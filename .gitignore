@@ -1,0 +1,100 @@
+# ========================
+# .NET 通用忽略项
+# ========================
+# 编译输出目录（.NET 核心忽略项）
+bin/
+obj/
+# 发布输出目录
+publish/
+dist/
+# 测试结果与覆盖率
+TestResults/
+coverage/
+# 临时XML文档（排除源码XML注释文件）
+!*.xml
+*.tmp.xml
+# 程序集与调试文件（保留源码dll，忽略编译产物）
+!src/**/*.dll
+bin/**/*.dll
+obj/**/*.dll
+*.exe
+*.pdb
+*.vshost.exe
+*.vshost.exe.config
+# NuGet 相关
+.nuget/
+packages/
+project.lock.json
+# .NET SDK 全局配置（本地自定义）
+global.json
+
+# ========================
+# Visual Studio 专属忽略项
+# ========================
+# VS 解决方案/项目用户配置
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+# VS 自动生成的隐藏目录
+.vs/
+# 代码分析与重构日志
+CodeAnalysisLogs/
+RefactorLogs/
+# ReSharper 缓存
+_ReSharper*/
+*.ReSharper
+# Rider/IntelliJ 配置
+.idea/
+# 临时文件
+*.tmp
+*.bak
+*.swp
+# 安装包
+*.msi
+*.msp
+*.msm
+*.cab
+
+# ========================
+# 操作系统通用忽略项
+# ========================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.msix
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ========================
+# 工具/额外忽略项
+# ========================
+# 日志文件
+*.log
+# 本地配置文件（密钥/环境变量）
+appsettings.Development.json
+appsettings.Local.json
+launchSettings.json
+# 压缩包
+*.7z
+*.zip
+*.tar
+*.gz
+# Docker 本地覆盖配置
+.dockerignore
+docker-compose.override.yml
+# 本地脚本（避免误提交）
+*.bat
+*.sh
+# VS Code 配置
+.vscode/
