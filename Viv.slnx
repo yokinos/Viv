@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Banshee/">
+    <Project Path="src/Banshee/Viv.Vva/Viv.Vva.csproj" />
+  </Folder>
+  <Folder Name="/src/Vivian/" />
+</Solution>
