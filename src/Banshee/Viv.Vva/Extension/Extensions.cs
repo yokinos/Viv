@@ -2,14 +2,16 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Text;
-using Viv.Vva.Enum;
+using Viv.Vva.Enums;
 
 namespace Viv.Vva.Extension
 {
     public static partial class Extensions
     {
-        public static bool IsNullOrEmpty(this string self)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsNullOrEmpty([NotNullWhen(false)][AllowNull]this string self)
         {
             return string.IsNullOrWhiteSpace(self);
         }
@@ -49,11 +51,14 @@ namespace Viv.Vva.Extension
             return t.As<T>();
         }
 
-        public static bool Between<T>(this T t, T min, T max) where T : IComparable<T>
+        public static bool Between<T>(this T self, T min, T max) where T : IComparable<T>
         {
-            return t.CompareTo(min) >= 0 && t.CompareTo(max) <= 0;
+            return self.CompareTo(min) >= 0 && self.CompareTo(max) <= 0;
         }
 
-        public 
+        public static T Nvl<T>([AllowNull] this T self, T otherValue)
+        {
+            return self is null or DBNull ? otherValue : self;
+        }
     }
 }
