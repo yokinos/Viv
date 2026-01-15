@@ -12,7 +12,7 @@ namespace Viv.Cache.Redis
     {
         /// <summary>
         /// Redis 连接字符串
-        /// 单体示例: "127.0.0.1:6379,password=123456,defaultDatabase=0"
+        /// 单体示例: "127.0.0.1:6379,password=123456"
         /// 集群示例: "127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381,password=123456,allowAdmin=true"
         /// 哨兵无需填写此值，通过 SentinelEndPoints 配置
         /// </summary>
@@ -60,7 +60,7 @@ namespace Viv.Cache.Redis
         public string Password { get; set; } = string.Empty;
 
         /// <summary>
-        /// 默认数据库（哨兵/单体模式有效）
+        /// 默认数据库[0-15]（哨兵/单体模式有效）
         /// </summary>
         public int DefaultDatabase { get; set; } = 0;
     }
