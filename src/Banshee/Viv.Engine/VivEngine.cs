@@ -5,12 +5,17 @@ using Viv.Engine.Options;
 
 namespace Viv.Engine
 {
-    public class VivEngine
-    {
+    public sealed class VivEngine
+    { 
+        private static bool isInit = false;
+        private static readonly Lock _initlock = new();
+
         /// <summary>
         /// Viv配置选项
         /// </summary>
-        public static VivOptions? VivOptions { get; set; }
+        public static VivOptions? VivOptions { get; private set; }
+
+        private VivEngine() { }
 
 
     }
