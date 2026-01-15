@@ -1,7 +1,13 @@
 <Solution>
   <Folder Name="/src/" />
   <Folder Name="/src/Banshee/">
+    <Project Path="src/Banshee/Viv.Cache.Redis/Viv.Cache.Redis.csproj" />
+    <Project Path="src/Banshee/Viv.Engine/Viv.Engine.csproj" Id="be371f7c-f2e3-4fd5-b0f0-8122cc7c565c" />
+    <Project Path="src/Banshee/Viv.Shared/Viv.Shared.csproj" Id="6e57c69e-1709-428d-806c-3e3dca71e4b7" />
     <Project Path="src/Banshee/Viv.Vva/Viv.Vva.csproj" />
+  </Folder>
+  <Folder Name="/src/Test/">
+    <Project Path="src/Test/Viv.Test/Viv.Test.csproj" Id="e53540db-bd61-4609-852e-ab4806374b28" />
   </Folder>
   <Folder Name="/src/Vivian/" />
 </Solution>

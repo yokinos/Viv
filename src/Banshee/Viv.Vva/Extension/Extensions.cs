@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Contracts;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Viv.Vva.Enums;
@@ -10,6 +11,7 @@ namespace Viv.Vva.Extension
 {
     public static partial class Extensions
     {
+        [Pure]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsNullOrEmpty([NotNullWhen(false)][AllowNull]this string self)
         {
