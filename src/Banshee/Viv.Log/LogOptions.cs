@@ -12,7 +12,7 @@ namespace Viv.Log
         public LoggerType LoggerType { get; set; } = LoggerType.None;
 
         /// <summary>
-        /// 日志的配置文件路径
+        /// 日志的配置文件路径（如果没有则使用默认的配置）
         /// </summary>
         public string ConfigFilePath { get; set; } = string.Empty;
 

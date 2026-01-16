@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
+using Viv.Vva;
+using Viv.Vva.Extension;
 
 #nullable disable   
 namespace Viv.Log
@@ -47,12 +50,39 @@ namespace Viv.Log
         public static void SetLogOptions(LogOptions options)
         {
             ArgumentNullException.ThrowIfNull(options, nameof(LogOptions));
+
+            if (options.ConfigFilePath.IsNullOrEmpty())
+            {
+                // 如果没有指定配置文件路径，则使用默认路径
+                options.ConfigFilePath = GetDefaultConfigFilePath(options.LoggerType);
+            }
+
             _options = options;
 
             if (_lazyVivLogger.IsValueCreated)
             {
                 _lazyVivLogger.Reset();
             }
+        }
+
+        private static string GetDefaultConfigFilePath(LoggerType loggerType)
+        {
+            var configFile = loggerType switch
+            {
+                LoggerType.Log4net => "log4net.config",
+                LoggerType.NLog => "nlog.config",
+                _ => string.Empty
+            };
+
+            if (!configFile.IsNullOrEmpty())
+            {
+                EmbeddedConfigExtractor.EnsureConfigExists(configFile, (path) =>
+                {
+                    EmbeddedConfigExtractor.ExtractConfig("Viv.Log", $"Configs.{configFile}", path);
+                });
+            }
+
+            return configFile;
         }
     }
 }
