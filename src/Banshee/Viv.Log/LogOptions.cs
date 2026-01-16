@@ -2,27 +2,23 @@
 using System.Collections.Generic;
 using System.Text;
 
-#nullable disable   
 namespace Viv.Log
 {
     public class LogOptions
     {
-        private static LogOptions _options;
-
         /// <summary>
-        /// 当前日志配置选项
+        /// 日志框架类型  
         /// </summary>
-        public static LogOptions CurrentOptions => _options ??= new LogOptions();
-
-        public static void SetLogOptions(LogOptions options)
-        {
-            _options = options;
-        }
-
         public LoggerType LoggerType { get; set; } = LoggerType.None;
 
+        /// <summary>
+        /// 日志的配置文件路径
+        /// </summary>
         public string ConfigFilePath { get; set; } = string.Empty;
 
-        public string LoggerName { get; set; } = "Viv.Logger";
+        /// <summary>
+        /// 日志记录器的名称
+        /// </summary>
+        public string LoggerName { get; set; } = "[Viv.Log]";
     }
 }

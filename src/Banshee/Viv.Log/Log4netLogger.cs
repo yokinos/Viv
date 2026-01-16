@@ -12,7 +12,7 @@ namespace Viv.Log
 
         public Log4netLogger()
         {
-            var options = LogOptions.CurrentOptions;
+            var options = VivLogFactory.CurrentOptions;
             LoadLog4netConfig(options);
             _logger = LogManager.GetLogger(options.LoggerName);
         }

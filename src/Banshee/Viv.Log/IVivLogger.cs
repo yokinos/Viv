@@ -4,6 +4,9 @@ using System.Text;
 
 namespace Viv.Log
 {
+    /// <summary>
+    /// 日志约束接口
+    /// </summary>
     public interface IVivLogger
     {
         /// <summary>
@@ -14,11 +17,14 @@ namespace Viv.Log
         /// <param name="exception">异常信息（可选）</param>
         void Log(LogLevel level, string message, Exception? exception = null);
 
-        //void Trace(string message) => Log(LogLevel.Trace, message);
         void Debug(string message) => Log(LogLevel.Debug, message);
+
         void Info(string message) => Log(LogLevel.Info, message);
+        
         void Warn(string message) => Log(LogLevel.Warn, message);
+        
         void Error(string message, Exception? exception = null) => Log(LogLevel.Error, message, exception);
+        
         void Fatal(string message, Exception? exception = null) => Log(LogLevel.Fatal, message, exception);
     }
 }
