@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Viv.Cache.Redis\Viv.Cache.Redis.csproj" />
-    <ProjectReference Include="..\Viv.Shared\Viv.Shared.csproj" />
     <ProjectReference Include="..\Viv.Vva\Viv.Vva.csproj" />
   </ItemGroup>
 

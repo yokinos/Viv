@@ -4,13 +4,15 @@ using System.Text;
 using Viv.Cache.Redis;
 using Viv.Engine.Enums;
 
+#nullable disable
+
 namespace Viv.Engine.Options
 {
-    public class VivOptions
+    public record VivOptions
     {
         /// <summary>
         /// 缓存设置
         /// </summary>
-        public CacheOptions? CacheOptions { get; set; }
+        public CacheOptions CacheOptions { get; set; }
     }
 }

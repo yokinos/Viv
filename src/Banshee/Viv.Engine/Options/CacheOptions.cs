@@ -4,6 +4,7 @@ using System.Text;
 using Viv.Cache.Redis;
 using Viv.Engine.Enums;
 
+#nullable disable
 namespace Viv.Engine.Options
 {
     public record CacheOptions
@@ -16,6 +17,6 @@ namespace Viv.Engine.Options
         /// <summary>
         /// Redis配置
         /// </summary>
-        public RedisOptions? RedisOptions { get; set; }
+        public RedisOptions RedisOptions { get; set; }
     }
 }

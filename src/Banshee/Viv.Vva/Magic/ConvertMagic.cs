@@ -8,16 +8,30 @@ using Viv.Vva.Extension;
 
 namespace Viv.Vva.Magic
 {
+    /// <summary>
+    /// 通用类型转换工具类（核心能力：Unix时间戳转换、多类型安全转换）
+    /// </summary>
+    /// <remarks>
+    /// 设计原则：
+    /// 1. 无侵入：转换失败返回默认值，不抛业务异常；
+    /// 2. 兼容：支持常见基础类型、枚举、DateTime/DateTimeOffset、JSON字符串转换；
+    /// 3. 鲁棒：自动处理时区、Unix时间戳（秒/毫秒）、多语言文化格式；
+    /// 4. 轻量：仅依赖Newtonsoft.Json，无其他第三方依赖。
+    /// </remarks>
     public static class ConvertMagic
     {
+        /// <summary>Unix时间纪元（1970-01-01 00:00:00 UTC）</summary>
         private static readonly DateTimeOffset _unixEpoch = new(1970, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        /// <summary>Unix时间纪元（DateTime UTC版本）</summary>
         private static readonly DateTime _unixEpochDateTimeUtc = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        /// <summary>Unix时间戳秒/毫秒判断阈值（1万亿：超过则判定为毫秒级）</summary>
         private const long MillisecondsThreshold = 1_000_000_000_000L;
+        /// <summary>布尔值识别关键字（忽略大小写）</summary>
         private static readonly HashSet<string> _trueKeywords = new(StringComparer.OrdinalIgnoreCase)
         {
             "是", "对", "正确", "YES", "OK", "1", "成功", "Y"
         };
-
+        /// <summary>字符串转基础类型的解析器映射表</summary>
         private static readonly Dictionary<Type, Func<string, CultureInfo, object?, object?>> stringParsers;
 
         static ConvertMagic()
@@ -48,15 +62,47 @@ namespace Viv.Vva.Magic
             };
         }
 
+        /// <summary>
+        /// 将DateTime转换为Unix时间戳（自动统一为UTC时区）
+        /// </summary>
+        /// <param name="dateTime">待转换时间（支持Utc/Local/Unspecified）</param>
+        /// <param name="isMilliseconds">是否返回毫秒级时间戳（默认秒级）</param>
+        /// <returns>Unix时间戳（1970年前返回负数，不做拦截）</returns>
         public static long ToUnixTime(DateTime dateTime, bool isMilliseconds = false)
         {
-            var dto = new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Utc));
-            var timeSpan = dto - _unixEpoch;
-            return isMilliseconds ? (long)timeSpan.TotalMilliseconds : (long)timeSpan.TotalSeconds;
+            var utcDateTime = dateTime.Kind switch
+            {
+                DateTimeKind.Utc => dateTime,
+                DateTimeKind.Local => dateTime.ToUniversalTime(),
+                DateTimeKind.Unspecified => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc),
+                _ => dateTime
+            };
+
+            var dateTimeOffset = new DateTimeOffset(utcDateTime);
+            return ToUnixTime(dateTimeOffset, isMilliseconds);
         }
 
+        /// <summary>
+        /// 将DateTimeOffset转换为Unix时间戳
+        /// </summary>
+        /// <param name="date">带时区偏移的时间</param>
+        /// <param name="isMilliseconds">是否返回毫秒级时间戳（默认秒级）</param>
+        /// <returns>Unix时间戳（1970年前返回负数）</returns>
+        public static long ToUnixTime(DateTimeOffset date, bool isMilliseconds = false)
+        {
+            return isMilliseconds ? date.ToUnixTimeMilliseconds() : date.ToUnixTimeSeconds();
+        }
+
+        /// <summary>
+        /// 安全类型转换（失败返回默认值，无业务异常）
+        /// </summary>
+        /// <typeparam name="T">目标类型</typeparam>
+        /// <param name="source">源对象（支持DBNull/Null、基础类型、JSON字符串等）</param>
+        /// <param name="defaultValue">转换失败时返回的默认值</param>
+        /// <param name="culture">文化格式（默认不变文化）</param>
+        /// <returns>转换后的值，失败返回defaultValue</returns>
         [return: MaybeNull]
-        public static T TryConvert<T>([AllowNull] object? source, T? defaultValue = default, CultureInfo? culture = null)
+        public static T TryConvert<T>(object? source, T defaultValue, CultureInfo? culture = null)
         {
             if (source is null or DBNull) return defaultValue;
             if (source is T matched) return matched;
@@ -97,6 +143,14 @@ namespace Viv.Vva.Magic
             }
         }
 
+        /// <summary>
+        /// 尝试将字符串解析为指定类型
+        /// </summary>
+        /// <param name="sourceText">源字符串</param>
+        /// <param name="targetType">目标类型</param>
+        /// <param name="culture">文化格式</param>
+        /// <param name="defaultValue">解析失败默认值</param>
+        /// <returns>解析结果，失败返回null</returns>
         private static object? TryConvertStringToType(string sourceText, Type targetType, CultureInfo culture, object? defaultValue)
         {
             if (targetType.IsEnum)
@@ -120,6 +174,12 @@ namespace Viv.Vva.Magic
             return null;
         }
 
+        /// <summary>
+        /// 将任意对象转换为字符串（适配不同类型的序列化规则）
+        /// </summary>
+        /// <param name="source">源对象</param>
+        /// <param name="sourceType">源对象类型</param>
+        /// <returns>序列化后的字符串</returns>
         private static string ConvertObjectToString(object source, Type sourceType)
         {
             return source switch
@@ -133,18 +193,28 @@ namespace Viv.Vva.Magic
             };
         }
 
+        /// <summary>
+        /// 内部方法：解析字符串为DateTime（支持Unix时间戳/常规时间格式）
+        /// </summary>
+        /// <param name="sourceText">源字符串</param>
+        /// <param name="culture">文化格式</param>
+        /// <returns>解析后的DateTime，失败返回null</returns>
         private static DateTime? ParseDateTimeInternal(string sourceText, CultureInfo culture)
         {
             if (long.TryParse(sourceText, out var unixTime))
             {
-                return unixTime > MillisecondsThreshold
-                    ? _unixEpochDateTimeUtc.AddMilliseconds(unixTime).ToLocalTime()
-                    : _unixEpochDateTimeUtc.AddSeconds(unixTime).ToLocalTime();
+                return unixTime > MillisecondsThreshold ? _unixEpochDateTimeUtc.AddMilliseconds(unixTime).ToLocalTime() : _unixEpochDateTimeUtc.AddSeconds(unixTime).ToLocalTime();
             }
 
             return DateTime.TryParse(sourceText, culture, DateTimeStyles.None, out var dt) ? dt : null;
         }
 
+        /// <summary>
+        /// 内部方法：解析字符串为DateTimeOffset（支持Unix时间戳/常规时间格式）
+        /// </summary>
+        /// <param name="sourceText">源字符串</param>
+        /// <param name="culture">文化格式</param>
+        /// <returns>解析后的DateTimeOffset，失败返回null</returns>
         private static DateTimeOffset? ParseDateTimeOffsetInternal(string sourceText, CultureInfo culture)
         {
             if (long.TryParse(sourceText, out var unixTime))

@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Viv.Cache.Redis
 {
-    public interface IRedisService
+    public class RedisService : RedisFactory, IRedisService
     {
 
     }

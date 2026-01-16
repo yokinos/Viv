@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
+#nullable disable
 namespace Viv.Vva.Generic
 {
     public class TreeItem<T>

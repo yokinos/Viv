@@ -16,8 +16,13 @@ namespace Viv.Vva.Extension
             return ConvertMagic.ToUnixTime(self, isMs);
         }
 
+        public static long ToUnixTime(this DateTimeOffset self, bool isMs = false)
+        {
+            return ConvertMagic.ToUnixTime(self, isMs);
+        }
+
         [return: MaybeNull]
-        public static T As<T>([AllowNull] this object obj, T? defaultvalue = default, CultureInfo? culture = null)
+        public static T As<T>(this object? obj, T? defaultvalue = default, CultureInfo? culture = null)
         {
             return ConvertMagic.TryConvert(obj, defaultvalue, culture);
         }
@@ -34,7 +39,7 @@ namespace Viv.Vva.Extension
         }
 
         [return: MaybeNull]
-        public static DataTable ToDataTable<T>([AllowNull]this IList<T> list)
+        public static DataTable ToDataTable<T>([AllowNull] this IList<T> list)
         {
             return DataTableMagic.ToDataTable(list);
         }
