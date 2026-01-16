@@ -5,7 +5,6 @@ using Viv.Cache.Redis;
 using Viv.Engine.Enums;
 
 #nullable disable
-
 namespace Viv.Engine.Options
 {
     public record VivOptions
@@ -13,6 +12,11 @@ namespace Viv.Engine.Options
         /// <summary>
         /// 缓存设置
         /// </summary>
-        public CacheOptions CacheOptions { get; set; }
+        public VivCacheOptions CacheOptions { get; set; }
+
+        /// <summary>
+        /// API响应结果设置
+        /// </summary>
+        public VivApiResultOptions ApiResultOptions { get; set; }
     }
 }

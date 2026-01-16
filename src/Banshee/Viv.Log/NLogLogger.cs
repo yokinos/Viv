@@ -25,12 +25,6 @@ namespace Viv.Log
         /// </summary>
         private static void LoadNLogConfig(LogOptions options)
         {
-            if (string.IsNullOrEmpty(options.ConfigFilePath))
-            {
-                LogManager.Setup().LoadConfigurationFromFile();
-                return;
-            }
-
             try
             {
                 LogManager.Setup().LoadConfigurationFromFile(options.ConfigFilePath);
@@ -60,6 +54,12 @@ namespace Viv.Log
                 var exceptionMsg = ExceptionAnalyzer.Parse(exception);
                 _logger.Log(nlogLevel, $"{message}\n{exceptionMsg}");
             }
+        }
+
+        public ValueTask LogAsync(LogLevel level, string message, Exception? exception = null)
+        {
+            Log(level, message, exception);
+            return ValueTask.CompletedTask;
         }
     }
 }

@@ -7,7 +7,10 @@ using Viv.Engine.Enums;
 #nullable disable
 namespace Viv.Engine.Options
 {
-    public record CacheOptions
+    /// <summary>
+    /// 缓存配置
+    /// </summary>
+    public record VivCacheOptions
     {
         /// <summary>
         /// 缓存类型

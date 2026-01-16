@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Threading;
+using Viv.Log;
 
 namespace Viv.Cache.Redis
 {
@@ -121,7 +122,7 @@ namespace Viv.Cache.Redis
 
         protected static void WriteLog(string message)
         {
-            VivLogger.Error(message);
+            WriteLogger.Error(message);
         }
 
         public Task<IConnectionMultiplexer> GetConnectionAsync()
@@ -139,7 +140,7 @@ namespace Viv.Cache.Redis
             }
             catch (Exception ex)
             {
-                VivLogger.Error(ex);
+                WriteLogger.Error(ex);
                 return default;
             }
         }

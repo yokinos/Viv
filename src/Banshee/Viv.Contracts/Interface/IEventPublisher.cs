@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Shared.Interface
+namespace Viv.Contracts.Interface
 {
     public interface IEventPublisher
     {

@@ -7,11 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="StackExchange.Redis" Version="2.10.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
+    <Folder Include="Model\" />
   </ItemGroup>
 
 </Project>

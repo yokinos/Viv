@@ -32,5 +32,11 @@ namespace Viv.Log
                 Console.WriteLine($"{logHeader} 异常：{exceptionMsg}");
             }
         }
+        public ValueTask LogAsync(LogLevel level, string message, Exception? exception = null)
+        {
+            Log(level, message, exception);
+            return ValueTask.CompletedTask;
+        }
+
     }
 }

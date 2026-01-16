@@ -19,12 +19,6 @@ namespace Viv.Log
 
         private static void LoadLog4netConfig(LogOptions options)
         {
-            if (string.IsNullOrEmpty(options.ConfigFilePath))
-            {
-                XmlConfigurator.Configure();
-                return;
-            }
-
             try
             {
                 var fileInfo = new FileInfo(options.ConfigFilePath);
@@ -38,6 +32,8 @@ namespace Viv.Log
                 throw new InvalidOperationException($"加载Log4net配置文件失败：{options.ConfigFilePath}", ex);
             }
         }
+
+
 
         public void Log(LogLevel level, string message, Exception? exception = null)
         {
@@ -62,6 +58,12 @@ namespace Viv.Log
                     _logger.Info(message, exception);
                     break;
             }
+        }
+
+        public ValueTask LogAsync(LogLevel level, string message, Exception? exception = null)
+        {
+            Log(level, message, exception);
+            return ValueTask.CompletedTask;
         }
     }
 }
