@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Viv.Log.Enums;
 
-namespace Viv.Log
+namespace Viv.Log.VivLogger
 {
     /// <summary>
     /// 日志约束接口
@@ -16,17 +16,17 @@ namespace Viv.Log
         /// <param name="level">日志级别</param>
         /// <param name="message">日志内容</param>
         /// <param name="exception">异常信息（可选）</param>
-        void Log(LogLevel level, string message, Exception? exception = null);
+        void Log(VivLogLevel level, string message, Exception? exception = null);
 
-        void Debug(string message) => Log(LogLevel.Debug, message);
+        void Debug(string message) => Log(VivLogLevel.Debug, message);
 
-        void Info(string message) => Log(LogLevel.Info, message);
+        void Info(string message) => Log(VivLogLevel.Info, message);
 
-        void Warn(string message) => Log(LogLevel.Warn, message);
+        void Warn(string message) => Log(VivLogLevel.Warn, message);
 
-        void Error(string message, Exception? exception = null) => Log(LogLevel.Error, message, exception);
+        void Error(string message, Exception? exception = null) => Log(VivLogLevel.Error, message, exception);
 
-        void Fatal(string message, Exception? exception = null) => Log(LogLevel.Fatal, message, exception);
+        void Fatal(string message, Exception? exception = null) => Log(VivLogLevel.Fatal, message, exception);
 
         /// <summary>
         /// 记录日志
@@ -34,16 +34,16 @@ namespace Viv.Log
         /// <param name="level">日志级别</param>
         /// <param name="message">日志内容</param>
         /// <param name="exception">异常信息（可选）</param>
-        ValueTask LogAsync(LogLevel level, string message, Exception? exception = null);
+        ValueTask LogAsync(VivLogLevel level, string message, Exception? exception = null);
 
-        ValueTask DebugAsync(string message) => LogAsync(LogLevel.Debug, message);
+        ValueTask DebugAsync(string message) => LogAsync(VivLogLevel.Debug, message);
 
-        ValueTask InfoAsync(string message) => LogAsync(LogLevel.Info, message);
+        ValueTask InfoAsync(string message) => LogAsync(VivLogLevel.Info, message);
 
-        ValueTask WarnAsync(string message) => LogAsync(LogLevel.Warn, message);
+        ValueTask WarnAsync(string message) => LogAsync(VivLogLevel.Warn, message);
 
-        ValueTask ErrorAsync(string message, Exception? exception = null) => LogAsync(LogLevel.Error, message, exception);
+        ValueTask ErrorAsync(string message, Exception? exception = null) => LogAsync(VivLogLevel.Error, message, exception);
 
-        ValueTask FatalAsync(string message, Exception? exception = null) => LogAsync(LogLevel.Fatal, message, exception);
+        ValueTask FatalAsync(string message, Exception? exception = null) => LogAsync(VivLogLevel.Fatal, message, exception);
     }
 }

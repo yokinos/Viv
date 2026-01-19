@@ -23,7 +23,7 @@ namespace Viv.Log.VivLogger
             _logPrefix = VivLogFactory.CurrentOptions.LoggerName;
         }
 
-        public void Log(LogLevel level, string message, Exception? exception = null)
+        public void Log(VivLogLevel level, string message, Exception? exception = null)
         {
             var logHeader = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{level}] {_logPrefix}";
             Console.WriteLine($"{logHeader} {message}");
@@ -33,7 +33,7 @@ namespace Viv.Log.VivLogger
                 Console.WriteLine($"{logHeader} 异常：{exceptionMsg}");
             }
         }
-        public ValueTask LogAsync(LogLevel level, string message, Exception? exception = null)
+        public ValueTask LogAsync(VivLogLevel level, string message, Exception? exception = null)
         {
             Log(level, message, exception);
             return ValueTask.CompletedTask;

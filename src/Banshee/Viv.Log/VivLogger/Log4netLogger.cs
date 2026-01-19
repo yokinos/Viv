@@ -34,25 +34,23 @@ namespace Viv.Log.VivLogger
             }
         }
 
-
-
-        public void Log(LogLevel level, string message, Exception? exception = null)
+        public void Log(VivLogLevel level, string message, Exception? exception = null)
         {
             switch (level)
             {
-                case LogLevel.Debug:
+                case VivLogLevel.Debug:
                     _logger.Debug(message, exception);
                     break;
-                case LogLevel.Info:
+                case VivLogLevel.Info:
                     _logger.Info(message, exception);
                     break;
-                case LogLevel.Warn:
+                case VivLogLevel.Warn:
                     _logger.Warn(message, exception);
                     break;
-                case LogLevel.Error:
+                case VivLogLevel.Error:
                     _logger.Error(message, exception);
                     break;
-                case LogLevel.Fatal:
+                case VivLogLevel.Fatal:
                     _logger.Fatal(message, exception);
                     break;
                 default:
@@ -61,7 +59,7 @@ namespace Viv.Log.VivLogger
             }
         }
 
-        public ValueTask LogAsync(LogLevel level, string message, Exception? exception = null)
+        public ValueTask LogAsync(VivLogLevel level, string message, Exception? exception = null)
         {
             Log(level, message, exception);
             return ValueTask.CompletedTask;

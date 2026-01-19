@@ -36,15 +36,15 @@ namespace Viv.Log.VivLogger
             }
         }
 
-        public void Log(LogLevel level, string message, Exception? exception = null)
+        public void Log(VivLogLevel level, string message, Exception? exception = null)
         {
             var nlogLevel = level switch
             {
-                LogLevel.Debug => NLog.LogLevel.Debug,
-                LogLevel.Info => NLog.LogLevel.Info,
-                LogLevel.Warn => NLog.LogLevel.Warn,
-                LogLevel.Error => NLog.LogLevel.Error,
-                LogLevel.Fatal => NLog.LogLevel.Fatal,
+                VivLogLevel.Debug => NLog.LogLevel.Debug,
+                VivLogLevel.Info => NLog.LogLevel.Info,
+                VivLogLevel.Warn => NLog.LogLevel.Warn,
+                VivLogLevel.Error => NLog.LogLevel.Error,
+                VivLogLevel.Fatal => NLog.LogLevel.Fatal,
                 _ => NLog.LogLevel.Info
             };
 
@@ -57,7 +57,7 @@ namespace Viv.Log.VivLogger
             }
         }
 
-        public ValueTask LogAsync(LogLevel level, string message, Exception? exception = null)
+        public ValueTask LogAsync(VivLogLevel level, string message, Exception? exception = null)
         {
             Log(level, message, exception);
             return ValueTask.CompletedTask;

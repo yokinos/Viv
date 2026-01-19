@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Viv.Log.Enums;
+using Viv.Log.VivLogger;
 
 namespace Viv.Log
 {
@@ -27,7 +29,7 @@ namespace Viv.Log
         /// <param name="message">日志内容</param>
         public static void Info(string message)
         {
-            Logger.Log(LogLevel.Info, message ?? string.Empty);
+            Logger.Log(VivLogLevel.Info, message ?? string.Empty);
         }
 
         /// <summary>
@@ -36,7 +38,7 @@ namespace Viv.Log
         /// <param name="exception">异常信息</param>
         public static void Error(Exception exception)
         {
-            Logger.Log(LogLevel.Error, string.Empty, exception);
+            Logger.Log(VivLogLevel.Error, string.Empty, exception);
         }
 
         /// <summary>
@@ -45,7 +47,7 @@ namespace Viv.Log
         /// <param name="message">日志内容</param>
         public static void Error(string message)
         {
-            Logger.Log(LogLevel.Error, message ?? string.Empty);
+            Logger.Log(VivLogLevel.Error, message ?? string.Empty);
         }
 
         /// <summary>
@@ -55,7 +57,7 @@ namespace Viv.Log
         /// <param name="exception">异常信息</param>
         public static void Error(string message, Exception exception)
         {
-            Logger.Log(LogLevel.Error, message ?? string.Empty, exception);
+            Logger.Log(VivLogLevel.Error, message ?? string.Empty, exception);
         }
 
         /// <summary>
@@ -64,7 +66,7 @@ namespace Viv.Log
         /// <param name="message">日志内容</param>
         public static void Debug(string message)
         {
-            Logger.Log(LogLevel.Debug, message ?? string.Empty);
+            Logger.Log(VivLogLevel.Debug, message ?? string.Empty);
         }
 
         /// <summary>
@@ -73,7 +75,7 @@ namespace Viv.Log
         /// <param name="message">日志内容</param>
         public static void Warn(string message)
         {
-            Logger.Log(LogLevel.Warn, message ?? string.Empty);
+            Logger.Log(VivLogLevel.Warn, message ?? string.Empty);
         }
 
         /// <summary>
@@ -83,7 +85,7 @@ namespace Viv.Log
         /// <param name="exception">异常信息（可选）</param>
         public static void Fatal(string message, Exception? exception = null)
         {
-            Logger.Log(LogLevel.Fatal, message ?? string.Empty, exception);
+            Logger.Log(VivLogLevel.Fatal, message ?? string.Empty, exception);
         }
 
         /// <summary>
@@ -93,7 +95,7 @@ namespace Viv.Log
         /// <returns>已完成的ValueTask</returns>
         public static ValueTask InfoAsync(string message)
         {
-            return Logger.LogAsync(LogLevel.Info, message ?? string.Empty);
+            return Logger.LogAsync(VivLogLevel.Info, message ?? string.Empty);
         }
 
         /// <summary>
@@ -103,7 +105,7 @@ namespace Viv.Log
         /// <returns>已完成的ValueTask</returns>
         public static ValueTask ErrorAsync(Exception exception)
         {
-            return Logger.LogAsync(LogLevel.Error, string.Empty, exception);
+            return Logger.LogAsync(VivLogLevel.Error, string.Empty, exception);
         }
 
         /// <summary>
@@ -113,7 +115,7 @@ namespace Viv.Log
         /// <returns>已完成的ValueTask</returns>
         public static ValueTask ErrorAsync(string message)
         {
-            return Logger.LogAsync(LogLevel.Error, message ?? string.Empty);
+            return Logger.LogAsync(VivLogLevel.Error, message ?? string.Empty);
         }
 
         /// <summary>
@@ -124,7 +126,7 @@ namespace Viv.Log
         /// <returns>已完成的ValueTask</returns>
         public static ValueTask ErrorAsync(string message, Exception exception)
         {
-            return Logger.LogAsync(LogLevel.Error, message ?? string.Empty, exception);
+            return Logger.LogAsync(VivLogLevel.Error, message ?? string.Empty, exception);
         }
 
         /// <summary>
@@ -134,7 +136,7 @@ namespace Viv.Log
         /// <returns>已完成的ValueTask</returns>
         public static ValueTask DebugAsync(string message)
         {
-            return Logger.LogAsync(LogLevel.Debug, message ?? string.Empty);
+            return Logger.LogAsync(VivLogLevel.Debug, message ?? string.Empty);
         }
 
         /// <summary>
@@ -144,7 +146,7 @@ namespace Viv.Log
         /// <returns>已完成的ValueTask</returns>
         public static ValueTask WarnAsync(string message)
         {
-            return Logger.LogAsync(LogLevel.Warn, message ?? string.Empty);
+            return Logger.LogAsync(VivLogLevel.Warn, message ?? string.Empty);
         }
 
         /// <summary>
@@ -155,7 +157,7 @@ namespace Viv.Log
         /// <returns>已完成的ValueTask</returns>
         public static ValueTask FatalAsync(string message, Exception? exception = null)
         {
-            return Logger.LogAsync(LogLevel.Fatal, message ?? string.Empty, exception);
+            return Logger.LogAsync(VivLogLevel.Fatal, message ?? string.Empty, exception);
         }
     }
 }

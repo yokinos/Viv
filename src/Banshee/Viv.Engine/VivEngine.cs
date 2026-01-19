@@ -9,7 +9,7 @@ namespace Viv.Engine
 {
     public sealed class VivEngine
     {
-        private static bool isInit = false;
+        private static volatile bool _isInit = false;
         private static readonly Lock _initlock = new();
 
         /// <summary>
@@ -24,9 +24,10 @@ namespace Viv.Engine
 
         public static void Initialize(VivOptions options)
         {
+            ArgumentNullException.ThrowIfNull(options);
             lock (_initlock)
             {
-                if (isInit) return;
+                if (_isInit) return;
 
 
             }

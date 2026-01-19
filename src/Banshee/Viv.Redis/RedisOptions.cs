@@ -11,6 +11,11 @@ namespace Viv.Redis
     public class RedisOptions
     {
         /// <summary>
+        /// Redis部署模式
+        /// </summary>
+        public RedisMode RedisMode { get; set; } = RedisMode.Standalone;
+
+        /// <summary>
         /// Redis 连接字符串
         /// 单体示例: "127.0.0.1:6379,password=123456"
         /// 集群示例: "127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381,password=123456,allowAdmin=true"
@@ -23,11 +28,6 @@ namespace Viv.Redis
         /// 示例: new List<string> { "127.0.0.1:26379", "127.0.0.1:26380" }
         /// </summary>
         public List<string> SentinelEndPoints { get; set; } = [];
-
-        /// <summary>
-        /// 判断是否为哨兵模式
-        /// </summary>
-        public bool IsSentinelMode { get; set; } = false;
 
         /// <summary>
         /// 哨兵模式 - 主节点名称（必填，如 "mymaster"）
@@ -63,5 +63,10 @@ namespace Viv.Redis
         /// 默认数据库[0-15]（哨兵/单体模式有效）
         /// </summary>
         public int DefaultDatabase { get; set; } = 0;
+
+        /// <summary>
+        /// 有效性保持时间（秒），默认 60 秒
+        /// </summary>
+        public int KeepAlive { get; set; } = 60;
     }
 }
