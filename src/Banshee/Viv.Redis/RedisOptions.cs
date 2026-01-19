@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Viv.Vva.Extension;
 
-namespace Viv.Cache.Redis
+namespace Viv.Redis
 {
     /// <summary>
     /// Redis配置模型（适配StackExchange.Redis 2.7+）

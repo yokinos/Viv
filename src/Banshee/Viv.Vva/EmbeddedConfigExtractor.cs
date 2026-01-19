@@ -6,7 +6,7 @@ using System.Text;
 namespace Viv.Vva
 {
     /// <summary>
-    /// 用来读取嵌入式配置文件的类
+    /// 用来读取嵌入式配置文件
     /// </summary>
     public class EmbeddedConfigExtractor
     {

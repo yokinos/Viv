@@ -5,7 +5,7 @@ using System.Net;
 using System.Threading;
 using Viv.Log;
 
-namespace Viv.Cache.Redis
+namespace Viv.Redis
 {
     /// <summary>
     /// Redis连接管理器
