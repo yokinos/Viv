@@ -1,7 +1,6 @@
 ﻿using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -73,6 +72,11 @@ namespace Viv.Redis
             RegisterConnectionEvents(connection);
             return connection;
         }
+
+        /// <summary>
+        /// Redis配置信息
+        /// </summary>
+        public static RedisOptions? RedisOptions => _redisOptions;
 
         /// <summary>
         /// 构建单机模式Redis配置
@@ -282,7 +286,7 @@ namespace Viv.Redis
         /// <returns>指定数据库的操作实例（IDatabase）</returns>
         public static async Task<IDatabase> GetDatabaseAsync(string key)
         {
-            var dbIndex = RedisDbAllocator.AllocateDbIndex(key);
+            var dbIndex = RedisDbAllocator.AllocateDbIndex(key, _redisOptions?.MaxDbIndex);
             return await GetDatabaseAsync(dbIndex);
         }
 

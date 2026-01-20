@@ -34,6 +34,7 @@ namespace Viv.Redis
         /// </summary>
         public RedisService()
         {
+
         }
 
         #region 基础字符串操作
@@ -676,14 +677,14 @@ namespace Viv.Redis
         /// <summary>
         /// 获取可重入分布式锁
         /// </summary>
-        /// <param name="lockKey">锁的Key（如：lock_stock_1001）</param>
-        /// <param name="clientId">全局唯一客户端ID（建议用GenerateUniqueClientId生成）</param>
-        /// <param name="expire">锁过期时间（必须>0，防止客户端宕机死锁）</param>
+        /// <param name="lockKey">锁的唯一标识（如：stock_lock_1001）</param>
+        /// <param name="lockHolderId">锁持有者唯一标识</param>
+        /// <param name="expire">锁过期时间（必须>0，防止死锁）</param>
         /// <param name="isReentrant">是否启用重入，默认true</param>
         /// <returns>true=加锁/重入成功，false=加锁失败</returns>
-        public bool AcquireLock(string lockKey, string clientId, TimeSpan expire, bool isReentrant = true)
+        public bool AcquireLock(string lockKey, string lockHolderId, TimeSpan expire, bool isReentrant = true)
         {
-            if (string.IsNullOrWhiteSpace(clientId) || expire <= TimeSpan.Zero)
+            if (string.IsNullOrWhiteSpace(lockHolderId) || expire <= TimeSpan.Zero)
                 return false;
 
             return ExecuteRedis(lockKey, db =>
@@ -691,7 +692,7 @@ namespace Viv.Redis
                 // 非重入锁：原生SET NX EX逻辑，原子性
                 if (!isReentrant)
                 {
-                    return db.StringSet(lockKey, clientId, expire, When.NotExists);
+                    return db.StringSet(lockKey, lockHolderId, expire, When.NotExists);
                 }
 
                 // 可重入锁核心Lua脚本（原子性执行加锁/重入逻辑）
@@ -712,7 +713,7 @@ namespace Viv.Redis
                     end";
 
                 // 执行Lua脚本：KEYS[1]=lockKey，ARGV[1]=clientId，ARGV[2]=过期时间(秒)
-                var scriptResult = db.ScriptEvaluate(reentrantLockScript, [lockKey], [clientId, (int)expire.TotalSeconds]);
+                var scriptResult = db.ScriptEvaluate(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]);
 
                 // 脚本返回1=成功，0=失败
                 return (long)scriptResult == 1;
@@ -723,12 +724,12 @@ namespace Viv.Redis
         /// 释放可重入分布式锁
         /// </summary>
         /// <param name="lockKey">锁的Key</param>
-        /// <param name="clientId">加锁时的客户端ID（必须完全一致）</param>
+        /// <param name="lockHolderId">锁持有者唯一标识（必须与加锁时一致）</param>
         /// <param name="isReentrant">是否启用重入，需和加锁时一致</param>
         /// <returns>true=释放/重入次数减1成功，false=锁不属于当前客户端/锁不存在</returns>
-        public bool ReleaseLock(string lockKey, string clientId, bool isReentrant = true)
+        public bool ReleaseLock(string lockKey, string lockHolderId, bool isReentrant = true)
         {
-            if (string.IsNullOrWhiteSpace(clientId))
+            if (string.IsNullOrWhiteSpace(lockHolderId))
                 return false;
 
             return ExecuteRedis(lockKey, db =>
@@ -744,7 +745,7 @@ namespace Viv.Redis
                             return 0
                         end";
 
-                    var result = db.ScriptEvaluate(normalReleaseScript, [lockKey], [clientId]);
+                    var result = db.ScriptEvaluate(normalReleaseScript, [lockKey], [lockHolderId]);
                     return (long)result == 1;
                 }
 
@@ -773,31 +774,45 @@ namespace Viv.Redis
                     end";
 
                 // 执行脚本：ARGV[2]=临时续期时间(秒)
-                var scriptResult = db.ScriptEvaluate(reentrantReleaseScript, [lockKey], [clientId, ReentrantLockTempExpireSeconds]);
+                var scriptResult = db.ScriptEvaluate(reentrantReleaseScript, [lockKey], [lockHolderId, ReentrantLockTempExpireSeconds]);
                 // 返回1=次数减1，2=锁删除，均视为成功
                 return (long)scriptResult >= 1;
             });
         }
 
+        /// <summary>
+        /// 强制释放锁（仅管理员/应急场景使用）
+        /// </summary>
+        /// <param name="lockKey">锁的唯一标识</param>
+        /// <returns>true=释放成功，false=锁不存在</returns>
+        public bool ForceReleaseLock(string lockKey)
+        {
+            var script = "return redis.call('del', KEYS[1])";
+            return ExecuteRedis(lockKey, db =>
+            {
+                var scriptResult = db.ScriptEvaluate(script, [lockKey]);
+                return (long)scriptResult > 0;
+            });
+        }
 
         /// <summary>
         /// 【异步】获取可重入分布式锁
         /// </summary>
-        /// <param name="lockKey">锁的Key</param>
-        /// <param name="clientId">全局唯一客户端ID</param>
+        /// <param name="lockKey">锁的唯一标识</param>
+        /// <param name="lockHolderId">锁持有者唯一标识</param>
         /// <param name="expire">锁过期时间</param>
         /// <param name="isReentrant">是否启用重入，默认true</param>
         /// <returns>true=加锁/重入成功，false=加锁失败</returns>
-        public async Task<bool> AcquireLockAsync(string lockKey, string clientId, TimeSpan expire, bool isReentrant = true)
+        public async Task<bool> AcquireLockAsync(string lockKey, string lockHolderId, TimeSpan expire, bool isReentrant = true)
         {
-            if (string.IsNullOrWhiteSpace(clientId) || expire <= TimeSpan.Zero)
+            if (string.IsNullOrWhiteSpace(lockHolderId) || expire <= TimeSpan.Zero)
                 return false;
 
             return await ExecuteRedisAsync(lockKey, async db =>
             {
                 if (!isReentrant)
                 {
-                    return await db.StringSetAsync(lockKey, clientId, expire, When.NotExists);
+                    return await db.StringSetAsync(lockKey, lockHolderId, expire, When.NotExists);
                 }
 
                 var reentrantLockScript = @"
@@ -813,7 +828,7 @@ namespace Viv.Redis
                         return 0
                     end";
 
-                var scriptResult = await db.ScriptEvaluateAsync(reentrantLockScript, [lockKey], [clientId, (int)expire.TotalSeconds]);
+                var scriptResult = await db.ScriptEvaluateAsync(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]);
                 return (long)scriptResult == 1;
             });
         }
@@ -822,12 +837,12 @@ namespace Viv.Redis
         /// 释放可重入分布式锁
         /// </summary>
         /// <param name="lockKey">锁的Key</param>
-        /// <param name="clientId">加锁时的客户端ID</param>
+        /// <param name="lockHolderId">加锁时的客户端ID</param>
         /// <param name="isReentrant">是否启用重入，需和加锁时一致</param>
         /// <returns>true=释放/重入次数减1成功，false=锁不属于当前客户端/锁不存在</returns>
-        public async Task<bool> ReleaseLockAsync(string lockKey, string clientId, bool isReentrant = true)
+        public async Task<bool> ReleaseLockAsync(string lockKey, string lockHolderId, bool isReentrant = true)
         {
-            if (string.IsNullOrWhiteSpace(clientId))
+            if (string.IsNullOrWhiteSpace(lockHolderId))
                 return false;
 
             return await ExecuteRedisAsync(lockKey, async db =>
@@ -842,7 +857,7 @@ namespace Viv.Redis
                             return 0
                         end";
 
-                    var result = await db.ScriptEvaluateAsync(normalReleaseScript, [lockKey], [clientId]);
+                    var result = await db.ScriptEvaluateAsync(normalReleaseScript, [lockKey], [lockHolderId]);
                     return (long)result == 1;
                 }
 
@@ -864,8 +879,24 @@ namespace Viv.Redis
                         return 2
                     end";
 
-                var scriptResult = await db.ScriptEvaluateAsync(reentrantReleaseScript, [lockKey], [clientId, ReentrantLockTempExpireSeconds]);
+                var scriptResult = await db.ScriptEvaluateAsync(reentrantReleaseScript, [lockKey], [lockHolderId, ReentrantLockTempExpireSeconds]);
                 return (long)scriptResult >= 1;
+            });
+        }
+
+
+        /// <summary>
+        /// 强制释放锁（仅管理员/应急场景使用）
+        /// </summary>
+        /// <param name="lockKey">锁的唯一标识</param>
+        /// <returns>true=释放成功，false=锁不存在</returns>
+        public async Task<bool> ForceReleaseLockAsync(string lockKey)
+        {
+            var script = "return redis.call('del', KEYS[1])";
+            return await ExecuteRedisAsync(lockKey, async db =>
+            {
+                var scriptResult = await db.ScriptEvaluateAsync(script, [lockKey]);
+                return (long)scriptResult > 0;
             });
         }
 

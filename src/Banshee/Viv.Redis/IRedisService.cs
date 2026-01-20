@@ -360,5 +360,19 @@ namespace Viv.Redis
         /// <param name="count">删除数量：0=删除所有匹配项；正数=删除前N个；负数=删除后N个</param>
         /// <returns>成功删除的元素数量</returns>
         Task<long> ListRemoveAsync(string key, object value, long count = 0);
+
+        /// <summary>
+        /// 模糊匹配获取Redis Key列表
+        /// </summary>
+        /// <param name="likeKey"></param>
+        /// <returns></returns>
+        List<string> GetKeyList(string likeKey);
+
+        /// <summary>
+        /// 模糊匹配获取Redis Key列表
+        /// </summary>
+        /// <param name="likeKey"></param>
+        /// <returns></returns>
+        List<string> GetKeyListAsync(string likeKey);
     }
 }

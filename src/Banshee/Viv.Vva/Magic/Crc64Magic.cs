@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Vva
+namespace Viv.Vva.Magic
 {
-    public class Crc64Helper
+    public class Crc64Magic
     {
         // CRC64参数（ECMA标准，保证分布均匀）
         private const ulong Crc64Polynomial = 0xC96C5795D7870F42;

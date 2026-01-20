@@ -68,5 +68,20 @@ namespace Viv.Redis
         /// 有效性保持时间（秒），默认 60 秒
         /// </summary>
         public int KeepAlive { get; set; } = 60;
+
+        /// <summary>
+        /// Redis数据库最大可用索引（决定应用可使用的DB范围）
+        /// 【关键说明】
+        /// 1. 单体Redis（单实例/主从）：有效，应用仅能使用 0 ~ MaxDbIndex 的DB（包含边界）；
+        ///    - 示例：MaxDbIndex=0 → 仅能用DB 0；MaxDbIndex=1 → 能用DB 0、1；
+        /// 2. Redis集群（Cluster）：强制为0且不可修改，因集群模式不支持多DB（所有操作默认DB 0）；
+        /// 3. 哨兵模式（Sentinel）：本质是单体Redis的高可用方案，支持多DB，该配置有效；
+        /// </summary>
+        /// <remarks>
+        /// 注意：
+        /// - Redis默认内置16个DB（索引0-15），该值建议不超过13（预留2个DB给运维/测试）；
+        /// - 生产环境不推荐使用多DB，建议通过Key前缀（如user:xxx、order:xxx）隔离，或部署多实例；
+        /// </remarks>
+        public int MaxDbIndex { get; set; } = 0;
     }
 }
