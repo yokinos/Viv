@@ -91,23 +91,17 @@ namespace Viv.Redis
             {
                 if (keyList.IsNullOrEmpty()) return [];
 
-                var keyWithDbGroups = keyList
-                    .Select(key => (RedisKey: (RedisKey)key, DbIndex: RedisMagic.AllocateDbIndex(key)))
-                    .GroupBy(item => item.DbIndex)
-                    .ToList();
-
+                var keyDict = RedisDbAllocator.AllocateGroupDbIndex(keyList);
                 var list = new List<T>();
 
-                foreach (var x in keyWithDbGroups)
+                foreach (var x in keyDict)
                 {
                     var database = await GetDatabaseAsync(x.Key);
                     if (database is null)
                     {
                         continue;
                     }
-
-                    var keys = x.Select(x => x.RedisKey).ToArray();
-                    var dbResult = await func(database, keys);
+                    var dbResult = await func(database, x.Value);
                     if (!EqualityComparer<T>.Default.Equals(dbResult, default))
                     {
                         list.Add(dbResult);
@@ -146,14 +140,10 @@ namespace Viv.Redis
             {
                 if (keyList.IsNullOrEmpty()) return [];
 
-                var keyWithDbGroups = keyList
-                    .Select(key => (RedisKey: (RedisKey)key, DbIndex: RedisMagic.AllocateDbIndex(key)))
-                    .GroupBy(item => item.DbIndex)
-                    .ToList();
-
+                var keyDict = RedisDbAllocator.AllocateGroupDbIndex(keyList);
                 var list = new List<T>();
 
-                foreach (var x in keyWithDbGroups)
+                foreach (var x in keyDict)
                 {
                     var database = GetDatabase(x.Key);
                     if (database is null)
@@ -161,8 +151,7 @@ namespace Viv.Redis
                         continue;
                     }
 
-                    var keys = x.Select(x => x.RedisKey).ToArray();
-                    var dbResult = func(database, keys);
+                    var dbResult = func(database, x.Value);
                     if (!EqualityComparer<T>.Default.Equals(dbResult, default))
                     {
                         list.Add(dbResult);

@@ -282,7 +282,7 @@ namespace Viv.Redis
         /// <returns>指定数据库的操作实例（IDatabase）</returns>
         public static async Task<IDatabase> GetDatabaseAsync(string key)
         {
-            var dbIndex = RedisMagic.AllocateDbIndex(key);
+            var dbIndex = RedisDbAllocator.AllocateDbIndex(key);
             return await GetDatabaseAsync(dbIndex);
         }
 
