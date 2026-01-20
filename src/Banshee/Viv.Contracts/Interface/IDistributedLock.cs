@@ -13,7 +13,7 @@ namespace Viv.Redis
         /// 【同步】获取可重入分布式锁
         /// </summary>
         /// <param name="lockKey">锁的唯一标识（如：stock_lock_1001）</param>
-        /// <param name="lockHolderId">锁持有者唯一标识（建议用GenerateLockHolderId生成）</param>
+        /// <param name="lockHolderId">锁持有者唯一标识</param>
         /// <param name="expireTime">锁过期时间（必须>0，防止死锁）</param>
         /// <param name="enableReentrant">是否启用重入，默认true</param>
         /// <returns>true=加锁/重入成功，false=加锁失败</returns>
