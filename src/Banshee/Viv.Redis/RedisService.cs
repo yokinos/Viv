@@ -2,10 +2,12 @@
 using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Viv.Contracts.Interface;
 using Viv.Vva.Extension;
 
 #nullable disable
@@ -667,69 +669,203 @@ namespace Viv.Redis
         #region 分布式锁
 
         /// <summary>
-        /// 获取Redis分布式锁（SET NX EX 模式）
+        /// 重入锁释放时的临时续期时间（秒），防止释放过程中锁过期
         /// </summary>
-        /// <param name="lockKey">锁键</param>
-        /// <param name="lockValue">锁值（建议使用唯一标识，如GUID，用于释放锁校验）</param>
-        /// <param name="expire">锁过期时间（避免死锁）</param>
-        /// <returns>获取锁成功返回true，否则返回false</returns>
-        public bool TryLock(string lockKey, string lockValue, TimeSpan expire)
-        {
-            return ExecuteRedis(lockKey, x => x.StringSet(lockKey, lockValue, expire, When.NotExists));
-        }
+        private const int ReentrantLockTempExpireSeconds = 60;
 
         /// <summary>
-        /// 异步获取Redis分布式锁（SET NX EX 模式）
+        /// 获取可重入分布式锁
         /// </summary>
-        /// <param name="lockKey">锁键</param>
-        /// <param name="lockValue">锁值（建议使用唯一标识，如GUID，用于释放锁校验）</param>
-        /// <param name="expire">锁过期时间（避免死锁）</param>
-        /// <returns>获取锁成功返回true，否则返回false</returns>
-        public async Task<bool> TryLockAsync(string lockKey, string lockValue, TimeSpan expire)
+        /// <param name="lockKey">锁的Key（如：lock_stock_1001）</param>
+        /// <param name="clientId">全局唯一客户端ID（建议用GenerateUniqueClientId生成）</param>
+        /// <param name="expire">锁过期时间（必须>0，防止客户端宕机死锁）</param>
+        /// <param name="isReentrant">是否启用重入，默认true</param>
+        /// <returns>true=加锁/重入成功，false=加锁失败</returns>
+        public bool AcquireLock(string lockKey, string clientId, TimeSpan expire, bool isReentrant = true)
         {
-            return await ExecuteRedisAsync(lockKey, async x => await x.StringSetAsync(lockKey, lockValue, expire, When.NotExists));
-        }
+            if (string.IsNullOrWhiteSpace(clientId) || expire <= TimeSpan.Zero)
+                return false;
 
-        /// <summary>
-        /// 释放Redis分布式锁（基于Lua脚本保证原子性，仅能释放自己持有的锁）
-        /// </summary>
-        /// <param name="lockKey">锁键</param>
-        /// <param name="lockValue">锁值（需与获取锁时的value一致）</param>
-        /// <returns>释放锁成功返回true，否则返回false</returns>
-        public bool ReleaseLock(string lockKey, string lockValue)
-        {
-            // Redis 分布式锁释放：使用 Lua 脚本保证原子性
-            var luaScript = @"
-                if redis.call('get', KEYS[1]) == ARGV[1] then
-                    return redis.call('del', KEYS[1])
-                else
-                    return 0
-                end";
-            return ExecuteRedis(lockKey, x =>
+            return ExecuteRedis(lockKey, db =>
             {
-                var result = x.ScriptEvaluate(luaScript, [(RedisKey)lockKey], [(RedisValue)lockValue]);
-                return (long)result > 0;
+                // 非重入锁：原生SET NX EX逻辑，原子性
+                if (!isReentrant)
+                {
+                    return db.StringSet(lockKey, clientId, expire, When.NotExists);
+                }
+
+                // 可重入锁核心Lua脚本（原子性执行加锁/重入逻辑）
+                var reentrantLockScript = @"
+                    local currentVal = redis.call('GET', KEYS[1])
+                    -- 情况1：锁未被持有 → 新增锁，格式：clientId_重入次数
+                    if currentVal == false then
+                        redis.call('SET', KEYS[1], ARGV[1] .. '_1', 'EX', ARGV[2])
+                        return 1
+                    -- 情况2：锁已被当前客户端持有 → 重入次数+1，续期过期时间
+                    elseif string.sub(currentVal, 1, -2) == ARGV[1] then
+                        local count = tonumber(string.sub(currentVal, -1)) + 1
+                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. count, 'EX', ARGV[2])
+                        return 1
+                    -- 情况3：锁被其他客户端持有 → 加锁失败
+                    else
+                        return 0
+                    end";
+
+                // 执行Lua脚本：KEYS[1]=lockKey，ARGV[1]=clientId，ARGV[2]=过期时间(秒)
+                var scriptResult = db.ScriptEvaluate(reentrantLockScript, [lockKey], [clientId, (int)expire.TotalSeconds]);
+
+                // 脚本返回1=成功，0=失败
+                return (long)scriptResult == 1;
             });
         }
 
         /// <summary>
-        /// 异步释放Redis分布式锁（基于Lua脚本保证原子性，仅能释放自己持有的锁）
+        /// 释放可重入分布式锁
         /// </summary>
-        /// <param name="lockKey">锁键</param>
-        /// <param name="lockValue">锁值（需与获取锁时的value一致）</param>
-        /// <returns>释放锁成功返回true，否则返回false</returns>
-        public async Task<bool> ReleaseLockAsync(string lockKey, string lockValue)
+        /// <param name="lockKey">锁的Key</param>
+        /// <param name="clientId">加锁时的客户端ID（必须完全一致）</param>
+        /// <param name="isReentrant">是否启用重入，需和加锁时一致</param>
+        /// <returns>true=释放/重入次数减1成功，false=锁不属于当前客户端/锁不存在</returns>
+        public bool ReleaseLock(string lockKey, string clientId, bool isReentrant = true)
         {
-            var luaScript = @"
-                if redis.call('get', KEYS[1]) == ARGV[1] then
-                    return redis.call('del', KEYS[1])
-                else
-                    return 0
-                end";
-            return await ExecuteRedisAsync(lockKey, async x =>
+            if (string.IsNullOrWhiteSpace(clientId))
+                return false;
+
+            return ExecuteRedis(lockKey, db =>
             {
-                var result = await x.ScriptEvaluateAsync(luaScript, [(RedisKey)lockKey], [(RedisValue)lockValue]);
-                return (long)result > 0;
+                // 非重入锁释放：原子性校验并删除，防止误删
+                if (!isReentrant)
+                {
+                    var normalReleaseScript = @"
+                        if redis.call('GET', KEYS[1]) == ARGV[1] then
+                            redis.call('DEL', KEYS[1])
+                            return 1
+                        else
+                            return 0
+                        end";
+
+                    var result = db.ScriptEvaluate(normalReleaseScript, [lockKey], [clientId]);
+                    return (long)result == 1;
+                }
+
+                // 可重入锁释放核心Lua脚本（原子性执行减次数/删锁逻辑）
+                var reentrantReleaseScript = @"
+                    local currentVal = redis.call('GET', KEYS[1])
+                    -- 情况1：锁不存在 → 释放失败
+                    if currentVal == false then
+                        return 0
+                    end
+                    -- 情况2：锁不属于当前客户端 → 释放失败（防止误删）
+                    local clientPart = string.sub(currentVal, 1, -2)
+                    if clientPart ~= ARGV[1] then
+                        return 0
+                    end
+                    -- 情况3：重入次数处理
+                    local count = tonumber(string.sub(currentVal, -1))
+                    if count > 1 then
+                        -- 次数>1 → 次数-1，临时续期
+                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count-1), 'EX', ARGV[2])
+                        return 1
+                    else
+                        -- 次数=1 → 删除锁，真正释放
+                        redis.call('DEL', KEYS[1])
+                        return 2
+                    end";
+
+                // 执行脚本：ARGV[2]=临时续期时间(秒)
+                var scriptResult = db.ScriptEvaluate(reentrantReleaseScript, [lockKey], [clientId, ReentrantLockTempExpireSeconds]);
+                // 返回1=次数减1，2=锁删除，均视为成功
+                return (long)scriptResult >= 1;
+            });
+        }
+
+
+        /// <summary>
+        /// 【异步】获取可重入分布式锁
+        /// </summary>
+        /// <param name="lockKey">锁的Key</param>
+        /// <param name="clientId">全局唯一客户端ID</param>
+        /// <param name="expire">锁过期时间</param>
+        /// <param name="isReentrant">是否启用重入，默认true</param>
+        /// <returns>true=加锁/重入成功，false=加锁失败</returns>
+        public async Task<bool> AcquireLockAsync(string lockKey, string clientId, TimeSpan expire, bool isReentrant = true)
+        {
+            if (string.IsNullOrWhiteSpace(clientId) || expire <= TimeSpan.Zero)
+                return false;
+
+            return await ExecuteRedisAsync(lockKey, async db =>
+            {
+                if (!isReentrant)
+                {
+                    return await db.StringSetAsync(lockKey, clientId, expire, When.NotExists);
+                }
+
+                var reentrantLockScript = @"
+                    local currentVal = redis.call('GET', KEYS[1])
+                    if currentVal == false then
+                        redis.call('SET', KEYS[1], ARGV[1] .. '_1', 'EX', ARGV[2])
+                        return 1
+                    elseif string.sub(currentVal, 1, -2) == ARGV[1] then
+                        local count = tonumber(string.sub(currentVal, -1)) + 1
+                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. count, 'EX', ARGV[2])
+                        return 1
+                    else
+                        return 0
+                    end";
+
+                var scriptResult = await db.ScriptEvaluateAsync(reentrantLockScript, [lockKey], [clientId, (int)expire.TotalSeconds]);
+                return (long)scriptResult == 1;
+            });
+        }
+
+        /// <summary>
+        /// 释放可重入分布式锁
+        /// </summary>
+        /// <param name="lockKey">锁的Key</param>
+        /// <param name="clientId">加锁时的客户端ID</param>
+        /// <param name="isReentrant">是否启用重入，需和加锁时一致</param>
+        /// <returns>true=释放/重入次数减1成功，false=锁不属于当前客户端/锁不存在</returns>
+        public async Task<bool> ReleaseLockAsync(string lockKey, string clientId, bool isReentrant = true)
+        {
+            if (string.IsNullOrWhiteSpace(clientId))
+                return false;
+
+            return await ExecuteRedisAsync(lockKey, async db =>
+            {
+                if (!isReentrant)
+                {
+                    var normalReleaseScript = @"
+                        if redis.call('GET', KEYS[1]) == ARGV[1] then
+                            redis.call('DEL', KEYS[1])
+                            return 1
+                        else
+                            return 0
+                        end";
+
+                    var result = await db.ScriptEvaluateAsync(normalReleaseScript, [lockKey], [clientId]);
+                    return (long)result == 1;
+                }
+
+                var reentrantReleaseScript = @"
+                    local currentVal = redis.call('GET', KEYS[1])
+                    if currentVal == false then
+                        return 0
+                    end
+                    local clientPart = string.sub(currentVal, 1, -2)
+                    if clientPart ~= ARGV[1] then
+                        return 0
+                    end
+                    local count = tonumber(string.sub(currentVal, -1))
+                    if count > 1 then
+                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count-1), 'EX', ARGV[2])
+                        return 1
+                    else
+                        redis.call('DEL', KEYS[1])
+                        return 2
+                    end";
+
+                var scriptResult = await db.ScriptEvaluateAsync(reentrantReleaseScript, [lockKey], [clientId, ReentrantLockTempExpireSeconds]);
+                return (long)scriptResult >= 1;
             });
         }
 

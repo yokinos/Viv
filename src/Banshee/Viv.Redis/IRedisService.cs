@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Contracts.Interface;
 
 namespace Viv.Redis
 {
@@ -9,7 +10,7 @@ namespace Viv.Redis
     /// Redis 操作服务接口
     /// 封装 Redis 基础操作、Hash操作、List操作、发布订阅、分布式锁等核心功能
     /// </summary>
-    public interface IRedisService
+    public interface IRedisService : IDistributedLock
     {
         /// <summary>
         /// 新增字符串类型缓存（指定过期时间秒数）
@@ -359,39 +360,5 @@ namespace Viv.Redis
         /// <param name="count">删除数量：0=删除所有匹配项；正数=删除前N个；负数=删除后N个</param>
         /// <returns>成功删除的元素数量</returns>
         Task<long> ListRemoveAsync(string key, object value, long count = 0);
-
-        /// <summary>
-        /// 获取Redis分布式锁
-        /// </summary>
-        /// <param name="lockKey">锁键</param>
-        /// <param name="lockValue">锁值（建议使用唯一标识，如GUID，用于释放锁校验）</param>
-        /// <param name="expire">锁过期时间（避免死锁）</param>
-        /// <returns>获取锁成功返回true，否则返回false</returns>
-        bool TryLock(string lockKey, string lockValue, TimeSpan expire);
-
-        /// <summary>
-        /// 异步获取Redis分布式锁
-        /// </summary>
-        /// <param name="lockKey">锁键</param>
-        /// <param name="lockValue">锁值（建议使用唯一标识，如GUID，用于释放锁校验）</param>
-        /// <param name="expire">锁过期时间（避免死锁）</param>
-        /// <returns>获取锁成功返回true，否则返回false</returns>
-        Task<bool> TryLockAsync(string lockKey, string lockValue, TimeSpan expire);
-
-        /// <summary>
-        /// 释放Redis分布式锁（仅能释放自己持有的锁）
-        /// </summary>
-        /// <param name="lockKey">锁键</param>
-        /// <param name="lockValue">锁值（需与获取锁时的value一致）</param>
-        /// <returns>释放锁成功返回true，否则返回false</returns>
-        bool ReleaseLock(string lockKey, string lockValue);
-
-        /// <summary>
-        /// 异步释放Redis分布式锁（仅能释放自己持有的锁）
-        /// </summary>
-        /// <param name="lockKey">锁键</param>
-        /// <param name="lockValue">锁值（需与获取锁时的value一致）</param>
-        /// <returns>释放锁成功返回true，否则返回false</returns>
-        Task<bool> ReleaseLockAsync(string lockKey, string lockValue);
     }
 }
