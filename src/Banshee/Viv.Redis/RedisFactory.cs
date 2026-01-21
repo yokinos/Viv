@@ -6,6 +6,7 @@ using System.Net;
 using System.Threading.Tasks;
 using Viv.Contracts;
 using Viv.Log;
+using Viv.Redis.DbAllocator;
 using Viv.Vva.Extension;
 
 namespace Viv.Redis
@@ -26,7 +27,7 @@ namespace Viv.Redis
         private static volatile bool _isConfigInitialized = false;
 
         /// <summary>
-        /// 配置初始化锁（保证Initialize方法线程安全，仅初始化一次）
+        /// 配置初始化锁
         /// </summary>
         private static readonly Lock _configLock = new();
 
@@ -34,6 +35,11 @@ namespace Viv.Redis
         /// Redis配置选项
         /// </summary>
         public static RedisOptions? CurrentRedisOptions => VivConfigRegistry.Get<RedisOptions>();
+
+        /// <summary>
+        /// Db分配器
+        /// </summary>
+        protected IDbAllocator? _dbAllocator;
 
         /// <summary>
         /// 懒加载Redis连接实例（异步，线程安全）
@@ -45,6 +51,18 @@ namespace Viv.Redis
         /// 资源释放状态标识
         /// </summary>
         private static bool _disposed = false;
+
+        public RedisFactory()
+        {
+            ArgumentNullException.ThrowIfNull(CurrentRedisOptions);
+            _dbAllocator = CurrentRedisOptions.SelectorType switch
+            {
+                DbSelectorType.KeyHash => new KeyHashAllocator(),
+                DbSelectorType.TenantIdHash => new TenantIdAllocator(),
+                DbSelectorType.None => new NoneAllocator(),
+                _ => new NoneAllocator(),
+            };
+        }
 
         /// <summary>
         /// 异步创建Redis连接实例（内部懒加载调用，无需外部调用）
@@ -187,20 +205,20 @@ namespace Viv.Redis
             {
                 case RedisMode.Standalone:
                 case RedisMode.Cluster:
-                    if (string.IsNullOrWhiteSpace(options.ConnectionString))
+                    if (options.ConnectionString.IsNullOrEmpty())
                     {
-                        throw new ArgumentException($"{options.RedisMode}模式下必须配置有效的连接字符串", nameof(options.ConnectionString));
+                        throw new Exception($"{options.RedisMode}模式下必须配置有效的连接字符串");
                     }
                     break;
 
                 case RedisMode.Sentinel:
-                    if (options.SentinelEndPoints == null || !options.SentinelEndPoints.Any())
+                    if (options.SentinelEndPoints.IsNullOrEmpty())
                     {
-                        throw new ArgumentException("哨兵模式下必须配置至少一个哨兵节点", nameof(options.SentinelEndPoints));
+                        throw new Exception("哨兵模式下必须配置至少一个哨兵节点");
                     }
-                    if (string.IsNullOrWhiteSpace(options.SentinelMasterName))
+                    if (options.SentinelMasterName.IsNullOrEmpty())
                     {
-                        throw new ArgumentException("哨兵模式下必须配置主节点名称", nameof(options.SentinelMasterName));
+                        throw new Exception("哨兵模式下必须配置主节点名称");
                     }
                     break;
 
@@ -280,9 +298,9 @@ namespace Viv.Redis
         /// </summary>
         /// <param name="key">Redis键（用于路由到对应数据库）</param>
         /// <returns>指定数据库的操作实例（IDatabase）</returns>
-        public static async Task<IDatabase> GetDatabaseAsync(string key)
+        public async Task<IDatabase> GetDatabaseAsync(string key)
         {
-            var dbIndex = RedisDbAllocator.AllocateDbIndex(key, CurrentRedisOptions?.MaxDbIndex);
+            var dbIndex = _dbAllocator?.AllocateDbIndex(key, CurrentRedisOptions?.MaxDbIndex);
             return await GetDatabaseAsync(dbIndex);
         }
 
@@ -304,7 +322,7 @@ namespace Viv.Redis
         /// </summary>
         /// <param name="dbNumber">数据库编号（null则使用配置默认值）</param>
         /// <returns>指定数据库的操作实例（IDatabase）</returns>
-        public static async Task<IDatabase> GetDatabaseAsync(int? dbNumber = null)
+        public async static Task<IDatabase> GetDatabaseAsync(int? dbNumber = null)
         {
             if (CurrentRedisOptions?.RedisMode == RedisMode.Cluster)
             {
@@ -323,7 +341,7 @@ namespace Viv.Redis
         /// <param name="endPoint">服务器端点（null则返回第一个可用节点）</param>
         /// <returns>Redis服务器操作实例（IServer）</returns>
         /// <exception cref="InvalidOperationException">未找到可用服务器端点时抛出</exception>
-        public static async Task<IServer> GetServerAsync(EndPoint? endPoint = null)
+        public async static Task<IServer> GetServerAsync(EndPoint? endPoint = null)
         {
             var connection = await GetConnectionAsync();
             var endPoints = connection.GetEndPoints();

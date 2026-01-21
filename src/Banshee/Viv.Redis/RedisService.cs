@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
+using Viv.Redis.DbAllocator;
 using Viv.Vva.Extension;
 
 #nullable disable

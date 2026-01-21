@@ -16,6 +16,7 @@ namespace Viv.Redis
     /// </summary>
     public class VivRedis : RedisFactory
     {
+
         /// <summary>
         /// 异步执行单个Key的Redis操作（自动路由到对应Db，内置异常捕获）
         /// </summary>
@@ -27,7 +28,7 @@ namespace Viv.Redis
         /// 可空类型标注：返回值可能为null/默认值，需结合业务判断有效性
         /// </returns>
         [return: MaybeNull]
-        public static async Task<T?> ExecuteRedisAsync<T>(string key, Func<IDatabase, Task<T>> func)
+        public async Task<T?> ExecuteRedisAsync<T>(string key, Func<IDatabase, Task<T>> func)
         {
             try
             {
@@ -53,7 +54,7 @@ namespace Viv.Redis
         /// 可空类型标注：返回值可能为null/默认值，需结合业务判断有效性
         /// </returns>
         [return: MaybeNull]
-        public static T ExecuteRedis<T>(string key, Func<IDatabase, T> func)
+        public T ExecuteRedis<T>(string key, Func<IDatabase, T> func)
         {
             try
             {
@@ -85,13 +86,12 @@ namespace Viv.Redis
         /// 可空类型标注：列表本身不为null，但列表元素可能为默认值（已过滤）
         /// </returns>
         [return: MaybeNull]
-        public static async Task<List<T>> ExecuteRedisAsync<T>(List<string> keyList, Func<IDatabase, RedisKey[], Task<T>> func)
+        public async Task<List<T>> ExecuteRedisAsync<T>(List<string> keyList, Func<IDatabase, RedisKey[], Task<T>> func)
         {
             try
             {
-                if (keyList.IsNullOrEmpty()) return [];
-
-                var keyDict = RedisDbAllocator.AllocateGroupDbIndex(keyList, CurrentRedisOptions?.MaxDbIndex);
+                if (_dbAllocator is null || keyList.IsNullOrEmpty()) return [];
+                var keyDict = _dbAllocator.AllocateGroupDbIndex(keyList, CurrentRedisOptions?.MaxDbIndex);
                 var list = new List<T>();
 
                 foreach (var x in keyDict)
@@ -134,13 +134,12 @@ namespace Viv.Redis
         /// 可空类型标注：列表本身不为null，但列表元素可能为默认值（已过滤）
         /// </returns>
         [return: MaybeNull]
-        public static List<T> ExecuteRedis<T>(List<string> keyList, Func<IDatabase, RedisKey[], T> func)
+        public List<T> ExecuteRedis<T>(List<string> keyList, Func<IDatabase, RedisKey[], T> func)
         {
             try
             {
-                if (keyList.IsNullOrEmpty()) return [];
-
-                var keyDict = RedisDbAllocator.AllocateGroupDbIndex(keyList, CurrentRedisOptions?.MaxDbIndex);
+                if (_dbAllocator is null || keyList.IsNullOrEmpty()) return []; 
+                var keyDict = _dbAllocator.AllocateGroupDbIndex(keyList, CurrentRedisOptions?.MaxDbIndex);
                 var list = new List<T>();
 
                 foreach (var x in keyDict)

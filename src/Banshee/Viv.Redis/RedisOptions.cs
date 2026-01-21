@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Redis.DbAllocator;
 using Viv.Vva.Extension;
 
 namespace Viv.Redis
@@ -84,5 +85,10 @@ namespace Viv.Redis
         /// - 生产环境不推荐使用多DB，建议通过Key前缀（如user:xxx、order:xxx）隔离，或部署多实例；
         /// </remarks>
         public int MaxDbIndex { get; set; } = 0;
+
+        /// <summary>
+        /// 你可以自定义Redis库的分库方式,默认按照key分库
+        /// </summary>
+        public DbSelectorType SelectorType { get; set; } = DbSelectorType.None;
     }
 }
