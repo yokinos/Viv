@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Redis;
 using Viv.Engine.Enums;
+using Viv.Redis;
 
 #nullable disable
 namespace Viv.Engine.Options
@@ -13,13 +13,19 @@ namespace Viv.Engine.Options
     public record VivCacheOptions
     {
         /// <summary>
-        /// 缓存类型
+        /// 分布式缓存类型
         /// </summary>
-        public CacheProviderType CacheProviderType { get; set; }
+        public DistributedCacheType CacheProviderType { get; set; }
 
         /// <summary>
         /// Redis配置
         /// </summary>
         public RedisOptions RedisOptions { get; set; }
+
+        /// <summary>
+        /// 是否启用内存缓存
+        /// <see cref="Contracts.Interface.IMemoryCacheService"/>
+        /// </summary>
+        public bool IsEnableMemoryCache { get; set; } = true;
     }
 }

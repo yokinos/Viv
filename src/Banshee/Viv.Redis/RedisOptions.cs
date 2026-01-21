@@ -71,6 +71,7 @@ namespace Viv.Redis
 
         /// <summary>
         /// Redis数据库最大可用索引（决定应用可使用的DB范围）
+        /// 注意：在正式使用后这个值就不允许修改了,修改会导致哈希错误 最终key定位错误
         /// 【关键说明】
         /// 1. 单体Redis（单实例/主从）：有效，应用仅能使用 0 ~ MaxDbIndex 的DB（包含边界）；
         ///    - 示例：MaxDbIndex=0 → 仅能用DB 0；MaxDbIndex=1 → 能用DB 0、1；

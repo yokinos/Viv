@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Viv.Redis;
 using Viv.Engine.Enums;
+using Viv.Log;
 
 #nullable disable
 namespace Viv.Engine.Options
@@ -13,6 +14,11 @@ namespace Viv.Engine.Options
         /// 缓存设置
         /// </summary>
         public VivCacheOptions CacheOptions { get; set; }
+
+        /// <summary>
+        /// 日志设置
+        /// </summary>
+        public LogOptions LogOptions { get; set; }
 
         /// <summary>
         /// API响应结果设置

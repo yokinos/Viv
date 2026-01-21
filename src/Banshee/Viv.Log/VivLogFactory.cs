@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
+using Viv.Contracts;
 using Viv.Log.Enums;
 using Viv.Log.VivLogger;
 using Viv.Vva;
 using Viv.Vva.Extension;
 
-#nullable disable   
 namespace Viv.Log
 {
     /// <summary>
@@ -15,12 +15,10 @@ namespace Viv.Log
     /// </summary>
     public sealed class VivLogFactory
     {
-        private static LogOptions _options;
-
         /// <summary>
         /// 当前日志配置选项
         /// </summary>
-        public static LogOptions CurrentOptions => _options ??= new LogOptions();
+        public static LogOptions CurrentOptions => VivConfigRegistry.Get<LogOptions>() ?? new LogOptions();
 
         /// <summary>
         /// 懒加载日志器实例
@@ -59,7 +57,7 @@ namespace Viv.Log
                 options.ConfigFilePath = GetDefaultConfigFilePath(options.LoggerType);
             }
 
-            _options = options;
+            VivConfigRegistry.Add(options);
 
             if (_lazyVivLogger.IsValueCreated)
             {
@@ -67,7 +65,7 @@ namespace Viv.Log
             }
         }
 
-        private static string GetDefaultConfigFilePath(LoggerType loggerType)
+        public static string GetDefaultConfigFilePath(LoggerType loggerType)
         {
             var configFile = loggerType switch
             {

@@ -91,7 +91,7 @@ namespace Viv.Redis
             {
                 if (keyList.IsNullOrEmpty()) return [];
 
-                var keyDict = RedisDbAllocator.AllocateGroupDbIndex(keyList, RedisOptions?.MaxDbIndex);
+                var keyDict = RedisDbAllocator.AllocateGroupDbIndex(keyList, CurrentRedisOptions?.MaxDbIndex);
                 var list = new List<T>();
 
                 foreach (var x in keyDict)
@@ -140,7 +140,7 @@ namespace Viv.Redis
             {
                 if (keyList.IsNullOrEmpty()) return [];
 
-                var keyDict = RedisDbAllocator.AllocateGroupDbIndex(keyList, RedisOptions?.MaxDbIndex);
+                var keyDict = RedisDbAllocator.AllocateGroupDbIndex(keyList, CurrentRedisOptions?.MaxDbIndex);
                 var list = new List<T>();
 
                 foreach (var x in keyDict)

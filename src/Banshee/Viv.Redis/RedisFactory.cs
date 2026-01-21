@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using Viv.Contracts;
 using Viv.Log;
 using Viv.Vva.Extension;
 
@@ -30,9 +31,9 @@ namespace Viv.Redis
         private static readonly Lock _configLock = new();
 
         /// <summary>
-        /// Redis配置选项（初始化后深拷贝存储，保证配置不可变）
+        /// Redis配置选项
         /// </summary>
-        private static RedisOptions? _redisOptions;
+        public static RedisOptions? CurrentRedisOptions => VivConfigRegistry.Get<RedisOptions>();
 
         /// <summary>
         /// 懒加载Redis连接实例（异步，线程安全）
@@ -54,29 +55,24 @@ namespace Viv.Redis
         private static async Task<IConnectionMultiplexer> GetConnectionMultiplexerAsync()
         {
             // 前置校验：配置必须已初始化
-            if (!_isConfigInitialized || _redisOptions == null)
+            if (!_isConfigInitialized || CurrentRedisOptions == null)
             {
                 throw new InvalidOperationException("Redis配置未初始化！请先调用RedisFactory.Initialize方法");
             }
 
             // 根据部署模式构建配置
-            var config = _redisOptions.RedisMode switch
+            var config = CurrentRedisOptions.RedisMode switch
             {
-                RedisMode.Standalone => BuildStandaloneConfig(_redisOptions),
-                RedisMode.Cluster => BuildClusterConfig(_redisOptions),
-                RedisMode.Sentinel => BuildSentinelConfig(_redisOptions),
-                _ => throw new NotSupportedException($"不支持的Redis部署模式: {_redisOptions.RedisMode}"),
+                RedisMode.Standalone => BuildStandaloneConfig(CurrentRedisOptions),
+                RedisMode.Cluster => BuildClusterConfig(CurrentRedisOptions),
+                RedisMode.Sentinel => BuildSentinelConfig(CurrentRedisOptions),
+                _ => throw new NotSupportedException($"不支持的Redis部署模式: {CurrentRedisOptions.RedisMode}"),
             };
 
             var connection = await ConnectionMultiplexer.ConnectAsync(config);
             RegisterConnectionEvents(connection);
             return connection;
         }
-
-        /// <summary>
-        /// Redis配置信息
-        /// </summary>
-        public static RedisOptions? RedisOptions => _redisOptions;
 
         /// <summary>
         /// 构建单机模式Redis配置
@@ -168,7 +164,7 @@ namespace Viv.Redis
                     {
                         ArgumentNullException.ThrowIfNull(options, nameof(options));
                         ValidateOptionsByMode(options);
-                        _redisOptions = options.DeepCopy();
+                        VivConfigRegistry.Add(options);
                         _isConfigInitialized = true;
                         return;
                     }
@@ -286,7 +282,7 @@ namespace Viv.Redis
         /// <returns>指定数据库的操作实例（IDatabase）</returns>
         public static async Task<IDatabase> GetDatabaseAsync(string key)
         {
-            var dbIndex = RedisDbAllocator.AllocateDbIndex(key, _redisOptions?.MaxDbIndex);
+            var dbIndex = RedisDbAllocator.AllocateDbIndex(key, CurrentRedisOptions?.MaxDbIndex);
             return await GetDatabaseAsync(dbIndex);
         }
 
@@ -310,14 +306,14 @@ namespace Viv.Redis
         /// <returns>指定数据库的操作实例（IDatabase）</returns>
         public static async Task<IDatabase> GetDatabaseAsync(int? dbNumber = null)
         {
-            if (_redisOptions?.RedisMode == RedisMode.Cluster)
+            if (CurrentRedisOptions?.RedisMode == RedisMode.Cluster)
             {
                 // 集群模式下只能使用0号库
                 dbNumber = 0;
             }
 
             var connection = await GetConnectionAsync();
-            return connection.GetDatabase(dbNumber ?? (_redisOptions?.DefaultDatabase ?? 0));
+            return connection.GetDatabase(dbNumber ?? (CurrentRedisOptions?.DefaultDatabase ?? 0));
         }
 
         /// <summary>
@@ -371,7 +367,8 @@ namespace Viv.Redis
                 }
 
                 _isConfigInitialized = false;
-                _redisOptions = null;
+                //_redisOptions = null;
+                VivConfigRegistry.Remove<RedisOptions>();
             }
 
             _disposed = true;

@@ -5,10 +5,10 @@ using System.Text;
 namespace Viv.Contracts.Interface
 {
     /// <summary>   
-    /// 缓存使用约定接口
+    /// 内存缓存接口
     /// </summary>
-    public interface ICacheService
-    { 
+    public interface IMemoryCacheService
+    {
         T Get<T>(string key);
 
         Task<T> GetAsync<T>(string key, CancellationToken token = default);
