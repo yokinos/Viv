@@ -28,7 +28,7 @@ namespace Viv.Authentication
         /// </summary>
         /// <param name="token">令牌字符串</param>
         /// <returns>解析后的载荷模型</returns>
-        /// <exception cref="InvalidTokenException">令牌无效时抛出</exception>
+        /// <exception cref="Contracts.Exceptions.InvalidTokenException">令牌无效时抛出</exception>
         TokenPayload ParseToken(string token);
     }
 }
