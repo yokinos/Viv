@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Paseto.Core" Version="1.5.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.15.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
   </ItemGroup>
 

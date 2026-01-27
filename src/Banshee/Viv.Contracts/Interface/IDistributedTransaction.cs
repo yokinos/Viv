@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Transactions;
-using Viv.Contracts.Model;
 
 namespace Viv.Contracts.Interface
 {

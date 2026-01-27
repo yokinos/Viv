@@ -13,4 +13,8 @@
     <ProjectReference Include="..\Viv.Vva\Viv.Vva.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Authentication\" />
+  </ItemGroup>
+
 </Project>

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Http;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Contracts.Interface;
@@ -17,11 +18,12 @@ namespace Viv.Engine.Middleware
             _next = next;
         }
 
-
         public async Task InvokeAsync(HttpContext context, IVivContext vivContext)
         {
             try
             {
+
+
                 vivContext.TenantId = 0;
                 await _next(context);
             }
