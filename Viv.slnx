@@ -1,14 +1,15 @@
 <Solution>
   <Folder Name="/src/" />
   <Folder Name="/src/Banshee/">
+    <Project Path="src/Banshee/Viv.Contracts/Viv.Contracts.csproj" Id="144cfe27-7b72-44fc-84b5-75f5c445a624" />
     <Project Path="src/Banshee/Viv.Engine/Viv.Engine.csproj" Id="be371f7c-f2e3-4fd5-b0f0-8122cc7c565c" />
     <Project Path="src/Banshee/Viv.Vva/Viv.Vva.csproj" />
   </Folder>
   <Folder Name="/src/Banshee/Imple/">
     <Project Path="src/Banshee/Viv.Authentication/Viv.Authentication.csproj" Id="4f3a38c0-fa59-43f9-8b2f-f643dd4b61f7" />
     <Project Path="src/Banshee/Viv.Autofac/Viv.Autofac.csproj" Id="03e2f248-f0d3-48e4-a625-48e92e168a9b" />
-    <Project Path="src/Banshee/Viv.Contracts/Viv.Contracts.csproj" Id="144cfe27-7b72-44fc-84b5-75f5c445a624" />
     <Project Path="src/Banshee/Viv.Log/Viv.Log.csproj" Id="3a99d054-ef25-48f4-8e09-02125198e390" />
+    <Project Path="src/Banshee/Viv.RabbitMQ/Viv.RabbitMQ.csproj" Id="8e02deac-2f40-4cc5-8ec7-ba93a8448f5a" />
     <Project Path="src/Banshee/Viv.Redis/Viv.Redis.csproj" Id="681e717d-013f-40c7-9bba-589b9ddf3629" />
   </Folder>
   <Folder Name="/src/Test/">

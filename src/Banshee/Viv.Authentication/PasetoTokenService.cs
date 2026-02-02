@@ -1,17 +1,13 @@
-﻿using Paseto;
-using Paseto.Builder;
-using Paseto.Cryptography;
-using Paseto.Validators;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Paseto;
+using Paseto.Builder;
+using Viv.Contracts.Exceptions;
 
 namespace Viv.Authentication
 {
-    /// <summary>
-    /// PASETO令牌服务实现（基于官方维护的Paseto.Core包）
-    /// </summary>
     public class PasetoTokenService : ITokenService
     {
         private readonly TokenOptions _options;
@@ -20,47 +16,67 @@ namespace Viv.Authentication
         public PasetoTokenService(TokenOptions options)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
-            if (string.IsNullOrEmpty(_options.SecretKey))
-            {
-                throw new ArgumentNullException(nameof(options.SecretKey), "PASETO加密密钥不能为空！");
-            }
 
-            // PASETO V2版本要求密钥至少32字节，不足则补全
-            _secretKey = Encoding.UTF8.GetBytes(_options.SecretKey);
-            if (_secretKey.Length < 32)
+            if (string.IsNullOrEmpty(_options.SecretKey))
+                throw new ArgumentException("密钥不能为空", nameof(options.SecretKey));
+
+            // 确保密钥是32字节
+            var key = Encoding.UTF8.GetBytes(_options.SecretKey);
+            if (key.Length < 32)
             {
-                var tempKey = new byte[32];
-                Array.Copy(_secretKey, tempKey, _secretKey.Length);
-                _secretKey = tempKey;
+                // 填充到32字节
+                var paddedKey = new byte[32];
+                Array.Copy(key, paddedKey, Math.Min(key.Length, 32));
+                // 如果还不够，用固定值填充
+                for (int i = key.Length; i < 32; i++)
+                    paddedKey[i] = 0x42; // 任意填充值
+                _secretKey = paddedKey;
+            }
+            else if (key.Length > 32)
+            {
+                // 截断到32字节
+                _secretKey = new byte[32];
+                Array.Copy(key, _secretKey, 32);
+            }
+            else
+            {
+                _secretKey = key;
             }
         }
 
         public string GenerateToken(TokenPayload payload)
         {
             if (payload == null) throw new ArgumentNullException(nameof(payload));
+            if (string.IsNullOrEmpty(payload.UserId))
+                throw new ArgumentException("UserId不能为空", nameof(payload.UserId));
 
-            // 构建PASETO Payload
-            var pasetoBuilder = new PasetoBuilder()
-                .UseVersion(PasetoVersion.V2) // V2版本（推荐，支持加密+签名）
-                .UsePurpose(PasetoPurpose.Local) // Local=加密模式，Public=签名模式
-                .WithSecretKey(_secretKey)
-                .AddClaim("sub", payload.UserId)
-                .AddClaim("name", payload.UserName)
-                .AddClaim("iss", _options.Issuer)
-                .AddClaim("aud", _options.Audience)
-                .AddClaim("exp", DateTime.UtcNow.AddMinutes(_options.ExpireMinutes))
-                .AddClaim("iat", DateTime.UtcNow);
-
-            // 添加角色（数组形式）
-            pasetoBuilder.AddClaim("roles", payload.Roles.ToArray());
-
-            // 添加自定义扩展字段
-            foreach (var kv in payload.Extensions)
+            var claims = new Dictionary<string, object>
             {
-                pasetoBuilder.AddClaim(kv.Key, kv.Value);
+                ["sub"] = payload.UserId,
+                ["iat"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                ["exp"] = DateTimeOffset.UtcNow.AddMinutes(_options.ExpireMinutes).ToUnixTimeSeconds()
+            };
+
+            if (!string.IsNullOrEmpty(_options.Issuer))
+                claims["iss"] = _options.Issuer;
+
+            if (!string.IsNullOrEmpty(_options.Audience))
+                claims["aud"] = _options.Audience;
+
+            if (!string.IsNullOrEmpty(payload.UserName))
+                claims["name"] = payload.UserName;
+
+            if (payload.Roles != null && payload.Roles.Any())
+                claims["roles"] = payload.Roles;
+
+            if (payload.Extensions != null)
+            {
+                foreach (var ext in payload.Extensions)
+                    if (!string.IsNullOrEmpty(ext.Key))
+                        claims[ext.Key] = ext.Value;
             }
 
-            return pasetoBuilder.Build();
+            return PasetoBuilder.EncodeLocal(_secretKey, claims, _options.ExpireMinutes * 60);
         }
 
         public bool ValidateToken(string token)
@@ -69,19 +85,8 @@ namespace Viv.Authentication
 
             try
             {
-                var validator = new PasetoValidator();
-                var validationResult = validator.Validate(token, new PasetoValidationParameters
-                {
-                    SecretKey = _secretKey,
-                    ValidIssuer = _options.Issuer,
-                    ValidAudience = _options.Audience,
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ClockSkew = TimeSpan.Zero
-                });
-
-                return validationResult.IsValid;
+                var result = PasetoBuilder.DecodeLocal(token, _secretKey);
+                return result != null;
             }
             catch
             {
@@ -91,37 +96,52 @@ namespace Viv.Authentication
 
         public TokenPayload ParseToken(string token)
         {
-            if (!ValidateToken(token))
-            {
-                throw new InvalidTokenException("PASETO令牌无效或已过期！");
-            }
+            if (string.IsNullOrEmpty(token))
+                throw new ArgumentException("Token不能为空", nameof(token));
 
             try
             {
-                var pasetoToken = PasetoParser.Parse(token);
-                var payloadDict = pasetoToken.Payload.ToDictionary();
+                var result = PasetoBuilder.DecodeLocal(token, _secretKey);
 
-                // 解析核心字段
+                if (result == null)
+                    throw new InvalidTokenException("令牌无效");
+
                 var payload = new TokenPayload
                 {
-                    UserId = payloadDict["sub"].ToString() ?? string.Empty,
-                    UserName = payloadDict["name"].ToString() ?? string.Empty,
-                    Roles = ((IEnumerable<object>)payloadDict["roles"]).Select(r => r.ToString() ?? string.Empty).ToList()
+                    UserId = GetStringValue(result, "sub") ?? string.Empty,
+                    UserName = GetStringValue(result, "name") ?? string.Empty,
+                    Roles = new List<string>(),
+                    Extensions = new Dictionary<string, string>()
                 };
 
-                // 解析自定义扩展字段（排除内置字段）
-                var builtInFields = new[] { "sub", "name", "roles", "iss", "aud", "exp", "iat" };
-                foreach (var kv in payloadDict.Where(kv => !builtInFields.Contains(kv.Key)))
+                // 解析角色
+                if (result.TryGetValue("roles", out var rolesObj))
                 {
-                    payload.Extensions.Add(kv.Key, kv.Value.ToString() ?? string.Empty);
+                    if (rolesObj is IEnumerable<object> rolesEnumerable)
+                        payload.Roles.AddRange(rolesEnumerable.Select(r => r?.ToString() ?? ""));
+                    else if (rolesObj is string roleStr)
+                        payload.Roles.Add(roleStr);
+                }
+
+                // 解析扩展字段
+                var standardFields = new HashSet<string> { "sub", "iss", "aud", "exp", "iat", "nbf", "jti", "name", "roles" };
+                foreach (var kvp in result)
+                {
+                    if (!standardFields.Contains(kvp.Key) && kvp.Value != null)
+                        payload.Extensions[kvp.Key] = kvp.Value.ToString() ?? "";
                 }
 
                 return payload;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not InvalidTokenException)
             {
-                throw new InvalidTokenException("解析PASETO令牌失败！", ex);
+                throw new InvalidTokenException("解析令牌失败", ex);
             }
+        }
+
+        private string? GetStringValue(IDictionary<string, object> dict, string key)
+        {
+            return dict.TryGetValue(key, out var value) ? value?.ToString() : null;
         }
     }
 }

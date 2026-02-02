@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
-using Viv.Contracts;
 using Viv.Log;
 using Viv.Redis.DbAllocator;
+using Viv.Vva;
 using Viv.Vva.Extension;
 
 namespace Viv.Redis

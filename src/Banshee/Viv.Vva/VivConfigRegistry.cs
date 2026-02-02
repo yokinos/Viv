@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
-namespace Viv.Contracts
+namespace Viv.Vva
 {
     /// <summary>
     /// 线程安全的运行时静态缓存工具

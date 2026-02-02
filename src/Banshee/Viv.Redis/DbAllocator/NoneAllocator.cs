@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using Viv.Contracts;
+using Viv.Vva;
 
 namespace Viv.Redis.DbAllocator
 {

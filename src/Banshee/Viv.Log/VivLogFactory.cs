@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
-using Viv.Contracts;
 using Viv.Log.Enums;
 using Viv.Log.VivLogger;
 using Viv.Vva;
