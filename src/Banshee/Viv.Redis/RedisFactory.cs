@@ -269,11 +269,11 @@ namespace Viv.Redis
         {
             if (ex == null)
             {
-                WriteLogger.Error(message);
+                VivWriteLogger.Error(message);
             }
             else
             {
-                WriteLogger.Error(message, ex);
+                VivWriteLogger.Error(message, ex);
             }
         }
 

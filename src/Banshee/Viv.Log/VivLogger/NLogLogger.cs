@@ -56,11 +56,5 @@ namespace Viv.Log.VivLogger
                 _logger.Log(nlogLevel, $"{message}\n{exceptionMsg}");
             }
         }
-
-        public ValueTask LogAsync(VivLogLevel level, string message, Exception? exception = null)
-        {
-            Log(level, message, exception);
-            return ValueTask.CompletedTask;
-        }
     }
 }
