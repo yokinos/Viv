@@ -7,7 +7,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="RabbitMQ\" />
+    <Folder Include="LocalMessage\" />
+    <Folder Include="RedisPubSub\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" Version="7.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
+    <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
+    <ProjectReference Include="..\Viv.Vva\Viv.Vva.csproj" />
   </ItemGroup>
 
 </Project>

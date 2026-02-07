@@ -6,6 +6,7 @@ using System.Diagnostics.Contracts;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Viv.Vva.Enums;
+using Viv.Vva.Magic;
 
 namespace Viv.Vva.Extension
 {
@@ -61,6 +62,18 @@ namespace Viv.Vva.Extension
         public static T Nvl<T>([AllowNull] this T self, T otherValue)
         {
             return self is null or DBNull ? otherValue : self;
+        }
+
+        public static string GetDescription(this Enum self)
+        {
+            return EnumMagic.GetDescription(self);
+        }
+
+        [return: MaybeNull]
+        public static byte[] ToBytes(this object self, byte[]? defaultvalue = default)
+        {
+            if (self is null) return defaultvalue;
+            return Encoding.UTF8.GetBytes(self.ToJson());
         }
     }
 }

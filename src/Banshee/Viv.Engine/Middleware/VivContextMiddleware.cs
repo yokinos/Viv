@@ -22,9 +22,12 @@ namespace Viv.Engine.Middleware
         {
             try
             {
+                // 解析登录对象
 
+                vivContext.SetAppId(0);
+                vivContext.SetTenantId(0);
+                vivContext.SetUserId(0);
 
-                vivContext.TenantId = 0;
                 await _next(context);
             }
             finally
