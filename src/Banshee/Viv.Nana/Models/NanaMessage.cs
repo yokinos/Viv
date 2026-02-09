@@ -6,7 +6,7 @@ using Viv.Vva.Magic;
 
 namespace Viv.Nana.Models
 {
-    public class VivMessage<T> where T : NanaMessage
+    public class NanaMessage<T> where T : VivMessage
     {
         /// <summary>
         /// 消息Id

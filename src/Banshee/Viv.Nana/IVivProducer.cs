@@ -5,7 +5,7 @@ using Viv.Nana.Core;
 
 namespace Viv.Nana
 {
-    public interface IVivNanaProducer
+    public interface IVivProducer
     {
         /// <summary>
         /// 发布普通消息
@@ -13,7 +13,7 @@ namespace Viv.Nana
         /// <typeparam name="T"></typeparam>
         /// <param name="content"></param>
         /// <returns></returns>
-        Task<bool> PublishAsync<T>(T content) where T : NanaMessage;
+        Task<bool> PublishAsync<T>(T content) where T : VivMessage;
 
         /// <summary>
         /// 发布延迟消息
@@ -21,6 +21,6 @@ namespace Viv.Nana
         /// <typeparam name="T"></typeparam>
         /// <param name="content"></param>
         /// <returns></returns>
-        Task<bool> PublishDelayAsync<T>(T content) where T : NanaMessage;
+        Task<bool> PublishDelayAsync<T>(T content) where T : VivMessage;
     }
 }

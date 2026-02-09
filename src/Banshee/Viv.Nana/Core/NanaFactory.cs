@@ -1,6 +1,7 @@
 ﻿using RabbitMQ.Client;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Log.VivLogger;
 using Viv.Nana.Models;
 using Viv.Nana.Options;
 using Viv.Nana.RabbitMQ;
@@ -13,11 +14,11 @@ namespace Viv.Nana.Core
     {
         protected static NanaOptions NanaOptions = VivConfigRegistry.Get<NanaOptions>() ?? new NanaOptions();
         private static List<QueueModel> QueueList = new List<QueueModel>();
+        protected readonly IVivLogger _logger;
 
-
-        public NanaFactory()
+        public NanaFactory(IVivLogger logger)
         {
-
+            _logger = logger;
         }
 
         protected QueueModel GetQueue<T>()
@@ -25,7 +26,13 @@ namespace Viv.Nana.Core
 
         }
 
-        public async Task<bool> RabbitMQPublishAsync<T>(VivMessage<T> message) where T : NanaMessage
+        /// <summary>
+        /// 发布消息到RabbitMQ
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="message"></param>
+        /// <returns></returns>
+        public async Task<bool> RabbitMQPublishAsync<T>(NanaMessage<T> message) where T : VivMessage
         {
             var model = GetQueue<T>();
             if (model is null || message.Content is null) return false;
@@ -42,7 +49,7 @@ namespace Viv.Nana.Core
                 };
             }
 
-            await channel.BasicPublishAsync(model.Exchange, model.RoutingKey, model.IsMandatory, properties, message.ToBytes());
+            await channel.BasicPublishAsync(model.Queue.Exchange, model.Queue.RoutingKey, model.Queue.IsMandatory, properties, message.ToBytes());
             return true;
         }
     }

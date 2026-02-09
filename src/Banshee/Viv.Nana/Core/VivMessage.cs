@@ -14,7 +14,7 @@ namespace Viv.Nana.Core
     /// 核心作用：统一封装消息的基础属性、队列配置、交换机配置，子类只需继承即可自动适配配置
     /// 设计规范：子类命名需以"Message"结尾（如OrderMessage），队列名自动生成（如OrderQueue）
     /// </summary>
-    public abstract class NanaMessage
+    public abstract class VivMessage
     {
         private const string MessageEnd = "Message";
         private const string QeueuEnd = "Queue";
