@@ -25,6 +25,11 @@ namespace Viv.Nana.Options
         public bool IsEnableLocalMessage { get; set; } = false;
 
         /// <summary>
+        /// 主队列发布失败的重试次数（默认3次）
+        /// </summary>
+        public int RetryCount { get; set; } = 3;
+
+        /// <summary>
         /// RabbitMQ 连接及配置项
         /// </summary>
         public RabbitMQOptions? RabbitMQOptions { get; set; }

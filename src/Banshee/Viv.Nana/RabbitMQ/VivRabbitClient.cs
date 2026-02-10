@@ -29,7 +29,7 @@ namespace Viv.Nana.RabbitMQ
         /// <returns>可用的RabbitMQ通道（IChannel）</returns>
         public async Task<IChannel> GetChannelAsync(QueueModel model, CancellationToken cancellationToken = default)
         {
-            var key = $"{model.Queue.Name}_{Environment.CurrentManagedThreadId}";
+            var key = $"{model.QueueName}_{Environment.CurrentManagedThreadId}";
             if (_channels.TryGetValue(key, out var oldChannel) && oldChannel.IsOpen)
             {
                 return oldChannel;
@@ -70,7 +70,7 @@ namespace Viv.Nana.RabbitMQ
 
             // 1. 声明队列
             await channel.QueueDeclareAsync(
-                queue: model.Queue.Name,                // 队列名称
+                queue: model.QueueName,                // 队列名称
                 durable: model.QueueDeclare.IsDurable, // 是否持久化（重启后队列不丢失）
                 exclusive: model.QueueDeclare.IsExclusive,   // 是否排他（仅当前Connection可用，关闭后自动删除）
                 autoDelete: model.QueueDeclare.IsAutoDelete, // 是否自动删除（无消费者时删除）
@@ -79,8 +79,8 @@ namespace Viv.Nana.RabbitMQ
 
             // 2. 声明交换机
             await channel.ExchangeDeclareAsync(
-                exchange: model.Queue.Exchange,                 // 交换机名称
-                type: model.Queue.ExchangeType,                 // 交换机类型（Direct/Fanout/Topic/Headers）
+                exchange: model.Exchange,                 // 交换机名称
+                type: model.ExchangeType,                 // 交换机类型（Direct/Fanout/Topic/Headers）
                 durable: model.ExchangeDeclare.IsDurable, // 是否持久化
                 autoDelete: model.ExchangeDeclare.IsAutoDelete, // 是否自动删除
                 arguments: model.ExchangeDeclare.Arguments,     // 交换机扩展参数
@@ -88,10 +88,10 @@ namespace Viv.Nana.RabbitMQ
 
             // 3. 绑定队列到交换机（指定路由键，完成消息路由规则）
             await channel.QueueBindAsync(
-                queue: model.Queue.Name,       // 队列名称
-                exchange: model.Queue.Exchange,     // 交换机名称
-                routingKey: model.Queue.RoutingKey, // 路由键（匹配规则）
-                arguments: model.Queue.Arguments,   // 绑定扩展参数
+                queue: model.QueueName,       // 队列名称
+                exchange: model.Exchange,     // 交换机名称
+                routingKey: model.RoutingKey, // 路由键（匹配规则）
+                arguments: model.QueueBind.Arguments,   // 绑定扩展参数
                 cancellationToken: cancellationToken); // 取消令牌
         }
 

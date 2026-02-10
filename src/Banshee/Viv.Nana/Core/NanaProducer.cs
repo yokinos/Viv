@@ -50,7 +50,7 @@ namespace Viv.Nana.Core
         {
             return queueType switch
             {
-                MessageQueueType.RabbitMQ => await RabbitMQPublishAsync(message),
+                MessageQueueType.RabbitMQ => await RabbitMQPublishAsync(message, NanaOptions.RetryCount),
                 MessageQueueType.RedisPubSub => false,
                 MessageQueueType.LocalMessage => false,
                 MessageQueueType.None => false,
