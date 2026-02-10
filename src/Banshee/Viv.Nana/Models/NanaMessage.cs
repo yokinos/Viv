@@ -8,6 +8,8 @@ namespace Viv.Nana.Models
 {
     public class NanaMessage<T> where T : VivMessage
     {
+        public NanaMessage() { }
+
         /// <summary>
         /// 消息Id
         /// </summary>
@@ -27,5 +29,10 @@ namespace Viv.Nana.Models
         /// 消息内容
         /// </summary>
         public T? Content { get; set; }
+
+        /// <summary>
+        /// 消息时间
+        /// </summary>
+        public DateTimeOffset PublishAt { get; set; } = DateTimeOffset.UtcNow;
     }
 }

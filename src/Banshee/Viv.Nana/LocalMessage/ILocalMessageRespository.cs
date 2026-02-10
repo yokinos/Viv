@@ -4,7 +4,7 @@ using System.Text;
 using Viv.Nana.Core;
 using Viv.Nana.Models;
 
-namespace Viv.Nana.Interface
+namespace Viv.Nana.LocalMessage
 {
     public interface ILocalMessageRespository
     {

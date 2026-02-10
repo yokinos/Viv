@@ -1,14 +1,15 @@
 ﻿using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
+using StackExchange.Redis;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using Viv.Log.VivLogger;
 using Viv.Nana.Models;
 using Viv.Nana.Options;
-using Viv.Nana.RabbitMQ;
+using Viv.Nana.RabbitMq;
+using Viv.Redis;
 using Viv.Vva;
 using Viv.Vva.Extension;
 
@@ -19,11 +20,14 @@ namespace Viv.Nana.Core
         protected static readonly NanaOptions NanaOptions = VivConfigRegistry.Get<NanaOptions>() ?? new NanaOptions();
         protected static readonly ConcurrentDictionary<string, QueueModel> _queue_dict = [];
         protected static readonly ConcurrentDictionary<string, string> _queue_Re_dict = [];
+
+        protected readonly Lazy<IRedisService> _redisService;
         protected readonly IVivLogger _logger;
 
-        public NanaFactory(IVivLogger logger)
+        public NanaFactory(IVivLogger logger, Lazy<IRedisService> redisService)
         {
             _logger = logger;
+            _redisService = redisService;
         }
 
         [return: MaybeNull]
@@ -45,6 +49,12 @@ namespace Viv.Nana.Core
             return queue;
         }
 
+        public async Task<IChannel> CreateChannelAsync(QueueModel model, CancellationToken cancellationToken = default)
+        {
+            var channel = await VivRabbitClient.GetInstance().GetChannelAsync(model, null, cancellationToken);
+            return channel;
+        }
+
         #region RabbitMQ发布消息
 
         /// <summary>
@@ -61,7 +71,7 @@ namespace Viv.Nana.Core
             var model = GetQueue(message.Content);
             if (model is null || message.Content is null) return false;
 
-            var channel = await VivRabbitClient.GetInstance().GetChannelAsync(model, cancellationToken);
+            var channel = await VivRabbitClient.GetInstance().GetChannelAsync(model, message.Content.GetDeadLetterQueue(), cancellationToken);
             if (channel is null || channel.IsClosed) return false;
 
             var properties = message.Content.GetBasicProperties(message.VivAppId, message.MessageId);
@@ -127,6 +137,18 @@ namespace Viv.Nana.Core
             {
                 var errorMsg = $"AMQP退回消息,交换机为Exchange为[{e.Exchange}],路由键Routingkey为[{e.RoutingKey}],状态码RelayCode为[{e.ReplyCode}],退回原因RelayText=[{e.ReplyText}]";
             };
+        }
+
+        #endregion
+
+        #region Redis发布消息
+
+        public async ValueTask<bool> RedisPublishAsync<T>(NanaMessage<T> message) where T : VivMessage
+        {
+            if (message is null || message.Content is null) return false;
+            var queue = message.Content.GetQueueName();
+            var clientCount = await _redisService.Value.PublishAsync(RedisChannel.Pattern(queue), message);
+            return clientCount > 0;
         }
 
         #endregion

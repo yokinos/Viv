@@ -11,7 +11,7 @@ using Viv.Log.VivLogger;
 using Viv.Nana.Options;
 using Viv.Vva;
 
-namespace Viv.Nana.RabbitMQ
+namespace Viv.Nana.RabbitMq
 {
     /// <summary>
     /// RabbitMQ连接工厂

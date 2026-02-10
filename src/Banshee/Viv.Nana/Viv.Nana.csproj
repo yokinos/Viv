@@ -7,11 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="LocalMessage\" />
-    <Folder Include="RedisPubSub\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="RabbitMQ.Client" Version="7.2.0" />
   </ItemGroup>
 
@@ -19,6 +14,7 @@
     <ProjectReference Include="..\Viv.Autofac\Viv.Autofac.csproj" />
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
     <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
+    <ProjectReference Include="..\Viv.Redis\Viv.Redis.csproj" />
     <ProjectReference Include="..\Viv.Vva\Viv.Vva.csproj" />
   </ItemGroup>
 

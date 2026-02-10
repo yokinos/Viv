@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Viv.Nana.Models;
 
-namespace Viv.Nana.RabbitMQ
+namespace Viv.Nana.RabbitMq
 {
     /// <summary>
     /// RabbitMQ客户端封装类
@@ -25,9 +25,10 @@ namespace Viv.Nana.RabbitMQ
         /// 获取指定队列的RabbitMQ通道（复用已有通道，无则创建）
         /// </summary>
         /// <param name="model">队列配置模型（包含队列、交换机、路由键等信息）</param>
+        /// <param name="deadLetter">死信队列配置模型（可选，为空则不创建死信队列）</param>
         /// <param name="cancellationToken">取消令牌（用于取消异步操作）</param>
         /// <returns>可用的RabbitMQ通道（IChannel）</returns>
-        public async Task<IChannel> GetChannelAsync(QueueModel model, CancellationToken cancellationToken = default)
+        public async Task<IChannel> GetChannelAsync(QueueModel model, QueueModel? deadLetter = null, CancellationToken cancellationToken = default)
         {
             var key = $"{model.QueueName}_{Environment.CurrentManagedThreadId}";
             if (_channels.TryGetValue(key, out var oldChannel) && oldChannel.IsOpen)
@@ -49,8 +50,19 @@ namespace Viv.Nana.RabbitMQ
                 outstandingPublisherConfirmationsRateLimiter: new ThrottlingRateLimiter(256)
             );
             var newChannel = await connection.CreateChannelAsync(channelOptions, cancellationToken);
-
             await BindChannelAsync(newChannel, model, cancellationToken);
+
+            if (deadLetter is not null)
+            {
+                var flag = DeadLetterValidator.Validate(model, deadLetter);
+                if (flag)
+                {
+                    // 创建死信队列通道并绑定,随即关闭通道（死信队列不需要长连接）
+                    using var deadletterChannel = await connection.CreateChannelAsync(channelOptions, cancellationToken);
+                    await BindChannelAsync(deadletterChannel, deadLetter, cancellationToken);
+                }
+            }
+
             _channels[key] = newChannel;
             return newChannel;
         }
