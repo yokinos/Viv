@@ -22,6 +22,23 @@ namespace Viv.Nana.RabbitMq
         public static VivRabbitClient GetInstance() => _instance.Value;
 
         /// <summary>
+        /// 关闭指定队列的RabbitMQ通道（如果存在），并从缓存中移除
+        /// </summary>
+        /// <param name="queueName"></param>
+        /// <returns></returns>
+        public async Task CloseAsync(string queueName)
+        {
+            var key = GetCacheKey(queueName);
+            if (_channels.TryGetValue(key, out var channel))
+            {
+                await SafeCloseChannelAsync(channel);
+                _channels.TryRemove(key, out _);
+            }
+        }
+
+        private static string GetCacheKey(string queueName) => $"{queueName}_{Environment.CurrentManagedThreadId}";
+
+        /// <summary>
         /// 获取指定队列的RabbitMQ通道（复用已有通道，无则创建）
         /// </summary>
         /// <param name="model">队列配置模型（包含队列、交换机、路由键等信息）</param>
@@ -30,7 +47,7 @@ namespace Viv.Nana.RabbitMq
         /// <returns>可用的RabbitMQ通道（IChannel）</returns>
         public async Task<IChannel> GetChannelAsync(QueueModel model, QueueModel? deadLetter = null, CancellationToken cancellationToken = default)
         {
-            var key = $"{model.QueueName}_{Environment.CurrentManagedThreadId}";
+            var key = GetCacheKey(model.QueueName);
             if (_channels.TryGetValue(key, out var oldChannel) && oldChannel.IsOpen)
             {
                 return oldChannel;

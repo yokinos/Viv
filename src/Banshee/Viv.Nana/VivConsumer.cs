@@ -2,6 +2,7 @@
 using RabbitMQ.Client.Events;
 using StackExchange.Redis;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Log.VivLogger;
@@ -22,10 +23,14 @@ namespace Viv.Nana
     /// 3. 本地消息表（最终兜底消费）
     /// </summary>
     /// <typeparam name="T">消息模型（需要继承[VivMessage]）</typeparam>
-    public abstract class VivConsumer<T> where T : VivMessage, new()
+    public abstract class VivConsumer<T> : IDisposable where T : VivMessage, new()
     {
         protected readonly Lazy<IRedisService> _redisService;
         protected readonly IVivLogger _logger;
+
+        private bool _disposed = false;
+        private RedisChannel _redisChannel;
+        private readonly HashSet<string> _queues = [];
 
         public VivConsumer(IVivLogger logger, Lazy<IRedisService> redisService)
         {
@@ -104,6 +109,8 @@ namespace Viv.Nana
             var channel = await VivRabbitClient.GetInstance().GetChannelAsync(queue, null, cancellationToken);
             if (channel is null) return;
 
+            _queues.Add(queue.QueueName);
+
             // 创建消费者并绑定事件
             var consumer = new AsyncEventingBasicConsumer(channel);
             consumer.ReceivedAsync += async (sender, args) =>
@@ -150,10 +157,20 @@ namespace Viv.Nana
                     }
                     else
                     {
-                        // 消费失败：拒绝消息并决定是否重新入队
-                        // requeue=false：消息进入死信队列；requeue=true：重新入队等待重试
-                        await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: subscribeResult.IsRequeue, cancellationToken);
-                        _logger.Error($"RabbitMQ消息消费失败，队列[{queue.QueueName}]，DeliveryTag：{args.DeliveryTag}");
+                        if (isDeadLetter)
+                        {
+                            // 死信消费失败：记录日志并[确认]丢弃消息，避免死信循环
+                            await channel.BasicAckAsync(args.DeliveryTag, multiple: false, cancellationToken);
+
+                            // 后续这里可以入库（先放着吧 我后面再改）
+                        }
+                        else
+                        {
+                            // 消费失败：拒绝消息并决定是否重新入队
+                            // requeue=false：消息进入死信队列；requeue=true：重新入队等待重试
+                            _logger.Error($"RabbitMQ消息消费失败，队列[{queue.QueueName}]，DeliveryTag：{args.DeliveryTag}");
+                            await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: subscribeResult.IsRequeue, cancellationToken);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -195,12 +212,12 @@ namespace Viv.Nana
             var queue = vivMessage.GetQueue();
             if (queue is null) return;
 
-            var redisChannel = RedisChannel.Pattern(queue.QueueName);
-            await _redisService.Value.SubscribeAsync<NanaMessage<T>>(redisChannel, async (message) =>
+            _redisChannel = RedisChannel.Pattern(queue.QueueName);
+            await _redisService.Value.SubscribeAsync<NanaMessage<T>>(_redisChannel, async (message) =>
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    _logger.Warn($"Redis消费被取消：频道[{redisChannel}]");
+                    _logger.Warn($"Redis消费被取消：频道[{_redisChannel}]");
                     return;
                 }
 
@@ -208,7 +225,7 @@ namespace Viv.Nana
                 {
                     if (message == null)
                     {
-                        _logger.Error($"Redis消息反序列化失败：频道[{redisChannel}]：消息内容：{message.ToJson()}");
+                        _logger.Error($"Redis消息反序列化失败：频道[{_redisChannel}]：消息内容：{message.ToJson()}");
                         return;
                     }
 
@@ -216,14 +233,21 @@ namespace Viv.Nana
                     if (!result.IsSuccess)
                     {
 
-                        _logger.Error($"Redis消息处理失败：频道[{redisChannel}]：消息内容：{message.ToJson()}, 失败原因：{result.Message}");
+                        _logger.Error($"Redis消息处理失败：频道[{_redisChannel}]：消息内容：{message.ToJson()}, 失败原因：{result.Message}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"Redis订阅消息处理异常：频道[{redisChannel}]，异常：{ex.Message}", ex);
+                    _logger.Error($"Redis订阅消息处理异常：频道[{_redisChannel}]，异常：{ex.Message}", ex);
                 }
             });
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }
