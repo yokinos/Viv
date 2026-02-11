@@ -6,10 +6,7 @@ namespace Viv.Vva.Generic
 {
     public class PagedList<T>
     {
-        public PagedList()
-        {
-
-        }
+        public PagedList() { }
 
         /// <summary>
         /// 页码

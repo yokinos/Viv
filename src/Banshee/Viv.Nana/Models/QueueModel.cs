@@ -35,6 +35,11 @@ namespace Viv.Nana.Models
         public bool IsMandatory { get; set; } = true;
 
         /// <summary>
+        /// 是否自动ACK,如果为true,消费者在收到消息后会自动发送ACK确认消息已被处理,如果为false,消费者需要手动发送ACK确认消息已被处理(默认False)
+        /// </summary>
+        public bool IsAutoAck { get; } = false;
+
+        /// <summary>
         /// 队列绑定设置
         /// </summary>
         public QueueBind QueueBind { get; set; } = new QueueBind();

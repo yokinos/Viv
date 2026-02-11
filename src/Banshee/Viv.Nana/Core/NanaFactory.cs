@@ -30,31 +30,6 @@ namespace Viv.Nana.Core
             _redisService = redisService;
         }
 
-        [return: MaybeNull]
-        protected QueueModel GetQueue<T>(T t) where T : VivMessage
-        {
-            var queueName = t.GetQueueName();
-
-            if (_queue_dict.TryGetValue(queueName, out var queue))
-            {
-                return queue;
-            }
-
-            queue = t.GetQueue();
-            if (queue != null)
-            {
-                _queue_dict.TryAdd(queueName, queue);
-            }
-
-            return queue;
-        }
-
-        public async Task<IChannel> CreateChannelAsync(QueueModel model, CancellationToken cancellationToken = default)
-        {
-            var channel = await VivRabbitClient.GetInstance().GetChannelAsync(model, null, cancellationToken);
-            return channel;
-        }
-
         #region RabbitMQ发布消息
 
         /// <summary>
@@ -68,7 +43,7 @@ namespace Viv.Nana.Core
         public async ValueTask<bool> RabbitMQPublishAsync<T>(NanaMessage<T> message, int retryCount, CancellationToken cancellationToken = default) where T : VivMessage
         {
             if (message is null || message.Content is null) return false;
-            var model = GetQueue(message.Content);
+            var model = message.Content.GetQueue();
             if (model is null || message.Content is null) return false;
 
             var channel = await VivRabbitClient.GetInstance().GetChannelAsync(model, message.Content.GetDeadLetterQueue(), cancellationToken);

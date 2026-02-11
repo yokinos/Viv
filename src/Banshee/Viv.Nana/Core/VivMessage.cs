@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using Viv.Nana.Enums;
 using Viv.Nana.Models;
 using Viv.Vva.Magic;
 
@@ -36,21 +35,25 @@ namespace Viv.Nana.Core
 
         public VivMessage() : this(false) { }
 
-        public VivMessage(bool isDelayQueue)
+        public VivMessage(bool isDelayQueue, TimeSpan? delayTTL = null)
         {
             IsDelayQueue = isDelayQueue;
+            if (isDelayQueue)
+            {
+                DelayTTL = delayTTL ?? TimeSpan.FromSeconds(30);
+            }
         }
 
         /// <summary>
         /// 是否是延迟队列
         /// </summary>
         /// <returns></returns>
-        public bool IsDelayQueue { get; set; }
+        public bool IsDelayQueue { get; private set; }
 
         /// <summary>
         /// 延迟多久（仅对延迟队列有效）
         /// </summary>
-        public TimeSpan DelayTTL { get; set; } = TimeSpan.FromSeconds(30);
+        public TimeSpan DelayTTL { get; set; }
 
         /// <summary>
         /// RabbitMQ已经按照AMQP规范实现了priority字段,它的值被定义为0~9之间.用于指定队列中消息的优先级.

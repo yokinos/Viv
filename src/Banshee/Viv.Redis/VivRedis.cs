@@ -138,7 +138,7 @@ namespace Viv.Redis
         {
             try
             {
-                if (_dbAllocator is null || keyList.IsNullOrEmpty()) return []; 
+                if (_dbAllocator is null || keyList.IsNullOrEmpty()) return [];
                 var keyDict = _dbAllocator.AllocateGroupDbIndex(keyList, CurrentRedisOptions?.MaxDbIndex);
                 var list = new List<T>();
 

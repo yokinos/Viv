@@ -14,7 +14,7 @@ namespace Viv.Redis.DbAllocator
 
         public TenantIdAllocator()
         {
-            var context = VivLocator.GetScopedService<IVivContext>();
+            var context = VivLocator.GetService<IVivContext>();
             _tenantId = context.TenantId;
         }
 
