@@ -4,7 +4,7 @@ using Autofac.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Http;
 using System;
 
-namespace Viv.Autofac
+namespace Viv.Aoi
 {
     /// <summary>
     /// Viv框架内置的Autofac服务定位器（适配.NET 10）
