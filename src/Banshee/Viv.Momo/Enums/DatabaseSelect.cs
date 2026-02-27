@@ -3,9 +3,9 @@
 namespace Viv.Momo.Enums
 {
     /// <summary>
-    /// 数据库来源
+    /// 数据库类型
     /// </summary>
-    public enum DatabaseSelect
+    public enum DatabaseSouceType
     {
         /// <summary>
         /// [已支持] PostgreSQL 数据库
@@ -16,11 +16,6 @@ namespace Viv.Momo.Enums
         /// [已支持] Microsoft SQL Server 数据库
         /// </summary>
         MsSql = 1,
-
-        /// <summary>
-        /// [已支持] Oracle 数据库
-        /// </summary>
-        Oracle = 2,
 
         /// <summary>
         /// [未支持] MySQL/MariaDB 数据库
