@@ -1,9 +1,10 @@
 ﻿
 using Microsoft.EntityFrameworkCore;
-
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
+using Npgsql;
 using System;
 using System.Data;
-using System.Data.SqlClient; // 新增：MsSql 连接
+using System.Data.SqlClient;
 using Viv.Momo.Enums;
 using Viv.Momo.Options;
 using Viv.Vva.Magic;
@@ -75,9 +76,6 @@ namespace Viv.Momo.Contexts
                 case DatabaseSouceType.MsSql:
                     optionsBuilder.UseSqlServer(connectionString);
                     break;
-                case DatabaseSouceType.Sqlite:
-                    optionsBuilder.UseSqlite(connectionString);
-                    break;
                 default:
                     // 修复：仅在不匹配时抛出异常
                     throw new NotSupportedException($"不支持的数据库类型：{_options.DatabaseSouce}");
@@ -89,20 +87,25 @@ namespace Viv.Momo.Contexts
         /// </summary>
         /// <param name="isRead">是否为读操作（默认 true，优先走从库）</param>
         /// <returns>数据库连接</returns>
-        public IDbConnection GetDbConnectionx(bool isRead = true)
+        public async IDbConnection GetDbConnectionx(bool isRead, bool isUseEfConn)
         {
+            if (isUseEfConn)
+            {
+                SwitchConnection(isRead);
+                var connection = Database.GetDbConnection();
+                return connection;
+            }
+
             // 获取适配读写分离的连接字符串
-            var currentConnStr = GetConnectionString(isRead);
+            var connectionString = GetConnectionString(isRead);
 
             var conn = _options.DatabaseSouce switch
             {
-                DatabaseSouceType.PostgreSQL => new NpgsqlConnection(currentConnStr),
-                DatabaseSouceType.MsSql => new SqlConnection(currentConnStr),
-                DatabaseSouceType.Sqlite => new SqliteConnection(currentConnStr), // 修复：使用 EF Core 推荐的 SqliteConnection
+                DatabaseSouceType.PostgreSQL => new NpgsqlConnection(connectionString),
+                DatabaseSouceType.MsSql => new SqlServerConnection(),
                 _ => throw new NotSupportedException($"不支持的数据库类型：{_options.DatabaseSouce}")
             };
 
-            var connection =  Database.getd
 
             // 仅在连接未打开时打开（避免重复打开）
             if (conn.State != ConnectionState.Open)
@@ -120,8 +123,7 @@ namespace Viv.Momo.Contexts
         /// <param name="isRead">是否为读操作</param>
         public void SwitchConnection(bool isRead)
         {
-            _connStr = GetConnectionString(isRead);
-            Database.GetDbConnection().ConnectionString = _connStr;
+            Database.GetDbConnection().ConnectionString = GetConnectionString(isRead);
         }
 
         /// <summary>
