@@ -17,6 +17,11 @@ namespace Viv.Momo.Database
             throw new NotImplementedException();
         }
 
+        public string CreateInsertTemplateSql(string tableName, Type type)
+        {
+            throw new NotImplementedException();
+        }
+
         public string CreateUpdateSql(string tableName, object entity, string whereKeys)
         {
             throw new NotImplementedException();

@@ -29,5 +29,7 @@ namespace Viv.Momo.Options
         /// 如果需要动态切换 需要实现 <see cref="Interface.IConnectionSelect"/>
         /// </summary>
         public bool IsNeedDanamicChangeDatabase { get; set; } = false;
+
+        public int Timeout { get; set; } = 30;
     }
 }

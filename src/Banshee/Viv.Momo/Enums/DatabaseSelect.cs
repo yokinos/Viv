@@ -15,7 +15,7 @@ namespace Viv.Momo.Enums
         /// <summary>
         /// Microsoft SQL Server 数据库
         /// </summary>
-        MsSql = 1,
+        SqlServer = 1,
 
         /// <summary>
         /// SQLite 嵌入式数据库

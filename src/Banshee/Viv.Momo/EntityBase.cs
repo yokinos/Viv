@@ -1,12 +1,13 @@
 ﻿using System;
 using Viv.Contracts.Enums;
+using Viv.Momo.Interface;
 
 namespace Viv.Momo
 {
     /// <summary>
     /// Viv框架所有业务实体的基类
     /// </summary>
-    public class EntityBase
+    public class EntityBase : IEntity
     {
         /// <summary>
         /// 主键ID（自增/雪花ID）

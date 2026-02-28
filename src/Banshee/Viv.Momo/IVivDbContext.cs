@@ -18,10 +18,10 @@ namespace Viv.Momo
         bool Insert<T>(IEnumerable<T> entitys);
         Task<bool> InsertAsync<T>(T entity);
         Task<bool> InsertAsync<T>(IEnumerable<T> entity);
-        bool Update<T>(T entity);
-        bool Update<T>(IEnumerable<T> entitys);
-        Task<bool> UpdateAsync<T>(T entity);
-        Task<bool> UpdateAsync<T>(IEnumerable<T> entity);
+        bool Update<T>(T entity) where T : IEntity;
+        bool Update<T>(IEnumerable<T> entitys) where T : class, IEntity;
+        Task<bool> UpdateAsync<T>(T entity) where T : IEntity;
+        Task<bool> UpdateAsync<T>(IEnumerable<T> entity) where T : IEntity;
         bool Delete<T>(T entity);
         bool Delete<T>(IEnumerable<T> entitys);
         Task<bool> DeleteAsync<T>(T entity);
@@ -48,9 +48,9 @@ namespace Viv.Momo
         Task<T> GetValueAsync<T>(string sql, params object[] parameters);
 
         bool ExecuteSql(string sql, params object[] parameters);
-        bool ExecuteSqlList(string sql, params object[] parameters);
+        bool ExecuteSqlList(string sql);
         Task<bool> ExecuteSqlAsync(string sql, params object[] parameters);
-        Task<bool> ExecuteSqlListAsync(string sql, params object[] parameters);
+        Task<bool> ExecuteSqlListAsync(string sql);
 
         bool BeginTransaction();
         void CommitTransaction();

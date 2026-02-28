@@ -1,19 +1,21 @@
-﻿using Microsoft.Data.SqlClient;
+﻿using Dapper;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Viv.Contracts.Interface;
 using Viv.Log.VivLogger;
 using Viv.Momo.Contexts;
 using Viv.Momo.Enums;
+using Viv.Momo.Interface;
 using Viv.Momo.Options;
 using Viv.Vva;
 using Viv.Vva.Extension;
 using Viv.Vva.Magic;
 
-namespace Viv.Momo
+namespace Viv.Momo.Core
 {
     public class VivDatabase
     {
@@ -24,6 +26,10 @@ namespace Viv.Momo
         private EFAppContext _writeDbContext;
         private EFAppContext _readDbContext;
 
+        protected readonly DbTransaction _transaction;
+        protected int _timeOut = 30;
+        protected static readonly HashSet<string> _primaryKeys = ["Id"];
+
         public VivDatabase(IVivContext vivContext, IVivLogger logger)
         {
             ArgumentNullException.ThrowIfNull(_vivContext);
@@ -33,7 +39,6 @@ namespace Viv.Momo
             _options = options;
             VivAppId = _vivContext.VivAppId;
             TenantId = _vivContext.TenantId;
-
             _logger = logger;
         }
 
@@ -47,7 +52,12 @@ namespace Viv.Momo
         [return: NotNull]
         public EFAppContext GetEFCoreContext(DbReadWriteType dbReadWriteType = DbReadWriteType.Write)
         {
-            return CreateEFAppContext(_options, dbReadWriteType);
+            var context = CreateEFAppContext(_options, dbReadWriteType);
+            if (context.Database.GetCommandTimeout() != _timeOut)
+            {
+                context.Database.SetCommandTimeout(_timeOut);
+            }
+            return context;
         }
 
         /// <summary>
@@ -137,6 +147,25 @@ namespace Viv.Momo
             }
         }
 
+        protected ISqlGenerater GetSqlGenerater()
+        {
+            return SqlGeneraterFactory.GetSqlGenerater(_options.DatabaseSouce);
+        }
+
+        /// <summary>
+        /// 适配数据库的字段名
+        /// </summary>
+        /// <param name="fieldName">原始字段名（如Amount/Status）</param>
+        /// <returns>适配数据库的字段名</returns>
+        public string AdaptFieldNameToDatabase(string fieldName)
+        {
+            return _options.DatabaseSouce switch
+            {
+                DatabaseSouceType.PostgreSQL => fieldName.ToLowerInvariant(),
+                _ => fieldName
+            };
+        }
+
         #endregion
 
         #region 批量处理
@@ -144,51 +173,36 @@ namespace Viv.Momo
         /// <summary>
         /// 单次EF处理实体的最大数量（超过这个数量转SQL处理）
         /// </summary>
-        private const int EFMaxCount = 1000;
+        protected const int EFMaxCount = 1000;
+
 
         /// <summary>
-        /// 单次SQL处理的最大数量（超过这个数量转命令处理）
+        /// 批量执行SQL语句（建议加事务执行）
         /// </summary>
-        private const int SqlMaxCount = 10000;
-
-        public int BatchExecute<T>(List<T> entitys, DbOperationType operationType)
+        /// <param name="sqlList"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        public bool DapperExecuteSqlList(List<string> sqlList, EFAppContext context, DynamicParameters? parameters = null, int pageSize = 200)
         {
-            AutoSetValue(entitys);
-            return operationType switch
+            var totalCount = sqlList.Count;
+            var totalPages = CalculateTotalPages(totalCount, pageSize);
+            for (int index = 1; index <= totalPages; index++)
             {
-                DbOperationType.Insert => BatchInsert(entitys),
-            };
+                var list = sqlList.Skip((index - 1) * pageSize).Take(pageSize).ToList();
+                var sql = string.Join(";", list) + ";";
+                context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
+            }
+
+            return true;
         }
 
-        public int BatchInsert<T>(List<T> entitys)
+        public static int CalculateTotalPages(int totalItems, int pageSize)
         {
-            var count = entitys.Count;
-            if (count < EFMaxCount)
-            {
-                var context = GetEFCoreContext();
-                context.AddRange(entitys);
-                return context.SaveChanges();
-            }
+            if (totalItems < 0 || pageSize <= 0)
+                return 0;
 
-            if (count < SqlMaxCount)
-            {
-                // 用dapper批量插入
-                var sqlList = new List<string>();
-                foreach (var entity in entitys)
-                {
-                  var sql = _options.DatabaseSouce switch 
-                    {
-                         DatabaseSouceType.PostgreSQL => Posgresqlma:
-                        
-                         DatabaseSouceType.MsSql:
-                    
-                    }
-
-                    sqlList.Add()
-                }
-
-            }
-
+            //return (int)Math.Ceiling((double)totalItems / pageSize);
+            return (totalItems + pageSize - 1) / pageSize;
         }
 
         #endregion

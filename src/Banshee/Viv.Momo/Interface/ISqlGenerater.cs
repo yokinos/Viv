@@ -13,5 +13,7 @@ namespace Viv.Momo.Interface
         string CreateDeleteSql(string tableName, string whereKeys);
 
         string ToDatabaseValue(object value);
+
+        string CreateInsertTemplateSql(string tableName, Type type);
     }
 }

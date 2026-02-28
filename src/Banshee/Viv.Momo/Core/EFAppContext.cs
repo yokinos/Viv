@@ -19,7 +19,15 @@ namespace Viv.Momo.Contexts
         public EFAppContext(DatabaseOptions options, DbReadWriteType dbReadWriteType = DbReadWriteType.Read)
         {
             _options = options;
-            _dbReadWriteType = dbReadWriteType;
+
+            if (options.IsReadWriteSplit)
+            {
+                _dbReadWriteType = dbReadWriteType;
+            }
+            else
+            {
+                _dbReadWriteType = DbReadWriteType.Write;
+            }
 
             // 事务约束：读库上下文禁止开启事务
             if (_dbReadWriteType == DbReadWriteType.Read)
@@ -34,7 +42,7 @@ namespace Viv.Momo.Contexts
         /// <param name="isRead">是否为读操作</param>
         /// <returns>适配的连接字符串</returns>
         /// <exception cref="InvalidOperationException">连接字符串配置异常</exception>
-        public string GetConnectionString(DbReadWriteType  dbReadWriteType)
+        public string GetConnectionString(DbReadWriteType dbReadWriteType)
         {
             if (_options.ConnectionStrings == null || _options.ConnectionStrings.Length == 0)
             {
@@ -60,7 +68,6 @@ namespace Viv.Momo.Contexts
             if (optionsBuilder.IsConfigured) return;
 
             var connectionString = GetConnectionString(_dbReadWriteType);
-
             var queryTrackingBehavior = _dbReadWriteType == DbReadWriteType.Read ? QueryTrackingBehavior.NoTracking : QueryTrackingBehavior.TrackAll;
 
             switch (_options.DatabaseSouce)
@@ -69,7 +76,7 @@ namespace Viv.Momo.Contexts
                     optionsBuilder.UseNpgsql(connectionString)
                         .UseQueryTrackingBehavior(queryTrackingBehavior);
                     break;
-                case DatabaseSouceType.MsSql:
+                case DatabaseSouceType.SqlServer:
                     optionsBuilder.UseSqlServer(connectionString)
                         .UseQueryTrackingBehavior(queryTrackingBehavior);
                     break;
@@ -81,21 +88,24 @@ namespace Viv.Momo.Contexts
         /// <summary>
         /// 暴露连接供 Dapper 使用（返回当前上下文绑定的读/写库连接）
         /// </summary>
-        public IDbConnection GetDbConnection()
+        public IDbConnection DbConnection
         {
-            // 缓存连接，避免重复获取
-            if (_cachedConnection == null)
+            get
             {
-                _cachedConnection = Database.GetDbConnection();
-            }
+                // 缓存连接，避免重复获取
+                if (_cachedConnection == null)
+                {
+                    _cachedConnection = Database.GetDbConnection();
+                }
 
-            // 确保连接打开
-            if (_cachedConnection.State != ConnectionState.Open)
-            {
-                _cachedConnection.Open();
-            }
+                // 确保连接打开
+                if (_cachedConnection.State != ConnectionState.Open)
+                {
+                    _cachedConnection.Open();
+                }
 
-            return _cachedConnection;
+                return _cachedConnection;
+            }
         }
     }
 }
