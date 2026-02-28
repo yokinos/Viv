@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
 using Viv.Momo.Enums;
+using Viv.Momo.Interface;
 using Viv.Momo.Options;
 using Viv.Vva.Generic;
 
@@ -63,5 +64,6 @@ namespace Viv.Momo
         void ChangeVivAppId(string vivAppId);
         void CloseAutoSetValue();
         void EnableAutoSetValue();
+        ISqlGenerater GetSqlGenerater(DatabaseSouceType databaseSouce);
     }
 }

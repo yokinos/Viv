@@ -6,6 +6,6 @@ namespace Viv.Momo.Interface
 {
     public interface IConnectionSelect
     {
-        Task<string[]> GetConnectionStrings(long appId, long tenantId);
+        Task<string[]> GetConnectionStrings(long appId, long tenantId, bool isRead);
     }
 }

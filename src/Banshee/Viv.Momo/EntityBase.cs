@@ -1,5 +1,5 @@
 ﻿using System;
-using Viv.Momo.Enums;
+using Viv.Contracts.Enums;
 
 namespace Viv.Momo
 {
@@ -24,7 +24,7 @@ namespace Viv.Momo
         public long TenantId { get; set; }
 
         /// <summary>
-        /// 软删除标识（VivBool是自定义布尔枚举）
+        /// 软删除标识
         /// </summary>
         public VivBool IsDeleted { get; set; } = VivBool.False;
 

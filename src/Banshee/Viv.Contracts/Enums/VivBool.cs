@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Momo.Enums
+namespace Viv.Contracts.Enums
 {
     public enum VivBool
     {
