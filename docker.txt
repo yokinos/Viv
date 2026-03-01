@@ -1,0 +1,11 @@
+docker run -d --name VivRedis -p 6379:6379 redis:latest --requirepass "vivdevredis77"
+docker run -d --name VivPostgreSQL -p 5432:5432 -e POSTGRES_PASSWORD=vivdevpgsql77 postgres:latest
+docker run -d --name VivRabbitMQ -p 5672:5672 -p 15672:15672 -e RABBITMQ_DEFAULT_USER=viv -e RABBITMQ_DEFAULT_PASS=vivdevmq77 rabbitmq:management
+
+
+# 直接指定官方仓库拉取
+docker pull docker.io/rabbitmq:management
+
+
+# 用GitHub镜像站克隆（无需SSL验证，速度更快）
+git clone --progress -v "https://github.com.cnpmjs.org/yokinos/Viv.git" "D:\Yokino\GitHub\Viv"
