@@ -28,10 +28,5 @@ namespace Viv.Momo
         /// 软删除标识
         /// </summary>
         public VivBool IsDeleted { get; set; } = VivBool.False;
-
-        /// <summary>
-        /// 实体创建时间（带时区）
-        /// </summary>
-        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
     }
 }

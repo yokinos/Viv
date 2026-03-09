@@ -139,10 +139,6 @@ namespace Viv.Momo.Core
                     {
                         entityBase.Id = IdMagic.NextId();
                     }
-                    if (entityBase.CreatedAt == default)
-                    {
-                        entityBase.CreatedAt = DateTimeOffset.Now;
-                    }
                 }
             }
         }
@@ -171,10 +167,9 @@ namespace Viv.Momo.Core
         #region 批量处理
 
         /// <summary>
-        /// 单次EF处理实体的最大数量（超过这个数量转SQL处理）
+        /// 单次EF处理实体的最大数量（超过这个数量会用Dapper处理）
         /// </summary>
-        protected const int EFMaxCount = 1000;
-
+        protected const int EFMaxCount = 500;
 
         /// <summary>
         /// 批量执行SQL语句（建议加事务执行）

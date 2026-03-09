@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Dapper;
+using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
@@ -21,16 +22,16 @@ namespace Viv.Momo
         bool Update<T>(T entity) where T : IEntity;
         bool Update<T>(IEnumerable<T> entitys) where T : class, IEntity;
         Task<bool> UpdateAsync<T>(T entity) where T : IEntity;
-        Task<bool> UpdateAsync<T>(IEnumerable<T> entity) where T : IEntity;
-        bool Delete<T>(T entity);
-        bool Delete<T>(IEnumerable<T> entitys);
-        Task<bool> DeleteAsync<T>(T entity);
-        Task<bool> DeleteAsync<T>(IEnumerable<T> entity);
+        Task<bool> UpdateAsync<T>(IEnumerable<T> entitys) where T : class, IEntity;
+        bool Delete<T>(T entity) where T : IEntity;
+        bool Delete<T>(IEnumerable<T> entitys) where T : class, IEntity;
+        Task<bool> DeleteAsync<T>(T entity) where T : IEntity;
+        Task<bool> DeleteAsync<T>(IEnumerable<T> entity) where T : class, IEntity;
 
-        Task<T> SingleOrDefaultAsync<T>(Expression<Func<T, bool>> predicate);
-        Task<T> SingleOrDefaultAsync<T>(string sql, params object[] parameters);
-        T SingleOrDefault<T>(Expression<Func<T, bool>> predicate);
-        T SingleOrDefault<T>(string sql, params object[] parameters);
+        Task<T> SingleOrDefaultAsync<T>(Expression<Func<T, bool>> predicate) where T : class;
+        Task<T> SingleOrDefaultAsync<T>(string sql, DynamicParameters? parameters = default) where T : class;
+        T? SingleOrDefault<T>(Expression<Func<T, bool>> predicate) where T : class;
+        T? SingleOrDefault<T>(string sql, DynamicParameters? parameters = default) where T : class;
 
         T FirstOrDefault<T>(Expression<Func<T, bool>> predicate);
         T FirstOrDefault<T>(string sql, params object[] parameters);
@@ -41,8 +42,8 @@ namespace Viv.Momo
         Task<IEnumerable<T>> FetchAsync<T>(Expression<Func<T, bool>> predicate);
         Task<IEnumerable<T>> FetchAsync<T>(string sql, params object[] parameters);
 
-        PagedList<T> Page<T>(int pageIndex, int pageSize, string sql, params object[] parameters);
-        Task<PagedList<T>> PageAsync<T>(int pageIndex, int pageSize, string sql, params object[] parameters);
+        PagedList<T> Page<T>(int pageIndex, int pageSize, string sql, DynamicParameters? parameters = default);
+        Task<PagedList<T>> PageAsync<T>(int pageIndex, int pageSize, string sql, DynamicParameters? parameters = default);
 
         T GetValue<T>(string sql, params object[] parameters);
         Task<T> GetValueAsync<T>(string sql, params object[] parameters);
