@@ -7,8 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Viv.Aoi\Viv.Aoi.csproj" />
+    <ProjectReference Include="..\Viv.Authentication\Viv.Authentication.csproj" />
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
     <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
+    <ProjectReference Include="..\Viv.Momo\Viv.Momo.csproj" />
+    <ProjectReference Include="..\Viv.Nana\Viv.Nana.csproj" />
     <ProjectReference Include="..\Viv.Redis\Viv.Redis.csproj" />
     <ProjectReference Include="..\Viv.Vva\Viv.Vva.csproj" />
   </ItemGroup>
