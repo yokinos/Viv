@@ -34,14 +34,14 @@ namespace Viv.Momo.Core
         {
             ArgumentNullException.ThrowIfNull(_vivContext);
             _vivContext = vivContext;
-            VivAppId = _vivContext.AppId;
+            AppId = _vivContext.AppId;
             TenantId = _vivContext.TenantId;
             _logger = logger;
 
             SetOptions();
         }
 
-        public void SetOptions(DatabaseOptions? options  = null)
+        public void SetOptions(DatabaseOptions? options = null)
         {
             options ??= VivConfigRegistry.Get<DatabaseOptions>();
             ArgumentNullException.ThrowIfNull(options);
@@ -73,7 +73,7 @@ namespace Viv.Momo.Core
         /// <param name="isRead">是否是创建读库</param>
         /// <param name="reload">是否重新实例化</param>
         /// <returns></returns>
-        public EFAppContext CreateEFAppContext(DatabaseOptions options, DbReadWriteType dbReadWriteType = DbReadWriteType.Read, bool reload = false)
+        public EFAppContext CreateEFAppContext(DatabaseOptions options, DbReadWriteType dbReadWriteType, bool reload = false)
         {
             if (!options.IsReadWriteSplit)
             {
@@ -115,7 +115,7 @@ namespace Viv.Momo.Core
         /// <summary>
         /// 当前实例的AppId
         /// </summary>
-        public long VivAppId { get; protected set; }
+        public long AppId { get; protected set; }
 
         /// <summary>
         /// 当前实例的TenantId
@@ -140,7 +140,7 @@ namespace Viv.Momo.Core
                 if (entity is EntityBase entityBase)
                 {
                     entityBase.TenantId = TenantId;
-                    entityBase.AppId = VivAppId;
+                    entityBase.AppId = AppId;
                     if (entityBase.Id == default)
                     {
                         entityBase.Id = IdMagic.NextId();

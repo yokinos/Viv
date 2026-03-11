@@ -531,7 +531,7 @@ namespace Viv.Momo.Core
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
-                return connection.QuerySingleOrDefault<T>(sql, parameters, _transaction, _timeOut);
+                return connection.QuerySingleOrDefault<T>(sql, parameters, null, _timeOut);
             }
             catch (InvalidOperationException ex)
             {
@@ -575,7 +575,7 @@ namespace Viv.Momo.Core
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
-                return await connection.QuerySingleOrDefaultAsync<T>(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
+                return await connection.QuerySingleOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
             {
@@ -600,7 +600,7 @@ namespace Viv.Momo.Core
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
                 var sql = GetSqlGenerater().GetFindSql(tableName);
-                return connection.QuerySingleOrDefault<T>(sql, new { Id = id }, _transaction, _timeOut);
+                return connection.QuerySingleOrDefault<T>(sql, new { Id = id }, null, _timeOut);
             }
             catch (Exception ex)
             {
@@ -619,7 +619,7 @@ namespace Viv.Momo.Core
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
                 var sql = GetSqlGenerater().GetFindSql(tableName);
-                return await connection.QueryFirstOrDefaultAsync<T>(sql, new { Id = id }, _transaction, _timeOut).ConfigureAwait(false);
+                return await connection.QueryFirstOrDefaultAsync<T>(sql, new { Id = id }, null, _timeOut).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -652,7 +652,7 @@ namespace Viv.Momo.Core
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
-                return connection.QueryFirstOrDefault<T>(sql, parameters, _transaction, _timeOut);
+                return connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
             }
             catch (Exception ex)
             {
@@ -685,7 +685,7 @@ namespace Viv.Momo.Core
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
-                return await connection.QueryFirstOrDefaultAsync<T>(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
+                return await connection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -719,7 +719,7 @@ namespace Viv.Momo.Core
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
-                var result = _context.DbConnection.Query<T>(sql, parameters, _transaction, true, _timeOut);
+                var result = _context.DbConnection.Query<T>(sql, parameters, null, true, _timeOut);
                 return result.ToList();
             }
             catch (Exception ex)
@@ -752,7 +752,7 @@ namespace Viv.Momo.Core
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
-                var result = await _context.DbConnection.QueryAsync<T>(sql, parameters, _transaction, _timeOut);
+                var result = await _context.DbConnection.QueryAsync<T>(sql, parameters, null, _timeOut);
                 return result.ToList();
             }
             catch (Exception ex)
@@ -769,7 +769,7 @@ namespace Viv.Momo.Core
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
-                var result = _context.DbConnection.QueryFirstOrDefault<T>(sql, parameters, _transaction, _timeOut);
+                var result = _context.DbConnection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
                 return result;
             }
             catch (Exception ex)
@@ -786,7 +786,7 @@ namespace Viv.Momo.Core
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
-                var result = await _context.DbConnection.QueryFirstOrDefaultAsync<T>(sql, parameters, _transaction, _timeOut);
+                var result = await _context.DbConnection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut);
                 return result;
             }
             catch (Exception ex)
@@ -805,10 +805,10 @@ namespace Viv.Momo.Core
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var tempSql = GetSqlGenerater().GetPageSql(sql, pageIndex, pageSize, out var countSql);
-                var totalCount = _context.DbConnection.ExecuteScalar<int>(countSql, null, _transaction, _timeOut);
+                var totalCount = _context.DbConnection.ExecuteScalar<int>(countSql, null, null, _timeOut);
                 if (totalCount > 0)
                 {
-                    var list = _context.DbConnection.Query<T>(tempSql, parameters, _transaction, true, _timeOut);
+                    var list = _context.DbConnection.Query<T>(tempSql, parameters, null, true, _timeOut);
                     var totalPages = CalculateTotalPages(totalCount, pageSize);
                     result.TotalCount = totalCount;
                     result.Items = list;
@@ -834,10 +834,10 @@ namespace Viv.Momo.Core
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var tempSql = GetSqlGenerater().GetPageSql(sql, pageIndex, pageSize, out var countSql);
-                var totalCount = await _context.DbConnection.ExecuteScalarAsync<int>(countSql, null, _transaction, _timeOut).ConfigureAwait(false);
+                var totalCount = await _context.DbConnection.ExecuteScalarAsync<int>(countSql, null, null, _timeOut).ConfigureAwait(false);
                 if (totalCount > 0)
                 {
-                    var list = await _context.DbConnection.QueryAsync<T>(tempSql, parameters, _transaction, _timeOut).ConfigureAwait(false);
+                    var list = await _context.DbConnection.QueryAsync<T>(tempSql, parameters, null, _timeOut).ConfigureAwait(false);
                     var totalPages = CalculateTotalPages(totalCount, pageSize);
                     result.TotalCount = totalCount;
                     result.Items = list;
@@ -1229,7 +1229,7 @@ namespace Viv.Momo.Core
         {
             if (vivAppId > 0)
             {
-                VivAppId = vivAppId;
+                AppId = vivAppId;
             }
         }
 
