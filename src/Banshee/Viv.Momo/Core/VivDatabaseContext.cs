@@ -1,5 +1,4 @@
-﻿using Autofac.Core;
-using Dapper;
+﻿using Dapper;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -1165,7 +1164,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"BeginTransaction,{ex.Message}", ex);
+                _logger.Error($"BeginTransactionAsync,{ex.Message}", ex);
                 return false;
             }
         }
@@ -1189,7 +1188,7 @@ namespace Viv.Momo.Core
                 }
                 _transaction?.Dispose();
                 _transaction = null;
-                _logger.Error($"CommitTransaction,{ex.Message}", ex);
+                _logger.Error($"CommitTransactionAsync,{ex.Message}", ex);
             }
         }
 
@@ -1207,7 +1206,7 @@ namespace Viv.Momo.Core
             {
                 _transaction?.Dispose();
                 _transaction = null;
-                _logger.Error($"RollbackTransaction,{ex.Message}", ex);
+                _logger.Error($"RollbackTransactionAsync,{ex.Message}", ex);
             }
         }
 
