@@ -31,7 +31,7 @@ namespace Viv.Momo
             {
                 Expression<Func<T, bool>> softDeleteExpr = x => (x as EntityBase).IsDeleted == VivBool.False;
                 Expression<Func<T, bool>> tenantExpr = x => (x as EntityBase).TenantId == tenantId;
-                Expression<Func<T, bool>> appIdExpr = x => (x as EntityBase).VivAppId == vivAppId;
+                Expression<Func<T, bool>> appIdExpr = x => (x as EntityBase).AppId == vivAppId;
 
                 finalPredicate = CombineExpressions(finalPredicate, softDeleteExpr);
                 finalPredicate = CombineExpressions(finalPredicate, tenantExpr);

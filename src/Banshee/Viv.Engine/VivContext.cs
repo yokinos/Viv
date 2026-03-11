@@ -13,7 +13,7 @@ namespace Viv.Engine
         private static readonly AsyncLocal<long> _tenantId = new();
         private static readonly AsyncLocal<long> _userId = new();
 
-        public long VivAppId => _appId.Value;
+        public long AppId => _appId.Value;
         public long TenantId => _tenantId.Value;
         public long UserId => _userId.Value;
 

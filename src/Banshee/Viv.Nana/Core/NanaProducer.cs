@@ -25,7 +25,7 @@ namespace Viv.Nana.Core
             if (content is null) return false;
             var message = new NanaMessage<T>()
             {
-                VivAppId = _context.VivAppId,
+                VivAppId = _context.AppId,
                 TenantId = _context.TenantId,
                 Content = content
             };

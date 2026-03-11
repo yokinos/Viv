@@ -34,7 +34,7 @@ namespace Viv.Momo.Core
         {
             ArgumentNullException.ThrowIfNull(_vivContext);
             _vivContext = vivContext;
-            VivAppId = _vivContext.VivAppId;
+            VivAppId = _vivContext.AppId;
             TenantId = _vivContext.TenantId;
             _logger = logger;
 
@@ -140,7 +140,7 @@ namespace Viv.Momo.Core
                 if (entity is EntityBase entityBase)
                 {
                     entityBase.TenantId = TenantId;
-                    entityBase.VivAppId = VivAppId;
+                    entityBase.AppId = VivAppId;
                     if (entityBase.Id == default)
                     {
                         entityBase.Id = IdMagic.NextId();

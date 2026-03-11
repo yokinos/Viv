@@ -10,7 +10,7 @@ namespace Viv.Contracts.Interface
         /// <summary>
         /// Viv应用唯一标识
         /// </summary>
-        long VivAppId { get; }
+        long AppId { get; }
 
         /// <summary>
         /// SaaS租户唯一标识（多租户隔离核心）
