@@ -1,6 +1,8 @@
-﻿using System;
+﻿using Azure;
+using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 
 namespace Viv.Momo.Database
@@ -25,6 +27,17 @@ namespace Viv.Momo.Database
         public string CreateUpdateSql(string tableName, object entity, string whereKeys)
         {
             throw new NotImplementedException();
+        }
+
+        public string GetFindSql(string tableName)
+        {
+            return $"SELECT * FROM {tableName.ToLowerInvariant()} WHERE id = @Id";
+        }
+
+        public string GetPageSql(string sql, int pageIndex, int pageSize, out string countSql)
+        {
+            countSql = $"SELECT COUNT(*) FROM ({sql}) xx";
+            return $"{sql} LIMIT {pageSize} OFFSET {(pageIndex - 1) * pageSize}";
         }
 
         public string ToDatabaseValue(object value)

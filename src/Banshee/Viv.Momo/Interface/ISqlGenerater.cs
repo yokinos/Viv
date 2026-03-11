@@ -15,5 +15,9 @@ namespace Viv.Momo.Interface
         string ToDatabaseValue(object value);
 
         string CreateInsertTemplateSql(string tableName, Type type);
+
+        string GetFindSql(string tableName);
+
+        string GetPageSql(string sql, int pageIndex, int pageSize, out string countSql);
     }
 }

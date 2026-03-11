@@ -5,7 +5,7 @@ using Viv.Momo.Enums;
 using Viv.Momo.Options;
 using Viv.Vva.Magic;
 
-namespace Viv.Momo.Contexts
+namespace Viv.Momo.Core
 {
     /// <summary>
     /// EF Core 上下文（读写分离：初始化时确定读/写库，避免运行时切换）

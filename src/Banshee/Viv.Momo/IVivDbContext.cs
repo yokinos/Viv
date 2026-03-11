@@ -15,10 +15,10 @@ namespace Viv.Momo
     /// </summary>
     public interface IVivDbContext : IDisposable
     {
-        bool Insert<T>(T entity);
-        bool Insert<T>(IEnumerable<T> entitys);
-        Task<bool> InsertAsync<T>(T entity);
-        Task<bool> InsertAsync<T>(IEnumerable<T> entity);
+        bool Insert<T>(T entity) where T : IEntity;
+        bool Insert<T>(IEnumerable<T> entitys) where T : IEntity;
+        Task<bool> InsertAsync<T>(T entity) where T : IEntity;
+        Task<bool> InsertAsync<T>(IEnumerable<T> entity) where T : IEntity;
         bool Update<T>(T entity) where T : IEntity;
         bool Update<T>(IEnumerable<T> entitys) where T : class, IEntity;
         Task<bool> UpdateAsync<T>(T entity) where T : IEntity;
@@ -28,30 +28,36 @@ namespace Viv.Momo
         Task<bool> DeleteAsync<T>(T entity) where T : IEntity;
         Task<bool> DeleteAsync<T>(IEnumerable<T> entity) where T : class, IEntity;
 
-        Task<T> SingleOrDefaultAsync<T>(Expression<Func<T, bool>> predicate) where T : class;
-        Task<T> SingleOrDefaultAsync<T>(string sql, DynamicParameters? parameters = default) where T : class;
         T? SingleOrDefault<T>(Expression<Func<T, bool>> predicate) where T : class;
-        T? SingleOrDefault<T>(string sql, DynamicParameters? parameters = default) where T : class;
+        T? SingleOrDefault<T>(string sql, object? parameters = default) where T : class;
+        Task<T?> SingleOrDefaultAsync<T>(Expression<Func<T, bool>> predicate) where T : class;
+        Task<T?> SingleOrDefaultAsync<T>(string sql, object? parameters = default) where T : class;
 
-        T FirstOrDefault<T>(Expression<Func<T, bool>> predicate);
-        T FirstOrDefault<T>(string sql, params object[] parameters);
-        Task<T> FirstOrDefaultAsync<T>(Expression<Func<T, bool>> predicate);
-        Task<T> FirstOrDefaultAsync<T>(string sql, params object[] parameters);
-        IEnumerable<T> Fetch<T>(Expression<Func<T, bool>> predicate);
-        IEnumerable<T> Fetch<T>(string sql, params object[] parameters);
-        Task<IEnumerable<T>> FetchAsync<T>(Expression<Func<T, bool>> predicate);
-        Task<IEnumerable<T>> FetchAsync<T>(string sql, params object[] parameters);
+        T? Find<T>(long id) where T : class, IEntity;
+        Task<T?> FindAsync<T>(long id) where T : class, IEntity;
 
-        PagedList<T> Page<T>(int pageIndex, int pageSize, string sql, DynamicParameters? parameters = default);
-        Task<PagedList<T>> PageAsync<T>(int pageIndex, int pageSize, string sql, DynamicParameters? parameters = default);
+        T? FirstOrDefault<T>(Expression<Func<T, bool>> predicate) where T : class;
+        T? FirstOrDefault<T>(string sql, object? parameters = default) where T : class;
+        Task<T?> FirstOrDefaultAsync<T>(Expression<Func<T, bool>> predicate) where T : class;
+        Task<T?> FirstOrDefaultAsync<T>(string sql, object? parameters = default) where T : class;
+        List<T> FindList<T>(Expression<Func<T, bool>> predicate) where T : class;
+        List<T> FindList<T>(string sql, object? parameters = default) where T : class;
+        Task<List<T>> FindListAsync<T>(Expression<Func<T, bool>> predicate) where T : class;
+        Task<List<T>> FindListAsync<T>(string sql, object? parameters = default) where T : class;
+        T? FindScalar<T>(string sql, object? parameters = default);
+        Task<T?> FindScalarAsync<T>(string sql, object? parameters = default);
 
-        T GetValue<T>(string sql, params object[] parameters);
-        Task<T> GetValueAsync<T>(string sql, params object[] parameters);
+        PagedList<T> Page<T>(string sql, int pageIndex, int pageSize, object? parameters = default);
+        Task<PagedList<T>> PageAsync<T>(string sql, int pageIndex, int pageSize, object? parameters = default);
 
-        bool ExecuteSql(string sql, params object[] parameters);
-        bool ExecuteSqlList(string sql);
-        Task<bool> ExecuteSqlAsync(string sql, params object[] parameters);
-        Task<bool> ExecuteSqlListAsync(string sql);
+        bool ExecuteSql(string sql, object? parameters = default);
+        Task<bool> ExecuteSqlAsync(string sql, object? parameters = default);
+
+        bool ExecuteSqlList(List<string> sqlList, object? parameters = default, bool isTxn = true);
+        Task<bool> ExecuteSqlListAsync(List<string> sqlList, object? parameters = default, bool isTxn = true);
+
+        bool ExecuteSqlList(List<KeyValueItem<string, object?>> sqlList, bool isTxn = true);
+        Task<bool> ExecuteSqlListAsync(List<KeyValueItem<string, object?>> sqlList, bool isTxn = true);
 
         bool BeginTransaction();
         void CommitTransaction();
@@ -61,10 +67,9 @@ namespace Viv.Momo
         Task RollbackTransactionAsync();
 
         IVivDbContext CreateContext(DatabaseOptions options);
-        void ChangeTenant(string tenantId);
-        void ChangeVivAppId(string vivAppId);
-        void CloseAutoSetValue();
-        void EnableAutoSetValue();
+        void ChangeTenant(long tenantId);
+        void ChangeVivAppId(long vivAppId);
+        void AutoSetValue(bool flag);
         ISqlGenerater GetSqlGenerater(DatabaseSouceType databaseSouce);
     }
 }

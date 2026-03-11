@@ -8,15 +8,21 @@ namespace Viv.Vva.Generic
     {
         public PagedList() { }
 
+        public PagedList(int pagIndex, int pageSize)
+        {
+            PageIndex = pagIndex;
+            PageSize = pageSize;
+        }
+
         /// <summary>
         /// 页码
         /// </summary>
-        public int PageIndex { get; set; }
+        public int PageIndex { get; set; } = 1;
 
         /// <summary>
         /// 每页数量
         /// </summary>
-        public long PageSize { get; set; }
+        public int PageSize { get; set; } = 20;
 
         /// <summary>
         /// 总页数
@@ -26,7 +32,7 @@ namespace Viv.Vva.Generic
         /// <summary>
         /// 总数据数量
         /// </summary>
-        public long TotalItems { get; set; }
+        public long TotalCount { get; set; }
 
         /// <summary>
         /// 是否有上一页

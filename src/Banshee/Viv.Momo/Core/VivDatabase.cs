@@ -2,12 +2,12 @@
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Viv.Contracts.Interface;
 using Viv.Log.VivLogger;
-using Viv.Momo.Contexts;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
@@ -20,13 +20,13 @@ namespace Viv.Momo.Core
     public class VivDatabase
     {
         protected readonly IVivContext _vivContext;
-        protected readonly DatabaseOptions _options;
+        protected DatabaseOptions _options;
         protected readonly IVivLogger _logger;
 
-        private EFAppContext _writeDbContext;
-        private EFAppContext _readDbContext;
+        protected EFAppContext? _writeDbContext;
+        protected EFAppContext? _readDbContext;
 
-        protected readonly DbTransaction _transaction;
+        protected IDbTransaction? _transaction;
         protected int _timeOut = 30;
         protected static readonly HashSet<string> _primaryKeys = ["Id"];
 
@@ -34,12 +34,18 @@ namespace Viv.Momo.Core
         {
             ArgumentNullException.ThrowIfNull(_vivContext);
             _vivContext = vivContext;
-            var options = VivConfigRegistry.Get<DatabaseOptions>();
-            ArgumentNullException.ThrowIfNull(options);
-            _options = options;
             VivAppId = _vivContext.VivAppId;
             TenantId = _vivContext.TenantId;
             _logger = logger;
+
+            SetOptions();
+        }
+
+        public void SetOptions(DatabaseOptions? options  = null)
+        {
+            options ??= VivConfigRegistry.Get<DatabaseOptions>();
+            ArgumentNullException.ThrowIfNull(options);
+            _options = options;
         }
 
         #region 实例化EFCore
@@ -170,26 +176,6 @@ namespace Viv.Momo.Core
         /// 单次EF处理实体的最大数量（超过这个数量会用Dapper处理）
         /// </summary>
         protected const int EFMaxCount = 500;
-
-        /// <summary>
-        /// 批量执行SQL语句（建议加事务执行）
-        /// </summary>
-        /// <param name="sqlList"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        public bool DapperExecuteSqlList(List<string> sqlList, EFAppContext context, DynamicParameters? parameters = null, int pageSize = 200)
-        {
-            var totalCount = sqlList.Count;
-            var totalPages = CalculateTotalPages(totalCount, pageSize);
-            for (int index = 1; index <= totalPages; index++)
-            {
-                var list = sqlList.Skip((index - 1) * pageSize).Take(pageSize).ToList();
-                var sql = string.Join(";", list) + ";";
-                context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
-            }
-
-            return true;
-        }
 
         public static int CalculateTotalPages(int totalItems, int pageSize)
         {
