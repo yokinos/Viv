@@ -91,7 +91,7 @@ namespace Viv.Momo.Database
             return realType.Name switch
             {
                 // 数字类型：直接返回值
-                nameof(Int32) or nameof(Int64) or nameof(Decimal) or nameof(Byte) or nameof(SByte) or nameof(Double) or 
+                nameof(Int32) or nameof(Int64) or nameof(Decimal) or nameof(Byte) or nameof(SByte) or nameof(Double) or
                 nameof(Single) or nameof(Int16) or nameof(UInt32) or nameof(UInt64) or nameof(UInt16) => value.ToString()!,
                 // 布尔类型：PG的布尔值是 true/false（小写）
                 nameof(Boolean) => (bool)value ? "1" : "0",
