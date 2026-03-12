@@ -17,13 +17,7 @@ namespace Viv.Test.Core
         [CommandDescription("Exit", "退出程序", true)]
         Exit,
 
-        [CommandDescription("RRate", "续费率测试")]
-        RenewalRate,
-
         [CommandDescription("Lwl", "lwl的测试程序")]
         LwL,
-
-        [CommandDescription("Exam", "考试测试")]
-        Exam,
     }
 }

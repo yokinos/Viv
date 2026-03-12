@@ -500,7 +500,6 @@ namespace Viv.Momo.Core
             }
         }
 
-        [return: MaybeNull]
         public T? SingleOrDefault<T>(Expression<Func<T, bool>> predicate) where T : class
         {
             if (predicate == null) return default;
@@ -522,7 +521,6 @@ namespace Viv.Momo.Core
             }
         }
 
-        [return: MaybeNull]
         public T? SingleOrDefault<T>(string sql, object? parameters = default) where T : class
         {
             if (sql.IsNullOrEmpty()) return default;
@@ -566,7 +564,6 @@ namespace Viv.Momo.Core
             }
         }
 
-        [return: MaybeNull]
         public async Task<T?> SingleOrDefaultAsync<T>(string sql, object? parameters = default) where T : class
         {
             if (sql.IsNullOrEmpty()) return default;
@@ -805,7 +802,7 @@ namespace Viv.Momo.Core
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var tempSql = GetSqlGenerater().GetPageSql(sql, pageIndex, pageSize, out var countSql);
-                var totalCount = _context.DbConnection.ExecuteScalar<int>(countSql, null, null, _timeOut);
+                var totalCount = _context.DbConnection.ExecuteScalar<int>(countSql, parameters, null, _timeOut);
                 if (totalCount > 0)
                 {
                     var list = _context.DbConnection.Query<T>(tempSql, parameters, null, true, _timeOut);
@@ -834,7 +831,7 @@ namespace Viv.Momo.Core
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var tempSql = GetSqlGenerater().GetPageSql(sql, pageIndex, pageSize, out var countSql);
-                var totalCount = await _context.DbConnection.ExecuteScalarAsync<int>(countSql, null, null, _timeOut).ConfigureAwait(false);
+                var totalCount = await _context.DbConnection.ExecuteScalarAsync<int>(countSql, parameters, null, _timeOut).ConfigureAwait(false);
                 if (totalCount > 0)
                 {
                     var list = await _context.DbConnection.QueryAsync<T>(tempSql, parameters, null, _timeOut).ConfigureAwait(false);
@@ -1159,7 +1156,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                _transaction = (IDbTransaction)GetEFCoreContext().Database.BeginTransactionAsync();
+                var transaction = await GetEFCoreContext().Database.BeginTransactionAsync();
+                _transaction = (IDbTransaction)transaction;
                 return true;
             }
             catch (Exception ex)
