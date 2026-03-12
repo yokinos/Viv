@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Vva.Enums
+namespace Viv.Vva
 {
     public enum EncrypType
     {

@@ -77,10 +77,10 @@ namespace Viv.Vva.Extension
             return formt switch
             {
                 DateFormat.ShortDate => "yyyyMMdd",
-                DateFormat.Date => $"yyyy{symbol}MM{symbol}dd",
+                DateFormat.DateOnly => $"yyyy{symbol}MM{symbol}dd",
                 DateFormat.LongDate => $"yyyy{symbol}MM{symbol}dd HH:mm:ss",
                 DateFormat.CompactLongDate => "yyyyMMddHHmmss",
-                DateFormat.Time => "HHmmss",
+                DateFormat.TimeOnly => "HHmmss",
                 DateFormat.StandardTime => "HH:mm:ss",
                 _ => string.Empty
             };

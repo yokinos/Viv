@@ -41,5 +41,17 @@ namespace Viv.Vva
             _typeDict[type] = properties;
             return properties;
         }
+
+        public static List<string> GetPropertyNameList(Type type)
+        {
+            var list = new List<string>();
+
+            foreach (var property in type.GetProperties())
+            {
+                list.Add(property.Name);
+            }
+
+            return list;
+        }
     }
 }

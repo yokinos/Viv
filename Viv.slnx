@@ -15,6 +15,7 @@
     <Project Path="src/Test/Viv.Test/Viv.Test.csproj" Id="e53540db-bd61-4609-852e-ab4806374b28" />
   </Folder>
   <Folder Name="/src/Vivian/" />
+  <Folder Name="/src/Vivian/Chat/" />
   <Folder Name="/src/Vivian/Getway/" />
   <Folder Name="/src/Vivian/Shared/" />
 </Solution>

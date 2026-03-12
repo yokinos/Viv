@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
-using Viv.Vva.Enums;
 
 namespace Viv.Vva.Options
 {

@@ -62,8 +62,8 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var genarater = GetSqlGenerater();
-                    var tempsql = genarater.CreateInsertTemplateSql(XMagic.GetTableName<T>(), typeof(T));
+                    var tableName = DataSqlBuilder.GetTableName<T>();
+                    var tempsql = DataSqlBuilder.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
                     affected = context.DbConnection.Execute(tempsql, entitys, _transaction, _timeOut);
                 }
 
@@ -113,8 +113,8 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var genarater = GetSqlGenerater();
-                    var tempsql = genarater.CreateInsertTemplateSql(XMagic.GetTableName<T>(), typeof(T));
+                    var tableName = DataSqlBuilder.GetTableName<T>();
+                    var tempsql = DataSqlBuilder.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
                     affected = await context.DbConnection.ExecuteAsync(tempsql, entitys, _transaction, _timeOut);
                 }
 
@@ -320,7 +320,7 @@ namespace Viv.Momo.Core
         private List<KeyValueItem<string, DynamicParameters>> BuilderUpdateSqlList<T>(List<T> entityList, int pageSize = 200)
         {
             var type = typeof(T);
-            var tableName = AdaptFieldNameToDatabase(XMagic.GetTableName<T>());
+            var tableName = AdaptFieldNameToDatabase(DataSqlBuilder.GetTableName<T>());
             var pilist = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
             var sqlList = new List<KeyValueItem<string, DynamicParameters>>();
 
@@ -429,8 +429,9 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
+                    var tableName = DataSqlBuilder.GetTableName<T>();
                     var connection = _context.DbConnection;
-                    var deleteSql = $"DELETE FROM {XMagic.GetTableName<T>()} WHERE Id IN @Ids";
+                    var deleteSql = $"DELETE FROM {AdaptFieldNameToDatabase(tableName)} WHERE {AdaptFieldNameToDatabase("Id")} IN @Ids";
                     int affectedRows = connection.Execute(deleteSql, new { Ids = ids });
                     return affectedRows > 0;
                 }
@@ -487,8 +488,9 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
+                    var tableName = DataSqlBuilder.GetTableName<T>();
                     var connection = _context.DbConnection;
-                    var deleteSql = $"DELETE FROM {XMagic.GetTableName<T>()} WHERE Id IN @Ids";
+                    var deleteSql = $"DELETE FROM {AdaptFieldNameToDatabase(tableName)} WHERE {AdaptFieldNameToDatabase("Id")} IN @Ids";
                     int affectedRows = await connection.ExecuteAsync(deleteSql, new { Ids = ids });
                     return affectedRows > 0;
                 }
@@ -590,13 +592,13 @@ namespace Viv.Momo.Core
         public T? Find<T>(long id) where T : class, IEntity
         {
             if (id <= 0) return default;
-            var tableName = XMagic.GetTableName<T>();
+            var tableName = DataSqlBuilder.GetTableName<T>();
 
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
-                var sql = GetSqlGenerater().GetFindSql(tableName);
+                var sql = DataSqlBuilder.GetFindSqlTemplate(tableName, _options.DatabaseSouce);
                 return connection.QuerySingleOrDefault<T>(sql, new { Id = id }, null, _timeOut);
             }
             catch (Exception ex)
@@ -609,13 +611,13 @@ namespace Viv.Momo.Core
         public async Task<T?> FindAsync<T>(long id) where T : class, IEntity
         {
             if (id <= 0) return default;
-            var tableName = XMagic.GetTableName<T>();
+            var tableName = DataSqlBuilder.GetTableName<T>();
 
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
-                var sql = GetSqlGenerater().GetFindSql(tableName);
+                var sql = DataSqlBuilder.GetFindSqlTemplate(tableName, _options.DatabaseSouce);
                 return await connection.QueryFirstOrDefaultAsync<T>(sql, new { Id = id }, null, _timeOut).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -801,11 +803,11 @@ namespace Viv.Momo.Core
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
-                var tempSql = GetSqlGenerater().GetPageSql(sql, pageIndex, pageSize, out var countSql);
+                var (pageSql, countSql) = DataSqlBuilder.GetPageSqlTemplate(sql, pageIndex, pageSize, _options.DatabaseSouce);
                 var totalCount = _context.DbConnection.ExecuteScalar<int>(countSql, parameters, null, _timeOut);
                 if (totalCount > 0)
                 {
-                    var list = _context.DbConnection.Query<T>(tempSql, parameters, null, true, _timeOut);
+                    var list = _context.DbConnection.Query<T>(pageSql, parameters, null, true, _timeOut);
                     var totalPages = CalculateTotalPages(totalCount, pageSize);
                     result.TotalCount = totalCount;
                     result.Items = list;
@@ -830,11 +832,11 @@ namespace Viv.Momo.Core
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
-                var tempSql = GetSqlGenerater().GetPageSql(sql, pageIndex, pageSize, out var countSql);
+                var (pageSql, countSql) = DataSqlBuilder.GetPageSqlTemplate(sql, pageIndex, pageSize, _options.DatabaseSouce);
                 var totalCount = await _context.DbConnection.ExecuteScalarAsync<int>(countSql, parameters, null, _timeOut).ConfigureAwait(false);
                 if (totalCount > 0)
                 {
-                    var list = await _context.DbConnection.QueryAsync<T>(tempSql, parameters, null, _timeOut).ConfigureAwait(false);
+                    var list = await _context.DbConnection.QueryAsync<T>(pageSql, parameters, null, _timeOut).ConfigureAwait(false);
                     var totalPages = CalculateTotalPages(totalCount, pageSize);
                     result.TotalCount = totalCount;
                     result.Items = list;

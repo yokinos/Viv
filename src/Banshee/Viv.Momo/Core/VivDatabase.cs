@@ -149,11 +149,6 @@ namespace Viv.Momo.Core
             }
         }
 
-        protected ISqlGenerater GetSqlGenerater()
-        {
-            return SqlGeneraterFactory.GetSqlGenerater(_options.DatabaseSouce);
-        }
-
         /// <summary>
         /// 适配数据库的字段名
         /// </summary>

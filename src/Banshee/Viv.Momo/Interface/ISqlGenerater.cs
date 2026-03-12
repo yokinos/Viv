@@ -6,18 +6,12 @@ namespace Viv.Momo.Interface
 {
     public interface ISqlGenerater
     {
-        string CreateInsertSql(string tableName, object entity);
+        string CreateInsertSql(string tableName, object entity, string ignoreKeys = "");
 
-        string CreateUpdateSql(string tableName, object entity, string whereKeys);
+        string CreateUpdateSql(string tableName, object entity, string whereKeys, string ignoreKeys = "");
 
-        string CreateDeleteSql(string tableName, string whereKeys);
+        string CreateDeleteSql(string tableName, object entity);
 
         string ToDatabaseValue(object value);
-
-        string CreateInsertTemplateSql(string tableName, Type type);
-
-        string GetFindSql(string tableName);
-
-        string GetPageSql(string sql, int pageIndex, int pageSize, out string countSql);
     }
 }
