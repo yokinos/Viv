@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Http;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Redis;
@@ -10,6 +11,21 @@ namespace Viv.Engine
     /// </summary>
     public static class VivEngineExtensions
     {
+        /// <summary>
+        /// 判断是否为Ajax请求
+        /// </summary>
+        public static bool IsAjax(this HttpRequest request, string rule = "")
+        {
+            // 判断是否为Post请求
+            bool isPost = request.Method.Equals("Post", StringComparison.OrdinalIgnoreCase);
 
+            // Ajax请求判断
+            bool isAjax = request.Headers["X-Requested-With"] == "XMLHttpRequest";
+
+            // 接口路径判断
+            bool isApiPath = !string.IsNullOrEmpty(rule) && request.Path.Value.Contains(rule, StringComparison.OrdinalIgnoreCase);
+
+            return isPost || isAjax || isApiPath;
+        }
     }
 }

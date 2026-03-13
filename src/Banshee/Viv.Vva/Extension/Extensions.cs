@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Viv.Vva.Enums;
@@ -87,16 +88,53 @@ namespace Viv.Vva.Extension
         }
 
         /// <summary>
-        /// [扩展方法] 深度拷贝对象（基于 JSON 序列化/反序列化实现）
+        /// [扩展方法] 深度拷贝对象
         /// </summary>
         /// <typeparam name="T">目标类型，需具备无参构造函数</typeparam>
-        /// <param name="t">待拷贝的对象</param>
-        /// <returns>拷贝后的新对象；若原对象为 null 则返回 null</returns>
-        /// <remarks>依赖 Newtonsoft.Json 实现深拷贝，仅适用于可序列化的类型</remarks>
+        /// <param name="source">待拷贝的对象</param>
+        /// <returns></returns>
         [return: MaybeNull]
-        public static T DeepCopy<T>([AllowNull] this T t) where T : new()
+        public static T? DeepCopy<T>(this T source)
         {
-            return t.As<T>();
+            if (source == null) return default;
+
+            var type = source.GetType();
+
+            // 值类型/string 直接返回
+            if (type.IsValueType || type == typeof(string))
+                return source;
+
+            // 数组
+            if (type.IsArray)
+            {
+                var array = source as Array;
+                var elementType = type.GetElementType()!;
+                var copy = Array.CreateInstance(elementType, array.Length);
+                for (int i = 0; i < array.Length; i++)
+                    copy.SetValue(DeepCopy(array.GetValue(i)), i);
+                return (T)(object)copy;
+            }
+
+            // 列表/集合
+            if (typeof(IEnumerable<object>).IsAssignableFrom(type))
+            {
+                var listType = typeof(List<>).MakeGenericType(type.GetGenericArguments()[0]);
+                var list = Activator.CreateInstance(listType) as dynamic;
+                if (list == null) return default;
+                foreach (var item in source as dynamic)
+                    list.Add(DeepCopy(item));
+                return (T)list;
+            }
+
+            // 对象拷贝
+            var obj = Activator.CreateInstance(type)!;
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (!prop.CanWrite) continue;
+                var value = prop.GetValue(source);
+                prop.SetValue(obj, DeepCopy(value));
+            }
+            return (T)obj;
         }
 
         /// <summary>

@@ -7,6 +7,7 @@ namespace Viv.Engine
     /// <summary>
     /// Viv API 通用响应封装
     /// </summary>
+    [Serializable]
     public class VivApiResult
     {
         public VivApiResult() { }

@@ -17,5 +17,7 @@
   <Folder Name="/src/Vivian/" />
   <Folder Name="/src/Vivian/Chat/" />
   <Folder Name="/src/Vivian/Getway/" />
-  <Folder Name="/src/Vivian/Shared/" />
+  <Folder Name="/src/Vivian/Shared/">
+    <Project Path="src/Vivian/Viv.Entity/Viv.Entity.csproj" Id="9630f360-f175-4db4-b06c-72b2730bf351" />
+  </Folder>
 </Solution>

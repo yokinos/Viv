@@ -4,6 +4,7 @@ using System.Text;
 
 namespace Viv.Engine
 {
+    [Serializable]
     public class VivApiResult<T> : VivApiResult
     {
         public VivApiResult() { }
