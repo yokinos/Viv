@@ -19,17 +19,23 @@ namespace Viv.Momo.Options
         public bool IsReadWriteSplit { get; set; }
 
         /// <summary>
-        /// 连接字符串
-        /// 若是读写分离，则为读连接字符串和写连接字符串的数组 [0]为写连接字符串，[1]为读连接字符串
+        /// 主库连接字符串（无论是否读写分离 这个都要有至少一个连接）
         /// </summary>
-        public string[] ConnectionStrings { get; set; } = [];
+        public string[] MasterConnectionStrings { get; set; } = [];
 
         /// <summary>
-        /// 是否需要动态切换数据库
-        /// 如果需要动态切换 需要实现 <see cref="Interface.IConnectionSelect"/>
+        /// 从库连接字符串（若没有读写分离 这个就不用设置）
         /// </summary>
-        public bool IsNeedDanamicChangeDatabase { get; set; } = false;
+        public string[] SlaveConnectionStrings { get; set; } = [];
 
+        /// <summary>
+        /// 超时时间（秒）
+        /// </summary>
         public int Timeout { get; set; } = 30;
+
+        /// <summary>
+        /// 实体程序集名称(所有的实体都需要继承<see cref="Interface.IEntity"/>)
+        /// </summary>
+        public string[] EntityAsseblyNames { get; set; } = [];
     }
 }

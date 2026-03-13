@@ -46,7 +46,7 @@ namespace Viv.Momo.Database
                 var databaseValue = ToDatabaseValue(value);
                 if (whereKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase))
                 {
-                    var line = whereList.Count == 0 ? "WHERE" : " AND";
+                    var line = whereList.Count == 0 ? "WHERE" : "AND";
                     whereList.Add($"{line} {name} = {databaseValue}");
                 }
                 else
@@ -70,7 +70,7 @@ namespace Viv.Momo.Database
                 var name = property.Name.ToLowerInvariant();
                 var value = property.GetValue(entity);
                 var databaseValue = ToDatabaseValue(value);
-                var line = whereList.Count == 0 ? "WHERE" : " AND";
+                var line = whereList.Count == 0 ? "WHERE" : "AND";
                 whereList.Add($"{line} {name} = {databaseValue}");
             }
 

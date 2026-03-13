@@ -23,7 +23,9 @@ namespace Viv.Momo.Core
     public class VivDatabaseContext : VivDatabase, IVivDbContext
     {
         private bool _disposed = false;
-        public VivDatabaseContext(IVivContext vivContext, IVivLogger vivLogger) : base(vivContext, vivLogger) { }
+
+        public VivDatabaseContext(IVivContext vivContext, IVivLogger vivLogger)
+            : base(vivContext, vivLogger) { }
 
         public bool Insert<T>(T entity) where T : IEntity
         {
@@ -62,8 +64,8 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var tableName = DataSqlBuilder.GetTableName<T>();
-                    var tempsql = DataSqlBuilder.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
+                    var tableName = SqlMagic.GetTableName<T>();
+                    var tempsql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
                     affected = context.DbConnection.Execute(tempsql, entitys, _transaction, _timeOut);
                 }
 
@@ -113,8 +115,8 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var tableName = DataSqlBuilder.GetTableName<T>();
-                    var tempsql = DataSqlBuilder.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
+                    var tableName = SqlMagic.GetTableName<T>();
+                    var tempsql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
                     affected = await context.DbConnection.ExecuteAsync(tempsql, entitys, _transaction, _timeOut);
                 }
 
@@ -320,7 +322,7 @@ namespace Viv.Momo.Core
         private List<KeyValueItem<string, DynamicParameters>> BuilderUpdateSqlList<T>(List<T> entityList, int pageSize = 200)
         {
             var type = typeof(T);
-            var tableName = AdaptFieldNameToDatabase(DataSqlBuilder.GetTableName<T>());
+            var tableName = AdaptFieldNameToDatabase(SqlMagic.GetTableName<T>());
             var pilist = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
             var sqlList = new List<KeyValueItem<string, DynamicParameters>>();
 
@@ -429,7 +431,7 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var tableName = DataSqlBuilder.GetTableName<T>();
+                    var tableName = SqlMagic.GetTableName<T>();
                     var connection = _context.DbConnection;
                     var deleteSql = $"DELETE FROM {AdaptFieldNameToDatabase(tableName)} WHERE {AdaptFieldNameToDatabase("Id")} IN @Ids";
                     int affectedRows = connection.Execute(deleteSql, new { Ids = ids });
@@ -488,7 +490,7 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var tableName = DataSqlBuilder.GetTableName<T>();
+                    var tableName = SqlMagic.GetTableName<T>();
                     var connection = _context.DbConnection;
                     var deleteSql = $"DELETE FROM {AdaptFieldNameToDatabase(tableName)} WHERE {AdaptFieldNameToDatabase("Id")} IN @Ids";
                     int affectedRows = await connection.ExecuteAsync(deleteSql, new { Ids = ids });
@@ -592,13 +594,13 @@ namespace Viv.Momo.Core
         public T? Find<T>(long id) where T : class, IEntity
         {
             if (id <= 0) return default;
-            var tableName = DataSqlBuilder.GetTableName<T>();
+            var tableName = SqlMagic.GetTableName<T>();
 
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
-                var sql = DataSqlBuilder.GetFindSqlTemplate(tableName, _options.DatabaseSouce);
+                var sql = SqlMagic.GetFindSqlTemplate(tableName, _options.DatabaseSouce);
                 return connection.QuerySingleOrDefault<T>(sql, new { Id = id }, null, _timeOut);
             }
             catch (Exception ex)
@@ -611,13 +613,13 @@ namespace Viv.Momo.Core
         public async Task<T?> FindAsync<T>(long id) where T : class, IEntity
         {
             if (id <= 0) return default;
-            var tableName = DataSqlBuilder.GetTableName<T>();
+            var tableName = SqlMagic.GetTableName<T>();
 
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
-                var sql = DataSqlBuilder.GetFindSqlTemplate(tableName, _options.DatabaseSouce);
+                var sql = SqlMagic.GetFindSqlTemplate(tableName, _options.DatabaseSouce);
                 return await connection.QueryFirstOrDefaultAsync<T>(sql, new { Id = id }, null, _timeOut).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -803,7 +805,7 @@ namespace Viv.Momo.Core
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
-                var (pageSql, countSql) = DataSqlBuilder.GetPageSqlTemplate(sql, pageIndex, pageSize, _options.DatabaseSouce);
+                var (pageSql, countSql) = SqlMagic.GetPageSqlTemplate(sql, pageIndex, pageSize, _options.DatabaseSouce);
                 var totalCount = _context.DbConnection.ExecuteScalar<int>(countSql, parameters, null, _timeOut);
                 if (totalCount > 0)
                 {
@@ -832,7 +834,7 @@ namespace Viv.Momo.Core
             try
             {
                 var _context = GetEFCoreContext(DbReadWriteType.Read);
-                var (pageSql, countSql) = DataSqlBuilder.GetPageSqlTemplate(sql, pageIndex, pageSize, _options.DatabaseSouce);
+                var (pageSql, countSql) = SqlMagic.GetPageSqlTemplate(sql, pageIndex, pageSize, _options.DatabaseSouce);
                 var totalCount = await _context.DbConnection.ExecuteScalarAsync<int>(countSql, parameters, null, _timeOut).ConfigureAwait(false);
                 if (totalCount > 0)
                 {
@@ -1210,8 +1212,9 @@ namespace Viv.Momo.Core
             }
         }
 
-        public IVivDbContext CreateContext(DatabaseOptions options)
+        public IVivDbContext? CreateContext(DatabaseOptions options)
         {
+            if (options == null) return default;
             var dataContext = new VivDatabaseContext(_vivContext, _logger);
             dataContext.SetOptions(options);
             return dataContext;
@@ -1233,14 +1236,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public void AutoSetValue(bool flag)
+        public void IsAutoSetDefaultValue(bool flag)
         {
             IsAutoSetValue = flag;
         }
 
-        public ISqlGenerater GetSqlGenerater(DatabaseSouceType databaseSouce)
+        public ISqlGenerater GetSqlGenerater(DatabaseSouceType? databaseSouce = null)
         {
-            return SqlGeneraterFactory.GetSqlGenerater(databaseSouce);
+            return SqlGeneraterFactory.GetSqlGenerater(databaseSouce ?? _options.DatabaseSouce);
         }
 
         public void Dispose()

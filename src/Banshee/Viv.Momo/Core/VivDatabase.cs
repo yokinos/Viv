@@ -41,11 +41,12 @@ namespace Viv.Momo.Core
             SetOptions();
         }
 
-        public void SetOptions(DatabaseOptions? options = null)
+        protected void SetOptions(DatabaseOptions? options = null)
         {
-            options ??= VivConfigRegistry.Get<DatabaseOptions>();
-            ArgumentNullException.ThrowIfNull(options);
-            _options = options;
+            var realOptions = options ?? VivConfigRegistry.Get<DatabaseOptions>();
+            ArgumentNullException.ThrowIfNull(realOptions);
+            _options = realOptions;
+            _timeOut = realOptions.Timeout;
         }
 
         #region 实例化EFCore
@@ -170,7 +171,7 @@ namespace Viv.Momo.Core
         /// <summary>
         /// 单次EF处理实体的最大数量（超过这个数量会用Dapper处理）
         /// </summary>
-        protected const int EFMaxCount = 500;
+        protected const int EFMaxCount = 200;
 
         public static int CalculateTotalPages(int totalItems, int pageSize)
         {

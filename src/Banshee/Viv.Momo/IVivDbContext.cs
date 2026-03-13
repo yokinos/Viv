@@ -1,5 +1,4 @@
-﻿using Dapper;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
@@ -66,10 +65,10 @@ namespace Viv.Momo
         Task CommitTransactionAsync();
         Task RollbackTransactionAsync();
 
-        IVivDbContext CreateContext(DatabaseOptions options);
+        IVivDbContext? CreateContext(DatabaseOptions options);
         void ChangeTenant(long tenantId);
         void ChangeVivAppId(long vivAppId);
-        void AutoSetValue(bool flag);
-        ISqlGenerater GetSqlGenerater(DatabaseSouceType databaseSouce);
+        void IsAutoSetDefaultValue(bool flag);
+        ISqlGenerater GetSqlGenerater(DatabaseSouceType? databaseSouce = null);
     }
 }

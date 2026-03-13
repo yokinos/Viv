@@ -1,7 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Data;
+using System.Reflection;
 using Viv.Momo.Enums;
+using Viv.Momo.Interface;
 using Viv.Momo.Options;
 using Viv.Vva.Magic;
 
@@ -26,6 +29,7 @@ namespace Viv.Momo.Core
             }
             else
             {
+                // 无读写分离 → 走主库
                 _dbReadWriteType = DbReadWriteType.Write;
             }
 
@@ -44,20 +48,21 @@ namespace Viv.Momo.Core
         /// <exception cref="InvalidOperationException">连接字符串配置异常</exception>
         public string GetConnectionString(DbReadWriteType dbReadWriteType)
         {
-            if (_options.ConnectionStrings == null || _options.ConnectionStrings.Length == 0)
+            if (_options.MasterConnectionStrings.IsNullOrEmpty())
             {
-                throw new InvalidOperationException("数据库连接字符串未配置");
+                throw new InvalidOperationException("未配置主库连接字符串");
             }
 
-            // 无读写分离/写操作/无从库 → 使用主库（第一个连接）
-            if (!_options.IsReadWriteSplit || dbReadWriteType == DbReadWriteType.Write || _options.ConnectionStrings.Length <= 1)
+            // 无读写分离/读操作/无从库 → 使用主库
+            if (!_options.IsReadWriteSplit || dbReadWriteType == DbReadWriteType.Write || _options.SlaveConnectionStrings.IsNullOrEmpty())
             {
-                return _options.ConnectionStrings[0];
+                var masterIndex = RandomMagic.Next(0, _options.MasterConnectionStrings.Length);
+                return _options.MasterConnectionStrings[masterIndex];
             }
 
-            // 读操作 → 随机选择从库（负载均衡）
-            var readIndex = RandomMagic.Next(1, _options.ConnectionStrings.Length);
-            return _options.ConnectionStrings[readIndex];
+            // 读操作 → 随机选择从库
+            var readIndex = RandomMagic.Next(0, _options.SlaveConnectionStrings.Length);
+            return _options.SlaveConnectionStrings[readIndex];
         }
 
         /// <summary>
@@ -82,6 +87,31 @@ namespace Viv.Momo.Core
                     break;
                 default:
                     throw new NotSupportedException($"不支持的数据库类型：{_options.DatabaseSouce}");
+            }
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            if (_options.EntityAsseblyNames.IsNullOrEmpty())
+            {
+                return;
+            }
+
+            var typeList = new List<Type>();
+            foreach (var assemblyName in _options.EntityAsseblyNames)
+            {
+                var assembly = Assembly.Load(assemblyName);
+                if (assembly == null) continue;
+
+                var entityTypes = assembly.GetTypes().Where(t => t.IsClass && !t.IsAbstract && typeof(IEntity).IsAssignableFrom(t));
+                typeList.AddRange(entityTypes);
+            }
+
+            foreach (var type in typeList)
+            {
+                modelBuilder.Entity(type);
             }
         }
 
