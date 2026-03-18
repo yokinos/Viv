@@ -28,15 +28,8 @@ namespace Viv.Momo.Converter
         {
             var (where, parameters) = Convert(expression);
 
-            return $"DELETE FROM {tableName} WHERE {where}";
+            var sql = $"DELETE FROM {tableName} WHERE {where}";
+            return (sql, parameters);
         }
-
-        public static (string sql, Dictionary<string, object> parameter) GetExistSql<T>(string tableName, Expression<Func<T, bool>> expression, DatabaseSouceType databaseSouceType)
-        {
-            var (where, parameters) = Convert(expression);
-
-            return $"DELETE FROM {tableName} WHERE {where}";
-        }
-
     }
 }

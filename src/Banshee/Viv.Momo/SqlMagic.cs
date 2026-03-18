@@ -40,33 +40,7 @@ namespace Viv.Momo
             }
 
             return tableName;
-        }
-        public static Expression<Func<T, bool>> AutoSpliceCommonCondition<T>(Expression<Func<T, bool>> predicate, long tenantId, long vivAppId)
-        {
-            Expression<Func<T, bool>> finalPredicate = predicate;
-            if (typeof(T).IsAssignableFrom(typeof(EntityBase)))
-            {
-                Expression<Func<T, bool>> softDeleteExpr = x => (x as EntityBase).IsDeleted == VivBool.False;
-                Expression<Func<T, bool>> tenantExpr = x => (x as EntityBase).TenantId == tenantId;
-                Expression<Func<T, bool>> appIdExpr = x => (x as EntityBase).AppId == vivAppId;
-
-                finalPredicate = CombineExpressions(finalPredicate, softDeleteExpr);
-                finalPredicate = CombineExpressions(finalPredicate, tenantExpr);
-                finalPredicate = CombineExpressions(finalPredicate, appIdExpr);
-            }
-
-            return finalPredicate;
-        }
-
-        private static Expression<Func<T, bool>> CombineExpressions<T>(Expression<Func<T, bool>> expr1, Expression<Func<T, bool>> expr2)
-        {
-            var param = Expression.Parameter(typeof(T), "x");
-            var body1 = new ParameterReplacer(param).Visit(expr1.Body);
-            var body2 = new ParameterReplacer(param).Visit(expr2.Body);
-            var combined = Expression.AndAlso(body1, body2);
-
-            return Expression.Lambda<Func<T, bool>>(combined, param);
-        }
+        } 
 
         /// <summary>
         /// 生成通用INSERT SQL模板

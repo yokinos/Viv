@@ -108,10 +108,10 @@ namespace Viv.Momo.Database
         {
             if (dateTime.TimeOfDay == TimeSpan.Zero)
             {
-                return dateTime.ExtToString(DateFormat.DateOnly);
+                return dateTime.FormatToString(DateFormat.Date);
             }
 
-            return dateTime.ExtToString();
+            return dateTime.FormatToString();
         }
 
         private static string DateTimeOffsetConver(DateTime dateTime)

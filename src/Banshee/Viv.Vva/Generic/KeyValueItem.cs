@@ -16,7 +16,7 @@ namespace Viv.Vva.Generic
     /// 2. 本类属性支持null值（可空类型），适配更多业务场景；
     /// 3. 提供无参构造函数，便于序列化/反序列化、反射实例化等场景
     /// </remarks>
-    public class KeyValueItem<TKey, TValue>
+    public struct KeyValueItem<TKey, TValue>
     {
         /// <summary>
         /// 无参构造函数

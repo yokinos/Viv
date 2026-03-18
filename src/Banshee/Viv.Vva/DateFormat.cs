@@ -14,7 +14,7 @@ namespace Viv.Vva
         /// <summary>
         /// 标准日期（年月日）yyyy-MM-dd
         /// </summary>
-        DateOnly,
+        Date,
 
         /// <summary>
         /// 长日期（年月日时分秒，横线+冒号分隔）yyyy-MM-dd HH:mm:ss
@@ -29,7 +29,7 @@ namespace Viv.Vva
         /// <summary>
         /// 时间（仅时分秒）HHmmss
         /// </summary>
-        TimeOnly,
+        Time,
 
         /// <summary>
         /// 标准时间（仅时分秒）HH:mm:ss

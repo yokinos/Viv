@@ -6,7 +6,6 @@ using System.Diagnostics.Contracts;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
-using Viv.Vva.Enums;
 using Viv.Vva.Magic;
 
 namespace Viv.Vva.Extension
@@ -70,7 +69,7 @@ namespace Viv.Vva.Extension
         /// 示例2：new DateTime(2026,2,11).ExtToString(DateFormat.Date, "/") → "2026/02/11"
         /// </example>
         [return: NotNull]
-        public static string ExtToString(this DateTime self, DateFormat formt = DateFormat.LongDate, string symbol = "-")
+        public static string FormatToString(this DateTime self, DateFormat formt = DateFormat.LongDate, string symbol = "-")
         {
             if (self == DateTime.MinValue || self == DateTime.MaxValue)
                 return string.Empty;
@@ -78,10 +77,10 @@ namespace Viv.Vva.Extension
             return formt switch
             {
                 DateFormat.ShortDate => "yyyyMMdd",
-                DateFormat.DateOnly => $"yyyy{symbol}MM{symbol}dd",
+                DateFormat.Date => $"yyyy{symbol}MM{symbol}dd",
                 DateFormat.LongDate => $"yyyy{symbol}MM{symbol}dd HH:mm:ss",
                 DateFormat.CompactLongDate => "yyyyMMddHHmmss",
-                DateFormat.TimeOnly => "HHmmss",
+                DateFormat.Time => "HHmmss",
                 DateFormat.StandardTime => "HH:mm:ss",
                 _ => string.Empty
             };

@@ -2,8 +2,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
-using Viv.Vva.Enums;
-using Viv.Vva.Options;
 
 namespace Viv.Vva.Magic
 {

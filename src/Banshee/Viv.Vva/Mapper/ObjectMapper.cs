@@ -6,7 +6,7 @@ using System.Globalization;
 using System.Text;
 using Viv.Vva.Extension;
 
-namespace Viv.Vva.Magic
+namespace Viv.Vva.Mapper
 {
     /// <summary>
     /// 通用类型转换工具类（核心能力：Unix时间戳转换、多类型安全转换）
@@ -18,7 +18,7 @@ namespace Viv.Vva.Magic
     /// 3. 鲁棒：自动处理时区、Unix时间戳（秒/毫秒）、多语言文化格式；
     /// 4. 轻量：仅依赖Newtonsoft.Json，无其他第三方依赖。
     /// </remarks>
-    public static class ConvertMagic
+    public static class ObjectMapper
     {
         /// <summary>Unix时间纪元（1970-01-01 00:00:00 UTC）</summary>
         private static readonly DateTimeOffset _unixEpoch = new(1970, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -34,7 +34,7 @@ namespace Viv.Vva.Magic
         /// <summary>字符串转基础类型的解析器映射表</summary>
         private static readonly Dictionary<Type, Func<string, CultureInfo, object?, object?>> stringParsers;
 
-        static ConvertMagic()
+        static ObjectMapper()
         {
             stringParsers = new Dictionary<Type, Func<string, CultureInfo, object?, object?>>
             {
@@ -122,16 +122,38 @@ namespace Viv.Vva.Magic
                     return (T)Enum.ToObject(targetType, source);
                 }
 
-                var sourceText = ConvertObjectToString(source, sourceType);
-                if (string.IsNullOrEmpty(sourceText)) return defaultValue;
-
-                var converted = TryConvertStringToType(sourceText, targetType, cultureInfo, defaultValue);
-                if (converted is not null)
+                // 基础类型转换
+                if (stringParsers.ContainsKey(targetType) || targetType.IsEnum)
                 {
-                    return (T)converted;
+                    var sourceText = ConvertObjectToString(source, sourceType);
+                    if (string.IsNullOrEmpty(sourceText)) return defaultValue;
+
+                    var converted = TryConvertStringToType(sourceText, targetType, cultureInfo, defaultValue);
+                    if (converted is not null)
+                    {
+                        return (T)converted;
+                    }
                 }
 
-                return JsonConvert.DeserializeObject<T>(sourceText);
+                // 尝试使用表达式目录树进行映射
+                if (ExpressionMapper.IsCustomType(sourceType) || ExpressionMapper.IsEnumerable(sourceType))
+                {
+                    var targetValue = ExpressionMapper.Map<T>(source);
+                    if (targetValue != null)
+                    {
+                        return targetValue;
+                    }
+
+                    // 使用EMIT映射
+                    var emitResult = EmitMapper.Map<T>(source);
+                    if (emitResult != null)
+                    {
+                        return emitResult;
+                    }
+                }
+
+                // 好了 没办法了，只能序列化了
+                return JsonConvert.DeserializeObject<T>(source.ToJson());
             }
             catch (Exception ex)
             {

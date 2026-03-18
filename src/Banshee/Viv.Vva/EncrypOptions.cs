@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Viv.Vva.Options
+namespace Viv.Vva
 {
     public class EncrypOptions
     {
