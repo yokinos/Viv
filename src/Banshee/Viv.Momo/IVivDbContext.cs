@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
+using Viv.Momo.Core;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
@@ -79,6 +80,6 @@ namespace Viv.Momo
         void ChangeVivAppId(long vivAppId);
         void IsAutoSetDefaultValue(bool flag);
         ISqlGenerater GetSqlGenerater(DatabaseSouceType? databaseSouce = null);
-        DbContext GetEFContext(DbReadWriteType readWriteType = DbReadWriteType.Read);
+        EFAppContext GetEFContext(DbReadWriteType readWriteType = DbReadWriteType.Read);
     }
 }

@@ -1377,7 +1377,7 @@ namespace Viv.Momo.Core
             _disposed = true;
         }
 
-        public DbContext GetEFContext(DbReadWriteType readWriteType)
+        public EFAppContext GetEFContext(DbReadWriteType readWriteType)
         {
             return GetAppContext(readWriteType);
         }
