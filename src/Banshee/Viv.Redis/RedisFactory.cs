@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Viv.Log;
 using Viv.Redis.DbAllocator;
@@ -87,7 +88,7 @@ namespace Viv.Redis
                 _ => throw new NotSupportedException($"不支持的Redis部署模式: {CurrentRedisOptions.RedisMode}"),
             };
 
-            var connection = await ConnectionMultiplexer.ConnectAsync(config);
+            var connection = await ConnectionMultiplexer.ConnectAsync(config).ConfigureAwait(false);
             RegisterConnectionEvents(connection);
             return connection;
         }
@@ -301,7 +302,7 @@ namespace Viv.Redis
         public async Task<IDatabase> GetDatabaseAsync(string key)
         {
             var dbIndex = _dbAllocator?.AllocateDbIndex(key, CurrentRedisOptions?.MaxDbIndex);
-            return await GetDatabaseAsync(dbIndex);
+            return await GetDatabaseAsync(dbIndex).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -312,8 +313,8 @@ namespace Viv.Redis
         /// <returns>指定数据库的操作实例（IDatabase）</returns>
         public static IDatabase GetDatabase(int? dbNumber = null)
         {
-            var database = Task.Run(async () => await GetDatabaseAsync(dbNumber)).Result;
-            return database;
+            // 改用 GetAwaiter().GetResult() 避免 Task.Run 死锁风险
+            return GetDatabaseAsync(dbNumber).GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -330,7 +331,7 @@ namespace Viv.Redis
                 dbNumber = 0;
             }
 
-            var connection = await GetConnectionAsync();
+            var connection = await GetConnectionAsync().ConfigureAwait(false);
             return connection.GetDatabase(dbNumber ?? (CurrentRedisOptions?.DefaultDatabase ?? 0));
         }
 
@@ -343,7 +344,7 @@ namespace Viv.Redis
         /// <exception cref="InvalidOperationException">未找到可用服务器端点时抛出</exception>
         public async static Task<IServer> GetServerAsync(EndPoint? endPoint = null)
         {
-            var connection = await GetConnectionAsync();
+            var connection = await GetConnectionAsync().ConfigureAwait(false);
             var endPoints = connection.GetEndPoints();
 
             if (endPoints.Length == 0)

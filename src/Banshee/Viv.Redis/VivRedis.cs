@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Viv.Vva.Extension;
 
@@ -33,8 +32,8 @@ namespace Viv.Redis
             try
             {
                 if (key.IsNullOrEmpty()) { return default; }
-                var database = await GetDatabaseAsync(key);
-                return await func(database);
+                var database = await GetDatabaseAsync(key).ConfigureAwait(false);
+                return await func(database).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -59,7 +58,7 @@ namespace Viv.Redis
             try
             {
                 if (key.IsNullOrEmpty()) { return default; }
-                var database = Task.Run(async () => await GetDatabaseAsync(key)).Result;
+                var database = GetDatabaseAsync(key).GetAwaiter().GetResult();
                 return func(database);
             }
             catch (Exception ex)
@@ -96,12 +95,12 @@ namespace Viv.Redis
 
                 foreach (var x in keyDict)
                 {
-                    var database = await GetDatabaseAsync(x.Key);
+                    var database = await GetDatabaseAsync(x.Key).ConfigureAwait(false);
                     if (database is null)
                     {
                         continue;
                     }
-                    var dbResult = await func(database, x.Value);
+                    var dbResult = await func(database, x.Value).ConfigureAwait(false);
                     if (!EqualityComparer<T>.Default.Equals(dbResult, default))
                     {
                         list.Add(dbResult);

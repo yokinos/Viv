@@ -17,7 +17,6 @@ namespace Viv.Momo.Core
     {
         private readonly DatabaseOptions _options;
         private readonly DbReadWriteType _dbReadWriteType;
-        private IDbConnection _cachedConnection;
 
         public EFAppContext(DatabaseOptions options, DbReadWriteType dbReadWriteType = DbReadWriteType.Read)
         {
@@ -46,18 +45,17 @@ namespace Viv.Momo.Core
         /// <param name="isRead">是否为读操作</param>
         /// <returns>适配的连接字符串</returns>
         /// <exception cref="InvalidOperationException">连接字符串配置异常</exception>
-        public string GetConnectionString(DbReadWriteType dbReadWriteType)
+        public string GetConnectionString()
         {
-            if (_options.MasterConnectionStrings.IsNullOrEmpty())
+            if (_options.MasterConnectionString.IsNullOrEmpty())
             {
                 throw new InvalidOperationException("未配置主库连接字符串");
             }
 
             // 无读写分离/读操作/无从库 → 使用主库
-            if (!_options.IsReadWriteSplit || dbReadWriteType == DbReadWriteType.Write || _options.SlaveConnectionStrings.IsNullOrEmpty())
+            if (!_options.IsReadWriteSplit || _dbReadWriteType == DbReadWriteType.Write || _options.SlaveConnectionStrings.IsNullOrEmpty())
             {
-                var masterIndex = RandomMagic.Next(0, _options.MasterConnectionStrings.Length);
-                return _options.MasterConnectionStrings[masterIndex];
+                return _options.MasterConnectionString;
             }
 
             // 读操作 → 随机选择从库
@@ -72,7 +70,7 @@ namespace Viv.Momo.Core
         {
             if (optionsBuilder.IsConfigured) return;
 
-            var connectionString = GetConnectionString(_dbReadWriteType);
+            var connectionString = GetConnectionString();
             var queryTrackingBehavior = _dbReadWriteType == DbReadWriteType.Read ? QueryTrackingBehavior.NoTracking : QueryTrackingBehavior.TrackAll;
 
             switch (_options.DatabaseSouce)
@@ -122,19 +120,15 @@ namespace Viv.Momo.Core
         {
             get
             {
-                // 缓存连接，避免重复获取
-                if (_cachedConnection == null)
-                {
-                    _cachedConnection = Database.GetDbConnection();
-                }
+                var connection = Database.GetDbConnection();
 
-                // 确保连接打开
-                if (_cachedConnection.State != ConnectionState.Open)
-                {
-                    _cachedConnection.Open();
-                }
+                //// 确保连接打开 Dapper会自己处理
+                //if (connection.State != ConnectionState.Open)
+                //{
+                //    connection.Open();
+                //}
 
-                return _cachedConnection;
+                return connection;
             }
         }
     }

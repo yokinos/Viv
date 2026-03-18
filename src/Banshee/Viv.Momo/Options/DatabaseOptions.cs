@@ -21,7 +21,7 @@ namespace Viv.Momo.Options
         /// <summary>
         /// 主库连接字符串（无论是否读写分离 这个都要有至少一个连接）
         /// </summary>
-        public string[] MasterConnectionStrings { get; set; } = [];
+        public string MasterConnectionString { get; set; } = string.Empty;
 
         /// <summary>
         /// 从库连接字符串（若没有读写分离 这个就不用设置）

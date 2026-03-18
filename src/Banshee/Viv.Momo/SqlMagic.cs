@@ -40,7 +40,16 @@ namespace Viv.Momo
             }
 
             return tableName;
-        } 
+        }
+
+        public static string QuoteIdentifier(string field, DatabaseSouceType databaseSouceType)
+        {
+            return databaseSouceType switch
+            {
+                DatabaseSouceType.PostgreSQL => field.ToLowerInvariant(),
+                _ => field
+            };
+        }
 
         /// <summary>
         /// 生成通用INSERT SQL模板

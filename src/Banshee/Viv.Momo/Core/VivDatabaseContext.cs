@@ -4,9 +4,11 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using Viv.Contracts.Interface;
 using Viv.Log.VivLogger;
 using Viv.Momo.Converter;
@@ -19,14 +21,16 @@ using Viv.Vva.Generic;
 namespace Viv.Momo.Core
 {
     /// <summary>
-    /// Viv 框架下的数据库访问实现 （基于EFCore与Dapper）(支持PostgreSQL,SqlServer)
+    /// Viv 框架下的数据库访问实现（基于 EFCore 与 Dapper，支持 PostgreSQL、SqlServer）
     /// </summary>
     public class VivDatabaseContext : VivDatabase, IVivDbContext
     {
-        private bool _disposed = false;
+        private bool _disposed;
 
         public VivDatabaseContext(IVivContext vivContext, IVivLogger vivLogger)
             : base(vivContext, vivLogger) { }
+
+        #region Insert
 
         public bool Insert<T>(T entity) where T : IEntity
         {
@@ -35,9 +39,9 @@ namespace Viv.Momo.Core
             try
             {
                 AutoSetValue(entity);
-                var _context = GetAppContext();
-                _context.Add(entity);
-                var count = _context.SaveChanges();
+                var context = GetAppContext();
+                context.Add(entity);
+                var count = context.SaveChanges();
                 return count > 0;
             }
             catch (Exception ex)
@@ -47,27 +51,27 @@ namespace Viv.Momo.Core
             }
         }
 
-        public bool Insert<T>(IEnumerable<T> entitys) where T : IEntity
+        public bool Insert<T>(IEnumerable<T> entities) where T : IEntity
         {
-            if (entitys.IsNullOrEmpty()) return false;
+            if (entities.IsNullOrEmpty()) return false;
 
             try
             {
-                AutoSetValue(entitys);
-                var count = entitys.Count();
+                AutoSetValue(entities.ToArray());
+                var entityList = entities.ToList();
                 var context = GetAppContext();
-                int affected = 0;
+                int affected;
 
-                if (count < EFMaxCount)
+                if (entityList.Count < EFMaxCount)
                 {
-                    context.AddRange(entitys);
+                    context.AddRange(entityList);
                     affected = context.SaveChanges();
                 }
                 else
                 {
                     var tableName = SqlMagic.GetTableName<T>();
-                    var tempsql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
-                    affected = context.DbConnection.Execute(tempsql, entitys, _transaction, _timeOut);
+                    var tempSql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
+                    affected = context.DbConnection.Execute(tempSql, entityList, _transaction, _timeOut);
                 }
 
                 return affected > 0;
@@ -86,9 +90,9 @@ namespace Viv.Momo.Core
             try
             {
                 AutoSetValue(entity);
-                var _context = GetAppContext();
-                _context.Add(entity);
-                var count = await _context.SaveChangesAsync();
+                var context = GetAppContext();
+                context.Add(entity);
+                var count = await context.SaveChangesAsync();
                 return count > 0;
             }
             catch (Exception ex)
@@ -98,27 +102,27 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> InsertAsync<T>(IEnumerable<T> entitys) where T : IEntity
+        public async Task<bool> InsertAsync<T>(IEnumerable<T> entities) where T : IEntity
         {
-            if (entitys.IsNullOrEmpty()) return false;
+            if (entities.IsNullOrEmpty()) return false;
 
             try
             {
-                AutoSetValue(entitys);
-                var count = entitys.Count();
+                AutoSetValue(entities.ToArray());
+                var entityList = entities.ToList();
                 var context = GetAppContext();
-                int affected = 0;
+                int affected;
 
-                if (count < EFMaxCount)
+                if (entityList.Count < EFMaxCount)
                 {
-                    context.AddRange(entitys);
+                    context.AddRange(entityList);
                     affected = await context.SaveChangesAsync();
                 }
                 else
                 {
                     var tableName = SqlMagic.GetTableName<T>();
-                    var tempsql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
-                    affected = await context.DbConnection.ExecuteAsync(tempsql, entitys, _transaction, _timeOut);
+                    var tempSql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
+                    affected = await context.DbConnection.ExecuteAsync(tempSql, entityList, _transaction, _timeOut);
                 }
 
                 return affected > 0;
@@ -130,24 +134,28 @@ namespace Viv.Momo.Core
             }
         }
 
+        #endregion
+
+        #region Update
+
         public bool Update<T>(T entity) where T : IEntity
         {
             if (entity == null) return false;
 
             try
             {
-                var _context = GetAppContext();
-                var existingEntity = _context.Find(typeof(T), entity.Id);
+                var context = GetAppContext();
+                var existingEntity = context.Find(typeof(T), entity.Id);
                 if (existingEntity != null)
                 {
-                    _context.Entry(existingEntity).CurrentValues.SetValues(entity);
+                    context.Entry(existingEntity).CurrentValues.SetValues(entity);
                 }
                 else
                 {
-                    _context.Update(entity);
+                    context.Update(entity);
                 }
 
-                var count = _context.SaveChanges();
+                var count = context.SaveChanges();
                 return count > 0;
             }
             catch (Exception ex)
@@ -157,27 +165,25 @@ namespace Viv.Momo.Core
             }
         }
 
-        public bool Update<T>(IEnumerable<T> entitys) where T : class, IEntity
+        public bool Update<T>(IEnumerable<T> entities) where T : class, IEntity
         {
-            if (entitys.IsNullOrEmpty()) return false;
+            if (entities.IsNullOrEmpty()) return false;
 
-            var entityList = entitys.Where(x => x.Id > 0).ToList();
-            if (entityList.IsNullOrEmpty())
-            {
-                return false;
-            }
+            var entityList = entities.Where(x => x.Id > 0).ToList();
+            if (entityList.IsNullOrEmpty()) return false;
 
             try
             {
-                var _context = GetAppContext();
-                var count = 0;
+                var context = GetAppContext();
+                int count;
+
                 if (entityList.Count < EFMaxCount)
                 {
-                    count = EFBatchUpdate(entityList, _context);
+                    count = EFBatchUpdate(entityList, context);
                 }
                 else
                 {
-                    count = DapperBatchUpdate(entityList, _context);
+                    count = DapperBatchUpdate(entityList, context);
                 }
 
                 return count > 0;
@@ -195,18 +201,18 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext();
-                var existingEntity = _context.Find(typeof(T), entity.Id);
+                var context = GetAppContext();
+                var existingEntity = await context.FindAsync(typeof(T), entity.Id);
                 if (existingEntity != null)
                 {
-                    _context.Entry(existingEntity).CurrentValues.SetValues(entity);
+                    context.Entry(existingEntity).CurrentValues.SetValues(entity);
                 }
                 else
                 {
-                    _context.Update(entity);
+                    context.Update(entity);
                 }
 
-                var count = await _context.SaveChangesAsync();
+                var count = await context.SaveChangesAsync();
                 return count > 0;
             }
             catch (Exception ex)
@@ -216,50 +222,47 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> UpdateAsync<T>(IEnumerable<T> entitys) where T : class, IEntity
+        public async Task<bool> UpdateAsync<T>(IEnumerable<T> entities) where T : class, IEntity
         {
-            if (entitys.IsNullOrEmpty()) return false;
+            if (entities.IsNullOrEmpty()) return false;
 
-            var entityList = entitys.Where(x => x.Id > 0).ToList();
-            if (entityList.IsNullOrEmpty())
-            {
-                return false;
-            }
+            var entityList = entities.Where(x => x.Id > 0).ToList();
+            if (entityList.IsNullOrEmpty()) return false;
 
             try
             {
-                var _context = GetAppContext();
-                var count = 0;
+                var context = GetAppContext();
+                int count;
+
                 if (entityList.Count < EFMaxCount)
                 {
-                    count = await EFBatchUpdateAsync(entityList, _context);
+                    count = await EFBatchUpdateAsync(entityList, context);
                 }
                 else
                 {
-                    count = await DapperBatchUpdateAsync(entityList, _context);
+                    count = await DapperBatchUpdateAsync(entityList, context);
                 }
 
                 return count > 0;
             }
             catch (Exception ex)
             {
-                _logger.Error($"Update（批量）,{entityList.Count},{ex.Message}", ex);
+                _logger.Error($"UpdateAsync（批量）,{entityList.Count},{ex.Message}", ex);
                 return false;
             }
         }
 
-        private static int EFBatchUpdate<T>(List<T> entitys, EFAppContext context) where T : class, IEntity
+        private int EFBatchUpdate<T>(List<T> entities, EFAppContext context) where T : class, IEntity
         {
-            var entityIds = entitys.Select(e => e.Id).ToList();
+            var entityIds = entities.Select(e => e.Id).ToList();
             var existingEntities = context.Set<T>().Where(e => entityIds.Contains(e.Id)).ToList();
 
-            foreach (var entity in entitys)
+            foreach (var entity in entities)
             {
-                // 查找当前实体是否在已跟踪的列表中
-                var existingEntity = existingEntities.FirstOrDefault(e => e.Id == entity.Id);
-                if (existingEntity != null)
+                var existing = existingEntities.FirstOrDefault(e => e.Id == entity.Id);
+                if (existing != null)
                 {
-                    context.Entry(existingEntity).CurrentValues.SetValues(entity);
+                    context.Entry(existing).CurrentValues.SetValues(entity);
                 }
                 else
                 {
@@ -267,22 +270,20 @@ namespace Viv.Momo.Core
                 }
             }
 
-            int count = context.SaveChanges();
-            return count;
+            return context.SaveChanges();
         }
 
-        private static async Task<int> EFBatchUpdateAsync<T>(List<T> entitys, EFAppContext context) where T : class, IEntity
+        private async Task<int> EFBatchUpdateAsync<T>(List<T> entities, EFAppContext context) where T : class, IEntity
         {
-            var entityIds = entitys.Select(e => e.Id).Distinct().ToList();
+            var entityIds = entities.Select(e => e.Id).Distinct().ToList();
             var existingEntities = context.Set<T>().Where(e => entityIds.Contains(e.Id)).ToList();
 
-            foreach (var entity in entitys)
+            foreach (var entity in entities)
             {
-                // 查找当前实体是否在已跟踪的列表中
-                var existingEntity = existingEntities.FirstOrDefault(e => e.Id == entity.Id);
-                if (existingEntity != null)
+                var existing = existingEntities.FirstOrDefault(e => e.Id == entity.Id);
+                if (existing != null)
                 {
-                    context.Entry(existingEntity).CurrentValues.SetValues(entity);
+                    context.Entry(existing).CurrentValues.SetValues(entity);
                 }
                 else
                 {
@@ -290,102 +291,97 @@ namespace Viv.Momo.Core
                 }
             }
 
-            int count = await context.SaveChangesAsync();
-            return count;
+            return await context.SaveChangesAsync();
         }
 
-        private int DapperBatchUpdate<T>(List<T> entitys, EFAppContext context) where T : class, IEntity
+        private int DapperBatchUpdate<T>(List<T> entities, EFAppContext context) where T : class, IEntity
         {
-            var sqlList = BuilderUpdateSqlList(entitys);
+            var sqlList = BuildUpdateSqlList(entities);
             int count = 0;
             foreach (var item in sqlList)
             {
-                if (item.Key.IsNullOrEmpty()) continue;
+                if (string.IsNullOrEmpty(item.Key)) continue;
                 count += context.DbConnection.Execute(item.Key, item.Value, _transaction, _timeOut);
             }
-
             return count;
         }
 
-        private async Task<int> DapperBatchUpdateAsync<T>(List<T> entitys, EFAppContext context) where T : class, IEntity
+        private async Task<int> DapperBatchUpdateAsync<T>(List<T> entities, EFAppContext context) where T : class, IEntity
         {
-            var sqlList = BuilderUpdateSqlList(entitys);
+            var sqlList = BuildUpdateSqlList(entities);
             int count = 0;
             foreach (var item in sqlList)
             {
-                if (item.Key.IsNullOrEmpty()) continue;
+                if (string.IsNullOrEmpty(item.Key)) continue;
                 count += await context.DbConnection.ExecuteAsync(item.Key, item.Value, _transaction, _timeOut);
             }
-
             return count;
         }
 
-        private List<KeyValueItem<string, DynamicParameters>> BuilderUpdateSqlList<T>(List<T> entityList, int pageSize = 200)
+        private List<KeyValueItem<string, DynamicParameters>> BuildUpdateSqlList<T>(List<T> entities, int pageSize = 200) where T : class, IEntity
         {
             var type = typeof(T);
             var tableName = AdaptFieldNameToDatabase(SqlMagic.GetTableName<T>());
-            var pilist = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-            var sqlList = new List<KeyValueItem<string, DynamicParameters>>();
+            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            var result = new List<KeyValueItem<string, DynamicParameters>>();
 
-            var totalCount = entityList.Count;
-            var totalPages = CalculateTotalPages(totalCount, pageSize);
-
-            for (int index = 1; index <= totalPages; index++)
+            int totalPages = CalculateTotalPages(entities.Count, pageSize);
+            for (int page = 1; page <= totalPages; page++)
             {
-                var currentPageList = entityList.Skip((index - 1) * pageSize).Take(pageSize).ToList();
-                if (currentPageList.Count == 0) continue;
+                var pageEntities = entities.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+                if (pageEntities.Count == 0) continue;
 
                 var sqlBuilder = new StringBuilder();
                 var parameters = new DynamicParameters();
 
                 sqlBuilder.Append($"UPDATE {tableName} SET ");
 
-                var fieldSqlList = new List<string>();
-                foreach (var pi in pilist)
+                var fieldSqls = new List<string>();
+                foreach (var prop in properties)
                 {
-                    var propertyName = pi.Name;
-                    if (_primaryKeys.Contains(propertyName, StringComparer.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
+                    var propName = prop.Name;
+                    if (_primaryKeys.Contains(propName, StringComparer.OrdinalIgnoreCase)) continue;
 
-                    var dbField = AdaptFieldNameToDatabase(propertyName);
+                    var dbField = AdaptFieldNameToDatabase(propName);
                     var idField = AdaptFieldNameToDatabase("Id");
 
-                    var fieldCaseSql = new StringBuilder($"{dbField} = CASE {idField} ");
-                    foreach (var entity in currentPageList)
+                    var caseBuilder = new StringBuilder($"{dbField} = CASE {idField} ");
+                    foreach (var entity in pageEntities)
                     {
                         var idValue = type.GetProperty("Id")?.GetValue(entity);
                         if (idValue == null) continue;
-                        var propertyValue = pi.GetValue(entity);
-                        var paramName = $"@{propertyName}_{idValue}";
-                        fieldCaseSql.Append($"WHEN {idValue} THEN {paramName} ");
-                        parameters.Add(paramName, propertyValue);
-                    }
 
-                    fieldCaseSql.Append($"ELSE {dbField} END");
-                    fieldSqlList.Add(fieldCaseSql.ToString());
+                        var paramValue = prop.GetValue(entity);
+                        var paramName = $"@{propName}_{idValue}";
+                        caseBuilder.Append($"WHEN {idValue} THEN {paramName} ");
+                        parameters.Add(paramName, paramValue);
+                    }
+                    caseBuilder.Append($"ELSE {dbField} END");
+                    fieldSqls.Add(caseBuilder.ToString());
                 }
 
-                sqlBuilder.Append(string.Join(", ", fieldSqlList));
+                sqlBuilder.Append(string.Join(", ", fieldSqls));
 
-                var idParamList = new List<string>();
-                foreach (var entity in currentPageList)
+                var idParams = new List<string>();
+                foreach (var entity in pageEntities)
                 {
                     var idValue = type.GetProperty("Id")?.GetValue(entity);
                     if (idValue == null) continue;
-                    var idParamName = $"@Id_{idValue}";
-                    idParamList.Add(idParamName);
-                    parameters.Add(idParamName, idValue);
+                    var paramName = $"@Id_{idValue}";
+                    idParams.Add(paramName);
+                    parameters.Add(paramName, idValue);
                 }
 
-                sqlBuilder.Append($" WHERE {AdaptFieldNameToDatabase("Id")} IN ({string.Join(", ", idParamList)})");
-                sqlList.Add(new KeyValueItem<string, DynamicParameters>(sqlBuilder.ToString(), parameters));
+                sqlBuilder.Append($" WHERE {AdaptFieldNameToDatabase("Id")} IN ({string.Join(", ", idParams)})");
+                result.Add(new KeyValueItem<string, DynamicParameters>(sqlBuilder.ToString(), parameters));
             }
 
-            return sqlList;
+            return result;
         }
 
+        #endregion
+
+        #region Delete
 
         public bool Delete<T>(T entity) where T : IEntity
         {
@@ -393,17 +389,14 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext();
-                var entry = _context.Entry(entity);
+                var context = GetAppContext();
+                var entry = context.Entry(entity);
                 if (entry.State == EntityState.Detached)
-                {
-                    _context.Attach(entity);
-                }
+                    context.Attach(entity);
 
-                _context.Remove(entity);
-                var affectedCount = _context.SaveChanges();
-                return affectedCount > 0;
-
+                context.Remove(entity);
+                var affected = context.SaveChanges();
+                return affected > 0;
             }
             catch (Exception ex)
             {
@@ -412,31 +405,29 @@ namespace Viv.Momo.Core
             }
         }
 
-        public bool Delete<T>(IEnumerable<T> entitys) where T : class, IEntity
+        public bool Delete<T>(IEnumerable<T> entities) where T : class, IEntity
         {
-            if (entitys.IsNullOrEmpty()) return false;
+            if (entities.IsNullOrEmpty()) return false;
 
-            var ids = entitys.Where(x => x.Id > 0).Select(x => x.Id).ToList();
+            var ids = entities.Where(x => x.Id > 0).Select(x => x.Id).ToList();
             if (ids.IsNullOrEmpty()) return false;
 
             try
             {
-                var _context = GetAppContext();
+                var context = GetAppContext();
                 if (ids.Count < EFMaxCount)
                 {
-                    int affectedCount = _context.Set<T>()
+                    int affected = context.Set<T>()
                         .Where(x => ids.Contains(x.Id))
                         .ExecuteDelete();
-
-                    return affectedCount > 0;
+                    return affected > 0;
                 }
                 else
                 {
                     var tableName = SqlMagic.GetTableName<T>();
-                    var connection = _context.DbConnection;
                     var deleteSql = $"DELETE FROM {AdaptFieldNameToDatabase(tableName)} WHERE {AdaptFieldNameToDatabase("Id")} IN @Ids";
-                    int affectedRows = connection.Execute(deleteSql, new { Ids = ids });
-                    return affectedRows > 0;
+                    int affected = context.DbConnection.Execute(deleteSql, new { Ids = ids }, _transaction, _timeOut);
+                    return affected > 0;
                 }
             }
             catch (Exception ex)
@@ -452,17 +443,14 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext();
-                var entry = _context.Entry(entity);
+                var context = GetAppContext();
+                var entry = context.Entry(entity);
                 if (entry.State == EntityState.Detached)
-                {
-                    _context.Attach(entity);
-                }
+                    context.Attach(entity);
 
-                _context.Remove(entity);
-                var affectedCount = await _context.SaveChangesAsync();
-                return affectedCount > 0;
-
+                context.Remove(entity);
+                var affected = await context.SaveChangesAsync();
+                return affected > 0;
             }
             catch (Exception ex)
             {
@@ -471,31 +459,29 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> DeleteAsync<T>(IEnumerable<T> entitys) where T : class, IEntity
+        public async Task<bool> DeleteAsync<T>(IEnumerable<T> entities) where T : class, IEntity
         {
-            if (entitys.IsNullOrEmpty()) return false;
+            if (entities.IsNullOrEmpty()) return false;
 
-            var ids = entitys.Where(x => x.Id > 0).Select(x => x.Id).ToList();
+            var ids = entities.Where(x => x.Id > 0).Select(x => x.Id).ToList();
             if (ids.IsNullOrEmpty()) return false;
 
             try
             {
-                var _context = GetAppContext();
+                var context = GetAppContext();
                 if (ids.Count < EFMaxCount)
                 {
-                    int affectedCount = await _context.Set<T>()
+                    int affected = await context.Set<T>()
                         .Where(x => ids.Contains(x.Id))
                         .ExecuteDeleteAsync();
-
-                    return affectedCount > 0;
+                    return affected > 0;
                 }
                 else
                 {
                     var tableName = SqlMagic.GetTableName<T>();
-                    var connection = _context.DbConnection;
                     var deleteSql = $"DELETE FROM {AdaptFieldNameToDatabase(tableName)} WHERE {AdaptFieldNameToDatabase("Id")} IN @Ids";
-                    int affectedRows = await connection.ExecuteAsync(deleteSql, new { Ids = ids });
-                    return affectedRows > 0;
+                    int affected = await context.DbConnection.ExecuteAsync(deleteSql, new { Ids = ids }, _transaction, _timeOut);
+                    return affected > 0;
                 }
             }
             catch (Exception ex)
@@ -512,11 +498,11 @@ namespace Viv.Momo.Core
             try
             {
                 var tableName = SqlMagic.GetTableName<T>();
-                var (sql, parameter) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
-                if (sql.IsNullOrEmpty()) return false;
+                var (sql, parameters) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
+                if (string.IsNullOrEmpty(sql)) return false;
 
-                var _context = GetAppContext();
-                var count = _context.DbConnection.Execute(sql, parameter, _transaction, _timeOut);
+                var context = GetAppContext();
+                var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
                 return count > 0;
             }
             catch (Exception ex)
@@ -533,11 +519,11 @@ namespace Viv.Momo.Core
             try
             {
                 var tableName = SqlMagic.GetTableName<T>();
-                var (sql, parameter) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
-                if (sql.IsNullOrEmpty()) return false;
+                var (sql, parameters) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
+                if (string.IsNullOrEmpty(sql)) return false;
 
-                var _context = GetAppContext();
-                var count = await _context.DbConnection.ExecuteAsync(sql, parameter, _transaction, _timeOut);
+                var context = GetAppContext();
+                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut);
                 return count > 0;
             }
             catch (Exception ex)
@@ -547,14 +533,18 @@ namespace Viv.Momo.Core
             }
         }
 
+        #endregion
+
+        #region Query (Exist, Count, Single, First, Find, List)
+
         public bool Exist<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity
         {
             if (predicate == null) return false;
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                return _context.Set<T>().Any(predicate);
+                var context = GetAppContext(DbReadWriteType.Read);
+                return context.Set<T>().Any(predicate);
             }
             catch (Exception ex)
             {
@@ -569,8 +559,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                return await _context.Set<T>().AnyAsync(predicate);
+                var context = GetAppContext(DbReadWriteType.Read);
+                return await context.Set<T>().AnyAsync(predicate).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -585,8 +575,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                return _context.Set<T>().Count(predicate);
+                var context = GetAppContext(DbReadWriteType.Read);
+                return context.Set<T>().Count(predicate);
             }
             catch (Exception ex)
             {
@@ -601,12 +591,12 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                return await _context.Set<T>().CountAsync(predicate);
+                var context = GetAppContext(DbReadWriteType.Read);
+                return await context.Set<T>().CountAsync(predicate).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger.Error($"ExistAsync（委托）,{ex.Message}", ex);
+                _logger.Error($"CountAsync（委托）,{ex.Message}", ex);
                 return -1;
             }
         }
@@ -617,8 +607,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                return _context.Set<T>().SingleOrDefault(predicate);
+                var context = GetAppContext(DbReadWriteType.Read);
+                return context.Set<T>().SingleOrDefault(predicate);
             }
             catch (InvalidOperationException ex)
             {
@@ -632,14 +622,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public T? SingleOrDefault<T>(string sql, object? parameters = default) where T : class
+        public T? SingleOrDefault<T>(string sql, object? parameters = null) where T : class
         {
-            if (sql.IsNullOrEmpty()) return default;
+            if (string.IsNullOrEmpty(sql)) return default;
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                var connection = _context.DbConnection;
+                var context = GetAppContext(DbReadWriteType.Read);
+                var connection = context.DbConnection;
                 return connection.QuerySingleOrDefault<T>(sql, parameters, null, _timeOut);
             }
             catch (InvalidOperationException ex)
@@ -660,8 +650,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                return await _context.Set<T>().SingleOrDefaultAsync(predicate).ConfigureAwait(false);
+                var context = GetAppContext(DbReadWriteType.Read);
+                return await context.Set<T>().SingleOrDefaultAsync(predicate).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
             {
@@ -675,14 +665,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<T?> SingleOrDefaultAsync<T>(string sql, object? parameters = default) where T : class
+        public async Task<T?> SingleOrDefaultAsync<T>(string sql, object? parameters = null) where T : class
         {
-            if (sql.IsNullOrEmpty()) return default;
+            if (string.IsNullOrEmpty(sql)) return default;
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                var connection = _context.DbConnection;
+                var context = GetAppContext(DbReadWriteType.Read);
+                var connection = context.DbConnection;
                 return await connection.QuerySingleOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
@@ -705,8 +695,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                var connection = _context.DbConnection;
+                var context = GetAppContext(DbReadWriteType.Read);
+                var connection = context.DbConnection;
                 var sql = SqlMagic.GetFindSqlTemplate(tableName, _options.DatabaseSouce);
                 return connection.QuerySingleOrDefault<T>(sql, new { Id = id }, null, _timeOut);
             }
@@ -724,8 +714,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                var connection = _context.DbConnection;
+                var context = GetAppContext(DbReadWriteType.Read);
+                var connection = context.DbConnection;
                 var sql = SqlMagic.GetFindSqlTemplate(tableName, _options.DatabaseSouce);
                 return await connection.QueryFirstOrDefaultAsync<T>(sql, new { Id = id }, null, _timeOut).ConfigureAwait(false);
             }
@@ -742,8 +732,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                return _context.Set<T>().FirstOrDefault(predicate);
+                var context = GetAppContext(DbReadWriteType.Read);
+                return context.Set<T>().FirstOrDefault(predicate);
             }
             catch (Exception ex)
             {
@@ -752,14 +742,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public T? FirstOrDefault<T>(string sql, object? parameters = default) where T : class
+        public T? FirstOrDefault<T>(string sql, object? parameters = null) where T : class
         {
-            if (sql.IsNullOrEmpty()) return default;
+            if (string.IsNullOrEmpty(sql)) return default;
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                var connection = _context.DbConnection;
+                var context = GetAppContext(DbReadWriteType.Read);
+                var connection = context.DbConnection;
                 return connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
             }
             catch (Exception ex)
@@ -775,8 +765,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                return await _context.Set<T>().FirstOrDefaultAsync(predicate).ConfigureAwait(false);
+                var context = GetAppContext(DbReadWriteType.Read);
+                return await context.Set<T>().FirstOrDefaultAsync(predicate).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -785,14 +775,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<T?> FirstOrDefaultAsync<T>(string sql, object? parameters = default) where T : class
+        public async Task<T?> FirstOrDefaultAsync<T>(string sql, object? parameters = null) where T : class
         {
-            if (sql.IsNullOrEmpty()) return default;
+            if (string.IsNullOrEmpty(sql)) return default;
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                var connection = _context.DbConnection;
+                var context = GetAppContext(DbReadWriteType.Read);
+                var connection = context.DbConnection;
                 return await connection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -809,9 +799,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                var result = _context.Set<T>().Where(predicate);
-                return result.ToList();
+                var context = GetAppContext(DbReadWriteType.Read);
+                return context.Set<T>().Where(predicate).ToList();
             }
             catch (Exception ex)
             {
@@ -820,14 +809,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public List<T> FindList<T>(string sql, object? parameters = default) where T : class
+        public List<T> FindList<T>(string sql, object? parameters = null) where T : class
         {
-            if (sql.IsNullOrEmpty()) return [];
+            if (string.IsNullOrEmpty(sql)) return [];
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                var result = _context.DbConnection.Query<T>(sql, parameters, null, true, _timeOut);
+                var context = GetAppContext(DbReadWriteType.Read);
+                var result = context.DbConnection.Query<T>(sql, parameters, null, true, _timeOut);
                 return result.ToList();
             }
             catch (Exception ex)
@@ -843,8 +832,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                return await _context.Set<T>().Where(predicate).ToListAsync();
+                var context = GetAppContext(DbReadWriteType.Read);
+                return await context.Set<T>().Where(predicate).ToListAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -853,14 +842,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<List<T>> FindListAsync<T>(string sql, object? parameters = default) where T : class
+        public async Task<List<T>> FindListAsync<T>(string sql, object? parameters = null) where T : class
         {
-            if (sql.IsNullOrEmpty()) return [];
+            if (string.IsNullOrEmpty(sql)) return [];
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                var result = await _context.DbConnection.QueryAsync<T>(sql, parameters, null, _timeOut);
+                var context = GetAppContext(DbReadWriteType.Read);
+                var result = await context.DbConnection.QueryAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
                 return result.ToList();
             }
             catch (Exception ex)
@@ -870,15 +859,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public T? FindScalar<T>(string sql, object? parameters = default)
+        public T? FindScalar<T>(string sql, object? parameters = null)
         {
-            if (sql.IsNullOrEmpty()) return default;
+            if (string.IsNullOrEmpty(sql)) return default;
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                var result = _context.DbConnection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
-                return result;
+                var context = GetAppContext(DbReadWriteType.Read);
+                return context.DbConnection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
             }
             catch (Exception ex)
             {
@@ -887,14 +875,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<T?> FindScalarAsync<T>(string sql, object? parameters = default)
+        public async Task<T?> FindScalarAsync<T>(string sql, object? parameters = null)
         {
-            if (sql.IsNullOrEmpty()) return default;
+            if (string.IsNullOrEmpty(sql)) return default;
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
-                var result = await _context.DbConnection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut);
+                var context = GetAppContext(DbReadWriteType.Read);
+                var result = await context.DbConnection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
                 return result;
             }
             catch (Exception ex)
@@ -904,26 +892,28 @@ namespace Viv.Momo.Core
             }
         }
 
-        public PagedList<T> Page<T>(string sql, int pageIndex, int pageSize, object? parameters = default)
+        #endregion
+
+        #region PagedList
+
+        public PagedList<T> Page<T>(string sql, int pageIndex, int pageSize, object? parameters = null)
         {
             var result = new PagedList<T>(pageIndex, pageSize);
-            if (sql.IsNullOrEmpty()) return result;
+            if (string.IsNullOrEmpty(sql)) return result;
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
+                var context = GetAppContext(DbReadWriteType.Read);
                 var (pageSql, countSql) = SqlMagic.GetPageSqlTemplate(sql, pageIndex, pageSize, _options.DatabaseSouce);
-                var totalCount = _context.DbConnection.ExecuteScalar<int>(countSql, parameters, null, _timeOut);
+                var totalCount = context.DbConnection.ExecuteScalar<int>(countSql, parameters, null, _timeOut);
                 if (totalCount > 0)
                 {
-                    var list = _context.DbConnection.Query<T>(pageSql, parameters, null, true, _timeOut);
-                    var totalPages = CalculateTotalPages(totalCount, pageSize);
+                    var list = context.DbConnection.Query<T>(pageSql, parameters, null, true, _timeOut);
                     result.TotalCount = totalCount;
                     result.Items = list;
                     result.IsHaveFrontPage = pageIndex > 1;
-                    result.IsHaveNextPage = pageIndex < totalPages;
+                    result.IsHaveNextPage = pageIndex < CalculateTotalPages(totalCount, pageSize);
                 }
-
                 return result;
             }
             catch (Exception ex)
@@ -933,26 +923,24 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<PagedList<T>> PageAsync<T>(string sql, int pageIndex, int pageSize, object? parameters = default)
+        public async Task<PagedList<T>> PageAsync<T>(string sql, int pageIndex, int pageSize, object? parameters = null)
         {
             var result = new PagedList<T>(pageIndex, pageSize);
-            if (sql.IsNullOrEmpty()) return result;
+            if (string.IsNullOrEmpty(sql)) return result;
 
             try
             {
-                var _context = GetAppContext(DbReadWriteType.Read);
+                var context = GetAppContext(DbReadWriteType.Read);
                 var (pageSql, countSql) = SqlMagic.GetPageSqlTemplate(sql, pageIndex, pageSize, _options.DatabaseSouce);
-                var totalCount = await _context.DbConnection.ExecuteScalarAsync<int>(countSql, parameters, null, _timeOut).ConfigureAwait(false);
+                var totalCount = await context.DbConnection.ExecuteScalarAsync<int>(countSql, parameters, null, _timeOut).ConfigureAwait(false);
                 if (totalCount > 0)
                 {
-                    var list = await _context.DbConnection.QueryAsync<T>(pageSql, parameters, null, _timeOut).ConfigureAwait(false);
-                    var totalPages = CalculateTotalPages(totalCount, pageSize);
+                    var list = await context.DbConnection.QueryAsync<T>(pageSql, parameters, null, _timeOut).ConfigureAwait(false);
                     result.TotalCount = totalCount;
                     result.Items = list;
                     result.IsHaveFrontPage = pageIndex > 1;
-                    result.IsHaveNextPage = pageIndex < totalPages;
+                    result.IsHaveNextPage = pageIndex < CalculateTotalPages(totalCount, pageSize);
                 }
-
                 return result;
             }
             catch (Exception ex)
@@ -962,14 +950,18 @@ namespace Viv.Momo.Core
             }
         }
 
-        public bool ExecuteSql(string sql, object? parameters = default)
+        #endregion
+
+        #region ExecuteSql
+
+        public bool ExecuteSql(string sql, object? parameters = null)
         {
-            if (sql.IsNullOrEmpty()) return false;
+            if (string.IsNullOrEmpty(sql)) return false;
 
             try
             {
-                var _context = GetAppContext();
-                var count = _context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
+                var context = GetAppContext();
+                var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
                 return count > 0;
             }
             catch (Exception ex)
@@ -979,14 +971,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> ExecuteSqlAsync(string sql, object? parameters = default)
+        public async Task<bool> ExecuteSqlAsync(string sql, object? parameters = null)
         {
-            if (sql.IsNullOrEmpty()) return false;
+            if (string.IsNullOrEmpty(sql)) return false;
 
             try
             {
-                var _context = GetAppContext();
-                var count = await _context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
+                var context = GetAppContext();
+                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
                 return count > 0;
             }
             catch (Exception ex)
@@ -996,17 +988,19 @@ namespace Viv.Momo.Core
             }
         }
 
-        public bool ExecuteSqlList(List<string> sqlList, object? parameters = default, bool isTxn = true)
+        public bool ExecuteSqlList(List<string> sqlList, object? parameters = null, bool isTxn = true)
         {
             if (sqlList.IsNullOrEmpty()) return false;
 
             EFAppContext? context = null;
             IDbTransaction? transaction = null;
             bool isSelfCreatedTxn = false;
+
             try
             {
                 context = GetAppContext(DbReadWriteType.Write);
                 var connection = context.DbConnection;
+
                 if (isTxn)
                 {
                     transaction = _transaction ?? (IDbTransaction)context.Database.BeginTransaction();
@@ -1014,14 +1008,12 @@ namespace Viv.Momo.Core
                 }
 
                 int batchSize = 500;
-                int totalCount = sqlList.Count;
-                int totalBatches = CalculateTotalPages(totalCount, batchSize);
-
-                for (int batchIndex = 1; batchIndex <= totalBatches; batchIndex++)
+                int totalPages = CalculateTotalPages(sqlList.Count, batchSize);
+                for (int page = 1; page <= totalPages; page++)
                 {
-                    var batchSqlList = sqlList.Skip((batchIndex - 1) * batchSize).Take(batchSize).ToList();
-                    var batchSql = string.Join(";", batchSqlList) + ";";
-                    int affectedRows = connection.Execute(batchSql, parameters, transaction, _timeOut);
+                    var batch = sqlList.Skip((page - 1) * batchSize).Take(batchSize).ToList();
+                    var batchSql = string.Join(";", batch) + ";";
+                    connection.Execute(batchSql, parameters, transaction, _timeOut);
                 }
 
                 if (isSelfCreatedTxn && transaction != null)
@@ -1037,8 +1029,11 @@ namespace Viv.Momo.Core
                 {
                     context.Database.RollbackTransaction();
                 }
-                var sqlLog = sqlList.Count > 10 ? $"前10条SQL：{string.Join(",", sqlList.Take(10))}...（共{sqlList.Count}条）" : string.Join(",", sqlList);
-                _logger.Error(sqlLog, ex);
+
+                var log = sqlList.Count > 10
+                    ? $"前10条SQL：{string.Join(",", sqlList.Take(10))}...（共{sqlList.Count}条）"
+                    : string.Join(",", sqlList);
+                _logger.Error(log, ex);
                 return false;
             }
             finally
@@ -1050,17 +1045,19 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> ExecuteSqlListAsync(List<string> sqlList, object? parameters = default, bool isTxn = true)
+        public async Task<bool> ExecuteSqlListAsync(List<string> sqlList, object? parameters = null, bool isTxn = true)
         {
             if (sqlList.IsNullOrEmpty()) return false;
 
             EFAppContext? context = null;
             IDbTransaction? transaction = null;
-            bool isSelfCreatedTxn = false; // 标记是否是当前方法创建的事务
+            bool isSelfCreatedTxn = false;
+
             try
             {
                 context = GetAppContext(DbReadWriteType.Write);
                 var connection = context.DbConnection;
+
                 if (isTxn)
                 {
                     transaction = _transaction ?? (IDbTransaction)await context.Database.BeginTransactionAsync();
@@ -1068,14 +1065,12 @@ namespace Viv.Momo.Core
                 }
 
                 int batchSize = 500;
-                int totalCount = sqlList.Count;
-                int totalBatches = CalculateTotalPages(totalCount, batchSize);
-
-                for (int batchIndex = 1; batchIndex <= totalBatches; batchIndex++)
+                int totalPages = CalculateTotalPages(sqlList.Count, batchSize);
+                for (int page = 1; page <= totalPages; page++)
                 {
-                    var batchSqlList = sqlList.Skip((batchIndex - 1) * batchSize).Take(batchSize).ToList();
-                    var batchSql = string.Join(";", batchSqlList) + ";";
-                    int affectedRows = await connection.ExecuteAsync(batchSql, parameters, transaction, _timeOut);
+                    var batch = sqlList.Skip((page - 1) * batchSize).Take(batchSize).ToList();
+                    var batchSql = string.Join(";", batch) + ";";
+                    await connection.ExecuteAsync(batchSql, parameters, transaction, _timeOut);
                 }
 
                 if (isSelfCreatedTxn && transaction != null)
@@ -1091,8 +1086,11 @@ namespace Viv.Momo.Core
                 {
                     await context.Database.RollbackTransactionAsync();
                 }
-                var sqlLog = sqlList.Count > 10 ? $"前10条SQL：{string.Join(",", sqlList.Take(10))}...（共{sqlList.Count}条）" : string.Join(",", sqlList);
-                _logger.Error(sqlLog, ex);
+
+                var log = sqlList.Count > 10
+                    ? $"前10条SQL：{string.Join(",", sqlList.Take(10))}...（共{sqlList.Count}条）"
+                    : string.Join(",", sqlList);
+                _logger.Error(log, ex);
                 return false;
             }
             finally
@@ -1111,21 +1109,23 @@ namespace Viv.Momo.Core
             EFAppContext? context = null;
             IDbTransaction? transaction = null;
             bool isSelfCreatedTxn = false;
+
             try
             {
                 context = GetAppContext(DbReadWriteType.Write);
                 var connection = context.DbConnection;
+
                 if (isTxn)
                 {
                     transaction = _transaction ?? (IDbTransaction)context.Database.BeginTransaction();
                     isSelfCreatedTxn = _transaction == null;
                 }
 
-                foreach (var sqlItem in sqlList)
+                foreach (var item in sqlList)
                 {
-                    if (!sqlItem.Key.IsNullOrEmpty())
+                    if (!string.IsNullOrEmpty(item.Key))
                     {
-                        connection.Execute(sqlItem.Key, sqlItem.Value, transaction, _timeOut);
+                        connection.Execute(item.Key, item.Value, transaction, _timeOut);
                     }
                 }
 
@@ -1142,8 +1142,11 @@ namespace Viv.Momo.Core
                 {
                     context.Database.RollbackTransaction();
                 }
-                var sqlLog = sqlList.Count > 10 ? $"前10条SQL：{string.Join(",", sqlList.Take(10))}...（共{sqlList.Count}条）" : string.Join(",", sqlList);
-                _logger.Error(sqlLog, ex);
+
+                var log = sqlList.Count > 10
+                    ? $"前10条SQL：{string.Join(",", sqlList.Take(10).Select(x => x.Key))}...（共{sqlList.Count}条）"
+                    : string.Join(",", sqlList.Select(x => x.Key));
+                _logger.Error(log, ex);
                 return false;
             }
             finally
@@ -1161,22 +1164,24 @@ namespace Viv.Momo.Core
 
             EFAppContext? context = null;
             IDbTransaction? transaction = null;
-            bool isSelfCreatedTxn = false; // 标记是否是当前方法创建的事务
+            bool isSelfCreatedTxn = false;
+
             try
             {
                 context = GetAppContext(DbReadWriteType.Write);
                 var connection = context.DbConnection;
+
                 if (isTxn)
                 {
                     transaction = _transaction ?? (IDbTransaction)await context.Database.BeginTransactionAsync();
                     isSelfCreatedTxn = _transaction == null;
                 }
 
-                foreach (var sqlItem in sqlList)
+                foreach (var item in sqlList)
                 {
-                    if (!sqlItem.Key.IsNullOrEmpty())
+                    if (!string.IsNullOrEmpty(item.Key))
                     {
-                        await connection.ExecuteAsync(sqlItem.Key, sqlItem.Value, transaction, _timeOut);
+                        await connection.ExecuteAsync(item.Key, item.Value, transaction, _timeOut);
                     }
                 }
 
@@ -1193,8 +1198,11 @@ namespace Viv.Momo.Core
                 {
                     await context.Database.RollbackTransactionAsync();
                 }
-                var sqlLog = sqlList.Count > 10 ? $"前10条SQL：{string.Join(",", sqlList.Take(10))}...（共{sqlList.Count}条）" : string.Join(",", sqlList);
-                _logger.Error(sqlLog, ex);
+
+                var log = sqlList.Count > 10
+                    ? $"前10条SQL：{string.Join(",", sqlList.Take(10).Select(x => x.Key))}...（共{sqlList.Count}条）"
+                    : string.Join(",", sqlList.Select(x => x.Key));
+                _logger.Error(log, ex);
                 return false;
             }
             finally
@@ -1206,122 +1214,13 @@ namespace Viv.Momo.Core
             }
         }
 
-        public bool BeginTransaction()
-        {
-            if (_transaction != null) return true;
+        #endregion
 
-            try
-            {
-                _transaction = (IDbTransaction)GetAppContext().Database.BeginTransaction();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"BeginTransaction,{ex.Message}", ex);
-                return false;
-            }
-        }
-
-        public void CommitTransaction()
-        {
-            if (_transaction == null) return;
-            DbContext? context = null;
-
-            try
-            {
-                context = GetAppContext();
-                context.Database.CommitTransaction();
-                _transaction.Dispose();
-                _transaction = null;
-            }
-            catch (Exception ex)
-            {
-                context?.Database.RollbackTransaction();
-                _transaction?.Dispose();
-                _transaction = null;
-                _logger.Error($"CommitTransaction,{ex.Message}", ex);
-            }
-        }
-
-        public void RollbackTransaction()
-        {
-            if (_transaction == null) return;
-            try
-            {
-                var context = GetAppContext();
-                context.Database.RollbackTransaction();
-                _transaction.Dispose();
-                _transaction = null;
-            }
-            catch (Exception ex)
-            {
-                _transaction?.Dispose();
-                _transaction = null;
-                _logger.Error($"RollbackTransaction,{ex.Message}", ex);
-            }
-        }
-
-        public async Task<bool> BeginTransactionAsync()
-        {
-            if (_transaction != null) return true;
-
-            try
-            {
-                var transaction = await GetAppContext().Database.BeginTransactionAsync();
-                _transaction = (IDbTransaction)transaction;
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"BeginTransactionAsync,{ex.Message}", ex);
-                return false;
-            }
-        }
-
-        public async Task CommitTransactionAsync()
-        {
-            if (_transaction == null) return;
-            DbContext? context = null;
-            try
-            {
-                context = GetAppContext();
-                await context.Database.CommitTransactionAsync();
-                _transaction.Dispose();
-                _transaction = null;
-            }
-            catch (Exception ex)
-            {
-                if (context != null)
-                {
-                    await context.Database.RollbackTransactionAsync();
-                }
-                _transaction?.Dispose();
-                _transaction = null;
-                _logger.Error($"CommitTransactionAsync,{ex.Message}", ex);
-            }
-        }
-
-        public async Task RollbackTransactionAsync()
-        {
-            if (_transaction == null) return;
-            try
-            {
-                var context = GetAppContext();
-                await context.Database.RollbackTransactionAsync();
-                _transaction.Dispose();
-                _transaction = null;
-            }
-            catch (Exception ex)
-            {
-                _transaction?.Dispose();
-                _transaction = null;
-                _logger.Error($"RollbackTransactionAsync,{ex.Message}", ex);
-            }
-        }
+        #region 其他接口实现
 
         public IVivDbContext? CreateContext(DatabaseOptions options)
         {
-            if (options == null) return default;
+            if (options == null) return null;
             var dataContext = new VivDatabaseContext(_vivContext, _logger);
             dataContext.SetOptions(options);
             return dataContext;
@@ -1330,17 +1229,13 @@ namespace Viv.Momo.Core
         public void ChangeTenant(long tenantId)
         {
             if (tenantId > 0)
-            {
                 TenantId = tenantId;
-            }
         }
 
         public void ChangeVivAppId(long vivAppId)
         {
             if (vivAppId > 0)
-            {
                 AppId = vivAppId;
-            }
         }
 
         public void IsAutoSetDefaultValue(bool flag)
@@ -1353,33 +1248,28 @@ namespace Viv.Momo.Core
             return SqlGeneraterFactory.GetSqlGenerater(databaseSouce ?? _options.DatabaseSouce);
         }
 
-        public void Dispose()
+        public EFAppContext GetEFContext(DbReadWriteType readWriteType)
         {
-            Dispose(true);
-            GC.SuppressFinalize(this);
+            return GetAppContext(readWriteType);
         }
 
-        protected virtual void Dispose(bool disposing)
+        #endregion
+
+        #region Dispose
+
+        protected override void Dispose(bool disposing)
         {
             if (_disposed) return;
 
             if (disposing)
             {
-                _transaction?.Dispose();
-                _writeDbContext?.Dispose();
-                _readDbContext?.Dispose();
-
-                _transaction = null;
-                _writeDbContext = null;
-                _readDbContext = null;
+                // 子类自己的资源释放（如果有）
             }
 
+            base.Dispose(disposing);
             _disposed = true;
         }
 
-        public EFAppContext GetEFContext(DbReadWriteType readWriteType)
-        {
-            return GetAppContext(readWriteType);
-        }
+        #endregion
     }
 }

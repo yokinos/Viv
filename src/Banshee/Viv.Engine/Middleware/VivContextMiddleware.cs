@@ -7,7 +7,7 @@ using Viv.Contracts.Interface;
 namespace Viv.Engine.Middleware
 {
     /// <summary>
-    /// [中间件] 注册当前请求的VivContext
+    /// [中间件] 注册Viv框架下的各种Context
     /// </summary>
     public class VivContextMiddleware
     {
@@ -22,6 +22,8 @@ namespace Viv.Engine.Middleware
         {
             try
             {
+                LockHolderContext.Clear();
+                var x = LockHolderContext.CurrentHolderId; //调用一次 直接生成
                 // 解析登录对象
 
                 vivContext.SetAppId(0);
@@ -32,6 +34,7 @@ namespace Viv.Engine.Middleware
             }
             finally
             {
+                LockHolderContext.Clear();
                 vivContext.Clear();
             }
         }

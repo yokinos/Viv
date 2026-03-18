@@ -13,12 +13,12 @@ namespace Viv.Momo.Converter
         /// 将表达式解析为 通用参数化 SQL
         /// 自动适配：MSSQL / PostgreSQL / MySQL
         /// </summary>
-        public static (string sql, Dictionary<string, object> parameter) Convert<T>(Expression<Func<T, bool>> expression)
+        public static (string sql, Dictionary<string, object> parameter) Convert<T>(Expression<Func<T, bool>> expression, DatabaseSouceType databaseSouceType)
         {
             if (expression == null)
                 return (string.Empty, []);
 
-            var visitor = new SqlExpressionVisitor();
+            var visitor = new SqlExpressionVisitor(databaseSouceType);
             visitor.Visit(expression);
 
             return (visitor.Sql.ToString(), visitor.Parameters);
@@ -26,8 +26,10 @@ namespace Viv.Momo.Converter
 
         public static (string sql, Dictionary<string, object> parameter) GetDeleteSql<T>(string tableName, Expression<Func<T, bool>> expression, DatabaseSouceType databaseSouceType)
         {
-            var (where, parameters) = Convert(expression);
+            if (expression == null)
+                return (string.Empty, []);
 
+            var (where, parameters) = Convert(expression, databaseSouceType);
             var sql = $"DELETE FROM {tableName} WHERE {where}";
             return (sql, parameters);
         }

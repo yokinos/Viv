@@ -15,11 +15,6 @@ namespace Viv.Momo
         public long Id { get; set; }
 
         /// <summary>
-        /// Viv应用ID（多应用隔离）
-        /// </summary>
-        public long AppId { get; set; }
-
-        /// <summary>
         /// 租户ID（多租户隔离）
         /// </summary>
         public long TenantId { get; set; }
