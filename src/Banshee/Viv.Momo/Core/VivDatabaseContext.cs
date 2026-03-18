@@ -35,7 +35,7 @@ namespace Viv.Momo.Core
             try
             {
                 AutoSetValue(entity);
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 _context.Add(entity);
                 var count = _context.SaveChanges();
                 return count > 0;
@@ -55,7 +55,7 @@ namespace Viv.Momo.Core
             {
                 AutoSetValue(entitys);
                 var count = entitys.Count();
-                var context = GetEFCoreContext();
+                var context = GetAppContext();
                 int affected = 0;
 
                 if (count < EFMaxCount)
@@ -86,7 +86,7 @@ namespace Viv.Momo.Core
             try
             {
                 AutoSetValue(entity);
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 _context.Add(entity);
                 var count = await _context.SaveChangesAsync();
                 return count > 0;
@@ -106,7 +106,7 @@ namespace Viv.Momo.Core
             {
                 AutoSetValue(entitys);
                 var count = entitys.Count();
-                var context = GetEFCoreContext();
+                var context = GetAppContext();
                 int affected = 0;
 
                 if (count < EFMaxCount)
@@ -136,7 +136,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 var existingEntity = _context.Find(typeof(T), entity.Id);
                 if (existingEntity != null)
                 {
@@ -169,7 +169,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 var count = 0;
                 if (entityList.Count < EFMaxCount)
                 {
@@ -195,7 +195,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 var existingEntity = _context.Find(typeof(T), entity.Id);
                 if (existingEntity != null)
                 {
@@ -228,7 +228,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 var count = 0;
                 if (entityList.Count < EFMaxCount)
                 {
@@ -393,7 +393,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 var entry = _context.Entry(entity);
                 if (entry.State == EntityState.Detached)
                 {
@@ -421,7 +421,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 if (ids.Count < EFMaxCount)
                 {
                     int affectedCount = _context.Set<T>()
@@ -452,7 +452,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 var entry = _context.Entry(entity);
                 if (entry.State == EntityState.Detached)
                 {
@@ -480,7 +480,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 if (ids.Count < EFMaxCount)
                 {
                     int affectedCount = await _context.Set<T>()
@@ -515,7 +515,7 @@ namespace Viv.Momo.Core
                 var (sql, parameter) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
                 if (sql.IsNullOrEmpty()) return false;
 
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 var count = _context.DbConnection.Execute(sql, parameter, _transaction, _timeOut);
                 return count > 0;
             }
@@ -536,7 +536,7 @@ namespace Viv.Momo.Core
                 var (sql, parameter) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
                 if (sql.IsNullOrEmpty()) return false;
 
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 var count = await _context.DbConnection.ExecuteAsync(sql, parameter, _transaction, _timeOut);
                 return count > 0;
             }
@@ -553,7 +553,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 return _context.Set<T>().Any(predicate);
             }
             catch (Exception ex)
@@ -569,7 +569,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 return await _context.Set<T>().AnyAsync(predicate);
             }
             catch (Exception ex)
@@ -585,7 +585,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 return _context.Set<T>().Count(predicate);
             }
             catch (Exception ex)
@@ -601,7 +601,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 return await _context.Set<T>().CountAsync(predicate);
             }
             catch (Exception ex)
@@ -617,7 +617,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 return _context.Set<T>().SingleOrDefault(predicate);
             }
             catch (InvalidOperationException ex)
@@ -638,7 +638,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
                 return connection.QuerySingleOrDefault<T>(sql, parameters, null, _timeOut);
             }
@@ -660,7 +660,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 return await _context.Set<T>().SingleOrDefaultAsync(predicate).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
@@ -681,7 +681,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
                 return await connection.QuerySingleOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
             }
@@ -705,7 +705,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
                 var sql = SqlMagic.GetFindSqlTemplate(tableName, _options.DatabaseSouce);
                 return connection.QuerySingleOrDefault<T>(sql, new { Id = id }, null, _timeOut);
@@ -724,7 +724,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
                 var sql = SqlMagic.GetFindSqlTemplate(tableName, _options.DatabaseSouce);
                 return await connection.QueryFirstOrDefaultAsync<T>(sql, new { Id = id }, null, _timeOut).ConfigureAwait(false);
@@ -742,7 +742,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 return _context.Set<T>().FirstOrDefault(predicate);
             }
             catch (Exception ex)
@@ -758,7 +758,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
                 return connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
             }
@@ -775,7 +775,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 return await _context.Set<T>().FirstOrDefaultAsync(predicate).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -791,7 +791,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var connection = _context.DbConnection;
                 return await connection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
             }
@@ -809,7 +809,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var result = _context.Set<T>().Where(predicate);
                 return result.ToList();
             }
@@ -826,7 +826,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var result = _context.DbConnection.Query<T>(sql, parameters, null, true, _timeOut);
                 return result.ToList();
             }
@@ -843,7 +843,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 return await _context.Set<T>().Where(predicate).ToListAsync();
             }
             catch (Exception ex)
@@ -859,7 +859,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var result = await _context.DbConnection.QueryAsync<T>(sql, parameters, null, _timeOut);
                 return result.ToList();
             }
@@ -876,7 +876,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var result = _context.DbConnection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
                 return result;
             }
@@ -893,7 +893,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var result = await _context.DbConnection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut);
                 return result;
             }
@@ -911,7 +911,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var (pageSql, countSql) = SqlMagic.GetPageSqlTemplate(sql, pageIndex, pageSize, _options.DatabaseSouce);
                 var totalCount = _context.DbConnection.ExecuteScalar<int>(countSql, parameters, null, _timeOut);
                 if (totalCount > 0)
@@ -940,7 +940,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                var _context = GetAppContext(DbReadWriteType.Read);
                 var (pageSql, countSql) = SqlMagic.GetPageSqlTemplate(sql, pageIndex, pageSize, _options.DatabaseSouce);
                 var totalCount = await _context.DbConnection.ExecuteScalarAsync<int>(countSql, parameters, null, _timeOut).ConfigureAwait(false);
                 if (totalCount > 0)
@@ -968,7 +968,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 var count = _context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
                 return count > 0;
             }
@@ -985,7 +985,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var _context = GetEFCoreContext();
+                var _context = GetAppContext();
                 var count = await _context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
                 return count > 0;
             }
@@ -1005,7 +1005,7 @@ namespace Viv.Momo.Core
             bool isSelfCreatedTxn = false;
             try
             {
-                context = GetEFCoreContext(DbReadWriteType.Write);
+                context = GetAppContext(DbReadWriteType.Write);
                 var connection = context.DbConnection;
                 if (isTxn)
                 {
@@ -1059,7 +1059,7 @@ namespace Viv.Momo.Core
             bool isSelfCreatedTxn = false; // 标记是否是当前方法创建的事务
             try
             {
-                context = GetEFCoreContext(DbReadWriteType.Write);
+                context = GetAppContext(DbReadWriteType.Write);
                 var connection = context.DbConnection;
                 if (isTxn)
                 {
@@ -1113,7 +1113,7 @@ namespace Viv.Momo.Core
             bool isSelfCreatedTxn = false;
             try
             {
-                context = GetEFCoreContext(DbReadWriteType.Write);
+                context = GetAppContext(DbReadWriteType.Write);
                 var connection = context.DbConnection;
                 if (isTxn)
                 {
@@ -1164,7 +1164,7 @@ namespace Viv.Momo.Core
             bool isSelfCreatedTxn = false; // 标记是否是当前方法创建的事务
             try
             {
-                context = GetEFCoreContext(DbReadWriteType.Write);
+                context = GetAppContext(DbReadWriteType.Write);
                 var connection = context.DbConnection;
                 if (isTxn)
                 {
@@ -1212,7 +1212,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                _transaction = (IDbTransaction)GetEFCoreContext().Database.BeginTransaction();
+                _transaction = (IDbTransaction)GetAppContext().Database.BeginTransaction();
                 return true;
             }
             catch (Exception ex)
@@ -1229,7 +1229,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                context = GetEFCoreContext();
+                context = GetAppContext();
                 context.Database.CommitTransaction();
                 _transaction.Dispose();
                 _transaction = null;
@@ -1248,7 +1248,7 @@ namespace Viv.Momo.Core
             if (_transaction == null) return;
             try
             {
-                var context = GetEFCoreContext();
+                var context = GetAppContext();
                 context.Database.RollbackTransaction();
                 _transaction.Dispose();
                 _transaction = null;
@@ -1267,7 +1267,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var transaction = await GetEFCoreContext().Database.BeginTransactionAsync();
+                var transaction = await GetAppContext().Database.BeginTransactionAsync();
                 _transaction = (IDbTransaction)transaction;
                 return true;
             }
@@ -1284,7 +1284,7 @@ namespace Viv.Momo.Core
             DbContext? context = null;
             try
             {
-                context = GetEFCoreContext();
+                context = GetAppContext();
                 await context.Database.CommitTransactionAsync();
                 _transaction.Dispose();
                 _transaction = null;
@@ -1306,7 +1306,7 @@ namespace Viv.Momo.Core
             if (_transaction == null) return;
             try
             {
-                var context = GetEFCoreContext();
+                var context = GetAppContext();
                 await context.Database.RollbackTransactionAsync();
                 _transaction.Dispose();
                 _transaction = null;
@@ -1379,7 +1379,7 @@ namespace Viv.Momo.Core
 
         public DbContext GetEFContext(DbReadWriteType readWriteType)
         {
-            return GetEFCoreContext(readWriteType);
+            return GetAppContext(readWriteType);
         }
     }
 }

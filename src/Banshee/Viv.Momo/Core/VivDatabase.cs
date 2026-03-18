@@ -57,7 +57,7 @@ namespace Viv.Momo.Core
         /// <param name="dbReadWriteType"></param>
         /// <returns></returns>
         [return: NotNull]
-        public EFAppContext GetEFCoreContext(DbReadWriteType dbReadWriteType = DbReadWriteType.Write)
+        public EFAppContext GetAppContext(DbReadWriteType dbReadWriteType = DbReadWriteType.Write)
         {
             var context = CreateEFAppContext(_options, dbReadWriteType);
             if (context.Database.GetCommandTimeout() != _timeOut)
