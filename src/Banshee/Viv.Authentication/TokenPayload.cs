@@ -12,7 +12,7 @@ namespace Viv.Authentication
         /// <summary>
         /// 隶属Viv平台的哪个App
         /// </summary>
-        public string VivAppId { get; set; } = string.Empty;
+        public string AppId { get; set; } = string.Empty;
 
         /// <summary>
         /// 多租户Id

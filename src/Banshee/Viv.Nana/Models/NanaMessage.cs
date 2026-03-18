@@ -18,7 +18,7 @@ namespace Viv.Nana.Models
         /// <summary>
         /// Viv的AppId
         /// </summary>
-        public long VivAppId { get; set; }
+        public long AppId { get; set; }
 
         /// <summary>
         /// SaaS类型的Id

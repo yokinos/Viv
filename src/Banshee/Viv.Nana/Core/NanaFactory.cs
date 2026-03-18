@@ -49,7 +49,7 @@ namespace Viv.Nana.Core
             var channel = await VivRabbitClient.GetInstance().GetChannelAsync(model, message.Content.GetDeadLetterQueue(), cancellationToken);
             if (channel is null || channel.IsClosed) return false;
 
-            var properties = message.Content.GetBasicProperties(message.VivAppId, message.MessageId);
+            var properties = message.Content.GetBasicProperties(message.AppId, message.MessageId);
             if (properties is null)
             {
                 return false;
