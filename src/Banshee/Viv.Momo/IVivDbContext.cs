@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
@@ -26,6 +27,14 @@ namespace Viv.Momo
         bool Delete<T>(IEnumerable<T> entitys) where T : class, IEntity;
         Task<bool> DeleteAsync<T>(T entity) where T : IEntity;
         Task<bool> DeleteAsync<T>(IEnumerable<T> entity) where T : class, IEntity;
+        bool Delete<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
+        Task<bool> DeleteAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
+
+        bool Exist<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
+        Task<bool> ExistAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
+
+        int Count<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
+        Task<int> CountAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
 
         T? SingleOrDefault<T>(Expression<Func<T, bool>> predicate) where T : class;
         T? SingleOrDefault<T>(string sql, object? parameters = default) where T : class;
@@ -70,5 +79,6 @@ namespace Viv.Momo
         void ChangeVivAppId(long vivAppId);
         void IsAutoSetDefaultValue(bool flag);
         ISqlGenerater GetSqlGenerater(DatabaseSouceType? databaseSouce = null);
+        DbContext GetEFContext(DbReadWriteType readWriteType = DbReadWriteType.Read);
     }
 }

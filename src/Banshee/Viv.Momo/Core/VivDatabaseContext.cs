@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Text;
 using Viv.Contracts.Interface;
 using Viv.Log.VivLogger;
+using Viv.Momo.Converter;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
@@ -501,6 +502,112 @@ namespace Viv.Momo.Core
             {
                 _logger.Error($"DeleteAsync（批量）,{ex.Message}", ex);
                 return false;
+            }
+        }
+
+        public bool Delete<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity
+        {
+            if (predicate == null) return false;
+
+            try
+            {
+                var tableName = SqlMagic.GetTableName<T>();
+                var (sql, parameter) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
+                if (sql.IsNullOrEmpty()) return false;
+
+                var _context = GetEFCoreContext();
+                var count = _context.DbConnection.Execute(sql, parameter, _transaction, _timeOut);
+                return count > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Delete（委托）,{ex.Message}", ex);
+                return false;
+            }
+        }
+
+        public async Task<bool> DeleteAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity
+        {
+            if (predicate == null) return false;
+
+            try
+            {
+                var tableName = SqlMagic.GetTableName<T>();
+                var (sql, parameter) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
+                if (sql.IsNullOrEmpty()) return false;
+
+                var _context = GetEFCoreContext();
+                var count = await _context.DbConnection.ExecuteAsync(sql, parameter, _transaction, _timeOut);
+                return count > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"DeleteAsync（委托）,{ex.Message}", ex);
+                return false;
+            }
+        }
+
+        public bool Exist<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity
+        {
+            if (predicate == null) return false;
+
+            try
+            {
+                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                return _context.Set<T>().Any(predicate);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Exist（委托）,{ex.Message}", ex);
+                return false;
+            }
+        }
+
+        public async Task<bool> ExistAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity
+        {
+            if (predicate == null) return false;
+
+            try
+            {
+                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                return await _context.Set<T>().AnyAsync(predicate);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"ExistAsync（委托）,{ex.Message}", ex);
+                return false;
+            }
+        }
+
+        public int Count<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity
+        {
+            if (predicate == null) return -1;
+
+            try
+            {
+                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                return _context.Set<T>().Count(predicate);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Count（委托）,{ex.Message}", ex);
+                return -1;
+            }
+        }
+
+        public async Task<int> CountAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity
+        {
+            if (predicate == null) return -1;
+
+            try
+            {
+                var _context = GetEFCoreContext(DbReadWriteType.Read);
+                return await _context.Set<T>().CountAsync(predicate);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"ExistAsync（委托）,{ex.Message}", ex);
+                return -1;
             }
         }
 
@@ -1268,6 +1375,11 @@ namespace Viv.Momo.Core
             }
 
             _disposed = true;
+        }
+
+        public DbContext GetEFContext(DbReadWriteType readWriteType)
+        {
+            return GetEFCoreContext(readWriteType);
         }
     }
 }
