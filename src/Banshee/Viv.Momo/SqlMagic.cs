@@ -29,7 +29,7 @@ namespace Viv.Momo
         /// </summary>
         /// <typeparam name="T">实体类型</typeparam>
         /// <returns>数据库表名称</returns>
-        public static string GetTableName<T>()
+        public static string GetTableName<T>(DatabaseSouceType databaseSouceType)
         {
             var entityType = typeof(T);
             if (!_tableNameCache.TryGetValue(entityType, out var tableName))
@@ -39,14 +39,15 @@ namespace Viv.Momo
                 _tableNameCache[entityType] = tableName;
             }
 
-            return tableName;
+            return QuoteIdentifier(tableName, databaseSouceType);
         }
 
         public static string QuoteIdentifier(string field, DatabaseSouceType databaseSouceType)
         {
             return databaseSouceType switch
             {
-                DatabaseSouceType.PostgreSQL => field.ToLowerInvariant(),
+                DatabaseSouceType.SqlServer => $"[{field}]",
+                DatabaseSouceType.PostgreSQL => $"{field.ToLowerInvariant()}",
                 _ => field
             };
         }
@@ -65,7 +66,7 @@ namespace Viv.Momo
             if (databaseSouceType == DatabaseSouceType.PostgreSQL)
             {
                 var nameListLower = propertyNameList.Select(x => x.ToLowerInvariant()).ToList();
-                return $"INSERT INTO {tableName.ToLowerInvariant()}({string.Join(",", nameListLower)}) VALUES({string.Join(",", nameListLower.Select(x => $"@{x}"))})";
+                return $"INSERT INTO {tableName}({string.Join(",", nameListLower)}) VALUES({string.Join(",", nameListLower.Select(x => $"@{x}"))})";
             }
 
             var sql = $"INSERT INTO {tableName}({string.Join(",", propertyNameList)}) VALUES({string.Join(",", propertyNameList.Select(x => $"@{x}"))})";
@@ -83,7 +84,7 @@ namespace Viv.Momo
         {
             if (databaseSouceType == DatabaseSouceType.PostgreSQL)
             {
-                return $"SELECT * FROM {tableName.ToLowerInvariant()} WHERE id = @Id";
+                return $"SELECT * FROM {tableName} WHERE id = @Id";
             }
 
             return $"SELECT * FROM [{tableName}] WHERE Id = @Id";

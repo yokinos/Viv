@@ -11,7 +11,7 @@ namespace Viv.Momo.Options
     /// </summary>
     public class DatabaseOptions
     {
-        public DatabaseSouceType DatabaseSouce { get; set; }
+        public DatabaseSouceType DatabaseSouce { get; set; } = DatabaseSouceType.PostgreSQL;
 
         /// <summary>
         /// 是否读写分离
@@ -19,7 +19,7 @@ namespace Viv.Momo.Options
         public bool IsReadWriteSplit { get; set; }
 
         /// <summary>
-        /// 主库连接字符串（无论是否读写分离 这个都要有至少一个连接）
+        /// 主库连接字符串（无论是否读写分离 这个都要有连接）
         /// </summary>
         public string MasterConnectionString { get; set; } = string.Empty;
 

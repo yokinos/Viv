@@ -69,7 +69,7 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var tableName = SqlMagic.GetTableName<T>();
+                    var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
                     var tempSql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
                     affected = context.DbConnection.Execute(tempSql, entityList, _transaction, _timeOut);
                 }
@@ -120,7 +120,7 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var tableName = SqlMagic.GetTableName<T>();
+                    var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
                     var tempSql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSouce);
                     affected = await context.DbConnection.ExecuteAsync(tempSql, entityList, _transaction, _timeOut);
                 }
@@ -321,7 +321,7 @@ namespace Viv.Momo.Core
         private List<KeyValueItem<string, DynamicParameters>> BuildUpdateSqlList<T>(List<T> entities, int pageSize = 200) where T : class, IEntity
         {
             var type = typeof(T);
-            var tableName = AdaptFieldNameToDatabase(SqlMagic.GetTableName<T>());
+            var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
             var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
             var result = new List<KeyValueItem<string, DynamicParameters>>();
 
@@ -342,8 +342,8 @@ namespace Viv.Momo.Core
                     var propName = prop.Name;
                     if (_primaryKeys.Contains(propName, StringComparer.OrdinalIgnoreCase)) continue;
 
-                    var dbField = AdaptFieldNameToDatabase(propName);
-                    var idField = AdaptFieldNameToDatabase("Id");
+                    var dbField = SqlMagic.QuoteIdentifier(propName, _options.DatabaseSouce);
+                    var idField = SqlMagic.QuoteIdentifier("Id", _options.DatabaseSouce);
 
                     var caseBuilder = new StringBuilder($"{dbField} = CASE {idField} ");
                     foreach (var entity in pageEntities)
@@ -372,7 +372,7 @@ namespace Viv.Momo.Core
                     parameters.Add(paramName, idValue);
                 }
 
-                sqlBuilder.Append($" WHERE {AdaptFieldNameToDatabase("Id")} IN ({string.Join(", ", idParams)})");
+                sqlBuilder.Append($" WHERE {SqlMagic.QuoteIdentifier("Id", _options.DatabaseSouce)} IN ({string.Join(", ", idParams)})");
                 result.Add(new KeyValueItem<string, DynamicParameters>(sqlBuilder.ToString(), parameters));
             }
 
@@ -424,8 +424,8 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var tableName = SqlMagic.GetTableName<T>();
-                    var deleteSql = $"DELETE FROM {AdaptFieldNameToDatabase(tableName)} WHERE {AdaptFieldNameToDatabase("Id")} IN @Ids";
+                    var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
+                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _options.DatabaseSouce)} IN @Ids";
                     int affected = context.DbConnection.Execute(deleteSql, new { Ids = ids }, _transaction, _timeOut);
                     return affected > 0;
                 }
@@ -478,8 +478,8 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var tableName = SqlMagic.GetTableName<T>();
-                    var deleteSql = $"DELETE FROM {AdaptFieldNameToDatabase(tableName)} WHERE {AdaptFieldNameToDatabase("Id")} IN @Ids";
+                    var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
+                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _options.DatabaseSouce)} IN @Ids";
                     int affected = await context.DbConnection.ExecuteAsync(deleteSql, new { Ids = ids }, _transaction, _timeOut);
                     return affected > 0;
                 }
@@ -497,7 +497,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var tableName = SqlMagic.GetTableName<T>();
+                var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
                 var (sql, parameters) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
                 if (string.IsNullOrEmpty(sql)) return false;
 
@@ -518,7 +518,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                var tableName = SqlMagic.GetTableName<T>();
+                var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
                 var (sql, parameters) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
                 if (string.IsNullOrEmpty(sql)) return false;
 
@@ -691,7 +691,7 @@ namespace Viv.Momo.Core
         public T? Find<T>(long id) where T : class, IEntity
         {
             if (id <= 0) return default;
-            var tableName = SqlMagic.GetTableName<T>();
+            var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
 
             try
             {
@@ -710,7 +710,7 @@ namespace Viv.Momo.Core
         public async Task<T?> FindAsync<T>(long id) where T : class, IEntity
         {
             if (id <= 0) return default;
-            var tableName = SqlMagic.GetTableName<T>();
+            var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
 
             try
             {
@@ -1216,7 +1216,7 @@ namespace Viv.Momo.Core
 
         #endregion
 
-        #region 其他接口实现
+        #region Other
 
         public IVivDbContext? CreateContext(DatabaseOptions options)
         {

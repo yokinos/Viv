@@ -141,18 +141,6 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
-        /// 适配数据库的字段名（返回适合当前数据库的字段形式）
-        /// </summary>
-        public string AdaptFieldNameToDatabase(string fieldName)
-        {
-            return _options.DatabaseSouce switch
-            {
-                DatabaseSouceType.PostgreSQL => fieldName.ToLowerInvariant(),
-                _ => fieldName
-            };
-        }
-
-        /// <summary>
         /// 开启一个数据库事务（使用写库）
         /// </summary>
         public virtual bool BeginTransaction()

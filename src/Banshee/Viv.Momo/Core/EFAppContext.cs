@@ -11,7 +11,7 @@ using Viv.Vva.Magic;
 namespace Viv.Momo.Core
 {
     /// <summary>
-    /// EF Core 上下文（读写分离：初始化时确定读/写库，避免运行时切换）
+    /// EF Core 上下文（读写分离：初始化时确定读/写库 不允许运行时切换）
     /// </summary>
     public class EFAppContext : DbContext
     {
@@ -122,7 +122,7 @@ namespace Viv.Momo.Core
             {
                 var connection = Database.GetDbConnection();
 
-                //// 确保连接打开 Dapper会自己处理
+                // 确保连接打开 Dapper会自己处理
                 //if (connection.State != ConnectionState.Open)
                 //{
                 //    connection.Open();
