@@ -1,5 +1,6 @@
 ﻿using System.Threading;
 using Viv.Vva.Extension;
+using Viv.Vva.Magic;
 
 namespace Viv.Redis
 {
@@ -24,6 +25,9 @@ namespace Viv.Redis
             }
         }
 
+        /// <summary>
+        /// 重置当前异步流中的锁持有者
+        /// </summary>
         public static void ResetHolderId() => _holderId.Value = GenerateHolderId();
 
         /// <summary>
@@ -36,10 +40,13 @@ namespace Viv.Redis
         /// </summary>
         public static void Clear() => _holderId.Value = string.Empty;
 
+        /// <summary>
+        /// 生成分布式锁持有者Id
+        /// </summary>
+        /// <returns></returns>
         private static string GenerateHolderId()
         {
-            // 推荐组合方式：机器名+进程ID+线程ID+随机数，保证跨机器/进程唯一
-            return $"{Environment.MachineName}:{Environment.ProcessId}:{Thread.CurrentThread.ManagedThreadId}:{Guid.NewGuid():N}";
+            return IdMagic.NextId().ToString();
         }
     }
 }

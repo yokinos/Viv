@@ -27,8 +27,7 @@ namespace Viv.Engine.Middleware
         {
             try
             {
-                // 初始化分布式锁上下文
-                LockHolderContext.Clear();
+                // 重置[分布式锁]在当前请求的持有者信息
                 LockHolderContext.ResetHolderId();
 
                 // 获取 Token
