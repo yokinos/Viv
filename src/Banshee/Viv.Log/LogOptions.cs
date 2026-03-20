@@ -10,7 +10,7 @@ namespace Viv.Log
         /// <summary>
         /// 日志框架类型  
         /// </summary>
-        public LoggerType LoggerType { get; set; } = LoggerType.None;
+        public LoggerType LoggerType { get; set; } = LoggerType.Serilog;
 
         /// <summary>
         /// 日志的配置文件路径（如果没有则使用默认的配置）

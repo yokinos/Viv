@@ -16,7 +16,7 @@ namespace Viv.Nana.Models
         public long MessageId { get; set; } = IdMagic.NextId();
 
         /// <summary>
-        /// Viv的AppId
+        /// AppId
         /// </summary>
         public long AppId { get; set; }
 

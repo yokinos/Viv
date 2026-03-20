@@ -9,5 +9,6 @@ namespace Viv.Log.Enums
         None = 0,
         Log4net = 1,
         NLog = 2,
+        Serilog = 3,
     }
 }

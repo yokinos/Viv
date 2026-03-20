@@ -4,6 +4,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Viv.Contracts.Exceptions;
+using Viv.Vva.Extension;
 
 namespace Viv.Authentication
 {
@@ -34,7 +35,7 @@ namespace Viv.Authentication
             // 构建Claims（JWT载荷）
             var claims = new List<Claim>
             {
-                new Claim(JwtRegisteredClaimNames.Sub, payload.UserId),
+                new Claim(JwtRegisteredClaimNames.Sub, payload.UserId.ToString()),
                 new Claim(JwtRegisteredClaimNames.Name, payload.UserName),
                 new Claim(JwtRegisteredClaimNames.Iss, _options.Issuer),
                 new Claim(JwtRegisteredClaimNames.Aud, _options.Audience),
@@ -109,7 +110,7 @@ namespace Viv.Authentication
                 // 解析核心字段
                 var payload = new TokenPayload
                 {
-                    UserId = jwtToken.Claims.First(c => c.Type == JwtRegisteredClaimNames.Sub).Value,
+                    UserId = (jwtToken.Claims.First(c => c.Type == JwtRegisteredClaimNames.Sub).Value).As<long>(),
                     UserName = jwtToken.Claims.First(c => c.Type == JwtRegisteredClaimNames.Name).Value,
                     Roles = jwtToken.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList()
                 };

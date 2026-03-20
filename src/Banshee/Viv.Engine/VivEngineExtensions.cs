@@ -27,5 +27,15 @@ namespace Viv.Engine
 
             return isPost || isAjax || isApiPath;
         }
+
+        /// <summary>
+        /// 获取请求头中的Token信息
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        public static string GetJwtToken(this HttpContext context)
+        {
+            return context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+        }
     }
 }

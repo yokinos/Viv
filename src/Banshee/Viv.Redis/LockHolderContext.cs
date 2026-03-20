@@ -24,6 +24,8 @@ namespace Viv.Redis
             }
         }
 
+        public static void ResetHolderId() => _holderId.Value = GenerateHolderId();
+
         /// <summary>
         /// 显式设置持有者 ID（可用于测试或特殊情况）
         /// </summary>
