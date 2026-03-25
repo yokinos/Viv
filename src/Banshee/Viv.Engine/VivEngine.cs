@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
@@ -20,5 +21,12 @@ namespace Viv.Engine
         /// 不允许实例化
         /// </summary>
         private VivEngine() { }
+
+
+        public static VivOptions LoadVivConfig()
+        {
+            var json = File.ReadAllText("viv.config.json", Encoding.UTF8);
+            return JsonConvert.DeserializeObject<VivOptions>(json)!;
+        }
     }
 }

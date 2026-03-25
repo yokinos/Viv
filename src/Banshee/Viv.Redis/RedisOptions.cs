@@ -84,7 +84,7 @@ namespace Viv.Redis
         /// - Redis默认内置16个DB（索引0-15），该值建议不超过13（预留2个DB给运维/测试）；
         /// - 生产环境不推荐使用多DB，建议通过Key前缀（如user:xxx、order:xxx）隔离，或部署多实例；
         /// </remarks>
-        public int MaxDbIndex { get; set; } = 0;
+        public int MaxDbIndex { get; set; } = 12;
 
         /// <summary>
         /// 你可以自定义Redis库的分库方式,默认按照key分库

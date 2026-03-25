@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Aoi;
 using Viv.Engine.Enums;
 using Viv.Log;
 using Viv.Momo.Options;
@@ -10,8 +11,20 @@ using Viv.Redis;
 #nullable disable
 namespace Viv.Engine.Options
 {
-    public record VivOptions
-    { 
+    public class VivOptions
+    {
+        public VivOptions() { }
+
+        /// <summary>
+        /// 环境
+        /// </summary>
+        public VivEnv Env { get; set; } = VivEnv.Development;
+
+        /// <summary>
+        /// 当前程序的DI设置
+        /// </summary>
+        public DIOptions DIOptions { get; set; }
+
         /// <summary>
         /// 缓存设置
         /// </summary>

@@ -1,0 +1,75 @@
+{
+  "Env": 0,
+  "DIOptions": {
+    "ServiceImplementation": {
+      "AssemblyName": "Viv.Apex.Core",
+      "NameSpace": "Viv.Apex.Core.Service",
+      "BaseType": null,
+      "ClassNameEndWith": "Service",
+      "ClassNameStart": ""
+    },
+    "RepositoryImplementation": {
+      "AssemblyName": "Viv.Apex.Core",
+      "NameSpace": "Viv.Apex.Core.Repository",
+      "BaseType": null,
+      "ClassNameEndWith": "Repository",
+      "ClassNameStart": ""
+    }
+  },
+  "CacheOptions": {
+    "CacheProviderType": 1,
+    "RedisOptions": {
+      "RedisMode": 0,
+      "ConnectionString": "localhost:6379,password=vivRedis",
+      "SentinelEndPoints": [],
+      "SentinelMasterName": "MasterRedisNode",
+      "ConnectTimeout": 5000,
+      "SyncTimeout": 5000,
+      "AllowAdmin": true,
+      "AbortOnConnectFail": true,
+      "Password": "vivRedis",
+      "DefaultDatabase": 0,
+      "KeepAlive": 60,
+      "MaxDbIndex": 12,
+      "SelectorType": 0
+    },
+    "IsEnableMemoryCache": true
+  },
+  "LogOptions": {
+    "LoggerType": 3,
+    "ConfigFilePath": "",
+    "LoggerName": "[Viv.Log]"
+  },
+  "DatabaseOptions": {
+    "DatabaseSouce": 1,
+    "IsReadWriteSplit": true,
+    "MasterConnectionString": "Server=localhost;Database=vivApex;User Id=sa;Password=<PASSWORD>!;",
+    "SlaveConnectionStrings": [
+      "Server=localhost;Database=vivApexRead;User Id=sa;Password=<PASSWORD>!;"
+    ],
+    "Timeout": 30,
+    "EntityTyoeOptions": [
+      {
+        "AssemblyName": "Viv.Entity.Apex",
+        "NameSpace": "Viv.Entity.Apex.Database",
+        "BaseType": "Viv.Momo.Interface.IEntity, Viv.Momo, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+        "ClassNameEndWith": "",
+        "ClassNameStart": ""
+      }
+    ]
+  },
+  "NanaOptions": {
+    "MainQueueType": 1,
+    "SecondaryQueueType": 2,
+    "IsEnableLocalMessage": false,
+    "RetryCount": 3,
+    "RabbitMqOptions": {
+      "HostName": "localhost",
+      "Port": 5672,
+      "UserName": "viv",
+      "Password": "vivRabbitMQ",
+      "VirtualHost": "/Viv"
+    },
+    "ConsumerTypes": []
+  }
+}

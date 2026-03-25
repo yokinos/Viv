@@ -18,8 +18,8 @@ public class Program
         // Add services to the container.
         // 启用 Autofac
         builder.Services.AddAutofac();
-        builder.Services.AddViv();
-
+        var vivOptions = VivEngine.LoadVivConfig();
+        builder.Services.AddViv(vivOptions);
         builder.Services.AddControllers();
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         builder.Services.AddOpenApi();
