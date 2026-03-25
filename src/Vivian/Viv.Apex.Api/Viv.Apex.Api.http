@@ -1,0 +1,6 @@
+@Viv.Apex.Api_HostAddress = http://localhost:5134
+
+GET {{Viv.Apex.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

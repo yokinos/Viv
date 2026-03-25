@@ -15,14 +15,25 @@
     <Project Path="src/Test/Viv.Test/Viv.Test.csproj" Id="e53540db-bd61-4609-852e-ab4806374b28" />
   </Folder>
   <Folder Name="/src/Vivian/" />
+  <Folder Name="/src/Vivian/Apex/">
+    <Project Path="src/Vivian/Viv.Apex.Api/Viv.Apex.Api.csproj" />
+    <Project Path="src/Vivian/Viv.Apex.Core/Viv.Apex.Core.csproj" Id="ea22c3ae-b774-45a4-b55c-328ce12c4213" />
+  </Folder>
   <Folder Name="/src/Vivian/AspireGateway/">
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.ApiService/Viv.Aspire.ApiService.csproj" />
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.AppHost/Viv.Aspire.AppHost.csproj" Id="fbb6390a-0c47-4336-bac9-6c43cb13cb98" />
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.ServiceDefaults/Viv.Aspire.ServiceDefaults.csproj" />
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.Web/Viv.Aspire.Web.csproj" />
   </Folder>
-  <Folder Name="/src/Vivian/Chat/" />
+  <Folder Name="/src/Vivian/Chat/">
+    <Project Path="src/Vivian/Viv.Chat.Api/Viv.Chat.Api.csproj" />
+    <Project Path="src/Vivian/Viv.Chat.Core/Viv.Chat.Core.csproj" Id="3a78113c-73cb-4cc6-8710-0f50ae4fbe25" />
+    <Project Path="src/Vivian/Viv.Chat.Line/Viv.Chat.Line.csproj" />
+  </Folder>
   <Folder Name="/src/Vivian/Shared/">
+    <Project Path="src/Vivian/Viv.Entity.Chat/Viv.Entity.Chat.csproj" Id="c5dc643d-99e0-4f1b-ba7d-8df40f8ae48a" />
     <Project Path="src/Vivian/Viv.Entity/Viv.Entity.csproj" Id="9630f360-f175-4db4-b06c-72b2730bf351" />
+    <Project Path="src/Vivian/Viv.Sdk/Viv.Sdk.csproj" Id="c5bf3413-d555-4a9e-bd82-16ceb43b0206" />
+    <Project Path="src/Vivian/Viv.Toolkit/Viv.Toolkit.csproj" Id="bd421f34-2543-4f9a-91cc-23b79c7e6907" />
   </Folder>
 </Solution>

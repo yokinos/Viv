@@ -11,7 +11,7 @@ namespace Viv.Momo.Converter
         public StringBuilder Sql { get; } = new();
         public Dictionary<string, object> Parameters { get; } = new();
         private int _paramIndex;
-        private readonly DatabaseSouceType _databaseSourceType; // 注意枚举名称拼写
+        private readonly DatabaseSouceType _databaseSourceType;
 
         public SqlExpressionVisitor(DatabaseSouceType databaseSourceType)
         {
