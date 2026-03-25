@@ -1,16 +1,28 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Engine.Options;
+using Viv.Engine.Startup;
 using Viv.Redis;
 
 namespace Viv.Engine
 {
-    /// <summary>
-    /// 通过扩展方法注入整个Web框架的Viv相关封装功能
-    /// </summary>
     public static class VivEngineExtensions
     {
+        /// <summary>
+        /// 注册Viv相关服务
+        /// </summary>
+        /// <param name="services"></param>
+        /// <param name="options"></param>
+        /// <returns></returns>
+        public static IServiceCollection AddViv(this IServiceCollection services, VivOptions options)
+        {
+            VivRegister.Register(services, options);
+            return services;
+        }
+
         /// <summary>
         /// 判断是否为Ajax请求
         /// </summary>

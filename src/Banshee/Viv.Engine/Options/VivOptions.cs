@@ -11,7 +11,7 @@ using Viv.Redis;
 namespace Viv.Engine.Options
 {
     public record VivOptions
-    {
+    { 
         /// <summary>
         /// 缓存设置
         /// </summary>

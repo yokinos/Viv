@@ -23,7 +23,7 @@ namespace Viv.Nana
     /// 3. 本地消息表（最终兜底消费）
     /// </summary>
     /// <typeparam name="T">消息模型（需要继承[VivMessage]）</typeparam>
-    public abstract class VivConsumer<T> : IDisposable where T : VivMessage, new()
+    public abstract class VivConsumer<T> : IVivConsumer, IDisposable where T : VivMessage, new()
     {
         protected readonly Lazy<IRedisService> _redisService;
         protected readonly IVivLogger _logger;
@@ -58,7 +58,7 @@ namespace Viv.Nana
         /// 订阅消息
         /// </summary>
         /// <returns></returns>
-        public virtual async Task SubscribeAsync(CancellationToken cancellationToken)
+        public virtual async Task SubscribeAsync(CancellationToken cancellationToken = default)
         {
             if (cancellationToken.IsCancellationRequested)
             {

@@ -46,7 +46,7 @@ namespace Viv.Log
         /// 用于设置日志配置选项
         /// </summary>
         /// <param name="options"></param>
-        public static void SetLogOptions(LogOptions options)
+        public static void Initialize(LogOptions options)
         {
             ArgumentNullException.ThrowIfNull(options, nameof(LogOptions));
 

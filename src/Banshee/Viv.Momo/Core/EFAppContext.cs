@@ -92,21 +92,12 @@ namespace Viv.Momo.Core
         {
             base.OnModelCreating(modelBuilder);
 
-            if (_options.EntityAsseblyNames.IsNullOrEmpty())
+            if (_options.EntityTyoeOptions.IsNullOrEmpty())
             {
                 return;
             }
 
-            var typeList = new List<Type>();
-            foreach (var assemblyName in _options.EntityAsseblyNames)
-            {
-                var assembly = Assembly.Load(assemblyName);
-                if (assembly == null) continue;
-
-                var entityTypes = assembly.GetTypes().Where(t => t.IsClass && !t.IsAbstract && typeof(IEntity).IsAssignableFrom(t));
-                typeList.AddRange(entityTypes);
-            }
-
+            var typeList = TypeScanMagic.ScanRange(_options.EntityTyoeOptions);
             foreach (var type in typeList)
             {
                 modelBuilder.Entity(type);

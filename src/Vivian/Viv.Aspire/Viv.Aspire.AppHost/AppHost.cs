@@ -9,10 +9,6 @@ builder.AddProject<Projects.Viv_Aspire_Web>("webfrontend")
     .WithReference(apiService)
     .WaitFor(apiService);
 
-builder.AddProject<Projects.Viv_Chat_Api>("viv-chat-api");
-
-builder.AddProject<Projects.Viv_Chat_Line>("viv-chat-line");
-
 builder.AddProject<Projects.Viv_Apex_Api>("viv-apex-api");
 
 builder.AddProject<Projects.Viv_Herta_Api>("viv-herta-api");

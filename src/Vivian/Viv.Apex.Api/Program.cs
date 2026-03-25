@@ -1,5 +1,12 @@
+using Autofac;
 
-namespace Viv.Apex.Api;
+
+using Autofac.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Viv.Aoi;
+using Viv.Engine;
+using Viv.Engine.Options;
+
 
 public class Program
 {
@@ -9,13 +16,20 @@ public class Program
         builder.AddServiceDefaults();
 
         // Add services to the container.
+        // 启用 Autofac
+        builder.Services.AddAutofac();
+        builder.Services.AddViv();
 
         builder.Services.AddControllers();
         // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
         builder.Services.AddOpenApi();
+        builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
+        builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
+        {
+            containerBuilder.VivRegister(null);
+        });
 
         var app = builder.Build();
-
         app.MapDefaultEndpoints();
 
         // Configure the HTTP request pipeline.

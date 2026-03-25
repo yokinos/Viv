@@ -1,5 +1,6 @@
 ﻿using System;
 using Viv.Nana.Enums;
+using Viv.Vva.Magic;
 
 namespace Viv.Nana.Options
 {
@@ -14,9 +15,9 @@ namespace Viv.Nana.Options
         public MessageQueueType MainQueueType { get; set; } = MessageQueueType.RabbitMQ;
 
         /// <summary>
-        /// 备用/副消息队列类型（默认未启用）
+        /// 备用/副消息队列类型
         /// </summary>
-        public MessageQueueType SecondaryQueueType { get; set; } = MessageQueueType.None;
+        public MessageQueueType SecondaryQueueType { get; set; } = MessageQueueType.RedisPubSub;
 
         /// <summary>
         /// 是否启用本地消息模式
@@ -32,6 +33,11 @@ namespace Viv.Nana.Options
         /// <summary>
         /// RabbitMQ 连接及配置项
         /// </summary>
-        public RabbitMQOptions? RabbitMQOptions { get; set; }
+        public RabbitMqOptions? RabbitMqOptions { get; set; }
+
+        /// <summary>
+        /// 要注册的消费者类型
+        /// </summary>
+        public List<FilterTypeOptions> ConsumerTypes { get; set; } = [];
     }
 }

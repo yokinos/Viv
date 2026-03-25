@@ -20,12 +20,12 @@ namespace Viv.Nana.RabbitMq
     {
         protected readonly Lock _connectionLock = new();
         protected IConnection? _connection;
-        protected readonly RabbitMQOptions? _options;
+        protected readonly RabbitMqOptions? _options;
         protected readonly IVivLogger _logger;
 
         public RabbitMQFactory()
         {
-            _options = VivConfigRegistry.Get<RabbitMQOptions>();
+            _options = VivConfigRegistry.Get<RabbitMqOptions>();
             ArgumentNullException.ThrowIfNull(_options, "RabbitMQ配置未加载（VivConfigRegistry中未找到RabbitMQOptions）");
             ValidateOptions(_options);
             _logger = VivLogFactory.GetLogger();
@@ -125,7 +125,7 @@ namespace Viv.Nana.RabbitMq
         /// <summary>
         /// 校验MQ配置有效性
         /// </summary>
-        private void ValidateOptions(RabbitMQOptions options)
+        public static void ValidateOptions(RabbitMqOptions options)
         {
             var errors = new List<string>();
 
@@ -147,7 +147,6 @@ namespace Viv.Nana.RabbitMq
             if (errors.Count > 0)
             {
                 var errorMsg = $"RabbitMQ配置无效：{string.Join("；", errors)}";
-                _logger?.Error(errorMsg);
                 throw new ArgumentException(errorMsg, nameof(options));
             }
         }

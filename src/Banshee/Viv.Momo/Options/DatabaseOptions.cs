@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Viv.Momo.Enums;
+using Viv.Vva.Magic;
 
 namespace Viv.Momo.Options
 {
@@ -36,6 +37,6 @@ namespace Viv.Momo.Options
         /// <summary>
         /// 实体程序集名称(所有的实体都需要继承<see cref="Interface.IEntity"/>)
         /// </summary>
-        public string[] EntityAsseblyNames { get; set; } = [];
+        public List<FilterTypeOptions> EntityTyoeOptions { get; set; } = [];
     }
 }

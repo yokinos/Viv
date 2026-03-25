@@ -21,7 +21,7 @@ namespace Viv.Vva
         /// </summary>
         /// <typeparam name="T">缓存数据类型</typeparam>
         /// <param name="value">要缓存的数据（允许null）</param>
-        public static void Add<T>(T value)
+        public static void Add<T>([NotNull] T value)
         {
             ArgumentNullException.ThrowIfNull(value);
             var key = GetTypeKey<T>();

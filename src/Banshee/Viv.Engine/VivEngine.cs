@@ -20,14 +20,5 @@ namespace Viv.Engine
         /// 不允许实例化
         /// </summary>
         private VivEngine() { }
-
-        /// <summary>
-        /// 初始化配置
-        /// </summary>
-        /// <param name="options"></param>
-        public static void Initialize(VivOptions options)
-        {
-            _vivOptions = options;
-        }
     }
 }
