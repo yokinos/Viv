@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace Viv.Chat.Api.Controllers;
+namespace Viv.Herta.Api.Controllers;
 
 [ApiController]
 [Route("[controller]")]

@@ -1,5 +1,5 @@
 
-namespace Viv.Chat.Api;
+namespace Viv.Robin.Api;
 
 public class Program
 {

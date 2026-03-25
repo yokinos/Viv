@@ -1,5 +1,5 @@
 
-namespace Viv.Chat.Line;
+namespace Viv.Herta.Link;
 
 public class Program
 {

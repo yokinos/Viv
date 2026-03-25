@@ -1,0 +1,6 @@
+@Viv.Herta.Link_HostAddress = http://localhost:5028
+
+GET {{Viv.Herta.Link_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,4 +1,4 @@
-namespace Viv.Chat.Api;
+namespace Viv.Herta.Link;
 
 public class WeatherForecast
 {

@@ -25,13 +25,16 @@
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.ServiceDefaults/Viv.Aspire.ServiceDefaults.csproj" />
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.Web/Viv.Aspire.Web.csproj" />
   </Folder>
-  <Folder Name="/src/Vivian/Chat/">
-    <Project Path="src/Vivian/Viv.Chat.Api/Viv.Chat.Api.csproj" />
-    <Project Path="src/Vivian/Viv.Chat.Core/Viv.Chat.Core.csproj" Id="3a78113c-73cb-4cc6-8710-0f50ae4fbe25" />
-    <Project Path="src/Vivian/Viv.Chat.Line/Viv.Chat.Line.csproj" />
+  <Folder Name="/src/Vivian/Herta/">
+    <Project Path="src/Vivian/Viv.Herta.Api/Viv.Herta.Api.csproj" />
+    <Project Path="src/Vivian/Viv.Herta.Core/Viv.Herta.Core.csproj" Id="cf06d83e-8637-4bd2-b96f-e73975450007" />
+    <Project Path="src/Vivian/Viv.Herta.Link/Viv.Herta.Link.csproj" />
+  </Folder>
+  <Folder Name="/src/Vivian/Robin/">
+    <Project Path="src/Vivian/Viv.Robin.Api/Viv.Robin.Api.csproj" />
   </Folder>
   <Folder Name="/src/Vivian/Shared/">
-    <Project Path="src/Vivian/Viv.Entity.Chat/Viv.Entity.Chat.csproj" Id="c5dc643d-99e0-4f1b-ba7d-8df40f8ae48a" />
+    <Project Path="src/Vivian/Viv.Entity.Herta/Viv.Entity.Herta.csproj" Id="30abe8b2-ecaa-4acb-9cd6-3c4bc6a69d13" />
     <Project Path="src/Vivian/Viv.Entity/Viv.Entity.csproj" Id="9630f360-f175-4db4-b06c-72b2730bf351" />
     <Project Path="src/Vivian/Viv.Sdk/Viv.Sdk.csproj" Id="c5bf3413-d555-4a9e-bd82-16ceb43b0206" />
     <Project Path="src/Vivian/Viv.Toolkit/Viv.Toolkit.csproj" Id="bd421f34-2543-4f9a-91cc-23b79c7e6907" />

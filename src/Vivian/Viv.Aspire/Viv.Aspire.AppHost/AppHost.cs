@@ -15,4 +15,10 @@ builder.AddProject<Projects.Viv_Chat_Line>("viv-chat-line");
 
 builder.AddProject<Projects.Viv_Apex_Api>("viv-apex-api");
 
+builder.AddProject<Projects.Viv_Herta_Api>("viv-herta-api");
+
+builder.AddProject<Projects.Viv_Herta_Link>("viv-herta-link");
+
+builder.AddProject<Projects.Viv_Robin_Api>("viv-robin-api");
+
 builder.Build().Run();

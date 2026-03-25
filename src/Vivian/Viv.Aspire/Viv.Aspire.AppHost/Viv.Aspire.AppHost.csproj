@@ -10,8 +10,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Viv.Apex.Api\Viv.Apex.Api.csproj" />
-    <ProjectReference Include="..\..\Viv.Chat.Api\Viv.Chat.Api.csproj" />
-    <ProjectReference Include="..\..\Viv.Chat.Line\Viv.Chat.Line.csproj" />
+    <ProjectReference Include="..\..\Viv.Herta.Api\Viv.Herta.Api.csproj" />
+    <ProjectReference Include="..\..\Viv.Herta.Link\Viv.Herta.Link.csproj" />
+    <ProjectReference Include="..\..\Viv.Robin.Api\Viv.Robin.Api.csproj" />
     <ProjectReference Include="..\Viv.Aspire.ApiService\Viv.Aspire.ApiService.csproj" />
     <ProjectReference Include="..\Viv.Aspire.Web\Viv.Aspire.Web.csproj" />
   </ItemGroup>

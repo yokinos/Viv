@@ -1,4 +1,4 @@
-namespace Viv.Chat.Line;
+namespace Viv.Robin.Api;
 
 public class WeatherForecast
 {

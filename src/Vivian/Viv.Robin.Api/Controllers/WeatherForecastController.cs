@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace Viv.Chat.Line.Controllers;
+namespace Viv.Robin.Api.Controllers;
 
 [ApiController]
 [Route("[controller]")]
