@@ -20,7 +20,6 @@ namespace Viv.Nana.Options
 
         /// <summary>
         /// 是否启用本地消息模式
-        /// 此模式下，消息将直接存储在本地数据库中，不经过消息队列，适用于低延迟、高吞吐量的场景
         /// 启用时需实现 <see cref="LocalMessage.ILocalMessageRespository"/> 接口
         /// </summary>
         public bool IsEnableLocalMessage { get; set; } = false;

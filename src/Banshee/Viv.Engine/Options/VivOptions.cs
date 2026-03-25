@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Redis;
 using Viv.Engine.Enums;
 using Viv.Log;
+using Viv.Momo.Options;
+using Viv.Nana.Options;
+using Viv.Redis;
 
 #nullable disable
 namespace Viv.Engine.Options
@@ -21,8 +23,13 @@ namespace Viv.Engine.Options
         public LogOptions LogOptions { get; set; }
 
         /// <summary>
-        /// API响应结果设置
+        /// 数据库设置
         /// </summary>
-        public VivApiResultOptions ApiResultOptions { get; set; }
+        public DatabaseOptions DatabaseOptions { get; set; }
+
+        /// <summary>
+        /// MQ设置
+        /// </summary>
+        public NanaOptions NanaOptions { get; set; }
     }
 }

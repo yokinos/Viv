@@ -5,9 +5,9 @@ using System.Text;
 namespace Viv.Engine.Startup
 {
     /// <summary>
-    /// Viv 统一启动API
+    /// Swagger 启动
     /// </summary>
-    public class VivWebApplicationStartup
+    public class SwaggerStartup
     {
 
     }
