@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Engine.Conveter;
 
 namespace Viv.Engine
 {
@@ -46,7 +48,16 @@ namespace Viv.Engine
                 response.ContentType = "application/json; charset=UTF-8";
             }
 
-            var jsonString = JsonConvert.SerializeObject(this, Formatting.None);
+            var settings = new JsonSerializerSettings
+            {
+                DateFormatString = "yyyy-MM-dd HH:mm:ss",
+                ContractResolver = new VivContractResolver()
+                {
+                    NamingStrategy = new CamelCaseNamingStrategy()
+                }
+            };
+
+            var jsonString = JsonConvert.SerializeObject(this, Formatting.None, settings);
             await response.WriteAsync(jsonString);
         }
     }

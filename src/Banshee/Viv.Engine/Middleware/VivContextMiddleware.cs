@@ -3,72 +3,44 @@ using System;
 using System.Threading.Tasks;
 using Viv.Authentication;
 using Viv.Contracts.Interface;
-using Viv.Log.VivLogger;
 using Viv.Redis;
 using Viv.Vva.Extension;
 
 namespace Viv.Engine.Middleware
 {
     /// <summary>
-    /// [中间件] 注册Viv框架下的各种Context
+    /// [中间件] 注册Viv框架下的各种Context（微服务网关版）
     /// </summary>
     public class VivContextMiddleware
     {
         private readonly RequestDelegate _next;
-        private readonly ITokenService _tokenService;
 
-        public VivContextMiddleware(RequestDelegate next, ITokenService tokenService)
+        public VivContextMiddleware(RequestDelegate next)
         {
             _next = next;
-            _tokenService = tokenService;
         }
 
         public async Task InvokeAsync(HttpContext context, IVivContext vivContext)
         {
             try
             {
-                // 重置[分布式锁]在当前请求的持有者信息
                 LockHolderContext.ResetHolderId();
 
-                //// 获取 Token
-                //var token = context.GetJwtToken();
-                //if (string.IsNullOrEmpty(token))
-                //{
-                //    context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                //    return;
-                //}
+                var appId = context.Request.Headers["Viv_AppId"].ToString().As<long>();
+                var tenantId = context.Request.Headers["Viv_TenantId"].ToString().As<long>();
+                var userId = context.Request.Headers["Viv_UserId"].ToString().As<long>();
 
-                //// 验证 Token 是否有效
-                //if (!_tokenService.ValidateToken(token))
-                //{
-                //    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                //    return;
-                //}
+                if (appId > 0 && userId > 0)
+                {
+                    vivContext.SetAppId(appId);
+                    vivContext.SetTenantId(tenantId);
+                    vivContext.SetUserId(userId);
+                }
 
-                //// 解析 Token
-                //var tokenInfo = _tokenService.ParseToken(token);
-                //if (tokenInfo == null)
-                //{
-                //    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                //    return;
-                //}
-
-                //// 注入上下文
-                //vivContext.SetAppId(tokenInfo.AppId);
-                //vivContext.SetTenantId(tokenInfo.TenantId);
-                //vivContext.SetUserId(tokenInfo.UserId);
-
-                // 执行后续中间件
                 await _next(context).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-
             }
             finally
             {
-                // 清理上下文，避免内存泄漏/污染
                 LockHolderContext.Clear();
                 vivContext.Clear();
             }
