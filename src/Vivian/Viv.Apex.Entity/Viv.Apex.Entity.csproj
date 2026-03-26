@@ -7,7 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Folder Include="ViewModel\Account\Output\" />
+  </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
   </ItemGroup>
 
 </Project>

@@ -4,6 +4,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Viv.Contracts.Exceptions;
+using Viv.Vva;
 using Viv.Vva.Extension;
 
 namespace Viv.Authentication
@@ -16,12 +17,12 @@ namespace Viv.Authentication
         private readonly TokenOptions _options;
         private readonly SymmetricSecurityKey _securityKey;
 
-        public JwtTokenService(TokenOptions options)
+        public JwtTokenService()
         {
-            _options = options ?? throw new ArgumentNullException(nameof(options));
+            _options = VivConfigRegistry.Get<TokenOptions>() ?? new TokenOptions(); ;
             if (string.IsNullOrEmpty(_options.SecretKey))
             {
-                throw new ArgumentNullException(nameof(options.SecretKey), "JWT签名密钥不能为空！");
+                throw new ArgumentNullException(nameof(_options.SecretKey), "JWT签名密钥不能为空！");
             }
 
             // 初始化对称加密密钥

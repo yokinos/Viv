@@ -2,22 +2,14 @@
 using Viv.Contracts.Enums;
 using Viv.Momo.Interface;
 
-namespace Viv.Momo
+namespace Viv.Momo.Base
 {
-    /// <summary>
-    /// Viv框架所有业务实体的基类
-    /// </summary>
     public class EntityBase : IEntity
     {
         /// <summary>
         /// 主键ID（自增/雪花ID）
         /// </summary>
         public long Id { get; set; }
-
-        /// <summary>
-        /// 租户ID（多租户隔离）
-        /// </summary>
-        public long TenantId { get; set; }
 
         /// <summary>
         /// 软删除标识

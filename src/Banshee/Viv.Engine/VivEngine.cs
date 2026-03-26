@@ -22,11 +22,21 @@ namespace Viv.Engine
         /// </summary>
         private VivEngine() { }
 
-
-        public static VivOptions LoadVivConfig()
+        /// <summary>
+        /// 加载Viv配置选项
+        /// </summary>
+        /// <param name="configfile"></param>
+        /// <returns></returns>
+        public static VivOptions LoadVivConfig(string configfile = "viv.config.json")
         {
-            var json = File.ReadAllText("viv.config.json", Encoding.UTF8);
-            return JsonConvert.DeserializeObject<VivOptions>(json)!;
+            var json = File.ReadAllText(configfile, Encoding.UTF8);
+            var options = JsonConvert.DeserializeObject<VivOptions>(json)!;
+            if (options != null)
+            {
+                _vivOptions = options;
+            }
+
+            return options;
         }
     }
 }

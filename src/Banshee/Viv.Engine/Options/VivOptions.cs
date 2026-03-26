@@ -7,6 +7,7 @@ using Viv.Log;
 using Viv.Momo.Options;
 using Viv.Nana.Options;
 using Viv.Redis;
+using Viv.Authentication;
 
 #nullable disable
 namespace Viv.Engine.Options
@@ -18,31 +19,36 @@ namespace Viv.Engine.Options
         /// <summary>
         /// 环境
         /// </summary>
-        public VivEnv Env { get; set; } = VivEnv.Development;
+        public VivEnv Env { get; set; }
 
         /// <summary>
         /// 当前程序的DI设置
         /// </summary>
-        public DIOptions DIOptions { get; set; }
+        public DIOptions DIOption { get; set; }
 
         /// <summary>
         /// 缓存设置
         /// </summary>
-        public VivCacheOptions CacheOptions { get; set; }
+        public VivCacheOptions CacheOption { get; set; }
 
         /// <summary>
         /// 日志设置
         /// </summary>
-        public LogOptions LogOptions { get; set; }
+        public LogOptions LogOption { get; set; }
 
         /// <summary>
         /// 数据库设置
         /// </summary>
-        public DatabaseOptions DatabaseOptions { get; set; }
+        public DatabaseOptions DatabaseOption { get; set; }
 
         /// <summary>
         /// MQ设置
         /// </summary>
-        public NanaOptions NanaOptions { get; set; }
+        public NanaOptions NanaOption { get; set; }
+
+        /// <summary>
+        /// 令牌设置
+        /// </summary>
+        public TokenOptions TokenOption { get; set; }
     }
 }

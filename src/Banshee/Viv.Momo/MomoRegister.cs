@@ -11,9 +11,8 @@ namespace Viv.Momo
     {
         public static void Initialize(DatabaseOptions options)
         {
-            var copy = options.DeepCopy();
-            ArgumentNullException.ThrowIfNull(copy);
-            VivConfigRegistry.Add(copy);
+            ArgumentNullException.ThrowIfNull(options);
+            VivConfigRegistry.Add(options);
         }
     }
 }

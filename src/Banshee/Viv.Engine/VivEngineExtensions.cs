@@ -1,11 +1,12 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Autofac;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Aoi;
 using Viv.Engine.Options;
-using Viv.Engine.Startup;
-using Viv.Redis;
+using Viv.Vva.Magic;
 
 namespace Viv.Engine
 {
@@ -17,10 +18,31 @@ namespace Viv.Engine
         /// <param name="services"></param>
         /// <param name="options"></param>
         /// <returns></returns>
-        public static IServiceCollection AddViv(this IServiceCollection services, VivOptions options)
+        public static IServiceCollection AddViv(this IServiceCollection services, VivOptions vivOptions)
         {
-            VivRegister.Register(services, options);
+            ArgumentNullException.ThrowIfNull(vivOptions);
+            VivRegister.Register(services, vivOptions);
             return services;
+        }
+
+        public static void VivAutofacRegister(this ContainerBuilder builder, DIOptions diOptions, Action<ContainerBuilder> customSet = null)
+        {
+            // 可能不需要抽象
+            if (diOptions == null) return;
+
+            var serviceImplTypes = TypeScanMagic.Scan(diOptions.ServiceImplementation);
+
+            builder.RegisterTypes(serviceImplTypes.ToArray())
+                   .AsImplementedInterfaces()
+                   .InstancePerLifetimeScope();
+
+            var repoImplTypes = TypeScanMagic.Scan(diOptions.RepositoryImplementation);
+
+            builder.RegisterTypes(repoImplTypes.ToArray())
+                   .AsImplementedInterfaces()
+                   .InstancePerLifetimeScope();
+
+            customSet?.Invoke(builder);
         }
 
         /// <summary>

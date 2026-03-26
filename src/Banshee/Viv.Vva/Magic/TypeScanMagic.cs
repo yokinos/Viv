@@ -26,7 +26,7 @@ namespace Viv.Vva.Magic
                     continue;
 
                 // 命名空间筛选（配置了才校验）
-                if (!string.IsNullOrEmpty(filter.NameSpace) && type.Namespace != filter.NameSpace)
+                if (!string.IsNullOrEmpty(filter.NameSpace) && !type.Namespace.IsNullOrEmpty() && !type.Namespace.StartsWith(filter.NameSpace))
                     continue;
 
                 if (!filter.ClassNameStart.IsNullOrEmpty() && !type.Name.StartsWith(filter.ClassNameStart))

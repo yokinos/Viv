@@ -1,50 +1,86 @@
 using Autofac;
-
-
 using Autofac.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
+using System.Text;
 using Viv.Aoi;
+using Viv.Apex.Api.Magic;
 using Viv.Engine;
-using Viv.Engine.Options;
+using Viv.Engine.Conveter;
+using Viv.Engine.Filter;
+using Viv.Engine.Middleware;
 
-
-public class Program
+namespace Viv.Apex.Api
 {
-    public static void Main(string[] args)
+    public class Program
     {
-        var builder = WebApplication.CreateBuilder(args);
-        builder.AddServiceDefaults();
-
-        // Add services to the container.
-        // 启用 Autofac
-        builder.Services.AddAutofac();
-        var vivOptions = VivEngine.LoadVivConfig();
-        builder.Services.AddViv(vivOptions);
-        builder.Services.AddControllers();
-        // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-        builder.Services.AddOpenApi();
-        builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
-        builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
+        public static void Main(string[] args)
         {
-            containerBuilder.VivRegister(null);
-        });
+            var builder = WebApplication.CreateBuilder(args);
+            builder.AddServiceDefaults();
 
-        var app = builder.Build();
-        app.MapDefaultEndpoints();
+            // 加载 Viv 配置
+            var vivOptions = VivEngine.LoadVivConfig();
+            ArgumentNullException.ThrowIfNull(vivOptions);
 
-        // Configure the HTTP request pipeline.
-        if (app.Environment.IsDevelopment())
-        {
-            app.MapOpenApi();
+            // Autofac 容器
+            builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
+            builder.Host.ConfigureContainer<ContainerBuilder>(container =>
+            {
+                container.VivAutofacRegister(vivOptions.DIOption);
+            });
+
+            // 基础服务
+            builder.Services.AddViv(vivOptions);
+            builder.Services.AddOptions();
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+            // 控制器 + 全局异常 + JSON 格式化
+            builder.Services.AddControllers();
+            builder.Services.AddMvc(options =>
+            {
+                options.Filters.Add<VivExceptionFilterAttribute>();
+            })
+            .AddNewtonsoftJson(json =>
+            {
+                json.SerializerSettings.DateFormatString = "yyyy-MM-dd HH:mm:ss";
+                json.SerializerSettings.ContractResolver = new VivContractResolver()
+                {
+                    NamingStrategy = new Newtonsoft.Json.Serialization.CamelCaseNamingStrategy()
+                };
+            });
+
+            // 跨域
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy(typeof(Program).Namespace!, policy =>
+                {
+                    policy.AllowAnyMethod().AllowAnyHeader().AllowAnyOrigin();
+                });
+            });
+
+            builder.Services.AddSwagger();
+
+            var app = builder.Build();
+            app.MapDefaultEndpoints();
+            VivLocator.Initialize(app.Services);
+
+            // Swagger UI
+            if (app.Environment.IsDevelopment())
+            {
+                app.VivUseSwagger(vivOptions.Env);
+            }
+
+            app.UseMiddleware<NotFoundMiddleware>();
+            app.UseMiddleware<VivContextMiddleware>();
+
+            app.UseStaticFiles();
+            app.UseRouting();
+
+            app.UseCors(typeof(Program).Namespace!);
+            app.UseHttpsRedirection();
+            //app.UseAuthentication();
+            //app.UseAuthorization();
+            app.MapControllers();
+            app.Run();
         }
-
-        app.UseHttpsRedirection();
-
-        app.UseAuthorization();
-
-
-        app.MapControllers();
-
-        app.Run();
     }
 }

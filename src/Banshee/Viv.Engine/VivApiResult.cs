@@ -1,4 +1,7 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -8,7 +11,7 @@ namespace Viv.Engine
     /// Viv API 通用响应封装
     /// </summary>
     [Serializable]
-    public class VivApiResult
+    public class VivApiResult : IActionResult
     {
         public VivApiResult() { }
         public VivApiResult(int code, string message) : this(code, message, default) { }
@@ -33,5 +36,18 @@ namespace Viv.Engine
         /// 数据
         /// </summary>
         public object? Data { get; set; }
+
+        public async Task ExecuteResultAsync(ActionContext context)
+        {
+            var response = context.HttpContext.Response;
+
+            if (string.IsNullOrEmpty(response.ContentType) || !response.ContentType.Contains("application/json", StringComparison.OrdinalIgnoreCase))
+            {
+                response.ContentType = "application/json; charset=UTF-8";
+            }
+
+            var jsonString = JsonConvert.SerializeObject(this, Formatting.None);
+            await response.WriteAsync(jsonString);
+        }
     }
 }

@@ -1,179 +1,89 @@
 ﻿using Autofac;
-using Autofac.Core.Registration;
-using Autofac.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 
 namespace Viv.Aoi
 {
     /// <summary>
-    /// Viv框架内置的Autofac服务定位器（适配.NET 10）
-    /// 核心职责：从Autofac容器中解析/获取已注册的服务，无需构造函数注入
+    /// Viv 框架全能服务定位器
+    /// 同时支持：.NET官方DI + Autofac原生解析
     /// </summary>
-    /// <remarks>
-    /// 支持的生命周期：
-    /// 1. 单例（SingleInstance）：全局唯一实例；
-    /// 2. 作用域（InstancePerLifetimeScope）：基于当前请求/临时作用域；
-    /// 3. 瞬时（InstancePerDependency）：每次解析新实例。
-    /// 注意：非必要场景不建议使用服务定位器（违背依赖注入原则），仅用于无法构造注入的场景（如静态类、第三方组件）
-    /// </remarks>
     public static class VivLocator
     {
-        /// <summary>
-        /// Autofac根容器（应用全局唯一，初始化后不可修改）
-        /// </summary>
-        private static IContainer? _rootContainer;
+        private static IServiceProvider _serviceProvider = null!;
+        private static IHttpContextAccessor _httpContextAccessor = null!;
+        private static ILifetimeScope _lifetimeScope = null!;
+        private static bool _initialized = false;
 
         /// <summary>
-        /// 标记是否已初始化容器
+        /// 统一初始化（只需传入 app.Services）
         /// </summary>
-        private static bool _isInitialized;
-
-        /// <summary>
-        /// Web场景下的HttpContext访问器（用于获取当前请求作用域）
-        /// </summary>
-        private static IHttpContextAccessor? _httpContextAccessor;
-
-        /// <summary>
-        /// 初始化Autofac服务定位器（非Web场景）
-        /// </summary>
-        /// <param name="container">Autofac根容器（由Program.cs构建）</param>
-        /// <exception cref="ArgumentNullException">容器为空时抛出</exception>
-        /// <exception cref="InvalidOperationException">重复初始化时抛出</exception>
-        public static void Initialize(IContainer container)
+        public static void Initialize(IServiceProvider serviceProvider)
         {
-            if (container == null)
-            {
-                throw new ArgumentNullException(nameof(container), "Autofac根容器不能为空！");
-            }
+            if (serviceProvider == null)
+                throw new ArgumentNullException(nameof(serviceProvider));
 
-            if (_isInitialized)
-            {
-                throw new InvalidOperationException("VivLocator已初始化，禁止重复调用！");
-            }
+            if (_initialized)
+                throw new InvalidOperationException("请勿重复初始化！");
 
-            _rootContainer = container;
-            _isInitialized = true;
+            _serviceProvider = serviceProvider;
+            _lifetimeScope = serviceProvider.GetRequiredService<ILifetimeScope>();
+            _httpContextAccessor = serviceProvider.GetService<IHttpContextAccessor>() ?? null!;
+
+            _initialized = true;
         }
 
         /// <summary>
-        /// 初始化Autofac服务定位器（Web场景专用，关联HttpContext）
+        /// 直接用 Autofac 原生解析（最快、最原生）
         /// </summary>
-        /// <param name="container">Autofac根容器</param>
-        /// <param name="httpContextAccessor">HttpContext访问器（需提前注册到DI）</param>
-        public static void Initialize(IContainer container, IHttpContextAccessor httpContextAccessor)
+        public static T GetAutofaService<T>() where T : notnull
         {
-            Initialize(container);
-            _httpContextAccessor = httpContextAccessor ??
-                throw new ArgumentNullException(nameof(httpContextAccessor), "Web场景必须提供HttpContextAccessor！");
+            CheckInitialized();
+            return _lifetimeScope.Resolve<T>();
         }
 
         /// <summary>
-        /// 解析单例/瞬时服务（Autofac：SingleInstance/InstancePerDependency）
+        /// .NET 官方标准解析（兼容所有容器）
         /// </summary>
-        /// <typeparam name="T">要解析的服务接口类型</typeparam>
-        /// <returns>服务实例</returns>
-        /// <exception cref="InvalidOperationException">未初始化/解析失败时抛出</exception>
         public static T GetService<T>() where T : notnull
         {
-            // 1. 校验初始化状态
-            if (!_isInitialized)
-            {
-                throw new InvalidOperationException("请先调用VivLocator.Initialize()初始化Autofac容器！");
-            }
-
-            // 2. 从根容器解析服务（单例/瞬时服务适合从根容器解析）
-            try
-            {
-                var service = _rootContainer.Resolve<T>();
-                return service;
-            }
-            catch (ComponentNotRegisteredException ex)
-            {
-                throw new InvalidOperationException($"服务类型 {typeof(T).FullName} 未在Autofac容器中注册！", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"解析服务 {typeof(T).FullName} 失败：{ex.Message}", ex);
-            }
+            CheckInitialized();
+            return _serviceProvider.GetRequiredService<T>();
         }
 
         /// <summary>
-        /// 解析作用域服务（Autofac：InstancePerLifetimeScope）
+        /// 获取请求作用域服务（Web专用）
         /// </summary>
-        /// <typeparam name="T">要解析的服务接口类型</typeparam>
-        /// <returns>当前作用域的服务实例</returns>
-        /// <exception cref="InvalidOperationException">未初始化时抛出</exception>
         public static T GetScopedService<T>() where T : notnull
         {
-            // 基础校验
-            if (!_isInitialized)
+            CheckInitialized();
+
+            if (_httpContextAccessor?.HttpContext != null)
             {
-                throw new InvalidOperationException("请先调用VivLocator.Initialize()初始化Autofac容器！");
+                return _httpContextAccessor.HttpContext.RequestServices.GetRequiredService<T>();
             }
 
-            ILifetimeScope? currentScope = null;
-
-            // Web场景：优先从HttpContext获取当前请求作用域
-            if (_httpContextAccessor != null)
-            {
-                var httpContext = _httpContextAccessor.HttpContext;
-                if (httpContext != null)
-                {
-                    // 从HttpContext获取Autofac作用域
-                    currentScope = httpContext.RequestServices.GetAutofacRoot();
-                }
-            }
-
-            // 3. 非Web场景/无请求上下文：创建临时作用域
-            if (currentScope == null)
-            {
-                currentScope = _rootContainer.BeginLifetimeScope();
-                // 提示：非Web场景建议通过CreateTempScope()手动管理作用域生命周期
-            }
-
-            // 4. 解析作用域服务
-            try
-            {
-                var service = currentScope.Resolve<T>();
-                return service;
-            }
-            catch (ComponentNotRegisteredException ex)
-            {
-                throw new InvalidOperationException($"作用域服务类型 {typeof(T).FullName} 未在Autofac容器中注册！", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"解析作用域服务 {typeof(T).FullName} 失败：{ex.Message}", ex);
-            }
+            using var scope = _serviceProvider.CreateScope();
+            return scope.ServiceProvider.GetRequiredService<T>();
         }
 
         /// <summary>
-        /// 手动创建临时作用域（非Web场景推荐使用）
+        /// 创建临时作用域
         /// </summary>
-        /// <returns>Autofac作用域实例</returns>
-        /// <exception cref="InvalidOperationException">未初始化时抛出</exception>
-        public static ILifetimeScope CreateTempScope()
+        public static IDisposable CreateScope()
         {
-            if (!_isInitialized)
-            {
-                throw new InvalidOperationException("请先调用VivLocator.Initialize()初始化Autofac容器！");
-            }
-            return _rootContainer.BeginLifetimeScope();
+            CheckInitialized();
+            return _serviceProvider.CreateScope();
         }
 
         /// <summary>
-        /// 释放根容器
+        /// 检查初始化状态
         /// </summary>
-        public static void Dispose()
+        private static void CheckInitialized()
         {
-            if (_isInitialized && _rootContainer != null)
-            {
-                _rootContainer.Dispose();
-                _rootContainer = null;
-                _isInitialized = false;
-                _httpContextAccessor = null;
-            }
+            if (!_initialized)
+                throw new InvalidOperationException("请先调用 VivLocator.Initialize(IServiceProvider) 完成初始化！");
         }
     }
 }

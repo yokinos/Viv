@@ -4,13 +4,13 @@ using System.Text;
 using Viv.Authentication.Enums;
 
 namespace Viv.Authentication
-{ 
+{
     public class TokenOptions
     {
         /// <summary>
         /// 当前使用的令牌类型
         /// </summary>
-        public TokenType CurrentType { get; set; } = TokenType.Jwt;
+        public TokenType TokenType { get; set; } = TokenType.Jwt;
 
         /// <summary>
         /// 签名/加密密钥（JWT/PASETO通用，建议32位以上）
@@ -23,12 +23,12 @@ namespace Viv.Authentication
         public int ExpireMinutes { get; set; } = 120;
 
         /// <summary>
-        /// 发行方（JWT/PASETO通用）
+        /// 发行方
         /// </summary>
         public string Issuer { get; set; } = string.Empty;
 
         /// <summary>
-        /// 受众（JWT/PASETO通用）
+        /// 受众
         /// </summary>
         public string Audience { get; set; } = string.Empty;
     }

@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -54,10 +53,19 @@ namespace Viv.Engine.Middleware
         /// <summary>
         /// 处理页面请求的404：重定向到404页面
         /// </summary>
-        private static async ValueTask HandlePageNotFoundAsync(HttpContext context)
+        private static async Task HandlePageNotFoundAsync(HttpContext context)
         {
-
+            context.Response.ContentType = "text/html;charset=utf-8";
+            var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "404.html");
+            if (File.Exists(path))
+            {
+                var html = await File.ReadAllTextAsync(path);
+                await context.Response.WriteAsync(html);
+            }
+            else
+            {
+                await context.Response.WriteAsync("404 - 页面不存在");
+            }
         }
-
     }
 }

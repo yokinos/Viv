@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using Viv.Aoi;
+using Viv.Authentication.Enums;
 using Viv.Engine.Enums;
 using Viv.Engine.Options;
 using Viv.Momo.Interface;
@@ -22,7 +23,7 @@ namespace Viv.Test.TestTask
                 Env = VivEnv.Development,
 
                 // 自动DI配置（Service/Repository 自动扫描注册）
-                DIOptions = new DIOptions
+                DIOption = new DIOptions
                 {
                     // 服务自动注册
                     ServiceImplementation = new Vva.Magic.FilterTypeOptions
@@ -44,13 +45,13 @@ namespace Viv.Test.TestTask
                 },
 
                 // 日志
-                LogOptions = new Log.LogOptions
+                LogOption = new Log.LogOptions
                 {
                     LoggerType = Log.Enums.LoggerType.Serilog
                 },
 
                 // 缓存（二级缓存：内存 + Redis）
-                CacheOptions = new VivCacheOptions
+                CacheOption = new VivCacheOptions
                 {
                     CacheProviderType = DistributedCacheType.Redis,
                     IsEnableMemoryCache = true,
@@ -73,7 +74,7 @@ namespace Viv.Test.TestTask
                 },
 
                 // 消息队列（RabbitMQ + Redis 发布订阅）
-                NanaOptions = new Nana.Options.NanaOptions
+                NanaOption = new Nana.Options.NanaOptions
                 {
                     MainQueueType = Nana.Enums.MessageQueueType.RabbitMQ,
                     SecondaryQueueType = Nana.Enums.MessageQueueType.RedisPubSub,
@@ -91,7 +92,7 @@ namespace Viv.Test.TestTask
                 },
 
                 // 数据库（读写分离 + 自动实体扫描）
-                DatabaseOptions = new Momo.Options.DatabaseOptions
+                DatabaseOption = new Momo.Options.DatabaseOptions
                 {
                     DatabaseSouce = Momo.Enums.DatabaseSouceType.SqlServer,
                     MasterConnectionString = "Server=localhost;Database=vivApex;User Id=sa;Password=<PASSWORD>!;",
@@ -107,6 +108,14 @@ namespace Viv.Test.TestTask
                             BaseType = typeof(IEntity)
                         }
                     ]
+                },
+                TokenOption = new Authentication.TokenOptions()
+                {
+                    TokenType = TokenType.Jwt,
+                    SecretKey = "1x24as5da56d4qd1w65qd1",
+                    Audience = string.Empty,
+                    ExpireMinutes = 120,
+                    Issuer = string.Empty
                 }
             };
 

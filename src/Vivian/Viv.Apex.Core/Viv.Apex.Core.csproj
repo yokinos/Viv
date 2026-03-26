@@ -6,4 +6,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
+    <ProjectReference Include="..\Viv.Apex.Entity\Viv.Apex.Entity.csproj" />
+    <ProjectReference Include="..\Viv.Sdk\Viv.Sdk.csproj" />
+  </ItemGroup>
+
 </Project>

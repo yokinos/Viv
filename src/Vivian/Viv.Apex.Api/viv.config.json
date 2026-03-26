@@ -1,6 +1,6 @@
 {
   "Env": 0,
-  "DIOptions": {
+  "DIOption": {
     "ServiceImplementation": {
       "AssemblyName": "Viv.Apex.Core",
       "NameSpace": "Viv.Apex.Core.Service",
@@ -16,7 +16,7 @@
       "ClassNameStart": ""
     }
   },
-  "CacheOptions": {
+  "CacheOption": {
     "CacheProviderType": 1,
     "RedisOptions": {
       "RedisMode": 0,
@@ -35,12 +35,12 @@
     },
     "IsEnableMemoryCache": true
   },
-  "LogOptions": {
+  "LogOption": {
     "LoggerType": 3,
     "ConfigFilePath": "",
     "LoggerName": "[Viv.Log]"
   },
-  "DatabaseOptions": {
+  "DatabaseOption": {
     "DatabaseSouce": 1,
     "IsReadWriteSplit": true,
     "MasterConnectionString": "Server=localhost;Database=vivApex;User Id=sa;Password=<PASSWORD>!;",
@@ -58,7 +58,7 @@
       }
     ]
   },
-  "NanaOptions": {
+  "NanaOption": {
     "MainQueueType": 1,
     "SecondaryQueueType": 2,
     "IsEnableLocalMessage": false,
@@ -71,5 +71,12 @@
       "VirtualHost": "/Viv"
     },
     "ConsumerTypes": []
+  },
+  "TokenOption": {
+    "TokenType": 0,
+    "SecretKey": "1x24as5da56d4qd1w65qd1",
+    "ExpireMinutes": 120,
+    "Issuer": "",
+    "Audience": ""
   }
 }

@@ -13,10 +13,5 @@ namespace Viv.Authentication.Enums
         /// JSON Web Token（默认）
         /// </summary>
         Jwt,
-
-        /// <summary>
-        /// Platform-Agnostic Security Tokens（安全升级版JWT）
-        /// </summary>
-        Paseto
     }
 }

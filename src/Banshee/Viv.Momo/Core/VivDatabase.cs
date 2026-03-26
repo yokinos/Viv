@@ -7,6 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
 using Viv.Log.VivLogger;
+using Viv.Momo.Base;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
@@ -124,7 +125,7 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
-        /// 自动设置默认值（Id、AppId、TenantId）
+        /// 自动设置默认值（Id、TenantId）
         /// </summary>
         protected void AutoSetValue<T>(params T[] entities)
         {
@@ -133,9 +134,15 @@ namespace Viv.Momo.Core
             {
                 if (entity is EntityBase entityBase)
                 {
-                    entityBase.TenantId = TenantId;
                     if (entityBase.Id == default)
                         entityBase.Id = IdMagic.NextId();
+                }
+
+                if (entity is TenantEntityBase tenantEntityBase)
+                {
+                    tenantEntityBase.TenantId = TenantId;
+                    if (tenantEntityBase.Id == default)
+                        tenantEntityBase.Id = IdMagic.NextId();
                 }
             }
         }
