@@ -30,33 +30,33 @@ namespace Viv.Engine.Middleware
                 // 重置[分布式锁]在当前请求的持有者信息
                 LockHolderContext.ResetHolderId();
 
-                // 获取 Token
-                var token = context.GetJwtToken();
-                if (string.IsNullOrEmpty(token))
-                {
-                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    return;
-                }
+                //// 获取 Token
+                //var token = context.GetJwtToken();
+                //if (string.IsNullOrEmpty(token))
+                //{
+                //    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                //    return;
+                //}
 
-                // 验证 Token 是否有效
-                if (!_tokenService.ValidateToken(token))
-                {
-                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    return;
-                }
+                //// 验证 Token 是否有效
+                //if (!_tokenService.ValidateToken(token))
+                //{
+                //    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                //    return;
+                //}
 
-                // 解析 Token
-                var tokenInfo = _tokenService.ParseToken(token);
-                if (tokenInfo == null)
-                {
-                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    return;
-                }
+                //// 解析 Token
+                //var tokenInfo = _tokenService.ParseToken(token);
+                //if (tokenInfo == null)
+                //{
+                //    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                //    return;
+                //}
 
-                // 注入上下文
-                vivContext.SetAppId(tokenInfo.AppId);
-                vivContext.SetTenantId(tokenInfo.TenantId);
-                vivContext.SetUserId(tokenInfo.UserId);
+                //// 注入上下文
+                //vivContext.SetAppId(tokenInfo.AppId);
+                //vivContext.SetTenantId(tokenInfo.TenantId);
+                //vivContext.SetUserId(tokenInfo.UserId);
 
                 // 执行后续中间件
                 await _next(context).ConfigureAwait(false);
