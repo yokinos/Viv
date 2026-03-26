@@ -20,12 +20,13 @@
     <Project Path="src/Vivian/Viv.Apex.Core/Viv.Apex.Core.csproj" Id="ea22c3ae-b774-45a4-b55c-328ce12c4213" />
     <Project Path="src/Vivian/Viv.Apex.Entity/Viv.Apex.Entity.csproj" Id="aa25f199-c2b9-4cb9-826f-e2c693414410" />
   </Folder>
-  <Folder Name="/src/Vivian/AspireGateway/">
+  <Folder Name="/src/Vivian/Aspire/">
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.ApiService/Viv.Aspire.ApiService.csproj" />
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.AppHost/Viv.Aspire.AppHost.csproj" Id="fbb6390a-0c47-4336-bac9-6c43cb13cb98" />
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.ServiceDefaults/Viv.Aspire.ServiceDefaults.csproj" />
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.Web/Viv.Aspire.Web.csproj" />
   </Folder>
+  <Folder Name="/src/Vivian/Gateway/" />
   <Folder Name="/src/Vivian/Herta/">
     <Project Path="src/Vivian/Viv.Herta.Api/Viv.Herta.Api.csproj" />
     <Project Path="src/Vivian/Viv.Herta.Core/Viv.Herta.Core.csproj" Id="cf06d83e-8637-4bd2-b96f-e73975450007" />
