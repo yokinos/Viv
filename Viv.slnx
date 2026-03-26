@@ -26,7 +26,6 @@
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.ServiceDefaults/Viv.Aspire.ServiceDefaults.csproj" />
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.Web/Viv.Aspire.Web.csproj" />
   </Folder>
-  <Folder Name="/src/Vivian/Gateway/" />
   <Folder Name="/src/Vivian/Herta/">
     <Project Path="src/Vivian/Viv.Herta.Api/Viv.Herta.Api.csproj" />
     <Project Path="src/Vivian/Viv.Herta.Core/Viv.Herta.Core.csproj" Id="cf06d83e-8637-4bd2-b96f-e73975450007" />
