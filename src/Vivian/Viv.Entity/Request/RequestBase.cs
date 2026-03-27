@@ -20,7 +20,6 @@ namespace Viv.Entity.Request
         /// </summary>
         [Required]
         [Display(Name = "客户端AppId")]
-        [Range(1, long.MaxValue)]
         public long AppId { get; set; }
 
         /// <summary>
@@ -28,7 +27,7 @@ namespace Viv.Entity.Request
         /// </summary>
         [Required]
         [Display(Name = "服务器内部版本号")]
-        [Range(1, int.MaxValue)]
+        [Range(1000, 9999)]
         public int Version { get; set; }
 
         /// <summary>
@@ -36,7 +35,7 @@ namespace Viv.Entity.Request
         /// </summary>
         [Required]
         [Display(Name = "时间戳")]
-        [Range(1000000000, long.MaxValue)]
+        [Range(1000000000, 2000000000)]
         public long Timestamp { get; set; }
 
         /// <summary>
