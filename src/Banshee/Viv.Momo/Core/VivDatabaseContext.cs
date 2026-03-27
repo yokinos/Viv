@@ -1232,12 +1232,6 @@ namespace Viv.Momo.Core
                 TenantId = tenantId;
         }
 
-        public void ChangeVivAppId(long vivAppId)
-        {
-            if (vivAppId > 0)
-                AppId = vivAppId;
-        }
-
         public void IsAutoSetDefaultValue(bool flag)
         {
             IsAutoSetValue = flag;

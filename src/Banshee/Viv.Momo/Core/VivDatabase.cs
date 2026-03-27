@@ -103,11 +103,6 @@ namespace Viv.Momo.Core
         public bool IsAutoSetValue { get; protected set; } = true;
 
         /// <summary>
-        /// 当前实例的AppId
-        /// </summary>
-        public long AppId { get; protected set; }
-
-        /// <summary>
         /// 当前实例的TenantId
         /// </summary>
         public long TenantId { get; protected set; }

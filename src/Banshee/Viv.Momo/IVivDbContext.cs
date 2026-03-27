@@ -77,7 +77,6 @@ namespace Viv.Momo
 
         IVivDbContext? CreateContext(DatabaseOptions options);
         void ChangeTenant(long tenantId);
-        void ChangeVivAppId(long vivAppId);
         void IsAutoSetDefaultValue(bool flag);
         ISqlGenerater GetSqlGenerater(DatabaseSouceType? databaseSouce = null);
         EFAppContext GetEFContext(DbReadWriteType readWriteType = DbReadWriteType.Read);
