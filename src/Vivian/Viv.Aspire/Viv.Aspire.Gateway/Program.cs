@@ -16,7 +16,8 @@ public class Program
 
         // 3. 注册 YARP——LoadFromConfig 内部已支持服务发现
         builder.Services.AddReverseProxy()
-            .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+            .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
+            .AddServiceDiscoveryDestinationResolver();
 
         var app = builder.Build();
 
