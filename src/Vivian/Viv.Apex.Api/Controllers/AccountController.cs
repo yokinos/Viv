@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Viv.Apex.Core.Entity.ViewModel.Account.Request;
 using Viv.Apex.Core.IService;
-using Viv.Apex.Entity.ViewModel.Account.Request;
 
 namespace Viv.Apex.Api.Controllers
 {

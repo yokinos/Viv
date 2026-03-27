@@ -8,8 +8,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
-    <ProjectReference Include="..\Viv.Apex.Entity\Viv.Apex.Entity.csproj" />
-    <ProjectReference Include="..\Viv.Sdk\Viv.Sdk.csproj" />
+    <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Entity\ViewModel\Account\Output\" />
   </ItemGroup>
 
 </Project>

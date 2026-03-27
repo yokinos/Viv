@@ -18,7 +18,6 @@
   <Folder Name="/src/Vivian/Apex/">
     <Project Path="src/Vivian/Viv.Apex.Api/Viv.Apex.Api.csproj" />
     <Project Path="src/Vivian/Viv.Apex.Core/Viv.Apex.Core.csproj" Id="ea22c3ae-b774-45a4-b55c-328ce12c4213" />
-    <Project Path="src/Vivian/Viv.Apex.Entity/Viv.Apex.Entity.csproj" Id="aa25f199-c2b9-4cb9-826f-e2c693414410" />
   </Folder>
   <Folder Name="/src/Vivian/Aspire/">
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.ApiService/Viv.Aspire.ApiService.csproj" />
@@ -29,7 +28,6 @@
   <Folder Name="/src/Vivian/Herta/">
     <Project Path="src/Vivian/Viv.Herta.Api/Viv.Herta.Api.csproj" />
     <Project Path="src/Vivian/Viv.Herta.Core/Viv.Herta.Core.csproj" Id="cf06d83e-8637-4bd2-b96f-e73975450007" />
-    <Project Path="src/Vivian/Viv.Herta.Entity/Viv.Herta.Entity.csproj" Id="9020b133-0fce-435d-89e1-fa95bdd7922d" />
     <Project Path="src/Vivian/Viv.Herta.Link/Viv.Herta.Link.csproj" />
   </Folder>
   <Folder Name="/src/Vivian/Robin/">
