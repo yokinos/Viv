@@ -19,8 +19,4 @@
     <ProjectReference Include="..\Viv.Aspire\Viv.Aspire.ServiceDefaults\Viv.Aspire.ServiceDefaults.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Magic\" />
-  </ItemGroup>
-
 </Project>

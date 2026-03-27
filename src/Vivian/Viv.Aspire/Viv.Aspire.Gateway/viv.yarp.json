@@ -1,0 +1,60 @@
+{
+  "ReverseProxy": {
+    "Clusters": {
+      "apex": {
+        "Destinations": {
+          "d1": { "Address": "http://viv-apex-api" }
+        }
+      },
+      "herta": {
+        "Destinations": {
+          "d1": { "Address": "http://viv-herta-api" }
+        }
+      },
+      "hertalink": {
+        "Destinations": {
+          "d1": { "Address": "http://viv-herta-link" }
+        }
+      },
+      "robin": {
+        "Destinations": {
+          "d1": { "Address": "http://viv-robin-api" }
+        }
+      }
+    },
+    "Routes": {
+      "apex-route": {
+        "ClusterId": "apex",
+        "Match": { "Path": "/apex/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/apex" },
+          { "PathPrefix": "/api" }
+        ]
+      },
+      "herta-route": {
+        "ClusterId": "herta",
+        "Match": { "Path": "/herta/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/herta" },
+          { "PathPrefix": "/api" }
+        ]
+      },
+      "hertalink-route": {
+        "ClusterId": "hertalink",
+        "Match": { "Path": "/hertalink/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/hertalink" },
+          { "PathPrefix": "/api" }
+        ]
+      },
+      "robin-route": {
+        "ClusterId": "robin",
+        "Match": { "Path": "/robin/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/robin" },
+          { "PathPrefix": "/api" }
+        ]
+      }
+    }
+  }
+}
