@@ -13,7 +13,7 @@ namespace Viv.Elysia.Filter
         {
             if (context.ActionArguments.IsNullOrEmpty())
             {
-                await next();
+                await next().ConfigureAwait(false);
                 return;
             }
 
@@ -31,7 +31,7 @@ namespace Viv.Elysia.Filter
                 }
             }
 
-            await next();
+            await next().ConfigureAwait(false);
         }
     }
 }

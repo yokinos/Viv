@@ -37,13 +37,7 @@ namespace Viv.Engine.Filter
             var ex = context.Exception;
             var path = context.HttpContext.Request.Path;
 
-            if (ex is VivConnectionException)
-            {
-                _vivLogger.Error($"[连接异常]请求地址：{path}", ex);
-                context.ExceptionHandled = true;
-                return;
-            }
-            else if (ex is InvalidTokenException)
+            if (ex is InvalidTokenException)
             {
                 _vivLogger.Warn($"[Token无效]请求地址：{path}，信息：{ex.Message}");
                 context.HttpContext.Response.StatusCode = 401;
