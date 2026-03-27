@@ -42,7 +42,7 @@ namespace Viv.Engine.Middleware
         /// </summary>
         private static async Task HandleApiNotFoundAsync(HttpContext context)
         {
-            var result = new VivApiResult(-404, "404 Not Found");
+            var result = VivApiResult.ApiRsult(ResultCode.NotFound, "404 Not Found");
 
             context.Response.Clear();
             context.Response.StatusCode = 200;

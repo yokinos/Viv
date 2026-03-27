@@ -2,7 +2,7 @@ using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using System.Text;
 using Viv.Aoi;
-using Viv.Apex.Api.Magic;
+using Viv.Elysia.Filter;
 using Viv.Engine;
 using Viv.Engine.Conveter;
 using Viv.Engine.Filter;
@@ -32,12 +32,17 @@ namespace Viv.Apex.Api
             builder.Services.AddViv(vivOptions);
             builder.Services.AddOptions();
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+            {
+                // 关闭自动验证
+                options.SuppressModelStateInvalidFilter = true;
+            });
 
             // 控制器 + 全局异常 + JSON 格式化
-            builder.Services.AddControllers();
             builder.Services.AddMvc(options =>
             {
                 options.Filters.Add<VivExceptionFilterAttribute>();
+                options.Filters.Add<RequestFilterAttribute>();
             })
             .AddNewtonsoftJson(json =>
             {

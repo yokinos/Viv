@@ -34,6 +34,7 @@
     <Project Path="src/Vivian/Viv.Robin.Api/Viv.Robin.Api.csproj" />
   </Folder>
   <Folder Name="/src/Vivian/Shared/">
+    <Project Path="src/Vivian/Viv.Elysia/Viv.Elysia.csproj" Id="e55f97d7-954b-4df1-84d5-f94197b74a64" />
     <Project Path="src/Vivian/Viv.Entity/Viv.Entity.csproj" Id="9630f360-f175-4db4-b06c-72b2730bf351" />
     <Project Path="src/Vivian/Viv.Sdk/Viv.Sdk.csproj" Id="c5bf3413-d555-4a9e-bd82-16ceb43b0206" />
     <Project Path="src/Vivian/Viv.Toolkit/Viv.Toolkit.csproj" Id="bd421f34-2543-4f9a-91cc-23b79c7e6907" />

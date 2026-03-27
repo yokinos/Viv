@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
@@ -97,6 +98,17 @@ namespace Viv.Vva.Extension
         {
             if (source == null) return default;
 
+            var settings = new JsonSerializerSettings
+            {
+                ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                TypeNameHandling = TypeNameHandling.Auto
+            };
+
+            var json = JsonConvert.SerializeObject(source, settings);
+            return JsonConvert.DeserializeObject<T>(json, settings);
+
+            #region  示例
+
             var type = source.GetType();
 
             // 值类型/string 直接返回
@@ -112,6 +124,32 @@ namespace Viv.Vva.Extension
                 for (int i = 0; i < array.Length; i++)
                     copy.SetValue(DeepCopy(array.GetValue(i)), i);
                 return (T)(object)copy;
+            }
+
+            if (source is IDictionary dict)
+            {
+                // 尝试获取字典的泛型参数类型，用于创建同类型实例
+                Type dictType;
+                if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Dictionary<,>))
+                {
+                    var args = type.GetGenericArguments();
+                    var keyType = args[0];
+                    var valueType = args[1];
+                    dictType = typeof(Dictionary<,>).MakeGenericType(keyType, valueType);
+                }
+                else
+                {
+                    // 非泛型字典，默认使用 Dictionary<object, object>
+                    dictType = typeof(Dictionary<object, object>);
+                }
+                var copy = (IDictionary)Activator.CreateInstance(dictType)!;
+                foreach (DictionaryEntry entry in dict)
+                {
+                    var keyCopy = DeepCopy(entry.Key);
+                    var valueCopy = DeepCopy(entry.Value);
+                    copy[keyCopy] = valueCopy;
+                }
+                return (T)copy;
             }
 
             // 列表/集合
@@ -134,6 +172,8 @@ namespace Viv.Vva.Extension
                 prop.SetValue(obj, DeepCopy(value));
             }
             return (T)obj;
+
+            #endregion
         }
 
         /// <summary>
@@ -152,19 +192,33 @@ namespace Viv.Vva.Extension
             return self.CompareTo(min) >= 0 && self.CompareTo(max) <= 0;
         }
 
+        public static bool Between(this IComparable self, object min, object max)
+        {
+            return self.CompareTo(min) >= 0 && self.CompareTo(max) <= 0;
+        }
+
         /// <summary>
         /// [扩展方法] 空值替换（类似数据库 NVL 函数）
         /// </summary>
         /// <typeparam name="T">任意类型</typeparam>
         /// <param name="self">待检查的对象</param>
-        /// <param name="otherValue">空值时的替换值</param>
+        /// <param name="defaultValue">为空/空字符串时的默认值</param>
         /// <returns>
-        /// 1. 若 self 为 null/DBNull → 返回 otherValue
+        /// 1. 若 self 为 null/DBNull/空字符串 → 返回 defaultValue
         /// 2. 否则 → 返回 self 本身
         /// </returns>
-        public static T Nvl<T>([AllowNull] this T self, T otherValue)
+        [return: NotNull]
+        public static T Nvl<T>([AllowNull] this T self, [NotNull] T defaultValue)
         {
-            return self is null or DBNull ? otherValue : self;
+            ArgumentNullException.ThrowIfNull(defaultValue);
+            if (self is null || self is DBNull || (self is string txt && txt.IsNullOrEmpty()))
+            {
+                return defaultValue;
+            }
+            else
+            {
+                return self;
+            }
         }
 
         /// <summary>

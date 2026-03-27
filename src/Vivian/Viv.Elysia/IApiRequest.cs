@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Entity
+namespace Viv.Elysia
 {
     /// <summary>
     /// 请求Dto的基类接口
@@ -13,6 +13,6 @@ namespace Viv.Entity
         /// 校验请求参数
         /// </summary>
         /// <returns></returns>
-        string Validate();
+        string Validate(bool useBaseValidation = true);
     }
 }

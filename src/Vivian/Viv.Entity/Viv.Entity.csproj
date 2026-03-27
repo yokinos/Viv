@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Viv.Elysia\Viv.Elysia.csproj" />
+  </ItemGroup>
+
 </Project>

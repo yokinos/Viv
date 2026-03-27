@@ -9,7 +9,7 @@ using System.Text;
 using Viv.Engine.Enums;
 using Viv.Engine.Interface;
 
-namespace Viv.Apex.Api.Magic
+namespace Viv.Engine
 {
     public static class WebApiExtensions
     {

@@ -36,7 +36,7 @@ namespace Viv.Vva.Magic
         /// 2. MD5为128位哈希算法，输出固定32位十六进制字符串；
         /// 3. 不可逆加密，无法从哈希值还原原始字符串
         /// </remarks>
-        public static string HashMD5(string input, Encoding? encoding = null)
+        public static string HashMd5(string input, Encoding? encoding = null)
         {
             ArgumentNullException.ThrowIfNull(input);
             encoding ??= Utf8;

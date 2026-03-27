@@ -8,12 +8,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
-    <ProjectReference Include="..\Viv.Elysia\Viv.Elysia.csproj" />
-    <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Entity\ViewModel\Account\Output\" />
   </ItemGroup>
 
 </Project>

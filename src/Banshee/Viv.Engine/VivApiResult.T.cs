@@ -20,5 +20,20 @@ namespace Viv.Engine
         /// 数据
         /// </summary>
         public new T? Data { get; set; }
+
+        public static VivApiResult<T> Success(string message = "successful", T? data = default)
+        {
+            return ApiRsult(ResultCode.Success, message, data);
+        }
+
+        public static VivApiResult<T> Error(string message, T? data = default)
+        {
+            return ApiRsult(ResultCode.Error, message, data);
+        }
+
+        public static VivApiResult<T> ApiRsult(int code, string message, T? data = default)
+        {
+            return new VivApiResult<T>(code, message, data);
+        }
     }
 }
