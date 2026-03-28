@@ -3,7 +3,7 @@
     "Clusters": {
       "apex": {
         "Destinations": {
-          "d1": { "Address": "http://viv-apex-api" }
+          "d1": { "Address": "https://localhost:7093" }
         }
       },
       "herta": {

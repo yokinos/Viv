@@ -16,14 +16,12 @@ public class Program
 
         // 3. 注册 YARP——LoadFromConfig 内部已支持服务发现
         builder.Services.AddReverseProxy()
-            .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
-            .AddServiceDiscoveryDestinationResolver();
+            .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
         var app = builder.Build();
 
         // 4. 路由中间件（必须！否则代理不工作）
         app.UseRouting();
-
         app.MapReverseProxy();
 
         app.Run();
