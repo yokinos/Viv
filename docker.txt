@@ -8,4 +8,4 @@ docker pull docker.io/rabbitmq:management
 
 
 # 用GitHub镜像站克隆（无需SSL验证，速度更快）
-git clone --progress -v "https://github.com.cnpmjs.org/yokinos/Viv.git" "D:\Yokino\GitHub\Viv"
+git clone --progress -v "https://github.com.cnpmjs.org/yokinos/Viv.git"

@@ -1,0 +1,7 @@
+{
+  "CustomRateLimit": {
+    "PermitLimit": 100,
+    "Window": 10,
+    "QueueLimit": 2
+  }
+}

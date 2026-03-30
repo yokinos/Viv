@@ -1,8 +1,7 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-
 var apexApi = builder.AddProject<Projects.Viv_Apex_Api>("viv-apex-api")
-    .WithDeveloperCertificateTrust(true) ;
+    .WithDeveloperCertificateTrust(true);
 var hertaApi = builder.AddProject<Projects.Viv_Herta_Api>("viv-herta-api")
     .WithDeveloperCertificateTrust(true); ;
 var hertaLink = builder.AddProject<Projects.Viv_Herta_Link>("viv-herta-link")
@@ -15,6 +14,6 @@ builder.AddProject<Projects.Viv_Aspire_Gateway>("viv-aspire-gateway")
      .WithReference(hertaApi)
      .WithReference(hertaLink)
      .WithReference(robinApi)
-     .WithDeveloperCertificateTrust(true) ;
+     .WithDeveloperCertificateTrust(true);
 
 builder.Build().Run();
