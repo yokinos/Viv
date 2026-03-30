@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Contracts.Interface;
@@ -8,13 +9,16 @@ namespace Viv.Momo.Base
     /// <summary>
     /// 通用仓库基类
     /// </summary>
-    public class RepositoryBase
+    public abstract class RepositoryBase
     {
+        protected readonly IVivContext _vivContext;
+        protected readonly IVivDbContext _dbContext;
+
         public RepositoryBase(IVivContext context, IVivDbContext dbContext)
         {
-
+            _vivContext = context;
+            _dbContext = dbContext;
         }
-
 
     }
 }

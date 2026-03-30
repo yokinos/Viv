@@ -7,7 +7,7 @@ namespace Viv.Entity.Enums
     /// <summary>
     /// 应用来源类型
     /// </summary>
-    public enum VxAppSource
+    public enum EmAppSouce
     {
         /// <summary>
         /// 官方自营应用（Viv 框架原生）

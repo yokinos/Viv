@@ -19,7 +19,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 客户端平台类型
         /// </summary>
-        public VxAppPlatform Platform { get; set; }
+        public EmAppPlatform Platform { get; set; }
 
         /// <summary>
         /// 密钥
@@ -29,7 +29,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 应用来源
         /// </summary>
-        public VxAppSource Source { get; set; }
+        public EmAppSouce Source { get; set; }
 
         /// <summary>
         /// 创建时间

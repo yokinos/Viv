@@ -7,7 +7,7 @@ namespace Viv.Entity.Enums
     /// <summary>
     /// 应用客户端平台
     /// </summary>
-    public enum VxAppPlatform
+    public enum EmAppPlatform
     {
         /// <summary>
         /// Web 网页端
