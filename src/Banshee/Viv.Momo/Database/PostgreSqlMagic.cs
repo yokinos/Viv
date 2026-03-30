@@ -2,22 +2,21 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using Viv.Momo.Interface;
 using Viv.Vva;
 using Viv.Vva.Extension;
 
 namespace Viv.Momo.Database
 {
-    public class SqlServerGenerater : ISqlGenerater
+    public class PostgreSqlMagic
     {
-        public string CreateInsertSql(string tableName, object entity, string ignoreKeys = "")
+        public static string CreateInsertSql(string tableName, object entity, string ignoreKeys = "")
         {
             var fieldList = new List<string>();
             var valueList = new List<string>();
             var propertieList = VivTypeReflectionCache.GetPropertieList(entity.GetType());
             foreach (var property in propertieList)
             {
-                var name = property.Name;
+                var name = property.Name.ToLowerInvariant();
                 if (ignoreKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
                 var value = property.GetValue(entity);
@@ -27,11 +26,11 @@ namespace Viv.Momo.Database
                 valueList.Add(ToDatabaseValue(value));
             }
 
-            var sql = $"INSERT INTO {tableName} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
+            var sql = $"INSERT INTO {tableName.ToLowerInvariant()} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
             return sql;
         }
 
-        public string CreateUpdateSql(string tableName, object entity, string whereKeys, string ignoreKeys = "")
+        public static string CreateUpdateSql(string tableName, object entity, string whereKeys, string ignoreKeys = "")
         {
             var setList = new List<string>();
             var whereList = new List<string>();
@@ -39,7 +38,7 @@ namespace Viv.Momo.Database
             var propertieList = VivTypeReflectionCache.GetPropertieList(entity.GetType());
             foreach (var property in propertieList)
             {
-                var name = property.Name;
+                var name = property.Name.ToLowerInvariant();
                 if (ignoreKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
                 var value = property.GetValue(entity);
@@ -57,29 +56,30 @@ namespace Viv.Momo.Database
 
             if (whereList.Count == 0) throw new ArgumentException("WhereKeys is empty.");
 
-            var sql = $"UPDATE {tableName} SET {string.Join(",", setList)} {string.Join(" ", whereList)}";
+            var sql = $"UPDATE {tableName.ToLowerInvariant()} SET {string.Join(",", setList)} {string.Join(" ", whereList)}";
             return sql;
         }
 
-        public string CreateDeleteSql(string tableName, object entity)
+        public static string CreateDeleteSql(string tableName, object entity)
         {
             var whereList = new List<string>();
             var propertieList = VivTypeReflectionCache.GetPropertieList(entity.GetType());
             foreach (var property in propertieList)
             {
-                var name = property.Name;
+                var name = property.Name.ToLowerInvariant();
                 var value = property.GetValue(entity);
                 var databaseValue = ToDatabaseValue(value);
                 var line = whereList.Count == 0 ? "WHERE" : "AND";
                 whereList.Add($"{line} {name} = {databaseValue}");
             }
 
-            var sql = $"DELETE FROM {tableName} {string.Join(" ", whereList)}";
+            var sql = $"DELETE FROM {tableName.ToLowerInvariant()} {string.Join(" ", whereList)}";
             return sql;
         }
 
+
         [return: NotNull]
-        public string ToDatabaseValue([AllowNull] object value)
+        public static string ToDatabaseValue([AllowNull] object value)
         {
             if (value == null) return "NULL";
             var valueType = value.GetType();
@@ -88,13 +88,19 @@ namespace Viv.Momo.Database
 
             return realType.Name switch
             {
-                nameof(Int32) or nameof(Int64) or nameof(Decimal) or nameof(Byte) or nameof(SByte) or nameof(Double) or nameof(Single) or nameof(Int16) or nameof(UInt32) or
-                nameof(UInt64) or nameof(UInt16) => value.ToString()!,
-                nameof(Boolean) => (bool)value ? "1" : "0",
+                // 数字类型：直接返回值
+                nameof(Int32) or nameof(Int64) or nameof(Decimal) or nameof(Byte) or nameof(SByte) or nameof(Double) or
+                nameof(Single) or nameof(Int16) or nameof(UInt32) or nameof(UInt64) or nameof(UInt16) => value.ToString()!,
+                // 布尔类型：PG的布尔值是 true/false（小写）
+                nameof(Boolean) => (bool)value ? "true" : "false",
+                // 字符串类型：加单引号 + 转义单引号（防注入）
                 nameof(String) => $"'{EscapeSingleQuote(value.ToString()!)}'",
+                // 日期时间类型：格式化为PG兼容的ISO格式 + 单引号
                 nameof(DateTime) => $"'{DateTimeConver((DateTime)value)}'",
                 nameof(DateTimeOffset) => $"'{DateTimeOffsetConver(((DateTimeOffset)value).UtcDateTime)}'",
+                // 枚举类型：取枚举值（数字）或名称（根据业务调整）
                 _ when realType.IsEnum => ((int)value).ToString(),
+                // 其他类型：转为JSON字符串
                 _ => $"'{EscapeSingleQuote(value.ToJson()!)}'"
             };
         }

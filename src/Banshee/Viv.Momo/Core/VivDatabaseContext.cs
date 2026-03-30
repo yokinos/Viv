@@ -498,7 +498,7 @@ namespace Viv.Momo.Core
             try
             {
                 var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
-                var (sql, parameters) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
+                var (sql, parameters) = SqlMagic.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
@@ -519,7 +519,7 @@ namespace Viv.Momo.Core
             try
             {
                 var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
-                var (sql, parameters) = ExpressionToSqlConverter.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
+                var (sql, parameters) = SqlMagic.GetDeleteSql(tableName, predicate, _options.DatabaseSouce);
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
@@ -529,6 +529,92 @@ namespace Viv.Momo.Core
             catch (Exception ex)
             {
                 _logger.Error($"DeleteAsync（委托）,{ex.Message}", ex);
+                return false;
+            }
+        }
+
+        #endregion
+
+        #region SoftDelete
+
+        public bool SoftDelete<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity, ISoftDelete
+        {
+            if (predicate == null) return false;
+
+            try
+            {
+                var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
+                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSouce);
+                if (string.IsNullOrEmpty(sql)) return false;
+
+                var context = GetAppContext(DbReadWriteType.Write);
+                var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
+                return count > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"SoftDelete（委托）,{ex.Message}", ex);
+                return false;
+            }
+        }
+
+        public async Task<bool> SoftDeleteAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity, ISoftDelete
+        {
+            if (predicate == null) return false;
+
+            try
+            {
+                var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
+                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSouce);
+                if (string.IsNullOrEmpty(sql)) return false;
+
+                var context = GetAppContext();
+                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut);
+                return count > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"SoftDeleteAsync（委托）,{ex.Message}", ex);
+                return false;
+            }
+        }
+
+        public bool SoftDelete<T>(long id) where T : class, IEntity, ISoftDelete
+        {
+            if (id <= 0) return false;
+
+            try
+            {
+                Expression<Func<T, bool>> predicate = x => x.Id == id;
+                var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
+                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSouce);
+                var context = GetAppContext(DbReadWriteType.Write);
+                var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
+                return count > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"SoftDelete（Id）,{ex.Message}", ex);
+                return false;
+            }
+        }
+
+        public async Task<bool> SoftDeleteAsync<T>(long id) where T : class, IEntity, ISoftDelete
+        {
+            if (id <= 0) return false;
+
+            try
+            {
+                Expression<Func<T, bool>> predicate = x => x.Id == id;
+                var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSouce);
+                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSouce);
+                var context = GetAppContext(DbReadWriteType.Write);
+                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut);
+                return count > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"SoftDeleteAsync（Id）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -1235,11 +1321,6 @@ namespace Viv.Momo.Core
         public void IsAutoSetDefaultValue(bool flag)
         {
             IsAutoSetValue = flag;
-        }
-
-        public ISqlGenerater GetSqlGenerater(DatabaseSouceType? databaseSouce = null)
-        {
-            return SqlGeneraterFactory.GetSqlGenerater(databaseSouce ?? _options.DatabaseSouce);
         }
 
         public EFAppContext GetEFContext(DbReadWriteType readWriteType)

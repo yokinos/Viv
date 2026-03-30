@@ -4,12 +4,13 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
 using Viv.Entity.Enums;
 using Viv.Momo.Base;
+using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
     [Table("viv_clientapp")]
     [Serializable]
-    public class VivClientApp : EntityBase
+    public class VivClientApp : IEntity, ISoftDelete
     {
         /// <summary>
         /// 客户端应用程序名称
@@ -50,5 +51,8 @@ namespace Viv.Entity.Database.Apex
         /// 更新人
         /// </summary>
         public long UpdateBy { get; set; }
+        public long Id { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public bool IsDeleted { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public DateTime? DeletedAt { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
     }
 }

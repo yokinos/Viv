@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
 using Viv.Momo.Enums;
+using Viv.Momo.Interface;
 
 namespace Viv.Momo.Converter
 {
@@ -22,16 +23,6 @@ namespace Viv.Momo.Converter
             visitor.Visit(expression);
 
             return (visitor.Sql.ToString(), visitor.Parameters);
-        }
-
-        public static (string sql, Dictionary<string, object> parameter) GetDeleteSql<T>(string tableName, Expression<Func<T, bool>> expression, DatabaseSouceType databaseSouceType)
-        {
-            if (expression == null)
-                return (string.Empty, []);
-
-            var (where, parameters) = Convert(expression, databaseSouceType);
-            var sql = $"DELETE FROM {tableName} WHERE {where}";
-            return (sql, parameters);
         }
     }
 }

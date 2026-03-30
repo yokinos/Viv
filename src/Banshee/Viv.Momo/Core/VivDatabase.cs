@@ -132,11 +132,9 @@ namespace Viv.Momo.Core
                         entityBase.Id = IdMagic.NextId();
                 }
 
-                if (entity is TenantEntityBase tenantEntityBase)
+                if (entity is ITenant tenant)
                 {
-                    tenantEntityBase.TenantId = TenantId;
-                    if (tenantEntityBase.Id == default)
-                        tenantEntityBase.Id = IdMagic.NextId();
+                    tenant.TenantId = TenantId;
                 }
             }
         }

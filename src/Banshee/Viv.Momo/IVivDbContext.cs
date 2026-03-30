@@ -31,6 +31,11 @@ namespace Viv.Momo
         bool Delete<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
         Task<bool> DeleteAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
 
+        bool SoftDelete<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity, ISoftDelete;
+        Task<bool> SoftDeleteAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity, ISoftDelete;
+        bool SoftDelete<T>(long id) where T : class, IEntity, ISoftDelete;
+        Task<bool> SoftDeleteAsync<T>(long id) where T : class, IEntity, ISoftDelete;
+
         bool Exist<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
         Task<bool> ExistAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
 
@@ -78,7 +83,6 @@ namespace Viv.Momo
         IVivDbContext? CreateContext(DatabaseOptions options);
         void ChangeTenant(long tenantId);
         void IsAutoSetDefaultValue(bool flag);
-        ISqlGenerater GetSqlGenerater(DatabaseSouceType? databaseSouce = null);
         EFAppContext GetEFContext(DbReadWriteType readWriteType = DbReadWriteType.Read);
     }
 }

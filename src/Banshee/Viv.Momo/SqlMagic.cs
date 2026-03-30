@@ -6,8 +6,11 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using Viv.Contracts.Enums;
+using Viv.Momo.Converter;
 using Viv.Momo.Core;
+using Viv.Momo.Database;
 using Viv.Momo.Enums;
+using Viv.Momo.Interface;
 using Viv.Vva;
 
 namespace Viv.Momo
@@ -63,13 +66,8 @@ namespace Viv.Momo
         public static string GetInsertSqlTemplate(string tableName, Type type, DatabaseSouceType databaseSouceType)
         {
             var propertyNameList = VivTypeReflectionCache.GetPropertyNameList(type);
-            if (databaseSouceType == DatabaseSouceType.PostgreSQL)
-            {
-                var nameListLower = propertyNameList.Select(x => x.ToLowerInvariant()).ToList();
-                return $"INSERT INTO {tableName}({string.Join(",", nameListLower)}) VALUES({string.Join(",", nameListLower.Select(x => $"@{x}"))})";
-            }
-
-            var sql = $"INSERT INTO {tableName}({string.Join(",", propertyNameList)}) VALUES({string.Join(",", propertyNameList.Select(x => $"@{x}"))})";
+            var nameListLower = propertyNameList.Select(x => QuoteIdentifier(x, databaseSouceType)).ToList();
+            var sql = $"INSERT INTO {tableName}({string.Join(",", nameListLower)}) VALUES({string.Join(",", nameListLower.Select(x => $"@{x}"))})";
             return sql;
         }
 
@@ -82,12 +80,7 @@ namespace Viv.Momo
         /// <returns>带参数占位符@Id的SELECT SQL语句</returns>
         public static string GetFindSqlTemplate(string tableName, DatabaseSouceType databaseSouceType)
         {
-            if (databaseSouceType == DatabaseSouceType.PostgreSQL)
-            {
-                return $"SELECT * FROM {tableName} WHERE id = @Id";
-            }
-
-            return $"SELECT * FROM [{tableName}] WHERE Id = @Id";
+            return $"SELECT * FROM [{tableName}] WHERE {QuoteIdentifier("Id", databaseSouceType)} = @Id";
         }
 
         /// <summary>
@@ -116,6 +109,66 @@ namespace Viv.Momo
             }
 
             return (pageSql, countSql);
+        }
+
+        /// <summary>
+        /// 生成真删除sql（物理删除）
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="tableName"></param>
+        /// <param name="expression"></param>
+        /// <param name="databaseSouceType"></param>
+        /// <returns></returns>
+        public static (string sql, Dictionary<string, object> parameter) GetDeleteSql<T>(
+          string tableName,
+          Expression<Func<T, bool>> expression,
+          DatabaseSouceType databaseSouceType)
+        {
+            if (expression == null)
+                return (string.Empty, []);
+
+            var (where, parameters) = ExpressionToSqlConverter.Convert(expression, databaseSouceType);
+            var sql = $"DELETE FROM {tableName} WHERE {where}";
+            return (sql, parameters);
+        }
+
+        /// <summary>
+        /// 生成软删除 SQL（更新 IsDeleted + DeletedAt）
+        /// </summary>
+        /// <typeparam name="T">实体类型</typeparam>
+        /// <param name="tableName">表名</param>
+        /// <param name="boolValue">删除标记 0/1</param>
+        /// <param name="expression">过滤条件</param>
+        /// <param name="databaseType">数据库类型</param>
+        /// <returns>SQL + 参数</returns>
+        public static (string sql, Dictionary<string, object> parameter) GetSoftDeleteSql<T>(
+            string tableName,
+            Expression<Func<T, bool>> expression,
+            DatabaseSouceType databaseType) where T : IEntity, ISoftDelete
+        {
+            if (expression == null)
+                return (string.Empty, []);
+
+            var isDeletedCol = QuoteIdentifier(nameof(ISoftDelete.IsDeleted), databaseType);
+            var deletedAtCol = QuoteIdentifier(nameof(ISoftDelete.DeletedAt), databaseType);
+
+            var dateSql = databaseType switch
+            {
+                DatabaseSouceType.PostgreSQL => "NOW()",
+                DatabaseSouceType.SqlServer => "GETDATE()",
+                _ => throw new NotSupportedException($"不支持的数据库类型: {databaseType}")
+            };
+
+            var boolSql = databaseType switch
+            {
+                DatabaseSouceType.PostgreSQL => "true",
+                DatabaseSouceType.SqlServer => "1",
+                _ => throw new NotSupportedException($"不支持的数据库类型: {databaseType}")
+            };
+
+            var (whereSql, parameters) = ExpressionToSqlConverter.Convert(expression, databaseType);
+            var sql = $"UPDATE {tableName} SET {isDeletedCol} = {boolSql}, {deletedAtCol} = {dateSql} WHERE {whereSql}";
+            return (sql, parameters);
         }
     }
 }
