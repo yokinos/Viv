@@ -11,6 +11,9 @@
     <Project Path="src/Banshee/Viv.Redis/Viv.Redis.csproj" Id="681e717d-013f-40c7-9bba-589b9ddf3629" />
     <Project Path="src/Banshee/Viv.Vva/Viv.Vva.csproj" />
   </Folder>
+  <Folder Name="/src/Doc/">
+    <File Path="docker.windows.txt" />
+  </Folder>
   <Folder Name="/src/Test/">
     <Project Path="src/Test/Viv.Test/Viv.Test.csproj" Id="e53540db-bd61-4609-852e-ab4806374b28" />
   </Folder>

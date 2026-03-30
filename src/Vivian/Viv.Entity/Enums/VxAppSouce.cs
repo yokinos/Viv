@@ -22,6 +22,6 @@ namespace Viv.Entity.Enums
         /// <summary>
         /// 第三方接入应用
         /// </summary>
-        Other = 2
+        Other = 3
     }
 }
