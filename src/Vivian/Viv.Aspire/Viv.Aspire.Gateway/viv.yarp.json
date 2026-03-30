@@ -9,7 +9,7 @@
       "herta": {
         "Destinations": {
           "d1": { "Address": "http://viv-herta-api" }
-        }
+        } 
       },
       "hertalink": {
         "Destinations": {
@@ -23,33 +23,77 @@
       }
     },
     "Routes": {
+      "apex-open-route": {
+        "ClusterId": "apex",
+        "Match": { "Path": "/apex/open/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/apex/open" },
+          { "PathPrefix": "/api" }
+        ]
+      },
       "apex-route": {
         "ClusterId": "apex",
         "Match": { "Path": "/apex/{**catch-all}" },
+        "Metadata": {
+          "Authorize": true
+        },
         "Transforms": [
           { "PathRemovePrefix": "/apex" },
+          { "PathPrefix": "/api" }
+        ]
+      },
+      "herta-open-route": {
+        "ClusterId": "herta",
+        "Match": { "Path": "/herta/open/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/herta/open" },
           { "PathPrefix": "/api" }
         ]
       },
       "herta-route": {
         "ClusterId": "herta",
         "Match": { "Path": "/herta/{**catch-all}" },
+        "Metadata": {
+          "Authorize": true
+        },
         "Transforms": [
           { "PathRemovePrefix": "/herta" },
+          { "PathPrefix": "/api" }
+        ]
+      },
+      "hertalink-open-route": {
+        "ClusterId": "hertalink",
+        "Match": { "Path": "/hertalink/open/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/hertalink/open" },
           { "PathPrefix": "/api" }
         ]
       },
       "hertalink-route": {
         "ClusterId": "hertalink",
         "Match": { "Path": "/hertalink/{**catch-all}" },
+        "Metadata": {
+          "Authorize": true
+        },
         "Transforms": [
           { "PathRemovePrefix": "/hertalink" },
+          { "PathPrefix": "/api" }
+        ]
+      },
+      "robin-open-route": {
+        "ClusterId": "robin",
+        "Match": { "Path": "/robin/open/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/robin/open" },
           { "PathPrefix": "/api" }
         ]
       },
       "robin-route": {
         "ClusterId": "robin",
         "Match": { "Path": "/robin/{**catch-all}" },
+        "Metadata": {
+          "Authorize": true
+        },
         "Transforms": [
           { "PathRemovePrefix": "/robin" },
           { "PathPrefix": "/api" }

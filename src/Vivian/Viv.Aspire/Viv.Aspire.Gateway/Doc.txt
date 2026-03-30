@@ -1,0 +1,9 @@
+﻿// 解决证书不信任的问题（windows）
+# 清理旧证书（可选但推荐）
+dotnet dev-certs https --clean
+
+# 生成并信任新的HTTPS开发证书
+dotnet dev-certs https --trust
+
+# 验证证书状态
+dotnet dev-certs https --check --trust
