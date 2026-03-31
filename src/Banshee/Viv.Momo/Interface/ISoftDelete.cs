@@ -9,8 +9,8 @@ namespace Viv.Momo.Interface
     /// </summary>
     public interface ISoftDelete
     {
-        public bool IsDeleted { get; set; }
+         bool IsDeleted { get; set; }
 
-        public DateTime? DeletedAt { get; set; }
+         DateTime? DeletedAt { get; set; }
     }
 }

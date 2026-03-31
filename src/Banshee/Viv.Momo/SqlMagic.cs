@@ -5,10 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
-using Viv.Contracts.Enums;
 using Viv.Momo.Converter;
-using Viv.Momo.Core;
-using Viv.Momo.Database;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Vva;
@@ -152,22 +149,23 @@ namespace Viv.Momo
             var isDeletedCol = QuoteIdentifier(nameof(ISoftDelete.IsDeleted), databaseType);
             var deletedAtCol = QuoteIdentifier(nameof(ISoftDelete.DeletedAt), databaseType);
 
-            var dateSql = databaseType switch
+            string dateValue, boolValue;
+            switch (databaseType)
             {
-                DatabaseSouceType.PostgreSQL => "NOW()",
-                DatabaseSouceType.SqlServer => "GETDATE()",
-                _ => throw new NotSupportedException($"不支持的数据库类型: {databaseType}")
-            };
-
-            var boolSql = databaseType switch
-            {
-                DatabaseSouceType.PostgreSQL => "true",
-                DatabaseSouceType.SqlServer => "1",
-                _ => throw new NotSupportedException($"不支持的数据库类型: {databaseType}")
-            };
+                case DatabaseSouceType.PostgreSQL:
+                    dateValue = "NOW()";
+                    boolValue = "true";
+                    break;
+                case DatabaseSouceType.SqlServer:
+                    dateValue = "GETDATE()";
+                    boolValue = "1";
+                    break;
+                default:
+                    return (string.Empty, []);
+            }
 
             var (whereSql, parameters) = ExpressionToSqlConverter.Convert(expression, databaseType);
-            var sql = $"UPDATE {tableName} SET {isDeletedCol} = {boolSql}, {deletedAtCol} = {dateSql} WHERE {whereSql}";
+            var sql = $"UPDATE {tableName} SET {isDeletedCol} = {boolValue}, {deletedAtCol} = {dateValue} WHERE {whereSql}";
             return (sql, parameters);
         }
     }
