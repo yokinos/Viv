@@ -134,7 +134,6 @@ namespace Viv.Momo
         /// </summary>
         /// <typeparam name="T">实体类型</typeparam>
         /// <param name="tableName">表名</param>
-        /// <param name="boolValue">删除标记 0/1</param>
         /// <param name="expression">过滤条件</param>
         /// <param name="databaseType">数据库类型</param>
         /// <returns>SQL + 参数</returns>
