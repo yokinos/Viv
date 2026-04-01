@@ -1338,7 +1338,7 @@ namespace Viv.Momo.Core
 
             if (disposing)
             {
-                // 子类自己的资源释放（如果有）
+
             }
 
             base.Dispose(disposing);
