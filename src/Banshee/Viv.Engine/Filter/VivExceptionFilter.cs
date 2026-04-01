@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
 using Viv.Contracts.Exceptions;
-using Viv.Log.VivLogger;
+using Viv.Log;
 using Viv.Nana;
 
 namespace Viv.Engine.Filter
@@ -14,14 +14,14 @@ namespace Viv.Engine.Filter
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
     public class VivExceptionFilterAttribute : Attribute, IAsyncExceptionFilter
     {
-        private readonly IVivLogger _vivLogger;
+        private readonly IDistributedLogger _logger;
 
         /// <summary>
         /// 构造函数：依赖注入（消息生产者 + 日志组件）
         /// </summary>
-        public VivExceptionFilterAttribute(IVivLogger vivLogger)
+        public VivExceptionFilterAttribute(IDistributedLogger logger)
         {
-            _vivLogger = vivLogger;
+            _logger = logger;
         }
 
         /// <summary>
@@ -39,7 +39,7 @@ namespace Viv.Engine.Filter
 
             if (ex is InvalidTokenException)
             {
-                _vivLogger.Warn($"[Token无效]请求地址：{path}，信息：{ex.Message}");
+                _logger.Warning($"[Token无效]请求地址：{path}，信息：{ex.Message}");
                 context.HttpContext.Response.StatusCode = 401;
                 context.Result = VivApiResult.ApiRsult(ResultCode.TokenInvalid, "Token无效或已过期");
                 context.ExceptionHandled = true;
@@ -48,7 +48,7 @@ namespace Viv.Engine.Filter
             else
             {
                 var realEx = ex.InnerException ?? ex;
-                _vivLogger.Error($"[全局未捕获异常]请求地址：{path}，消息：{ex.Message}", realEx);
+                _logger.Error($"[全局未捕获异常]请求地址：{path}，消息：{ex.Message}", realEx);
                 context.Result = VivApiResult.ApiRsult(ResultCode.ServerError, "服务器异常");
                 context.ExceptionHandled = true;
             }

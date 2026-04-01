@@ -4,10 +4,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Viv.Aoi;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
 using Viv.Log;
-using Viv.Log.VivLogger;
 using Viv.Nana.Options;
 using Viv.Vva;
 
@@ -16,19 +16,19 @@ namespace Viv.Nana.RabbitMq
     /// <summary>
     /// RabbitMQ连接工厂
     /// </summary>
-    public class RabbitMQFactory 
+    public class RabbitMQFactory
     {
         protected readonly Lock _connectionLock = new();
         protected IConnection? _connection;
         protected readonly RabbitMqOptions? _options;
-        protected readonly IVivLogger _logger;
+        protected readonly IDistributedLogger _logger;
 
         public RabbitMQFactory()
         {
             _options = VivConfigRegistry.Get<RabbitMqOptions>();
             ArgumentNullException.ThrowIfNull(_options, "RabbitMQ配置未加载（VivConfigRegistry中未找到RabbitMQOptions）");
             ValidateOptions(_options);
-            _logger = VivLogFactory.GetLogger();
+            _logger = VivLocator.GetAutofaService<IDistributedLogger>();
         }
 
         /// <summary>
@@ -98,7 +98,7 @@ namespace Viv.Nana.RabbitMq
                     // 注册连接关闭事件（便于排查断开原因）
                     connection.ConnectionShutdownAsync += async (sender, e) =>
                     {
-                        _logger.Warn($"【RabbitMQ连接】连接已关闭，地址：{resourceAddress}，原因：{e.ReplyText}，错误码：{e.ReplyCode}");
+                        _logger.Warning($"【RabbitMQ连接】连接已关闭，地址：{resourceAddress}，原因：{e.ReplyText}，错误码：{e.ReplyCode}");
                     };
 
                     _connection = connection;
@@ -106,7 +106,7 @@ namespace Viv.Nana.RabbitMq
                 }
                 catch (Exception ex) when (i < retryCount - 1)
                 {
-                    _logger.Warn($"【RabbitMQ连接】第{i + 1}次创建失败，地址：{resourceAddress}，原因：{ex.Message}，将在{retryDelay.TotalSeconds}秒后重试");
+                    _logger.Warning($"【RabbitMQ连接】第{i + 1}次创建失败，地址：{resourceAddress}，原因：{ex.Message}，将在{retryDelay.TotalSeconds}秒后重试");
                     await Task.Delay(retryDelay, cancellationToken);
                 }
                 catch (Exception ex)

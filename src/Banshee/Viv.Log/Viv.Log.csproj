@@ -7,24 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="Configs\log4net.config" />
-    <None Remove="Configs\nlog.config" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="Configs\log4net.config" />
-    <EmbeddedResource Include="Configs\nlog.config" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="log4net" Version="3.3.0" />
-    <PackageReference Include="NLog" Version="6.1.1" />
     <PackageReference Include="Serilog" Version="4.3.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Viv.Aoi\Viv.Aoi.csproj" />
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
     <ProjectReference Include="..\Viv.Vva\Viv.Vva.csproj" />
   </ItemGroup>

@@ -6,7 +6,7 @@ using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
-using Viv.Log.VivLogger;
+using Viv.Log;
 using Viv.Momo.Base;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
@@ -21,7 +21,7 @@ namespace Viv.Momo.Core
     {
         protected readonly IVivContext _vivContext;
         protected DatabaseOptions _options;
-        protected readonly IVivLogger _logger;
+        protected readonly IDistributedLogger _logger;
 
         protected EFAppContext? _writeDbContext;
         protected EFAppContext? _readDbContext;
@@ -33,7 +33,7 @@ namespace Viv.Momo.Core
         private readonly Lock _lock = new();
         private bool _disposed = false;
 
-        public VivDatabase(IVivContext vivContext, IVivLogger logger)
+        public VivDatabase(IVivContext vivContext, IDistributedLogger logger)
         {
             ArgumentNullException.ThrowIfNull(vivContext);
             _vivContext = vivContext;
@@ -156,7 +156,7 @@ namespace Viv.Momo.Core
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"BeginTransaction,{ex.Message}", ex);
+                    WriteLog($"BeginTransaction,{ex.Message}", ex);
                     return false;
                 }
             }
@@ -178,7 +178,7 @@ namespace Viv.Momo.Core
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"CommitTransaction,{ex.Message}", ex);
+                    WriteLog($"CommitTransaction,{ex.Message}", ex);
                     throw;
                 }
                 finally
@@ -205,7 +205,7 @@ namespace Viv.Momo.Core
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"RollbackTransaction,{ex.Message}", ex);
+                    WriteLog($"RollbackTransaction,{ex.Message}", ex);
                 }
                 finally
                 {
@@ -237,7 +237,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"BeginTransactionAsync,{ex.Message}", ex);
+                WriteLog($"BeginTransactionAsync,{ex.Message}", ex);
                 return false;
             }
         }
@@ -261,7 +261,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"CommitTransactionAsync,{ex.Message}", ex);
+                WriteLog($"CommitTransactionAsync,{ex.Message}", ex);
                 throw;
             }
             finally
@@ -293,7 +293,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"RollbackTransactionAsync,{ex.Message}", ex);
+                WriteLog($"RollbackTransactionAsync,{ex.Message}", ex);
             }
             finally
             {
@@ -326,6 +326,11 @@ namespace Viv.Momo.Core
         {
             Dispose(true);
             GC.SuppressFinalize(this);
+        }
+
+        protected void WriteLog(string message, Exception ex)
+        {
+
         }
 
         protected virtual void Dispose(bool disposing)

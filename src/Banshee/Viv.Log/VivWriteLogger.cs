@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
-using Viv.Log.Enums;
-using Viv.Log.VivLogger;
+using Viv.Aoi;
 
 namespace Viv.Log
 {
@@ -21,25 +20,7 @@ namespace Viv.Log
     public static class VivWriteLogger
     {
         // 懒加载获取日志器实例
-        private static IVivLogger Logger => VivLogFactory.GetLogger();
-
-        /// <summary>
-        /// 记录Info级别日志
-        /// </summary>
-        /// <param name="message">日志内容</param>
-        public static void Info(string message)
-        {
-            Logger.Log(VivLogLevel.Info, message ?? string.Empty);
-        }
-
-        /// <summary>
-        /// 记录Error级别日志（仅异常）
-        /// </summary>
-        /// <param name="exception">异常信息</param>
-        public static void Error(Exception exception)
-        {
-            Logger.Log(VivLogLevel.Error, string.Empty, exception);
-        }
+        private static IDistributedLogger Logger => VivLocator.GetAutofaService<IDistributedLogger>();
 
         /// <summary>
         /// 记录Error级别日志（仅消息）
@@ -47,45 +28,7 @@ namespace Viv.Log
         /// <param name="message">日志内容</param>
         public static void Error(string message)
         {
-            Logger.Log(VivLogLevel.Error, message ?? string.Empty);
-        }
-
-        /// <summary>
-        /// 记录Error级别日志（消息+异常）
-        /// </summary>
-        /// <param name="message">日志内容</param>
-        /// <param name="exception">异常信息</param>
-        public static void Error(string message, Exception exception)
-        {
-            Logger.Log(VivLogLevel.Error, message ?? string.Empty, exception);
-        }
-
-        /// <summary>
-        /// 记录Debug级别日志
-        /// </summary>
-        /// <param name="message">日志内容</param>
-        public static void Debug(string message)
-        {
-            Logger.Log(VivLogLevel.Debug, message ?? string.Empty);
-        }
-
-        /// <summary>
-        /// 记录Warn级别日志
-        /// </summary>
-        /// <param name="message">日志内容</param>
-        public static void Warn(string message)
-        {
-            Logger.Log(VivLogLevel.Warn, message ?? string.Empty);
-        }
-
-        /// <summary>
-        /// 记录Fatal级别日志
-        /// </summary>
-        /// <param name="message">日志内容</param>
-        /// <param name="exception">异常信息（可选）</param>
-        public static void Fatal(string message, Exception? exception = null)
-        {
-            Logger.Log(VivLogLevel.Fatal, message ?? string.Empty, exception);
+            Logger.Error(message);
         }
     }
 }

@@ -10,7 +10,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
-using Viv.Log.VivLogger;
+using Viv.Log;
 using Viv.Momo.Converter;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
@@ -27,8 +27,8 @@ namespace Viv.Momo.Core
     {
         private bool _disposed;
 
-        public VivDatabaseContext(IVivContext vivContext, IVivLogger vivLogger)
-            : base(vivContext, vivLogger) { }
+        public VivDatabaseContext(IVivContext vivContext, IDistributedLogger distributedLogger)
+            : base(vivContext, distributedLogger) { }
 
         #region Insert
 
@@ -46,7 +46,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"Insert,{ex.Message},{entity.ToJson()}", ex);
+                WriteLog($"Insert,{ex.Message},{entity.ToJson()}", ex);
                 return false;
             }
         }
@@ -78,7 +78,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"Insert（批量）,{ex.Message}", ex);
+                WriteLog($"Insert（批量）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -97,7 +97,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"InsertAsync,{ex.Message},{entity.ToJson()}", ex);
+                WriteLog($"InsertAsync,{ex.Message},{entity.ToJson()}", ex);
                 return false;
             }
         }
@@ -129,7 +129,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"InsertAsync（批量）,{ex.Message}", ex);
+                WriteLog($"InsertAsync（批量）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -160,7 +160,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"Update,{ex.Message},{entity.ToJson()}", ex);
+                WriteLog($"Update,{ex.Message},{entity.ToJson()}", ex);
                 return false;
             }
         }
@@ -190,7 +190,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"Update（批量）,{entityList.Count},{ex.Message}", ex);
+                WriteLog($"Update（批量）,{entityList.Count},{ex.Message}", ex);
                 return false;
             }
         }
@@ -217,7 +217,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"UpdateAsync,{ex.Message},{entity.ToJson()}", ex);
+                WriteLog($"UpdateAsync,{ex.Message},{entity.ToJson()}", ex);
                 return false;
             }
         }
@@ -247,7 +247,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"UpdateAsync（批量）,{entityList.Count},{ex.Message}", ex);
+                WriteLog($"UpdateAsync（批量）,{entityList.Count},{ex.Message}", ex);
                 return false;
             }
         }
@@ -400,7 +400,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"Delete,{ex.Message},{entity.ToJson()}", ex);
+                WriteLog($"Delete,{ex.Message},{entity.ToJson()}", ex);
                 return false;
             }
         }
@@ -432,7 +432,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"Delete（批量）,{ex.Message}", ex);
+                WriteLog($"Delete（批量）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -454,7 +454,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"DeleteAsync,{ex.Message},{entity.ToJson()}", ex);
+                WriteLog($"DeleteAsync,{ex.Message},{entity.ToJson()}", ex);
                 return false;
             }
         }
@@ -486,7 +486,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"DeleteAsync（批量）,{ex.Message}", ex);
+                WriteLog($"DeleteAsync（批量）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -507,7 +507,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"Delete（委托）,{ex.Message}", ex);
+                WriteLog($"Delete（委托）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -528,7 +528,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"DeleteAsync（委托）,{ex.Message}", ex);
+                WriteLog($"DeleteAsync（委托）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -553,7 +553,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"SoftDelete（委托）,{ex.Message}", ex);
+                WriteLog($"SoftDelete（委托）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -574,7 +574,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"SoftDeleteAsync（委托）,{ex.Message}", ex);
+                WriteLog($"SoftDeleteAsync（委托）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -594,7 +594,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"SoftDelete（Id）,{ex.Message}", ex);
+                WriteLog($"SoftDelete（Id）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -614,7 +614,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"SoftDeleteAsync（Id）,{ex.Message}", ex);
+                WriteLog($"SoftDeleteAsync（Id）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -634,7 +634,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"Exist（委托）,{ex.Message}", ex);
+                WriteLog($"Exist（委托）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -650,7 +650,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"ExistAsync（委托）,{ex.Message}", ex);
+                WriteLog($"ExistAsync（委托）,{ex.Message}", ex);
                 return false;
             }
         }
@@ -666,7 +666,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"Count（委托）,{ex.Message}", ex);
+                WriteLog($"Count（委托）,{ex.Message}", ex);
                 return -1;
             }
         }
@@ -682,7 +682,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"CountAsync（委托）,{ex.Message}", ex);
+                WriteLog($"CountAsync（委托）,{ex.Message}", ex);
                 return -1;
             }
         }
@@ -698,12 +698,12 @@ namespace Viv.Momo.Core
             }
             catch (InvalidOperationException ex)
             {
-                _logger.Error($"SingleOrDefault（委托）: 实体{typeof(T).Name}符合条件的记录超过1条，异常：{ex.Message}", ex);
+                WriteLog($"SingleOrDefault（委托）: 实体{typeof(T).Name}符合条件的记录超过1条，异常：{ex.Message}", ex);
                 return default;
             }
             catch (Exception ex)
             {
-                _logger.Error($"SingleOrDefault（委托）,{ex.Message}", ex);
+                WriteLog($"SingleOrDefault（委托）,{ex.Message}", ex);
                 return default;
             }
         }
@@ -720,12 +720,12 @@ namespace Viv.Momo.Core
             }
             catch (InvalidOperationException ex)
             {
-                _logger.Error($"SingleOrDefault（SQL）: 实体{typeof(T).Name}符合条件的记录超过1条，SQL：{sql}，异常：{ex.Message}", ex);
+                WriteLog($"SingleOrDefault（SQL）: 实体{typeof(T).Name}符合条件的记录超过1条，SQL：{sql}，异常：{ex.Message}", ex);
                 return default;
             }
             catch (Exception ex)
             {
-                _logger.Error($"SingleOrDefault（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"SingleOrDefault（SQL）,{sql},{ex.Message}", ex);
                 return default;
             }
         }
@@ -741,12 +741,12 @@ namespace Viv.Momo.Core
             }
             catch (InvalidOperationException ex)
             {
-                _logger.Error($"SingleOrDefaultAsync（委托）: 实体{typeof(T).Name}符合条件的记录超过1条，异常：{ex.Message}", ex);
+                WriteLog($"SingleOrDefaultAsync（委托）: 实体{typeof(T).Name}符合条件的记录超过1条，异常：{ex.Message}", ex);
                 return default;
             }
             catch (Exception ex)
             {
-                _logger.Error($"SingleOrDefaultAsync（委托）,{ex.Message}", ex);
+                WriteLog($"SingleOrDefaultAsync（委托）,{ex.Message}", ex);
                 return default;
             }
         }
@@ -763,12 +763,12 @@ namespace Viv.Momo.Core
             }
             catch (InvalidOperationException ex)
             {
-                _logger.Error($"SingleOrDefaultAsync（SQL）: 实体{typeof(T).Name}符合条件的记录超过1条，SQL：{sql}，异常：{ex.Message}", ex);
+                WriteLog($"SingleOrDefaultAsync（SQL）: 实体{typeof(T).Name}符合条件的记录超过1条，SQL：{sql}，异常：{ex.Message}", ex);
                 return default;
             }
             catch (Exception ex)
             {
-                _logger.Error($"SingleOrDefaultAsync（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"SingleOrDefaultAsync（SQL）,{sql},{ex.Message}", ex);
                 return default;
             }
         }
@@ -788,7 +788,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"Find,Table:{tableName},Id:{id},{ex.Message}", ex);
+                WriteLog($"Find,Table:{tableName},Id:{id},{ex.Message}", ex);
                 return default;
             }
         }
@@ -807,7 +807,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"FindAsync,Table:{tableName},Id:{id},{ex.Message}", ex);
+                WriteLog($"FindAsync,Table:{tableName},Id:{id},{ex.Message}", ex);
                 return default;
             }
         }
@@ -823,7 +823,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"FirstOrDefault（委托）,{ex.Message}", ex);
+                WriteLog($"FirstOrDefault（委托）,{ex.Message}", ex);
                 return default;
             }
         }
@@ -840,7 +840,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"FirstOrDefault（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"FirstOrDefault（SQL）,{sql},{ex.Message}", ex);
                 return default;
             }
         }
@@ -856,7 +856,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"FirstOrDefaultAsync（委托）,{ex.Message}", ex);
+                WriteLog($"FirstOrDefaultAsync（委托）,{ex.Message}", ex);
                 return default;
             }
         }
@@ -873,7 +873,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"FirstOrDefaultAsync（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"FirstOrDefaultAsync（SQL）,{sql},{ex.Message}", ex);
                 return default;
             }
         }
@@ -890,7 +890,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"FindList（委托）,{ex.Message}", ex);
+                WriteLog($"FindList（委托）,{ex.Message}", ex);
                 return [];
             }
         }
@@ -907,7 +907,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"FindList（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"FindList（SQL）,{sql},{ex.Message}", ex);
                 return [];
             }
         }
@@ -923,7 +923,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"FindListAsync（委托）,{ex.Message}", ex);
+                WriteLog($"FindListAsync（委托）,{ex.Message}", ex);
                 return [];
             }
         }
@@ -940,7 +940,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"FindListAsync（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"FindListAsync（SQL）,{sql},{ex.Message}", ex);
                 return [];
             }
         }
@@ -956,7 +956,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"FindScalar（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"FindScalar（SQL）,{sql},{ex.Message}", ex);
                 return default;
             }
         }
@@ -973,7 +973,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"FindScalarAsync（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"FindScalarAsync（SQL）,{sql},{ex.Message}", ex);
                 return default;
             }
         }
@@ -1004,7 +1004,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"Page（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"Page（SQL）,{sql},{ex.Message}", ex);
                 return result;
             }
         }
@@ -1031,7 +1031,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"PageAsync（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"PageAsync（SQL）,{sql},{ex.Message}", ex);
                 return result;
             }
         }
@@ -1052,7 +1052,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"ExecuteSql（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"ExecuteSql（SQL）,{sql},{ex.Message}", ex);
                 return false;
             }
         }
@@ -1069,7 +1069,7 @@ namespace Viv.Momo.Core
             }
             catch (Exception ex)
             {
-                _logger.Error($"ExecuteSqlAsync（SQL）,{sql},{ex.Message}", ex);
+                WriteLog($"ExecuteSqlAsync（SQL）,{sql},{ex.Message}", ex);
                 return false;
             }
         }
@@ -1119,7 +1119,7 @@ namespace Viv.Momo.Core
                 var log = sqlList.Count > 10
                     ? $"前10条SQL：{string.Join(",", sqlList.Take(10))}...（共{sqlList.Count}条）"
                     : string.Join(",", sqlList);
-                _logger.Error(log, ex);
+                WriteLog(log, ex);
                 return false;
             }
             finally
@@ -1176,7 +1176,7 @@ namespace Viv.Momo.Core
                 var log = sqlList.Count > 10
                     ? $"前10条SQL：{string.Join(",", sqlList.Take(10))}...（共{sqlList.Count}条）"
                     : string.Join(",", sqlList);
-                _logger.Error(log, ex);
+                WriteLog(log, ex);
                 return false;
             }
             finally
@@ -1232,7 +1232,7 @@ namespace Viv.Momo.Core
                 var log = sqlList.Count > 10
                     ? $"前10条SQL：{string.Join(",", sqlList.Take(10).Select(x => x.Key))}...（共{sqlList.Count}条）"
                     : string.Join(",", sqlList.Select(x => x.Key));
-                _logger.Error(log, ex);
+                WriteLog(log, ex);
                 return false;
             }
             finally
@@ -1288,7 +1288,7 @@ namespace Viv.Momo.Core
                 var log = sqlList.Count > 10
                     ? $"前10条SQL：{string.Join(",", sqlList.Take(10).Select(x => x.Key))}...（共{sqlList.Count}条）"
                     : string.Join(",", sqlList.Select(x => x.Key));
-                _logger.Error(log, ex);
+                WriteLog(log, ex);
                 return false;
             }
             finally

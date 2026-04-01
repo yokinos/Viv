@@ -5,7 +5,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Log.VivLogger;
+using Viv.Log;
 using Viv.Nana.Core;
 using Viv.Nana.Models;
 using Viv.Nana.RabbitMq;
@@ -26,13 +26,13 @@ namespace Viv.Nana
     public abstract class VivConsumer<T> : IVivConsumer, IDisposable where T : VivMessage, new()
     {
         protected readonly Lazy<IRedisService> _redisService;
-        protected readonly IVivLogger _logger;
+        protected readonly IDistributedLogger _logger;
 
         private bool _disposed = false;
         private RedisChannel _redisChannel;
         private readonly HashSet<string> _queues = [];
 
-        public VivConsumer(IVivLogger logger, Lazy<IRedisService> redisService)
+        public VivConsumer(IDistributedLogger logger, Lazy<IRedisService> redisService)
         {
             _redisService = redisService;
             _logger = logger;
@@ -62,7 +62,7 @@ namespace Viv.Nana
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                _logger.Warn("订阅操作已被取消，无需执行");
+                _logger.Warning("订阅操作已被取消，无需执行");
                 return;
             }
 
@@ -78,7 +78,7 @@ namespace Viv.Nana
             }
             else
             {
-                _logger.Warn("Redis服务未初始化，跳过Redis消息订阅");
+                _logger.Warning("Redis服务未初始化，跳过Redis消息订阅");
             }
         }
 
@@ -119,7 +119,7 @@ namespace Viv.Nana
                 {
                     // 消息被取消：拒绝消息并重新入队，等待下一次消费
                     await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: true, cancellationToken);
-                    _logger.Warn($"RabbitMQ消费被取消：队列[{queue.QueueName}]，DeliveryTag：[{args.DeliveryTag}]");
+                    _logger.Warning($"RabbitMQ消费被取消：队列[{queue.QueueName}]，DeliveryTag：[{args.DeliveryTag}]");
                     return;
                 }
 
@@ -184,7 +184,7 @@ namespace Viv.Nana
             // 绑定消费者关闭事件（监控消费者状态）
             consumer.ShutdownAsync += (sender, args) =>
             {
-                _logger.Warn($"RabbitMQ消费者已关闭：队列[{queue.QueueName}]，原因：{args.ReplyText}");
+                _logger.Warning($"RabbitMQ消费者已关闭：队列[{queue.QueueName}]，原因：{args.ReplyText}");
                 return Task.CompletedTask;
             };
 
@@ -217,7 +217,7 @@ namespace Viv.Nana
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    _logger.Warn($"Redis消费被取消：频道[{_redisChannel}]");
+                    _logger.Warning($"Redis消费被取消：频道[{_redisChannel}]");
                     return;
                 }
 

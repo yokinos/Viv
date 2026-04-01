@@ -5,6 +5,7 @@ using Viv.Aoi;
 using Viv.Authentication.Enums;
 using Viv.Engine.Enums;
 using Viv.Engine.Options;
+using Viv.Log;
 using Viv.Momo.Interface;
 using Viv.Redis;
 using Viv.Test.Core;
@@ -47,7 +48,7 @@ namespace Viv.Test.TestTask
                 // 日志
                 LogOption = new Log.LogOptions
                 {
-                    LoggerType = Log.Enums.LoggerType.Serilog
+                    LoggerType = LoggerType.Serilog
                 },
 
                 // 缓存（二级缓存：内存 + Redis）

@@ -1,6 +1,6 @@
 ﻿using System;
 using Viv.Contracts.Interface;
-using Viv.Log.VivLogger;
+using Viv.Log;
 using Viv.Nana.Enums;
 using Viv.Nana.LocalMessage;
 using Viv.Nana.Models;
@@ -13,7 +13,7 @@ namespace Viv.Nana.Core
         private readonly IVivContext _context;
         private readonly Lazy<ILocalMessageRespository> _localMessageRespository;
 
-        public NanaProducer(IVivContext context, IVivLogger logger, Lazy<IRedisService> redisService, Lazy<ILocalMessageRespository> localMessageRespository)
+        public NanaProducer(IVivContext context, IDistributedLogger logger, Lazy<IRedisService> redisService, Lazy<ILocalMessageRespository> localMessageRespository)
             : base(logger, redisService)
         {
             _context = context;

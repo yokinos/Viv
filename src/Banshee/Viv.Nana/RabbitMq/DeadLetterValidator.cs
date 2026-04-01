@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Log;
-using Viv.Log.VivLogger;
 using Viv.Nana.Models;
 using Viv.Vva.Magic;
 

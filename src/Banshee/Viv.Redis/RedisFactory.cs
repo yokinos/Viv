@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Viv.Aoi;
 using Viv.Log;
 using Viv.Redis.DbAllocator;
 using Viv.Vva;
@@ -53,6 +54,11 @@ namespace Viv.Redis
         /// </summary>
         private static bool _disposed = false;
 
+        /// <summary>
+        /// 分布式日志
+        /// </summary>
+        private static IDistributedLogger _logger;
+
         public RedisFactory()
         {
             ArgumentNullException.ThrowIfNull(CurrentRedisOptions);
@@ -63,6 +69,7 @@ namespace Viv.Redis
                 DbSelectorType.None => new NoneAllocator(),
                 _ => new NoneAllocator(),
             };
+            _logger = VivLocator.GetAutofaService<IDistributedLogger>();
         }
 
         /// <summary>
@@ -270,11 +277,11 @@ namespace Viv.Redis
         {
             if (ex == null)
             {
-                VivWriteLogger.Error(message);
+                _logger.Error(message);
             }
             else
             {
-                VivWriteLogger.Error(message, ex);
+                _logger.Error(message, ex);
             }
         }
 

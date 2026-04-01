@@ -4,8 +4,6 @@ using Viv.Contracts.Interface;
 using Viv.Engine.Cache;
 using Viv.Engine.Options;
 using Viv.Log;
-using Viv.Log.Enums;
-using Viv.Log.VivLogger;
 using Viv.Momo;
 using Viv.Momo.Core;
 using Viv.Nana;
@@ -46,19 +44,14 @@ namespace Viv.Engine
         private static void RegisterLogger(IServiceCollection services, VivOptions options)
         {
             if (options.LogOption == null) return;
-
-            VivLogFactory.Initialize(options.LogOption);
-            services.AddSingleton<IVivLogger>(provider =>
+            if(options.LogOption.LoggerType == LoggerType.Serilog)
             {
-                return options.LogOption.LoggerType switch
-                {
-                    LoggerType.None => new NoneLogger(),
-                    LoggerType.Log4net => new Log4netLogger(),
-                    LoggerType.NLog => new NLogLogger(),
-                    LoggerType.Serilog => new SerilogLogger(),
-                    _ => new NoneLogger()
-                };
-            });
+                services.AddSingleton<IDistributedLogger, SerilogDistributedLogger>();
+            }
+            else
+            {
+
+            }
         }
 
         #endregion

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Log.Enums
+namespace Viv.Log
 {
     public enum LoggerType
     {

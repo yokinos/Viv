@@ -36,9 +36,7 @@
     "IsEnableMemoryCache": true
   },
   "LogOption": {
-    "LoggerType": 3,
-    "ConfigFilePath": "",
-    "LoggerName": "[Viv.Log]"
+    "LoggerType": 1
   },
   "DatabaseOption": {
     "DatabaseSouce": 1,

@@ -5,7 +5,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
-using Viv.Log.VivLogger;
+using Viv.Log;
 using Viv.Nana.Models;
 using Viv.Nana.Options;
 using Viv.Nana.RabbitMq;
@@ -22,9 +22,9 @@ namespace Viv.Nana.Core
         protected static readonly ConcurrentDictionary<string, string> _queue_Re_dict = [];
 
         protected readonly Lazy<IRedisService> _redisService;
-        protected readonly IVivLogger _logger;
+        protected readonly IDistributedLogger _logger;
 
-        public NanaFactory(IVivLogger logger, Lazy<IRedisService> redisService)
+        public NanaFactory(IDistributedLogger logger, Lazy<IRedisService> redisService)
         {
             _logger = logger;
             _redisService = redisService;
