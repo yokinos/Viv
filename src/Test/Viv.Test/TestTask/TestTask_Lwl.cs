@@ -48,7 +48,7 @@ namespace Viv.Test.TestTask
                 // 日志
                 LogOption = new Log.LogOptions
                 {
-                    LoggerType = LoggerType.Serilog
+                    LogType = LogType.Serilog
                 },
 
                 // 缓存（二级缓存：内存 + Redis）

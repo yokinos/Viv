@@ -7,9 +7,7 @@ namespace Viv.Log
     /// </summary>
     public class NoneLogger : IDistributedLogger
     {
-        public NoneLogger()
-        {
-        }
+        public NoneLogger() { }
 
         public void Info(string message, params object[] args)
         {
@@ -33,7 +31,7 @@ namespace Viv.Log
 
         public void Warning(string message, params object[] args)
         {
-            Console.WriteLine($"[WARN] {DateTime.Now:yyyy-MM-dd HH:mm:ss} {message} {GetArgs(args)}");
+            Console.WriteLine($"[WARNING] {DateTime.Now:yyyy-MM-dd HH:mm:ss} {message} {GetArgs(args)}");
         }
 
         public void Fatal(string message, params object[] args)

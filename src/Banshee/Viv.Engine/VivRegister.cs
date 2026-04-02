@@ -44,13 +44,14 @@ namespace Viv.Engine
         private static void RegisterLogger(IServiceCollection services, VivOptions options)
         {
             if (options.LogOption == null) return;
-            if(options.LogOption.LoggerType == LoggerType.Serilog)
+            LoggerRegister.Initialize(options.LogOption);
+            if (options.LogOption.LogType == LogType.Serilog)
             {
                 services.AddSingleton<IDistributedLogger, SerilogDistributedLogger>();
             }
             else
             {
-
+                services.AddSingleton<IDistributedLogger, NoneLogger>();
             }
         }
 
@@ -114,7 +115,7 @@ namespace Viv.Engine
 
         public static void RegisterToken(IServiceCollection services, VivOptions options)
         {
-            if(options.TokenOption != null)
+            if (options.TokenOption != null)
             {
                 // 注册token实现
                 services.AddScoped<ITokenService, JwtTokenService>();

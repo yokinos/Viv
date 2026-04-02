@@ -1,15 +1,17 @@
 
 # Redis
-docker run -d --name VivRedis -p 6379:6379 redis:latest --requirepass "vivdevredis77"
+docker run -d --name Viv_Redis -p 6379:6379 redis:latest --requirepass "viv_dev_redis_77"
 
 # PGSQL
-docker run -d --name VivPostgreSQL -p 5432:5432 -e POSTGRES_PASSWORD=vivdevpgsql77 postgres:latest
+docker run -d --name Viv_PostgreSQL -p 5432:5432 -e POSTGRES_PASSWORD=viv_dev_pgsql_77 postgres:latest
 
 # RabbitMQ
-docker run -d --name VivRabbitMQ -p 5672:5672 -p 15672:15672 -e RABBITMQ_DEFAULT_USER=viv -e RABBITMQ_DEFAULT_PASS=vivdevmq77 rabbitmq:management
+docker run -d --name Viv_RabbitMQ -p 5672:5672 -p 15672:15672 -e RABBITMQ_DEFAULT_USER=viv -e RABBITMQ_DEFAULT_PASS=viv_dev_mq_77 rabbitmq:management
 
 # ELK
-docker network create viv-network
+docker network create elk-net
+docker run -d --name Viv_Elasticsearch --network elk-net -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" -e "xpack.security.enabled=true" -e "ELASTIC_PASSWORD=Viv_ELK_77" -e "xpack.security.transport.ssl.enabled=false" -e "xpack.security.http.ssl.enabled=false" -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" -v es_data:/usr/share/elasticsearch/data elasticsearch:8.11.0
+docker run -d --name Viv_Kibana --network elk-net -p 5601:5601 -e "ELASTICSEARCH_HOSTS=http://Viv_Elasticsearch:9200" -e "ELASTICSEARCH_USERNAME=elastic" -e "ELASTICSEARCH_PASSWORD=Viv_ELK_77" kibana:8.11.0
 
 # 直接指定官方仓库拉取
 docker pull docker.io/rabbitmq:management

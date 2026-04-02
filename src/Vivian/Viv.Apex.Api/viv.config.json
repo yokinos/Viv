@@ -36,7 +36,7 @@
     "IsEnableMemoryCache": true
   },
   "LogOption": {
-    "LoggerType": 1
+    "LogType": 1
   },
   "DatabaseOption": {
     "DatabaseSouce": 1,
