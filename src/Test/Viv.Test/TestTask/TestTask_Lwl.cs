@@ -48,7 +48,9 @@ namespace Viv.Test.TestTask
                 // 日志
                 LogOption = new Log.LogOptions
                 {
-                    LogType = LogType.Serilog
+                    LogType = LogType.Serilog,
+                    IsUseELK = true,
+                    ELKApiKey = string.Empty,
                 },
 
                 // 缓存（二级缓存：内存 + Redis）
@@ -70,7 +72,7 @@ namespace Viv.Test.TestTask
                         KeepAlive = 60,
                         MaxDbIndex = 12,
                         SyncTimeout = 5000,
-                        Password = "vivRedis"
+                        Password = "viv_redis_77"
                     }
                 },
 
@@ -85,7 +87,7 @@ namespace Viv.Test.TestTask
                     {
                         HostName = "localhost",
                         UserName = "viv",
-                        Password = "vivRabbitMQ",
+                        Password = "viv_rabbitmq_77",
                         Port = 5672,
                         VirtualHost = "/Viv"
                     },

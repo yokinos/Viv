@@ -26,7 +26,7 @@ namespace Viv.Log
 
         public string ELKApiKey { get; set; } = string.Empty;
         public string ELKUserName { get; private set; } = "elastic";
-        public string ELKPassword { get; set; } = "viv_dev_elk_77";
+        public string ELKPassword { get; set; } = "viv_elk_77";
     }
 
     public class LoggerRegister
