@@ -14,6 +14,6 @@ namespace Viv.Nana.Options
 
         public string Password { get; set; } = "guest";
 
-        public string VirtualHost { get; set; } = "Viv";
+        public string VirtualHost { get; set; } = string.Empty;
     }
 }
