@@ -20,8 +20,8 @@ services:
     container_name: Viv_Kibana
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTICSEARCH_USERNAME=kibana_system   # 固定！不能改！
-      - ELASTICSEARCH_PASSWORD=viv_elk_77      # 你要的密码！
+      - ELASTICSEARCH_USERNAME=kibana_system   
+      - ELASTICSEARCH_PASSWORD=viv_elk_77      
       - NODE_OPTIONS=--openssl-legacy-provider
       - XPACK_SECURITY_ENCRYPTIONKEY=something_long_random_key_123456
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=something_long_random_key_654321
