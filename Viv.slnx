@@ -12,7 +12,7 @@
     <Project Path="src/Banshee/Viv.Vva/Viv.Vva.csproj" />
   </Folder>
   <Folder Name="/src/Doc/">
-    <File Path="docker.windows.txt" />
+    <File Path="docker-compose.yml" />
   </Folder>
   <Folder Name="/src/Test/">
     <Project Path="src/Test/Viv.Test/Viv.Test.csproj" Id="e53540db-bd61-4609-852e-ab4806374b28" />

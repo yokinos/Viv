@@ -10,8 +10,8 @@ docker run -d --name Viv_RabbitMQ -p 5672:5672 -p 15672:15672 -e RABBITMQ_DEFAUL
 
 # ELK
 docker network create elk-net
-docker run -d --name Viv_Elasticsearch --network elk-net -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" -e "xpack.security.enabled=true" -e "ELASTIC_PASSWORD=Viv_ELK_77" -e "xpack.security.transport.ssl.enabled=false" -e "xpack.security.http.ssl.enabled=false" -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" -v es_data:/usr/share/elasticsearch/data elasticsearch:8.11.0
-docker run -d --name Viv_Kibana --network elk-net -p 5601:5601 -e "ELASTICSEARCH_HOSTS=http://Viv_Elasticsearch:9200" -e "ELASTICSEARCH_USERNAME=elastic" -e "ELASTICSEARCH_PASSWORD=Viv_ELK_77" kibana:8.11.0
+docker run -d --name Viv_Elasticsearch --network elk-net -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" -e "xpack.security.enabled=true" -e "ELASTIC_PASSWORD=viv_dev_elk_77" -e "xpack.security.transport.ssl.enabled=false" -e "xpack.security.http.ssl.enabled=false" -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" -v es_data:/usr/share/elasticsearch/data elasticsearch:8.11.0
+docker run -d --name Viv_Kibana --network elk-net -p 5601:5601 -e "ELASTICSEARCH_HOSTS=http://Viv_Elasticsearch:9200" -e "ELASTICSEARCH_USERNAME=elastic" -e "ELASTICSEARCH_PASSWORD=viv_dev_elk_77" kibana:8.11.0
 
 # 直接指定官方仓库拉取
 docker pull docker.io/rabbitmq:management

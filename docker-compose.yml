@@ -1,0 +1,91 @@
+services:
+  # Elasticsearch
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: Viv_Elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=viv_elk_77
+      - xpack.security.transport.ssl.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - elk-net
+    restart: unless-stopped
+
+  # Kibana
+  kibana:
+    image: kibana:8.11.0
+    container_name: Viv_Kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=viv_elk_77
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - elk-net
+    restart: unless-stopped
+
+  # Redis
+  redis:
+    image: redis:latest
+    container_name: Viv_Redis
+    command: redis-server --requirepass viv_redis_77
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - elk-net
+    restart: unless-stopped
+
+  # PostgreSQL
+  postgresql:
+    image: postgres:latest
+    container_name: Viv_PostgreSql
+    environment:
+      POSTGRES_PASSWORD: viv_pgsql_77
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - elk-net
+    restart: unless-stopped
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:4.0-management
+    container_name: Viv_RabbitMQ
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: viv_rabbitmq_77
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - elk-net
+    restart: unless-stopped
+
+volumes:
+  es_data:
+  redis_data:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  elk-net:
+    driver: bridge
