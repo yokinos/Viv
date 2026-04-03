@@ -57,6 +57,18 @@ services:
       - elk-net
     restart: unless-stopped
 
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: Viv_pgAdmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=viv@test.com
+      - PGADMIN_DEFAULT_PASSWORD=viv_pgadmin_77
+    ports:
+      - "5050:80"
+    networks:
+      - elk-net
+    restart: unless-stopped
+
   rabbitmq:
     image: rabbitmq:4.0-management
     container_name: Viv_RabbitMQ
