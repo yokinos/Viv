@@ -95,7 +95,6 @@ namespace Viv.Momo.Core
             }
         }
 
-
         /// <summary>
         /// 是否自动设置默认值
         /// </summary>
@@ -121,20 +120,18 @@ namespace Viv.Momo.Core
         /// <summary>
         /// 自动设置默认值（Id、TenantId）
         /// </summary>
-        protected void AutoSetValue<T>(params T[] entities)
+        protected void AutoSetValue<T>(params T[] entities) where T : IEntity
         {
             if (entities.IsNullOrEmpty() || !IsAutoSetValue) return;
             foreach (var entity in entities)
             {
-                if (entity is EntityBase entityBase)
-                {
-                    if (entityBase.Id == default)
-                        entityBase.Id = IdMagic.NextId();
-                }
+                if (entity.Id == default)
+                    entity.Id = IdMagic.NextId();
 
                 if (entity is ITenant tenant)
                 {
-                    tenant.TenantId = TenantId;
+                    if (tenant.TenantId == default)
+                        tenant.TenantId = TenantId;
                 }
             }
         }
@@ -322,15 +319,15 @@ namespace Viv.Momo.Core
             return (totalItems + pageSize - 1) / pageSize;
         }
 
+        protected void WriteLog(string message, Exception ex)
+        {
+            _logger.Error(message, ex);
+        }
+
         public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
-        }
-
-        protected void WriteLog(string message, Exception ex)
-        {
-
         }
 
         protected virtual void Dispose(bool disposing)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
 using Viv.Momo.Base;
+using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
@@ -10,12 +11,18 @@ namespace Viv.Entity.Database.Apex
     /// 客户端应用版本
     /// </summary>
     [Table("viv_clientapp_version")]
-    public class VivClientAppVersion : EntityBase
+    [Serializable]
+    public class VivClientAppVersion : EntityBase, ISoftDelete
     {
         /// <summary>
         /// 客户端AppId
         /// </summary>
         public long AppId { get; set; }
+
+        /// <summary>
+        /// 版本号（不为空 且自增）
+        /// </summary>
+        public int VersionCode { get; set; }
 
         /// <summary>
         /// 更新说明
@@ -26,5 +33,9 @@ namespace Viv.Entity.Database.Apex
         /// 版本
         /// </summary>
         public string? Version { get; set; }
+
+
+        public bool IsDeleted { get; set; }
+        public DateTime? DeletedAt { get; set; }
     }
 }

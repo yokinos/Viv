@@ -7,7 +7,7 @@ namespace Viv.Momo.Base
     public class EntityBase : IEntity
     {
         /// <summary>
-        /// 主键ID（自增/雪花ID）
+        /// 主键Id
         /// </summary>
         public long Id { get; set; }
     }

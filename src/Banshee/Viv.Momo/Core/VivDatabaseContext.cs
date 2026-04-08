@@ -11,7 +11,6 @@ using System.Text;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
 using Viv.Log;
-using Viv.Momo.Converter;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
@@ -27,8 +26,8 @@ namespace Viv.Momo.Core
     {
         private bool _disposed;
 
-        public VivDatabaseContext(IVivContext vivContext, IDistributedLogger distributedLogger)
-            : base(vivContext, distributedLogger) { }
+        public VivDatabaseContext(IVivContext vivContext, IDistributedLogger logger)
+            : base(vivContext, logger) { }
 
         #region Insert
 
