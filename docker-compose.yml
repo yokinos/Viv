@@ -1,0 +1,108 @@
+services:
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: Viv_Elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ELASTIC_PASSWORD=viv_elk_77
+      - xpack.security.transport.ssl.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    networks:
+      - viv-net
+    restart: unless-stopped
+
+  kibana:
+    image: kibana:8.11.0
+    container_name: Viv_Kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system   
+      - ELASTICSEARCH_PASSWORD=viv_elk_77      
+      - NODE_OPTIONS=--openssl-legacy-provider
+      - XPACK_SECURITY_ENCRYPTIONKEY=something_long_random_key_123456
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=something_long_random_key_654321
+      - I18N_LOCALE=zh-CN
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - viv-net
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    container_name: Viv_Redis
+    command: redis-server --requirepass viv_redis_77
+    ports:
+      - "6379:6379"
+    networks:
+      - viv-net
+    restart: unless-stopped
+
+  postgresql:
+    image: postgres:latest
+    container_name: Viv_PostgreSql
+    environment:
+      POSTGRES_PASSWORD: viv_pgsql_77
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - viv-net
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: Viv_pgAdmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=viv@test.com
+      - PGADMIN_DEFAULT_PASSWORD=viv_pgadmin_77
+    ports:
+      - "5050:80"
+    networks:
+      - viv-net
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4.0-management
+    container_name: Viv_RabbitMQ
+    environment:
+      - RABBITMQ_DEFAULT_USER=viv
+      - RABBITMQ_DEFAULT_PASS=viv_rabbitmq_77
+      - RABBITMQ_DEFAULT_VHOST=/viv
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - viv-net
+    restart: unless-stopped
+   
+  caddy:
+    image: caddy:latest
+    container_name: Viv-Caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - viv-net
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+
+name: viv
+
+networks:
+  viv-net:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
