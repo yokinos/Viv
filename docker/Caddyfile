@@ -1,0 +1,3 @@
+pgadmin.katoumegumi.net {
+  reverse_proxy viv_pgadmin:80
+}

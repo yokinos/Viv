@@ -175,5 +175,32 @@ namespace Viv.Vva.Extension
                 }
             }
         }
+
+
+        /// <summary>
+        /// 摩尔投票算法 → 获取列表中出现次数最多的元素（众数）
+        /// 时间 O(n)，空间 O(1)
+        /// </summary>
+        public static T GetMostFrequent<T>(this List<T> list)
+        {
+            if (list == null || list.Count == 0)
+                return default;
+
+            T candidate = default;
+            int count = 0;
+
+            foreach (var item in list)
+            {
+                if (count == 0)
+                    candidate = item;
+
+                if (Equals(item, candidate))
+                    count++;
+                else
+                    count--;
+            }
+
+            return candidate;
+        }
     }
 }
