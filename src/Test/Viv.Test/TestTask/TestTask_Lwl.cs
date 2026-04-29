@@ -51,6 +51,8 @@ namespace Viv.Test.TestTask
                     LogType = LogType.Serilog,
                     IsUseELK = true,
                     ELKApiKey = string.Empty,
+                    ELKUrl = "https://es.katoumegumi.net",
+                    ELKPassword = "viv_elk_77"
                 },
 
                 // 缓存（二级缓存：内存 + Redis）
@@ -62,7 +64,7 @@ namespace Viv.Test.TestTask
                     {
                         RedisMode = RedisMode.Standalone,
                         SelectorType = DbSelectorType.None,
-                        ConnectionString = "localhost:6379,password=vivRedis",
+                        ConnectionString = "43.228.79.205:6379,password=viv_redis_77",
                         SentinelEndPoints = [],
                         SentinelMasterName = "MasterRedisNode",
                         AbortOnConnectFail = true,
@@ -85,8 +87,8 @@ namespace Viv.Test.TestTask
                     IsEnableLocalMessage = false,
                     RabbitMqOptions = new Nana.Options.RabbitMqOptions
                     {
-                        HostName = "localhost",
-                        UserName = "viv",
+                        HostName = "43.228.79.205",
+                        UserName = "guest",
                         Password = "viv_rabbitmq_77",
                         Port = 5672,
                         VirtualHost = "/Viv"
@@ -97,10 +99,10 @@ namespace Viv.Test.TestTask
                 // 数据库（读写分离 + 自动实体扫描）
                 DatabaseOption = new Momo.Options.DatabaseOptions
                 {
-                    DatabaseSouce = Momo.Enums.DatabaseSouceType.SqlServer,
-                    MasterConnectionString = "Server=localhost;Database=vivApex;User Id=sa;Password=<PASSWORD>!;",
-                    SlaveConnectionStrings = ["Server=localhost;Database=vivApexRead;User Id=sa;Password=<PASSWORD>!;"],
-                    IsReadWriteSplit = true,
+                    DatabaseSouce = Momo.Enums.DatabaseSouceType.PostgreSQL,
+                    MasterConnectionString = "Server=43.228.79.205;Database=viv_apex;User Id=sa;Password=viv_pgsql_77;",
+                    SlaveConnectionStrings = [],
+                    IsReadWriteSplit = false,
                     Timeout = 30,
                     EntityTyoeOptions =
                     [
@@ -115,7 +117,7 @@ namespace Viv.Test.TestTask
                 TokenOption = new Authentication.TokenOptions()
                 {
                     TokenType = TokenType.Jwt,
-                    SecretKey = "1x24as5da56d4qd1w65qd1",
+                    SecretKey = "VivsK2pR5xQ8dGjN3mL6tHfBvYwApex",
                     Audience = string.Empty,
                     ExpireMinutes = 120,
                     Issuer = string.Empty
