@@ -10,7 +10,7 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 客户端应用版本
     /// </summary>
-    [Table("viv_clientapp_version")]
+    [Table("VivClientAppVersion")]
     [Serializable]
     public class VivClientAppVersion : EntityBase, ISoftDelete
     {

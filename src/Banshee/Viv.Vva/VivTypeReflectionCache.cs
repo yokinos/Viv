@@ -46,7 +46,7 @@ namespace Viv.Vva
         {
             var list = new List<string>();
 
-            foreach (var property in type.GetProperties())
+            foreach (var property in GetPropertieList(type))
             {
                 list.Add(property.Name);
             }

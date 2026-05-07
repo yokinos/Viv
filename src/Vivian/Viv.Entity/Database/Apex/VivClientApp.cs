@@ -14,7 +14,7 @@ namespace Viv.Entity.Database.Apex
     /// 同一应用不同平台 = 不同 AppId
     /// 同一应用不同版本 = 共用同一个 AppId（版本管理见 <see cref="VivClientAppVersion"/>）
     /// </summary>
-    [Table("viv_clientapp")]
+    [Table("VivClientApp")]
     [Serializable]
     public class VivClientApp : EntityBase, ISoftDelete
     {
