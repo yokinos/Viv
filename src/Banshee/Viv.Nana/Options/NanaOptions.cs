@@ -1,3 +1,4 @@
+using Viv.Momo.Enums;
 using Viv.Vva.Magic;
 
 namespace Viv.Nana.Options
@@ -38,5 +39,20 @@ namespace Viv.Nana.Options
         /// 要注册的消费者类型
         /// </summary>
         public List<FilterTypeOptions> ConsumerTypes { get; set; } = [];
+
+        /// <summary>
+        /// Saga 状态机扫描规则（非空时启用 Saga）
+        /// </summary>
+        public List<FilterTypeOptions> SagaStateMachineTypes { get; set; } = [];
+
+        /// <summary>
+        /// Saga 持久化数据库类型（PostgreSQL / SqlServer）
+        /// </summary>
+        public DatabaseSouceType SagaDatabaseSouce { get; set; } = DatabaseSouceType.PostgreSQL;
+
+        /// <summary>
+        /// Saga 持久化数据库连接字符串（默认复用 Momo 主库）
+        /// </summary>
+        public string? SagaConnectionString { get; set; }
     }
 }

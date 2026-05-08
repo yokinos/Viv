@@ -2,6 +2,7 @@ using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 using Viv.Nana.Core;
 using Viv.Nana.Options;
+using Viv.Nana.Saga;
 using Viv.Vva.Extension;
 
 namespace Viv.Nana
@@ -18,9 +19,16 @@ namespace Viv.Nana
 
             services.AddMassTransit(x =>
             {
+                // 注册消费者
                 if (!nanaOptions.ConsumerTypes.IsNullOrEmpty())
                 {
                     NanaRegister.AddVivConsumers(x, nanaOptions.ConsumerTypes);
+                }
+
+                // 注册 Saga（状态机 + EF Core 持久化）
+                if (!nanaOptions.SagaStateMachineTypes.IsNullOrEmpty())
+                {
+                    NanaRegister.AddVivSagas(x, nanaOptions.SagaStateMachineTypes);
                 }
 
                 x.UsingRabbitMq((context, cfg) =>

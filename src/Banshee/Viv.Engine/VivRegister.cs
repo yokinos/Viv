@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using MassTransit.EntityFrameworkCoreIntegration;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Viv.Authentication;
 using Viv.Contracts.Interface;
 using Viv.Engine.Cache;
@@ -6,11 +8,14 @@ using Viv.Engine.Options;
 using Viv.Log;
 using Viv.Momo;
 using Viv.Momo.Core;
+using Viv.Momo.Enums;
 using Viv.Nana;
 using Viv.Nana.Core;
+using Viv.Nana.Saga;
 using Viv.Redis;
 using Viv.Vva;
 using Viv.Vva.Extension;
+using Viv.Vva.Magic;
 
 namespace Viv.Engine
 {
@@ -88,11 +93,57 @@ namespace Viv.Engine
 
             NanaRegister.Initialize(options.NanaOption);
 
+            // 启用 Saga 时注册持久化 DbContext 和 ClassMap 扫描
+            if (!options.NanaOption.SagaStateMachineTypes.IsNullOrEmpty())
+            {
+                RegisterSagaDbContext(services, options);
+            }
+
             // 注册 MassTransit + RabbitMQ
             services.AddVivMassTransit(options.NanaOption);
 
             // Scoped 因为依赖 IVivContext
             services.AddScoped<IVivProducer, NanaProducer>();
+        }
+
+        /// <summary>
+        /// 注册 Saga 持久化 DbContext（独立数据库，不与业务库混用）
+        /// </summary>
+        private static void RegisterSagaDbContext(IServiceCollection services, VivOptions options)
+        {
+            var nanaOpt = options.NanaOption;
+            var connectionString = nanaOpt.SagaConnectionString
+                ?? throw new InvalidOperationException("Saga 需要配置独立的 SagaConnectionString，不能与业务库混用");
+
+            services.AddDbContext<VivSagaDbContext>(dbOpt =>
+            {
+                switch (nanaOpt.SagaDatabaseSouce)
+                {
+                    case Momo.Enums.DatabaseSouceType.PostgreSQL:
+                        dbOpt.UseNpgsql(connectionString);
+                        break;
+                    case Momo.Enums.DatabaseSouceType.SqlServer:
+                        dbOpt.UseSqlServer(connectionString);
+                        break;
+                    default:
+                        throw new NotSupportedException($"Saga 不支持该数据库类型：{nanaOpt.SagaDatabaseSouce}");
+                }
+            }, contextLifetime: ServiceLifetime.Scoped);
+
+            // 扫描注册所有 SagaClassMap 实现供 VivSagaDbContext 消费
+            var classMapFilters = options.NanaOption.SagaStateMachineTypes
+                .Select(f => new FilterTypeOptions
+                {
+                    AssemblyName = f.AssemblyName,
+                    NameSpace = f.NameSpace,
+                    BaseType = typeof(ISagaClassMap)
+                })
+                .ToList();
+            var classMapTypes = TypeScanMagic.ScanRange(classMapFilters);
+            foreach (var t in classMapTypes)
+            {
+                services.AddScoped(typeof(ISagaClassMap), t);
+            }
         }
 
         #endregion

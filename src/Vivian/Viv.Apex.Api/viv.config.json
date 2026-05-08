@@ -63,7 +63,18 @@
     "Password": "vivRabbitMQ",
     "VirtualHost": "/Viv",
     "RetryCount": 3,
-    "ConsumerTypes": []
+    "ConsumerTypes": [],
+    "SagaStateMachineTypes": [
+      {
+        "AssemblyName": "Viv.Apex.Core",
+        "NameSpace": "Viv.Apex.Core.Saga",
+        "BaseType": null,
+        "ClassNameEndWith": "StateMachine",
+        "ClassNameStart": ""
+      }
+    ],
+    "SagaDatabaseSouce": 1,
+    "SagaConnectionString": "Server=localhost;Database=vivSaga;User Id=sa;Password=<PASSWORD>!;"
   },
   "TokenOption": {
     "TokenType": 0,

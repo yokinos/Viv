@@ -1,6 +1,7 @@
 using MassTransit;
 using Viv.Nana.Core;
 using Viv.Nana.Options;
+using Viv.Nana.Saga;
 using Viv.Vva;
 using Viv.Vva.Extension;
 using Viv.Vva.Magic;
@@ -31,6 +32,27 @@ namespace Viv.Nana
                     ?.MakeGenericMethod(type);
 
                 method?.Invoke(null, [configurator]);
+            }
+        }
+
+        /// <summary>
+        /// 扫描并注册 Saga 状态机（MassTransit StateMachine + EF Core 持久化）
+        /// </summary>
+        public static void AddVivSagas(
+            IBusRegistrationConfigurator configurator,
+            List<FilterTypeOptions> stateMachineTypes)
+        {
+            if (stateMachineTypes.IsNullOrEmpty()) return;
+
+            var types = TypeScanMagic.ScanRange(stateMachineTypes);
+            if (types.IsNullOrEmpty()) return;
+
+            foreach (var smType in types)
+            {
+                var stateType = VivSagaRegistrationHelper.ExtractStateType(smType);
+                if (stateType == null) continue;
+
+                VivSagaRegistrationHelper.RegisterSaga(configurator, smType, stateType);
             }
         }
     }

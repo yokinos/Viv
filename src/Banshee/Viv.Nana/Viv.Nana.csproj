@@ -8,12 +8,14 @@
 
   <ItemGroup>
     <PackageReference Include="MassTransit" Version="8.4.0" />
+    <PackageReference Include="MassTransit.EntityFrameworkCore" Version="8.4.0" />
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.4.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
     <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
+    <ProjectReference Include="..\Viv.Momo\Viv.Momo.csproj" />
     <ProjectReference Include="..\Viv.Vva\Viv.Vva.csproj" />
   </ItemGroup>
 
