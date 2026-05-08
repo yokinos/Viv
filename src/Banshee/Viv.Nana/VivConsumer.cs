@@ -5,7 +5,7 @@ using Viv.Nana.Models;
 
 namespace Viv.Nana
 {
-    public abstract class VivConsumer<T> : IConsumer<NanaMessage<T>> where T : VivMessage, new()
+    public abstract class VivConsumer<T> : IConsumer<NanaMessage<T>> where T : VivEvent, new()
     {
         protected readonly IDistributedLogger _logger;
 

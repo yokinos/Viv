@@ -24,9 +24,13 @@ namespace Viv.Nana.Core
             _logger = logger;
         }
 
-        public async Task<bool> PublishAsync<T>(T content) where T : VivMessage
+        public async Task<bool> PublishAsync<T>(T content) where T : VivEvent
         {
             if (content is null) return false;
+
+            content.AppId = _context.AppId;
+            content.TenantId = _context.TenantId;
+            content.UserId = _context.UserId;
 
             var message = new NanaMessage<T>
             {
@@ -47,10 +51,14 @@ namespace Viv.Nana.Core
             }
         }
 
-        public async Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content) where T : VivMessage
+        public async Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content) where T : VivEvent
         {
             if (content is null) return false;
             if (delayTTL < TimeSpan.Zero) return false;
+
+            content.AppId = _context.AppId;
+            content.TenantId = _context.TenantId;
+            content.UserId = _context.UserId;
 
             var message = new NanaMessage<T>
             {

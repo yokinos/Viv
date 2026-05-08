@@ -8,10 +8,13 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.5" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
     <ProjectReference Include="..\Viv.Aspire\Viv.Aspire.ServiceDefaults\Viv.Aspire.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\Viv.Herta.Core\Viv.Herta.Core.csproj" />
   </ItemGroup>
 
 </Project>

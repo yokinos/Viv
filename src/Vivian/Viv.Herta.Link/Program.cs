@@ -1,3 +1,6 @@
+using Microsoft.AspNetCore.SignalR;
+using Viv.Engine;
+using Viv.Herta.Link.Hubs;
 
 namespace Viv.Herta.Link;
 
@@ -8,28 +11,23 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
 
-        // Add services to the container.
+        var vivOptions = VivEngine.LoadVivConfig();
+        ArgumentNullException.ThrowIfNull(vivOptions);
 
-        builder.Services.AddControllers();
-        // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-        builder.Services.AddOpenApi();
+        builder.Services.AddViv(vivOptions);
+        builder.Services.AddSignalR()
+            .AddStackExchangeRedis("localhost:6379,password=vivRedis");
 
         var app = builder.Build();
 
+        // 初始化连接池
+        var hubContext = app.Services.GetRequiredService<IHubContext<ChatHub>>();
+        ConnectionPool.Initialize(hubContext);
+
         app.MapDefaultEndpoints();
-
-        // Configure the HTTP request pipeline.
-        if (app.Environment.IsDevelopment())
-        {
-            app.MapOpenApi();
-        }
-
         app.UseHttpsRedirection();
 
-        app.UseAuthorization();
-
-
-        app.MapControllers();
+        app.MapHub<ChatHub>("/chat");
 
         app.Run();
     }

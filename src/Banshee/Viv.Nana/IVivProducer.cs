@@ -13,7 +13,7 @@ namespace Viv.Nana
         /// <typeparam name="T"></typeparam>
         /// <param name="content"></param>
         /// <returns></returns>
-        Task<bool> PublishAsync<T>(T content) where T : VivMessage;
+        Task<bool> PublishAsync<T>(T content) where T : VivEvent;
 
         /// <summary>
         /// 发布延迟消息
@@ -21,6 +21,6 @@ namespace Viv.Nana
         /// <typeparam name="T"></typeparam>
         /// <param name="content"></param>
         /// <returns></returns>
-        Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content) where T : VivMessage;
+        Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content) where T : VivEvent;
     }
 }
