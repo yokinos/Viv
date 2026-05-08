@@ -87,14 +87,12 @@ namespace Viv.Engine
             if (options.NanaOption == null) return;
 
             NanaRegister.Initialize(options.NanaOption);
-            services.AddSingleton<IVivProducer, NanaProducer>();
 
-            // 注册消费者
-            if (!options.NanaOption.ConsumerTypes.IsNullOrEmpty())
-            {
-                services.AddSingleton(new NanaConsumerHostedService(options.NanaOption.ConsumerTypes));
-                services.AddHostedService(sp => sp.GetRequiredService<NanaConsumerHostedService>());
-            }
+            // 注册 MassTransit + RabbitMQ
+            services.AddVivMassTransit(options.NanaOption);
+
+            // Scoped 因为依赖 IVivContext
+            services.AddScoped<IVivProducer, NanaProducer>();
         }
 
         #endregion

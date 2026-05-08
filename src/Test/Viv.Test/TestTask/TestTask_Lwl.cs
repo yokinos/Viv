@@ -1,6 +1,4 @@
-﻿using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
+using Newtonsoft.Json;
 using Viv.Aoi;
 using Viv.Authentication.Enums;
 using Viv.Engine.Enums;
@@ -17,7 +15,7 @@ namespace Viv.Test.TestTask
     {
         public async Task StartAsync()
         {
-            // 🔥 Viv 框架完整配置
+            // Viv 框架完整配置
             var options = new VivOptions
             {
                 // 环境
@@ -78,22 +76,16 @@ namespace Viv.Test.TestTask
                     }
                 },
 
-                // 消息队列（RabbitMQ + Redis 发布订阅）
+                // 消息队列（RabbitMQ via MassTransit）
                 NanaOption = new Nana.Options.NanaOptions
                 {
-                    MainQueueType = Nana.Enums.MessageQueueType.RabbitMQ,
-                    SecondaryQueueType = Nana.Enums.MessageQueueType.RedisPubSub,
-                    ConsumerTypes = [], // 不开启消费者
-                    IsEnableLocalMessage = false,
-                    RabbitMqOptions = new Nana.Options.RabbitMqOptions
-                    {
-                        HostName = "43.228.79.205",
-                        UserName = "guest",
-                        Password = "viv_rabbitmq_77",
-                        Port = 5672,
-                        VirtualHost = "/Viv"
-                    },
-                    RetryCount = 3
+                    Host = "43.228.79.205",
+                    Port = 5672,
+                    UserName = "guest",
+                    Password = "viv_rabbitmq_77",
+                    VirtualHost = "/Viv",
+                    RetryCount = 3,
+                    ConsumerTypes = [] // 不开启消费者
                 },
 
                 // 数据库（读写分离 + 自动实体扫描）
@@ -104,7 +96,7 @@ namespace Viv.Test.TestTask
                     SlaveConnectionStrings = [],
                     IsReadWriteSplit = false,
                     Timeout = 30,
-                    EntityTyoeOptions =
+                    EntityTypeOptions =
                     [
                         new Vva.Magic.FilterTypeOptions
                         {

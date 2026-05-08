@@ -1,39 +1,38 @@
-﻿using System;
-using Viv.Nana.Enums;
 using Viv.Vva.Magic;
 
 namespace Viv.Nana.Options
 {
-    /// <summary>
-    /// Nana消息队列核心配置项
-    /// </summary>
     public class NanaOptions
     {
         /// <summary>
-        /// 主消息队列类型（默认RabbitMQ）
+        /// RabbitMQ 主机地址
         /// </summary>
-        public MessageQueueType MainQueueType { get; set; } = MessageQueueType.RabbitMQ;
+        public string Host { get; set; } = "localhost";
 
         /// <summary>
-        /// 备用/副消息队列类型
+        /// RabbitMQ 端口
         /// </summary>
-        public MessageQueueType SecondaryQueueType { get; set; } = MessageQueueType.RedisPubSub;
+        public int Port { get; set; } = 5672;
 
         /// <summary>
-        /// 是否启用本地消息模式
-        /// 启用时需实现 <see cref="LocalMessage.ILocalMessageRespository"/> 接口
+        /// RabbitMQ 用户名
         /// </summary>
-        public bool IsEnableLocalMessage { get; set; } = false;
+        public string UserName { get; set; } = "guest";
 
         /// <summary>
-        /// 主队列发布失败的重试次数（默认3次）
+        /// RabbitMQ 密码
+        /// </summary>
+        public string Password { get; set; } = "guest";
+
+        /// <summary>
+        /// RabbitMQ 虚拟主机
+        /// </summary>
+        public string VirtualHost { get; set; } = "/";
+
+        /// <summary>
+        /// 消费失败后的重试次数
         /// </summary>
         public int RetryCount { get; set; } = 3;
-
-        /// <summary>
-        /// RabbitMQ 连接及配置项
-        /// </summary>
-        public RabbitMqOptions? RabbitMqOptions { get; set; }
 
         /// <summary>
         /// 要注册的消费者类型

@@ -46,7 +46,7 @@
       "Server=localhost;Database=vivApexRead;User Id=sa;Password=<PASSWORD>!;"
     ],
     "Timeout": 30,
-    "EntityTyoeOptions": [
+    "EntityTypeOptions": [
       {
         "AssemblyName": "Viv.Entity.Apex",
         "NameSpace": "Viv.Entity.Apex.Database",
@@ -57,17 +57,12 @@
     ]
   },
   "NanaOption": {
-    "MainQueueType": 1,
-    "SecondaryQueueType": 2,
-    "IsEnableLocalMessage": false,
+    "Host": "localhost",
+    "Port": 5672,
+    "UserName": "viv",
+    "Password": "vivRabbitMQ",
+    "VirtualHost": "/Viv",
     "RetryCount": 3,
-    "RabbitMqOptions": {
-      "HostName": "localhost",
-      "Port": 5672,
-      "UserName": "viv",
-      "Password": "vivRabbitMQ",
-      "VirtualHost": "/Viv"
-    },
     "ConsumerTypes": []
   },
   "TokenOption": {

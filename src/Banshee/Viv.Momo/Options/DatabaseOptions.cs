@@ -37,6 +37,6 @@ namespace Viv.Momo.Options
         /// <summary>
         /// 实体程序集名称(所有的实体都需要继承<see cref="Interface.IEntity"/>)
         /// </summary>
-        public List<FilterTypeOptions> EntityTyoeOptions { get; set; } = [];
+        public List<FilterTypeOptions> EntityTypeOptions { get; set; } = [];
     }
 }

@@ -92,12 +92,12 @@ namespace Viv.Momo.Core
         {
             base.OnModelCreating(modelBuilder);
 
-            if (_options.EntityTyoeOptions.IsNullOrEmpty())
+            if (_options.EntityTypeOptions.IsNullOrEmpty())
             {
                 return;
             }
 
-            var typeList = TypeScanMagic.ScanRange(_options.EntityTyoeOptions);
+            var typeList = TypeScanMagic.ScanRange(_options.EntityTypeOptions);
             foreach (var type in typeList)
             {
                 modelBuilder.Entity(type);

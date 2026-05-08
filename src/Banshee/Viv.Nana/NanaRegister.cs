@@ -1,11 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using MassTransit;
 using Viv.Nana.Core;
-using Viv.Nana.Enums;
 using Viv.Nana.Options;
-using Viv.Nana.RabbitMq;
 using Viv.Vva;
 using Viv.Vva.Extension;
 using Viv.Vva.Magic;
@@ -16,31 +11,26 @@ namespace Viv.Nana
     {
         public static void Initialize(NanaOptions options)
         {
-            var copy = options.DeepCopy();
-            ArgumentNullException.ThrowIfNull(copy);
-            VivConfigRegistry.Add(copy);
-
-            if ((options.MainQueueType == MessageQueueType.RabbitMQ || options.SecondaryQueueType == MessageQueueType.RabbitMQ))
-            {
-                ArgumentNullException.ThrowIfNull(options.RabbitMqOptions);
-                RabbitMQFactory.ValidateOptions(options.RabbitMqOptions);
-            }
+            ArgumentNullException.ThrowIfNull(options);
+            VivConfigRegistry.Add(options);
         }
 
-        public static async Task InitConsumerAsync(List<FilterTypeOptions> options)
+        public static void AddVivConsumers(
+            IBusRegistrationConfigurator configurator,
+            List<FilterTypeOptions> consumerTypes)
         {
-            if (options.IsNullOrEmpty()) return;
+            if (consumerTypes.IsNullOrEmpty()) return;
 
-            var typeList = TypeScanMagic.ScanRange(options);
-            if (typeList.IsNullOrEmpty()) return;
+            var types = TypeScanMagic.ScanRange(consumerTypes);
+            if (types.IsNullOrEmpty()) return;
 
-            foreach (var type in typeList)
+            foreach (var type in types)
             {
-                var instance = Activator.CreateInstance(type);
-                if (instance is IVivConsumer consumer)
-                {
-                    await consumer.SubscribeAsync();
-                }
+                var method = typeof(RegistrationExtensions)
+                    .GetMethod(nameof(RegistrationExtensions.AddConsumer), 1, [typeof(IBusRegistrationConfigurator)])
+                    ?.MakeGenericMethod(type);
+
+                method?.Invoke(null, [configurator]);
             }
         }
     }

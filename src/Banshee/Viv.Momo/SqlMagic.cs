@@ -9,6 +9,7 @@ using Viv.Momo.Converter;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Vva;
+using Viv.Vva.Extension;
 
 namespace Viv.Momo
 {
@@ -77,7 +78,7 @@ namespace Viv.Momo
         /// <returns>带参数占位符@Id的SELECT SQL语句</returns>
         public static string GetFindSqlTemplate(string tableName, DatabaseSouceType databaseSouceType)
         {
-            return $"SELECT * FROM [{tableName}] WHERE {QuoteIdentifier("Id", databaseSouceType)} = @Id";
+            return $"SELECT * FROM {tableName} WHERE {QuoteIdentifier("Id", databaseSouceType)} = @Id";
         }
 
         /// <summary>
@@ -166,6 +167,52 @@ namespace Viv.Momo
             var (whereSql, parameters) = ExpressionToSqlConverter.Convert(expression, databaseType);
             var sql = $"UPDATE {tableName} SET {isDeletedCol} = {boolValue}, {deletedAtCol} = {dateValue} WHERE {whereSql}";
             return (sql, parameters);
+        }
+
+        /// <summary>
+        /// 将 CLR 值转换为数据库兼容的 SQL 字面量（兼容 PostgreSQL 和 SQL Server）
+        /// 字符串会做单引号转义，非参数化场景使用
+        /// </summary>
+        public static string ToDatabaseValue(object? value, DatabaseSouceType databaseSouceType)
+        {
+            if (value == null) return "NULL";
+
+            var valueType = value.GetType();
+            var underlyingType = Nullable.GetUnderlyingType(valueType);
+            var realType = underlyingType ?? valueType;
+
+            return realType.Name switch
+            {
+                nameof(Int32) or nameof(Int64) or nameof(Decimal) or nameof(Byte) or nameof(SByte) or
+                nameof(Double) or nameof(Single) or nameof(Int16) or nameof(UInt32) or nameof(UInt64) or
+                nameof(UInt16) => value.ToString()!,
+
+                nameof(Boolean) => databaseSouceType switch
+                {
+                    DatabaseSouceType.PostgreSQL => (bool)value ? "true" : "false",
+                    DatabaseSouceType.SqlServer => (bool)value ? "1" : "0",
+                    _ => value.ToString()!
+                },
+
+                nameof(String) => $"'{EscapeSqlQuote(value.ToString()!)}'",
+
+                nameof(DateTime) => $"'{FormatDateTime((DateTime)value)}'",
+                nameof(DateTimeOffset) => $"'{FormatDateTime(((DateTimeOffset)value).UtcDateTime)}'",
+
+                _ when realType.IsEnum => ((int)value).ToString(),
+
+                _ => $"'{EscapeSqlQuote(value.ToJson()!)}'"
+            };
+        }
+
+        private static string EscapeSqlQuote(string input)
+            => input.Replace("'", "''");
+
+        private static string FormatDateTime(DateTime dt)
+        {
+            if (dt.TimeOfDay == TimeSpan.Zero)
+                return dt.FormatToString(DateFormat.Date);
+            return dt.FormatToString();
         }
     }
 }

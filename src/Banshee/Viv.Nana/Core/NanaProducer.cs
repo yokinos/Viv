@@ -1,82 +1,74 @@
-﻿using System;
+using MassTransit;
 using Viv.Contracts.Interface;
 using Viv.Log;
-using Viv.Nana.Enums;
-using Viv.Nana.LocalMessage;
 using Viv.Nana.Models;
-using Viv.Redis;
 
 namespace Viv.Nana.Core
 {
-    public class NanaProducer : NanaFactory, IVivProducer
+    public class NanaProducer : IVivProducer
     {
         private readonly IVivContext _context;
-        private readonly Lazy<ILocalMessageRespository> _localMessageRespository;
+        private readonly IPublishEndpoint _publishEndpoint;
+        private readonly IMessageScheduler _scheduler;
+        private readonly IDistributedLogger _logger;
 
-        public NanaProducer(IVivContext context, IDistributedLogger logger, Lazy<IRedisService> redisService, Lazy<ILocalMessageRespository> localMessageRespository)
-            : base(logger, redisService)
+        public NanaProducer(
+            IVivContext context,
+            IPublishEndpoint publishEndpoint,
+            IMessageScheduler scheduler,
+            IDistributedLogger logger)
         {
             _context = context;
-            _localMessageRespository = localMessageRespository;
+            _publishEndpoint = publishEndpoint;
+            _scheduler = scheduler;
+            _logger = logger;
         }
 
         public async Task<bool> PublishAsync<T>(T content) where T : VivMessage
         {
             if (content is null) return false;
-            var message = new NanaMessage<T>()
+
+            var message = new NanaMessage<T>
             {
                 AppId = _context.AppId,
                 TenantId = _context.TenantId,
                 Content = content
             };
 
-            var flag = await VivPublishAsync(NanaOptions.MainQueueType, message);
-            if (!flag)
+            try
             {
-                flag = await VivPublishAsync(NanaOptions.SecondaryQueueType, message);
-                if (!flag && NanaOptions.IsEnableLocalMessage)
-                {
-                    flag = await VivPublishAsync(MessageQueueType.LocalMessage, message);
-                }
+                await _publishEndpoint.Publish(message);
+                return true;
             }
-
-            return flag;
+            catch (Exception ex)
+            {
+                _logger.Error($"Publish failed for {typeof(T).Name}", ex);
+                return false;
+            }
         }
 
         public async Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content) where T : VivMessage
         {
             if (content is null) return false;
-            if (!content.IsDelayQueue) return false;
+            if (delayTTL < TimeSpan.Zero) return false;
 
-            if (delayTTL < TimeSpan.Zero)
+            var message = new NanaMessage<T>
             {
-                return false;
-            }
-
-            content.DelayTTL = delayTTL;
-            return await PublishAsync<T>(content);
-        }
-
-        private async Task<bool> VivPublishAsync<T>(MessageQueueType queueType, NanaMessage<T> message) where T : VivMessage
-        {
-            return queueType switch
-            {
-                MessageQueueType.RabbitMQ => await RabbitMQPublishAsync(message, NanaOptions.RetryCount),
-                MessageQueueType.RedisPubSub => await RedisPublishAsync(message),
-                MessageQueueType.LocalMessage => await AddLocalMessage(message),
-                MessageQueueType.None => false,
-                _ => false,
+                AppId = _context.AppId,
+                TenantId = _context.TenantId,
+                Content = content
             };
-        }
 
-        public async Task<bool> AddLocalMessage<T>(NanaMessage<T> message) where T : VivMessage
-        {
-            if (_localMessageRespository is null || _localMessageRespository.Value is null)
+            try
             {
+                await _scheduler.SchedulePublish(delayTTL, message);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"SchedulePublish failed for {typeof(T).Name}", ex);
                 return false;
             }
-
-            return await _localMessageRespository.Value.AddMessageAsync(message);
         }
     }
 }
