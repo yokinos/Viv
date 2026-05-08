@@ -36,18 +36,15 @@ namespace Viv.Nana
         }
 
         /// <summary>
-        /// 扫描并注册 Saga 状态机（MassTransit StateMachine + EF Core 持久化）
+        /// 注册 Saga 状态机（类型由 IVivSagaStateMachine 接口扫描得到）
         /// </summary>
         public static void AddVivSagas(
             IBusRegistrationConfigurator configurator,
-            List<FilterTypeOptions> stateMachineTypes)
+            List<Type> stateMachineTypes)
         {
             if (stateMachineTypes.IsNullOrEmpty()) return;
 
-            var types = TypeScanMagic.ScanRange(stateMachineTypes);
-            if (types.IsNullOrEmpty()) return;
-
-            foreach (var smType in types)
+            foreach (var smType in stateMachineTypes)
             {
                 var stateType = VivSagaRegistrationHelper.ExtractStateType(smType);
                 if (stateType == null) continue;

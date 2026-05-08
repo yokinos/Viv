@@ -93,36 +93,34 @@ namespace Viv.Engine
 
             NanaRegister.Initialize(options.NanaOption);
 
-            // 启用 Saga 时注册持久化 DbContext 和 ClassMap 扫描
-            if (!options.NanaOption.SagaStateMachineTypes.IsNullOrEmpty())
+            // 扫描 IVivSagaStateMachine — 有实现且配了 SagaConnectionString 才启用
+            var sagaTypes = TypeScanMagic.ScanTypes<IVivSagaStateMachine>();
+            var enableSaga = options.NanaOption.SagaConnectionString is not null && !sagaTypes.IsNullOrEmpty();
+
+            if (enableSaga)
             {
-                RegisterSagaDbContext(services, options);
+                RegisterSagaDbContext(services, options, sagaTypes);
             }
 
-            // 注册 MassTransit + RabbitMQ
-            services.AddVivMassTransit(options.NanaOption);
+            // 注册 MassTransit + RabbitMQ（Saga 类型传进去）
+            services.AddVivMassTransit(options.NanaOption, enableSaga ? sagaTypes : null);
 
-            // Scoped 因为依赖 IVivContext
             services.AddScoped<IVivProducer, NanaProducer>();
         }
 
-        /// <summary>
-        /// 注册 Saga 持久化 DbContext（独立数据库，不与业务库混用）
-        /// </summary>
-        private static void RegisterSagaDbContext(IServiceCollection services, VivOptions options)
+        private static void RegisterSagaDbContext(IServiceCollection services, VivOptions options, List<Type> sagaStateMachineTypes)
         {
             var nanaOpt = options.NanaOption;
-            var connectionString = nanaOpt.SagaConnectionString
-                ?? throw new InvalidOperationException("Saga 需要配置独立的 SagaConnectionString，不能与业务库混用");
+            var connectionString = nanaOpt.SagaConnectionString!;
 
             services.AddDbContext<VivSagaDbContext>(dbOpt =>
             {
                 switch (nanaOpt.SagaDatabaseSouce)
                 {
-                    case Momo.Enums.DatabaseSouceType.PostgreSQL:
+                    case DatabaseSouceType.PostgreSQL:
                         dbOpt.UseNpgsql(connectionString);
                         break;
-                    case Momo.Enums.DatabaseSouceType.SqlServer:
+                    case DatabaseSouceType.SqlServer:
                         dbOpt.UseSqlServer(connectionString);
                         break;
                     default:
@@ -130,16 +128,8 @@ namespace Viv.Engine
                 }
             }, contextLifetime: ServiceLifetime.Scoped);
 
-            // 扫描注册所有 SagaClassMap 实现供 VivSagaDbContext 消费
-            var classMapFilters = options.NanaOption.SagaStateMachineTypes
-                .Select(f => new FilterTypeOptions
-                {
-                    AssemblyName = f.AssemblyName,
-                    NameSpace = f.NameSpace,
-                    BaseType = typeof(ISagaClassMap)
-                })
-                .ToList();
-            var classMapTypes = TypeScanMagic.ScanRange(classMapFilters);
+            // 扫描所有 VivSagaClassMap 实现，注入到 VivSagaDbContext
+            var classMapTypes = TypeScanMagic.ScanTypes<ISagaClassMap>();
             foreach (var t in classMapTypes)
             {
                 services.AddScoped(typeof(ISagaClassMap), t);

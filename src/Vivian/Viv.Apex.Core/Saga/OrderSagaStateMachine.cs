@@ -1,12 +1,10 @@
 using MassTransit;
 using Viv.Apex.Core.Saga.Messages;
+using Viv.Nana.Saga;
 
 namespace Viv.Apex.Core.Saga
 {
-    /// <summary>
-    /// 订单 Saga 状态机：创建订单 → 预留库存 → 处理支付
-    /// </summary>
-    public class OrderSagaStateMachine : MassTransitStateMachine<OrderSagaState>
+    public class OrderSagaStateMachine : MassTransitStateMachine<OrderSagaState>, IVivSagaStateMachine
     {
         // 状态
         public State Submitted { get; private set; }

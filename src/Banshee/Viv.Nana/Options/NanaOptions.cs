@@ -41,17 +41,12 @@ namespace Viv.Nana.Options
         public List<FilterTypeOptions> ConsumerTypes { get; set; } = [];
 
         /// <summary>
-        /// Saga 状态机扫描规则（非空时启用 Saga）
-        /// </summary>
-        public List<FilterTypeOptions> SagaStateMachineTypes { get; set; } = [];
-
-        /// <summary>
         /// Saga 持久化数据库类型（PostgreSQL / SqlServer）
         /// </summary>
         public DatabaseSouceType SagaDatabaseSouce { get; set; } = DatabaseSouceType.PostgreSQL;
 
         /// <summary>
-        /// Saga 持久化数据库连接字符串（默认复用 Momo 主库）
+        /// Saga 持久化数据库连接字符串（不配则不启用 Saga）
         /// </summary>
         public string? SagaConnectionString { get; set; }
     }
