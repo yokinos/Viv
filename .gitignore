@@ -99,3 +99,4 @@ docker-compose.override.yml
 *.sh
 # VS Code 配置
 .vscode/
+/.claude
