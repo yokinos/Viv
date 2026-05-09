@@ -1328,15 +1328,15 @@ namespace Viv.Momo.Core
             return GetAppContext(readWriteType);
         }
 
-        public async Task SyncTableAsync(CancellationToken cancellationToken = default)
+        public async Task SyncTableAsync(bool allowDrop = false, CancellationToken cancellationToken = default)
         {
             var context = GetAppContext(DbReadWriteType.Write);
 
-            // 1. EF Core EnsureCreated：创建数据库中不存在的表（不会修改已有表结构）
+            // 1. EF Core EnsureCreated：创建数据库中不存在的表
             await context.Database.EnsureCreatedAsync(cancellationToken);
 
-            // 2. SchemaSynchronizer：处理列级变更（新增列 / 类型变更 / Nullable 变更 / 删除列 / 删除表）
-            var sync = new Sync.SchemaSynchronizer(_options);
+            // 2. SchemaSynchronizer：处理列级变更
+            var sync = new SchemaSynchronizer(_options);
             var entityTypes = sync.ScanEntityTypes();
             if (entityTypes.Count == 0)
                 return;
@@ -1344,6 +1344,29 @@ namespace Viv.Momo.Core
             var expected = sync.BuildExpectedSchema(entityTypes);
             var actual = await sync.FetchActualSchemaAsync(cancellationToken);
             var diff = sync.Diff(expected, actual);
+
+            if (!diff.HasChanges)
+                return;
+
+            // 默认禁止 DROP，避免改属性名时误删数据
+            if (!allowDrop)
+            {
+                if (diff.DeletedTables.Count > 0)
+                {
+                    WriteLog($"SyncTable: skip DROP {diff.DeletedTables.Count} table(s): {string.Join(", ", diff.DeletedTables.Select(t => t.TableName))}", null!);
+                    diff.DeletedTables.Clear();
+                }
+                foreach (var table in diff.ModifiedTables)
+                {
+                    var drops = table.ColumnDiffs.Where(c => c.Type == DiffType.Deleted).ToList();
+                    if (drops.Count > 0)
+                    {
+                        WriteLog($"SyncTable: skip DROP {drops.Count} column(s) in [{table.TableName}]: {string.Join(", ", drops.Select(c => c.ColumnName))}", null!);
+                        table.ColumnDiffs.RemoveAll(c => c.Type == DiffType.Deleted);
+                    }
+                }
+                diff.ModifiedTables.RemoveAll(t => t.ColumnDiffs.Count == 0);
+            }
 
             if (diff.HasChanges)
             {
