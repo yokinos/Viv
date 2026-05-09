@@ -83,5 +83,7 @@ namespace Viv.Momo
         void ChangeTenant(long tenantId);
         void IsAutoSetDefaultValue(bool flag);
         EFAppContext GetEFContext(DbReadWriteType readWriteType = DbReadWriteType.Read);
+
+        Task SyncTableAsync(CancellationToken cancellationToken = default);
     }
 }

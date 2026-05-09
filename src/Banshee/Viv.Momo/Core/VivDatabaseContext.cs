@@ -14,6 +14,7 @@ using Viv.Log;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
+using Viv.Momo.Sync;
 using Viv.Vva.Extension;
 using Viv.Vva.Generic;
 
@@ -1325,6 +1326,31 @@ namespace Viv.Momo.Core
         public EFAppContext GetEFContext(DbReadWriteType readWriteType)
         {
             return GetAppContext(readWriteType);
+        }
+
+        public async Task SyncTableAsync(CancellationToken cancellationToken = default)
+        {
+            var context = GetAppContext(DbReadWriteType.Write);
+
+            // 1. EF Core EnsureCreated：创建数据库中不存在的表（不会修改已有表结构）
+            await context.Database.EnsureCreatedAsync(cancellationToken);
+
+            // 2. SchemaSynchronizer：处理列级变更（新增列 / 类型变更 / Nullable 变更 / 删除列 / 删除表）
+            var sync = new Sync.SchemaSynchronizer(_options);
+            var entityTypes = sync.ScanEntityTypes();
+            if (entityTypes.Count == 0)
+                return;
+
+            var expected = sync.BuildExpectedSchema(entityTypes);
+            var actual = await sync.FetchActualSchemaAsync(cancellationToken);
+            var diff = sync.Diff(expected, actual);
+
+            if (diff.HasChanges)
+            {
+                var ddl = sync.GenerateDdl(diff);
+                foreach (var sql in ddl)
+                    await context.Database.ExecuteSqlRawAsync(sql, cancellationToken);
+            }
         }
 
         #endregion
