@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
-using Viv.Herta.Core.Events;
-using Viv.Herta.Core.Models;
+using Viv.Entity.Chat;
+using Viv.EventContracts.Herta;
 using Viv.Herta.Link.Hubs;
 using Viv.Log;
 using Viv.Nana;
@@ -26,22 +26,14 @@ namespace Viv.Herta.Link.Consumers
 
             var chatMessage = new ChatMessage
             {
-                MessageId = evt.MessageId,
-                FromUserId = evt.FromUserId,
-                ToUserId = evt.ToUserId,
-                Content = evt.Content,
-                ContentType = evt.ContentType,
-                MediaInfo = evt.MediaInfo,
-                Segments = evt.Segments,
                 SentAt = DateTimeOffset.UtcNow
             };
 
-            var connectionIds = ConnectionPool.GetConnectionIds(message.TenantId, evt.ToUserId);
+            var connectionIds = ConnectionPool.GetConnectionIds(message.TenantId, evt.TargetId);
 
             if (connectionIds.Count > 0)
             {
-                await _hubContext.Clients.Clients(connectionIds)
-                    .SendAsync("ReceiveMessage", chatMessage, cancellationToken);
+                await _hubContext.Clients.Clients(connectionIds).SendAsync("ReceiveMessage", chatMessage, cancellationToken);
             }
 
             return new SubscribeResult(true, false, "OK");

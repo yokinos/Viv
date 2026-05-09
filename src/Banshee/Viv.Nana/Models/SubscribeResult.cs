@@ -17,7 +17,7 @@ namespace Viv.Nana.Models
         public string Message { get; set; } = string.Empty;
 
         /// <summary>
-        /// 消费失败是否需要重新把消息放回队列（针对RabbitMQ），或重新发布（针对Redis Pub/Sub），或重新入库（针对本地消息表）
+        /// 消费失败是否需要重新把消息放回队列
         /// </summary>
         public bool IsRequeue { get; set; }
 

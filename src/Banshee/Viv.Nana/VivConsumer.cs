@@ -5,7 +5,7 @@ using Viv.Nana.Models;
 
 namespace Viv.Nana
 {
-    public abstract class VivConsumer<T> : IConsumer<NanaMessage<T>> where T : VivEvent, new()
+    public abstract class VivConsumer<T> : IConsumer<NanaMessage<T>> where T : VivEvent
     {
         protected readonly IDistributedLogger _logger;
 
@@ -18,6 +18,12 @@ namespace Viv.Nana
 
         public async Task Consume(ConsumeContext<NanaMessage<T>> context)
         {
+            if (context == null || context.Message == null || context.Message.Content == null)
+            {
+                // 没啥记录的必要 直接丢弃就完事了
+                return;
+            }
+
             var result = await ReceiveMessageAsync(context.Message, context.CancellationToken);
 
             if (result.IsSuccess)

@@ -16,7 +16,7 @@ namespace Viv.Nana.Models
         public long MessageId { get; set; } = IdMagic.NextId();
 
         /// <summary>
-        /// AppId
+        /// 由哪个客户端的请求产生的消息,在这套设计下即使是定时任务站点也被视为客户端
         /// </summary>
         public long AppId { get; set; }
 
@@ -31,8 +31,8 @@ namespace Viv.Nana.Models
         public T? Content { get; set; }
 
         /// <summary>
-        /// 消息时间
+        /// 消息创建时间
         /// </summary>
-        public DateTimeOffset PublishAt { get; set; } = DateTimeOffset.UtcNow;
+        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     }
 }

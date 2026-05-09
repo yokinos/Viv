@@ -100,6 +100,11 @@ public class Program
 
         var app = builder.Build();
 
+        app.UseWebSockets(new WebSocketOptions
+        {
+            KeepAliveInterval = TimeSpan.FromSeconds(15)
+        });
+
         app.UseCors(defaultCorsPolicyName);
         app.UseOutputCache();
         app.UseRateLimiter();

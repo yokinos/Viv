@@ -80,6 +80,13 @@
           { "PathPrefix": "/api" }
         ]
       },
+      "hertalink-chat-route": {
+        "ClusterId": "hertalink",
+        "Match": { "Path": "/hertalink/chat/{**catch-all}" },
+        "Transforms": [
+          { "PathRemovePrefix": "/hertalink" }
+        ]
+      },
       "robin-open-route": {
         "ClusterId": "robin",
         "Match": { "Path": "/robin/open/{**catch-all}" },

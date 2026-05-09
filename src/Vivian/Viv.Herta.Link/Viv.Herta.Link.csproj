@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
     <ProjectReference Include="..\Viv.Aspire\Viv.Aspire.ServiceDefaults\Viv.Aspire.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\Viv.EventContracts\Viv.EventContracts.csproj" />
     <ProjectReference Include="..\Viv.Herta.Core\Viv.Herta.Core.csproj" />
   </ItemGroup>
 
