@@ -14,5 +14,10 @@ namespace Viv.Entity.Chat.Message
         /// 文本消息内容
         /// </summary>
         public string Text { get; set; }
+
+        /// <summary>
+        /// 扩展消息
+        /// </summary>
+        public Dictionary<string, object> Extend { get; set; } = [];
     }
 }

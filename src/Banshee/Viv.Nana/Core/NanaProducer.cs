@@ -28,10 +28,6 @@ namespace Viv.Nana.Core
         {
             if (content is null) return false;
 
-            content.AppId = _context.AppId;
-            content.TenantId = _context.TenantId;
-            content.UserId = _context.UserId;
-
             var message = new NanaMessage<T>
             {
                 AppId = _context.AppId,
@@ -55,10 +51,6 @@ namespace Viv.Nana.Core
         {
             if (content is null) return false;
             if (delayTTL < TimeSpan.Zero) return false;
-
-            content.AppId = _context.AppId;
-            content.TenantId = _context.TenantId;
-            content.UserId = _context.UserId;
 
             var message = new NanaMessage<T>
             {

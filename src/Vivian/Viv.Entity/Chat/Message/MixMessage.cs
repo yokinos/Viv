@@ -14,5 +14,10 @@ namespace Viv.Entity.Chat.Message
         /// 混合消息列表
         /// </summary>
         public List<IChatMessage> MixList { get; set; }
+
+        /// <summary>
+        /// 扩展消息
+        /// </summary>
+        public Dictionary<string, object> Extend { get; set; } = [];
     }
 }

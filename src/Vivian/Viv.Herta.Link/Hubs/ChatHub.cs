@@ -1,9 +1,19 @@
 using Microsoft.AspNetCore.SignalR;
+using Viv.Herta.Core.IService;
 
 namespace Viv.Herta.Link.Hubs
 {
     public class ChatHub : Hub
     {
+        private readonly IGroupService _groupService;
+
+        public ChatHub(IGroupService groupService)
+        {
+            _groupService = groupService;
+        }
+
+        public static string GetGroupName(long tenantId, long groupId) => $"group:{tenantId}:{groupId}";
+
         public override async Task OnConnectedAsync()
         {
             var httpContext = Context.GetHttpContext();
@@ -16,6 +26,12 @@ namespace Viv.Herta.Link.Hubs
                 && long.TryParse(appIdStr, out var appId))
             {
                 ConnectionPool.Add(Context.ConnectionId, tenantId, userId, appId);
+
+                var groupIds = await _groupService.GetUserGroupIdsAsync(tenantId, userId);
+                foreach (var groupId in groupIds)
+                {
+                    await Groups.AddToGroupAsync(Context.ConnectionId, GetGroupName(tenantId, groupId));
+                }
             }
 
             await base.OnConnectedAsync();

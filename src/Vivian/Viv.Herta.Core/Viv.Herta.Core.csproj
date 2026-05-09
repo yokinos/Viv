@@ -9,14 +9,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Banshee\Viv.Nana\Viv.Nana.csproj" />
     <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
+    <ProjectReference Include="..\Viv.EventContracts\Viv.EventContracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Entity\ViewModel\" />
     <Folder Include="IRepository\" />
     <Folder Include="Repository\" />
-    <Folder Include="Service\" />
-    <Folder Include="IService\" />
   </ItemGroup>
 
 </Project>

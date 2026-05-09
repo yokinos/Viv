@@ -38,7 +38,9 @@ namespace Viv.Herta.Link.Hubs
             }
         }
 
-        /// <summary>按 (TenantId, UserId) 跨 AppId 查找连接</summary>
+        /// <summary>
+        /// 按 (TenantId, UserId) 跨 AppId 查找连接
+        /// </summary>
         public static List<string> GetConnectionIds(long tenantId, long userId)
         {
             var result = new List<string>();
@@ -50,7 +52,9 @@ namespace Viv.Herta.Link.Hubs
             return result;
         }
 
-        /// <summary>按 (TenantId, UserId, AppId) 精确查找连接</summary>
+        /// <summary>按
+        /// (TenantId, UserId, AppId) 精确查找连接
+        /// </summary>
         public static List<string> GetConnectionIds(long tenantId, long userId, long appId)
         {
             var key = new ConnectionKey(tenantId, userId, appId);
@@ -59,7 +63,9 @@ namespace Viv.Herta.Link.Hubs
                 : [];
         }
 
-        /// <summary>强制断开单个连接</summary>
+        /// <summary>
+        /// 强制断开单个连接
+        /// </summary>
         public static async Task ForceDisconnectAsync(string connectionId)
         {
             var ctx = _hubContext;
@@ -76,7 +82,9 @@ namespace Viv.Herta.Link.Hubs
             await ctx.Clients.Client(connectionId).SendAsync("ForceDisconnect");
         }
 
-        /// <summary>强制断开指定用户的所有连接</summary>
+        /// <summary>
+        /// 强制断开指定用户的所有连接
+        /// </summary>
         public static async Task ForceDisconnectUserAsync(long tenantId, long userId)
         {
             var ids = GetConnectionIds(tenantId, userId);
@@ -84,7 +92,9 @@ namespace Viv.Herta.Link.Hubs
                 await ForceDisconnectAsync(id);
         }
 
-        /// <summary>强制断开指定租户的所有连接</summary>
+        /// <summary>
+        /// 强制断开指定租户的所有连接<
+        /// /summary>
         public static async Task ForceDisconnectTenantAsync(long tenantId)
         {
             var keys = _userConnections.Keys.Where(k => k.TenantId == tenantId).ToList();
@@ -103,7 +113,9 @@ namespace Viv.Herta.Link.Hubs
             }
         }
 
-        /// <summary>清空所有连接池数据</summary>
+        /// <summary>
+        /// 清空所有连接池数据
+        /// </summary>
         public static void Clear()
         {
             _userConnections.Clear();

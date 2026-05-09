@@ -14,6 +14,11 @@ namespace Viv.Entity.Chat.Message
         /// 文件消息列表
         /// </summary>
         public List<MediaFileInfo> FileList { get; set; }
+
+        /// <summary>
+        /// 扩展消息
+        /// </summary>
+        public Dictionary<string, object> Extend { get; set; } = [];
     }
 
     public class MediaFileInfo

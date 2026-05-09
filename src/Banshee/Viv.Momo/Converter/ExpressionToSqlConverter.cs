@@ -12,7 +12,7 @@ namespace Viv.Momo.Converter
     {
         /// <summary>
         /// 将表达式解析为 通用参数化 SQL
-        /// 自动适配：MSSQL / PostgreSQL / MySQL
+        /// 自动适配：MSSQL / PostgreSQL
         /// </summary>
         public static (string sql, Dictionary<string, object> parameter) Convert<T>(Expression<Func<T, bool>> expression, DatabaseSouceType databaseSouceType)
         {
