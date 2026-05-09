@@ -83,12 +83,6 @@ namespace Viv.Momo
         void ChangeTenant(long tenantId);
         void IsAutoSetDefaultValue(bool flag);
         EFAppContext GetEFContext(DbReadWriteType readWriteType = DbReadWriteType.Read);
-
-        /// <summary>
-        /// 自动同步数据库表结构。ensureCreated + SchemaSynchronizer。
-        /// 新表/新列/类型变更/NULL变更 自动应用。
-        /// DROP 操作（删列/删表）默认禁止，需显式 allowDrop=true 避免误删数据。
-        /// </summary>
         Task SyncTableAsync(bool allowDrop = false, CancellationToken cancellationToken = default);
     }
 }
