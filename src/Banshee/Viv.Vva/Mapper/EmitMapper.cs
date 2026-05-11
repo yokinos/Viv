@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text;
 
 namespace Viv.Vva.Mapper
 {
@@ -88,7 +90,7 @@ namespace Viv.Vva.Mapper
                 if (!srcProp.CanRead) continue;
 
                 // 查找目标类型中同名可写属性（忽略大小写）
-                PropertyInfo tgtProp = targetType.GetProperty(srcProp.Name, BindingFlags.Public | BindingFlags.Instance);
+                PropertyInfo tgtProp = FindMatchingProperty(targetType, srcProp.Name);
                 if (tgtProp == null || !tgtProp.CanWrite) continue;
 
                 Type srcPropType = srcProp.PropertyType;
@@ -200,6 +202,60 @@ namespace Viv.Vva.Mapper
         private static bool IsComplex(Type type) =>
             !type.IsPrimitive && type != typeof(string) && !type.IsEnum && !type.IsValueType && !IsEnumerable(type);
 
+        /// <summary>snake_case → PascalCase</summary>
+        private static string SnakeToPascal(string snake)
+        {
+            if (!snake.Contains('_')) return snake;
+            var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
+            return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1).ToLowerInvariant()));
+        }
+
+        /// <summary>PascalCase → snake_case</summary>
+        private static string PascalToSnake(string pascal)
+        {
+            var sb = new StringBuilder();
+            for (int i = 0; i < pascal.Length; i++)
+            {
+                if (i > 0 && char.IsUpper(pascal[i]))
+                    sb.Append('_');
+                sb.Append(char.ToLowerInvariant(pascal[i]));
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// 按优先级匹配目标属性：精确匹配 → snake↔Pascal → 忽略大小写
+        /// </summary>
+        private static PropertyInfo FindMatchingProperty(Type targetType, string sourcePropName)
+        {
+            var allProps = targetType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.CanWrite)
+                .ToArray();
+
+            // 1. 精确匹配
+            var prop = allProps.FirstOrDefault(p => p.Name == sourcePropName);
+            if (prop != null) return prop;
+
+            // 2. 源 snake_case → 目标 PascalCase
+            if (sourcePropName.Contains('_'))
+            {
+                var pascal = SnakeToPascal(sourcePropName);
+                prop = allProps.FirstOrDefault(p => string.Equals(p.Name, pascal, StringComparison.OrdinalIgnoreCase));
+                if (prop != null) return prop;
+            }
+
+            // 3. 源 PascalCase → 目标 snake_case
+            if (sourcePropName.Any(char.IsUpper))
+            {
+                var snake = PascalToSnake(sourcePropName);
+                prop = allProps.FirstOrDefault(p => string.Equals(p.Name, snake, StringComparison.OrdinalIgnoreCase));
+                if (prop != null) return prop;
+            }
+
+            // 4. 忽略大小写兜底
+            return allProps.FirstOrDefault(p => string.Equals(p.Name, sourcePropName, StringComparison.OrdinalIgnoreCase));
+        }
+
         // ---------- 辅助方法：实际映射逻辑（供 IL 调用） ----------
 
         /// <summary>
@@ -215,7 +271,7 @@ namespace Viv.Vva.Mapper
         /// <summary>
         /// 将源集合映射为 List&lt;TTarget&gt;（供 Emit 调用）
         /// </summary>
-        private static List<TTarget> MapToList<TSource, TTarget>(IEnumerable<TSource> source)
+        private static List<TTarget>? MapToList<TSource, TTarget>(IEnumerable<TSource> source)
         {
             if (source == null) return null;
             var mapper = GetOrCreateMapper(typeof(TSource), typeof(TTarget));

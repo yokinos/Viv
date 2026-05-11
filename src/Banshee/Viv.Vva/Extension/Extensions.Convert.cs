@@ -79,6 +79,26 @@ namespace Viv.Vva.Extension
         }
 
         /// <summary>
+        /// [扩展方法] 将JSON字符串反序列化为对象，处理空值和字符串源对象场景    
+        /// </summary>
+        /// <param name="self">待反序列化的JSON字符串</param>
+        /// <returns>
+        /// 1. 源对象为null → 空字符串
+        /// 2. 源对象为字符串类型 → 直接返回原字符串（不额外序列化）
+        /// </returns>
+        /// <remarks>序列化使用Newtonsoft.Json默认配置，如需自定义序列化规则需单独处理</remarks>
+        [return: MaybeNull]
+        public static T DeserializeJson<T>([AllowNull] this string self, T? defalutValue = default, JsonSerializerSettings? settings = null)
+        {
+            if (self.IsNullOrEmpty())
+            {
+                return defalutValue;
+            }
+
+            return JsonConvert.DeserializeObject<T>(self, settings);
+        }
+
+        /// <summary>
         /// [扩展方法] 将泛型列表转换为DataTable
         /// </summary>
         /// <typeparam name="T">列表元素类型</typeparam>

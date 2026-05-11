@@ -135,20 +135,23 @@ namespace Viv.Vva.Mapper
                     }
                 }
 
-                // 尝试使用表达式目录树进行映射
+                // EMIT映射（优先，IL动态生成，性能最优）
                 if (ExpressionMapper.IsCustomType(sourceType) || ExpressionMapper.IsEnumerable(sourceType))
+                {
+                    var emitResult = EmitMapper.Map<T>(source);
+                    if (emitResult != null)
+                    {
+                        return emitResult;
+                    }
+                }
+
+                // 表达式目录树映射（默认禁用，设置 ExpressionMapper.IsEnabled = true 启用）
+                if (ExpressionMapper.IsEnabled && (ExpressionMapper.IsCustomType(sourceType) || ExpressionMapper.IsEnumerable(sourceType)))
                 {
                     var targetValue = ExpressionMapper.Map<T>(source);
                     if (targetValue != null)
                     {
                         return targetValue;
-                    }
-
-                    // 使用EMIT映射
-                    var emitResult = EmitMapper.Map<T>(source);
-                    if (emitResult != null)
-                    {
-                        return emitResult;
                     }
                 }
 

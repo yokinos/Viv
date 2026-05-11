@@ -4,11 +4,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Text;
 
 namespace Viv.Vva.Mapper
 {
     public static class ExpressionMapper
     {
+        public static bool IsEnabled = false;
+
         private static readonly Dictionary<string, Delegate> _compiledCache = new();
 
         public static TTarget Map<TTarget>(object source)
@@ -53,7 +56,7 @@ namespace Viv.Vva.Mapper
             {
                 if (!sourceProp.CanRead) continue;
 
-                PropertyInfo targetProp = targetType.GetProperty(sourceProp.Name);
+                PropertyInfo targetProp = FindMatchingProperty(targetType, sourceProp.Name);
                 if (targetProp == null || !targetProp.CanWrite) continue;
 
                 Type sType = sourceProp.PropertyType;
@@ -121,6 +124,51 @@ namespace Viv.Vva.Mapper
         public static bool IsEnumerable(Type type)
         {
             return typeof(IEnumerable).IsAssignableFrom(type) && type != typeof(string);
+        }
+
+        private static string SnakeToPascal(string snake)
+        {
+            if (!snake.Contains('_')) return snake;
+            var parts = snake.Split('_', StringSplitOptions.RemoveEmptyEntries);
+            return string.Concat(parts.Select(p => char.ToUpperInvariant(p[0]) + p.Substring(1).ToLowerInvariant()));
+        }
+
+        private static string PascalToSnake(string pascal)
+        {
+            var sb = new StringBuilder();
+            for (int i = 0; i < pascal.Length; i++)
+            {
+                if (i > 0 && char.IsUpper(pascal[i]))
+                    sb.Append('_');
+                sb.Append(char.ToLowerInvariant(pascal[i]));
+            }
+            return sb.ToString();
+        }
+
+        private static PropertyInfo FindMatchingProperty(Type targetType, string sourcePropName)
+        {
+            var allProps = targetType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.CanWrite)
+                .ToArray();
+
+            var prop = allProps.FirstOrDefault(p => p.Name == sourcePropName);
+            if (prop != null) return prop;
+
+            if (sourcePropName.Contains('_'))
+            {
+                var pascal = SnakeToPascal(sourcePropName);
+                prop = allProps.FirstOrDefault(p => string.Equals(p.Name, pascal, StringComparison.OrdinalIgnoreCase));
+                if (prop != null) return prop;
+            }
+
+            if (sourcePropName.Any(char.IsUpper))
+            {
+                var snake = PascalToSnake(sourcePropName);
+                prop = allProps.FirstOrDefault(p => string.Equals(p.Name, snake, StringComparison.OrdinalIgnoreCase));
+                if (prop != null) return prop;
+            }
+
+            return allProps.FirstOrDefault(p => string.Equals(p.Name, sourcePropName, StringComparison.OrdinalIgnoreCase));
         }
     }
 }
