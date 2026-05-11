@@ -14,6 +14,7 @@
     <ProjectReference Include="..\Viv.Momo\Viv.Momo.csproj" />
     <ProjectReference Include="..\Viv.Nana\Viv.Nana.csproj" />
     <ProjectReference Include="..\Viv.Redis\Viv.Redis.csproj" />
+    <ProjectReference Include="..\Viv.Sayu\Viv.Sayu.csproj" />
     <ProjectReference Include="..\Viv.Vva\Viv.Vva.csproj" />
   </ItemGroup>
 

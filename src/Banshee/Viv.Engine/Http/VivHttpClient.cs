@@ -110,7 +110,7 @@ namespace Viv.Engine.Http
                     IsSuccess = false,
                     StatusCode = HttpStatusCode.InternalServerError,
                     Message = ex.Message,
-                    ElapsedMilliseconds = stopwatch.ElapsedMilliseconds
+                    ElapsedTime = stopwatch.ElapsedMilliseconds
                 };
             }
         }
@@ -143,7 +143,7 @@ namespace Viv.Engine.Http
                     IsSuccess = false,
                     StatusCode = HttpStatusCode.InternalServerError,
                     Message = ex.Message,
-                    ElapsedMilliseconds = stopwatch.ElapsedMilliseconds
+                    ElapsedTime = stopwatch.ElapsedMilliseconds
                 };
             }
         }
@@ -168,7 +168,7 @@ namespace Viv.Engine.Http
             try
             {
                 var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                result.ResponseMessage = json;
+                result.ResponseJson = json;
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -189,7 +189,7 @@ namespace Viv.Engine.Http
             finally
             {
                 sw.Stop();
-                result.ElapsedMilliseconds = sw.ElapsedMilliseconds;
+                result.ElapsedTime = sw.ElapsedMilliseconds;
             }
 
             return result;

@@ -13,11 +13,13 @@ namespace Viv.Herta.Link.Consumers
     public class SendMessageConsumer : VivConsumer<SendMessageEvent>
     {
         private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IConnectionPool _connectionPool;
 
-        public SendMessageConsumer(IDistributedLogger logger, IHubContext<ChatHub> hubContext)
+        public SendMessageConsumer(IDistributedLogger logger, IHubContext<ChatHub> hubContext, IConnectionPool connectionPool)
             : base(logger)
         {
             _hubContext = hubContext;
+            _connectionPool = connectionPool;
         }
 
         public override async Task<SubscribeResult> ReceiveMessageAsync(NanaMessage<SendMessageEvent> message, CancellationToken cancellationToken = default)
@@ -40,15 +42,15 @@ namespace Viv.Herta.Link.Consumers
 
             if (evt.ReceiverType == EmChatReceiverType.Group)
             {
-                var groupName = ChatHub.GetGroupName(message.TenantId, evt.TargetId);
-                await _hubContext.Clients.Group(groupName).SendAsync("ReceiveMessage", chatMessage, cancellationToken);
+                var groupName = HertaLinkGroups.GetGroupName(message.TenantId, evt.TargetId);
+                await _hubContext.Clients.Group(groupName).SendAsync(HertaLinkClientMethods.ReceiveMessage, chatMessage, cancellationToken);
             }
             else
             {
-                var connectionIds = ConnectionPool.GetConnectionIds(message.TenantId, evt.TargetId);
+                var connectionIds = _connectionPool.GetConnectionIds(message.TenantId, evt.TargetId);
                 if (connectionIds.Count > 0)
                 {
-                    await _hubContext.Clients.Clients(connectionIds).SendAsync("ReceiveMessage", chatMessage, cancellationToken);
+                    await _hubContext.Clients.Clients(connectionIds).SendAsync(HertaLinkClientMethods.ReceiveMessage, chatMessage, cancellationToken);
                 }
             }
 

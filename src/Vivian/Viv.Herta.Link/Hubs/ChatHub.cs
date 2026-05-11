@@ -6,13 +6,13 @@ namespace Viv.Herta.Link.Hubs
     public class ChatHub : Hub
     {
         private readonly IGroupService _groupService;
+        private readonly IConnectionPool _connectionPool;
 
-        public ChatHub(IGroupService groupService)
+        public ChatHub(IGroupService groupService, IConnectionPool connectionPool)
         {
             _groupService = groupService;
+            _connectionPool = connectionPool;
         }
-
-        public static string GetGroupName(long tenantId, long groupId) => $"group:{tenantId}:{groupId}";
 
         public override async Task OnConnectedAsync()
         {
@@ -25,12 +25,12 @@ namespace Viv.Herta.Link.Hubs
                 && httpContext.Request.Query.TryGetValue("appId", out var appIdStr)
                 && long.TryParse(appIdStr, out var appId))
             {
-                ConnectionPool.Add(Context.ConnectionId, tenantId, userId, appId);
+                _connectionPool.Add(Context.ConnectionId, tenantId, userId, appId);
 
                 var groupIds = await _groupService.GetUserGroupIdsAsync(tenantId, userId);
                 foreach (var groupId in groupIds)
                 {
-                    await Groups.AddToGroupAsync(Context.ConnectionId, GetGroupName(tenantId, groupId));
+                    await Groups.AddToGroupAsync(Context.ConnectionId, HertaLinkGroups.GetGroupName(tenantId, groupId));
                 }
             }
 
@@ -39,7 +39,7 @@ namespace Viv.Herta.Link.Hubs
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            ConnectionPool.Remove(Context.ConnectionId);
+            _connectionPool.Remove(Context.ConnectionId);
             await base.OnDisconnectedAsync(exception);
         }
     }

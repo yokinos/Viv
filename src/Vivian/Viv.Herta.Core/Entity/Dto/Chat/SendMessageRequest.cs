@@ -6,7 +6,7 @@ using System.Text;
 using Viv.Entity.Enums;
 using Viv.Entity.Request;
 
-namespace Viv.Herta.Core.Entity.ViewModel.Chat
+namespace Viv.Herta.Core.Entity.Dto.Chat
 {
     public class SendMessageRequest : RequestBase
     {

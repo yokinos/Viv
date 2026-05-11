@@ -42,6 +42,7 @@ namespace Viv.Engine
             RegisterDatabase(services, options);
             // 注册Token
             RegisterToken(services, options);
+
         }
 
         #region 日志
@@ -159,6 +160,20 @@ namespace Viv.Engine
                 // 注册token实现
                 services.AddScoped<ITokenService, JwtTokenService>();
                 VivConfigRegistry.Add(options.TokenOption);
+            }
+        }
+
+        #endregion
+
+        #region 调度框架
+
+        private static void RegisterScheduler(IServiceCollection services, VivOptions options)
+        {
+            if (options.SayuOption == null) return;
+
+            if(options.SayuOption.SchedulerType == Sayu.VivSchedulerType.TickerQ)
+            {
+                ArgumentNullException.ThrowIfNull(options.SayuOption.TickerQ);
             }
         }
 

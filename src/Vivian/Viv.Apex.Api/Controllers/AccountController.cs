@@ -1,6 +1,7 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Viv.Apex.Core.Entity.ViewModel.Account.Request;
+using Viv.Apex.Core.Entity.Dto.Account.Request;
 using Viv.Apex.Core.IService;
 
 namespace Viv.Apex.Api.Controllers
@@ -16,6 +17,7 @@ namespace Viv.Apex.Api.Controllers
             _userService = userService;
         }
 
+        [AllowAnonymous]
         [HttpPost("apexLogin")]
         public async Task<IActionResult> ApexLoginAsync(ApexLoginRequest request)
         {

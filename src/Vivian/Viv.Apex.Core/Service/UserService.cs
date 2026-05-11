@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Apex.Core.Entity.ViewModel.Account.Request;
+using Viv.Apex.Core.Entity.Dto.Account.Request;
 using Viv.Apex.Core.IRepository;
 using Viv.Apex.Core.IService;
 using Viv.Engine;

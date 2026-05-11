@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Viv.Herta.Core.Entity.ViewModel.Chat;
+using Viv.Herta.Core.Entity.Dto.Chat;
 using Viv.Herta.Core.IService;
 using Viv.Nana;
 

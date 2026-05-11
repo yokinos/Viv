@@ -5,10 +5,13 @@ namespace Viv.Nana.Saga
     public abstract class VivSagaState : SagaStateMachineInstance
     {
         /// <summary>
-        /// MassTransit 要求的 Guid 类型关联标识（框架内部使用）
+        /// 分布式事务的标识
         /// </summary>
         public Guid CorrelationId { get; set; }
 
+        /// <summary>
+        /// 分布式事务当前状态
+        /// </summary>
         public int CurrentState { get; set; }
 
         /// <summary>

@@ -2,7 +2,7 @@ using System.Net;
 
 namespace Viv.Engine.Http
 {
-    public class HttpResult
+    public class HttpResult<T>
     {
         public bool IsSuccess { get; set; }
 
@@ -10,13 +10,10 @@ namespace Viv.Engine.Http
 
         public string? Message { get; set; }
 
-        public string? ResponseMessage { get; set; }
+        public string? ResponseJson { get; set; }
 
-        public long ElapsedMilliseconds { get; set; }
-    }
-
-    public class HttpResult<T> : HttpResult
-    {
+        public long ElapsedTime { get; set; }
+ 
         public T? Response { get; set; }
     }
 }

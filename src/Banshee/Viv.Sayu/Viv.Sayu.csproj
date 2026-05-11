@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="TickerQ" Version="10.3.0" />
+    <PackageReference Include="TickerQ.Dashboard" Version="10.3.0" />
+    <PackageReference Include="TickerQ.EntityFrameworkCore" Version="10.3.0" />
+    <PackageReference Include="TickerQ.Utilities" Version="10.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

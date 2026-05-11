@@ -2,12 +2,13 @@
 using System.Collections.Generic;
 using System.Text;
 using Viv.Aoi;
+using Viv.Authentication;
 using Viv.Engine.Enums;
 using Viv.Log;
 using Viv.Momo.Options;
 using Viv.Nana.Options;
 using Viv.Redis;
-using Viv.Authentication;
+using Viv.Sayu;
 
 #nullable disable
 namespace Viv.Engine.Options
@@ -50,5 +51,10 @@ namespace Viv.Engine.Options
         /// 令牌设置
         /// </summary>
         public TokenOptions TokenOption { get; set; }
+
+        /// <summary>
+        /// 定时任务配置
+        /// </summary>
+        public SayuOptions SayuOption { get; set; }
     }
 }

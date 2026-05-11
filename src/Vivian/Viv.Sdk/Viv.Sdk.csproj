@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
+  </ItemGroup>
+
 </Project>

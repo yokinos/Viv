@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Viv.Engine;
 using Viv.EventContracts.Herta;
-using Viv.Herta.Core.Entity.ViewModel.Chat;
+using Viv.Herta.Core.Entity.Dto.Chat;
 using Viv.Herta.Core.IService;
 using Viv.Herta.Core.Magic;
 using Viv.Nana;

@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text;
 using Viv.Entity.Request;
 
-namespace Viv.Apex.Core.Entity.ViewModel.Account.Request
+namespace Viv.Apex.Core.Entity.Dto.Account.Request
 {
     public class ApexLoginRequest : RequestBase
     {
