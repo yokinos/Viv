@@ -18,6 +18,6 @@ namespace Viv.Engine.Http
 
         Task<HttpResult<T>> UploadFileAsync<T>(string url, byte[] fileBytes, string fileName, string fieldName = "file", Dictionary<string, string>? formData = null, Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default);
 
-        Task<HttpResult<T>> UploadFileAsync<T>(string url, System.IO.Stream stream, string fileName, string fieldName = "file", Dictionary<string, string>? formData = null, Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default);
+        Task<HttpResult<T>> UploadFileAsync<T>(string url, Stream stream, string fileName, string fieldName = "file", Dictionary<string, string>? formData = null, Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default);
     }
 }
