@@ -13,6 +13,7 @@ using Viv.Nana;
 using Viv.Nana.Core;
 using Viv.Nana.Saga;
 using Viv.Redis;
+using Viv.Sayu;
 using Viv.Vva;
 using Viv.Vva.Extension;
 using Viv.Vva.Magic;
@@ -42,6 +43,8 @@ namespace Viv.Engine
             RegisterDatabase(services, options);
             // 注册Token
             RegisterToken(services, options);
+            // 注册调度
+            RegisterScheduler(services, options);
 
         }
 
@@ -171,9 +174,10 @@ namespace Viv.Engine
         {
             if (options.SayuOption == null) return;
 
-            if(options.SayuOption.SchedulerType == Sayu.VivSchedulerType.TickerQ)
+            if (options.SayuOption.SchedulerType == Sayu.VivSchedulerType.TickerQ)
             {
-                ArgumentNullException.ThrowIfNull(options.SayuOption.TickerQ);
+                Sayu.SayuRegister.Initialize(options.SayuOption);
+                services.AddVivTickerQ(options.SayuOption);
             }
         }
 

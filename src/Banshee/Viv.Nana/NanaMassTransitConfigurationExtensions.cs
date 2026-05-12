@@ -8,10 +8,7 @@ namespace Viv.Nana
 {
     public static class NanaMassTransitConfigurationExtensions
     {
-        public static IServiceCollection AddVivMassTransit(
-            this IServiceCollection services,
-            NanaOptions nanaOptions,
-            List<Type>? sagaStateMachineTypes = null)
+        public static IServiceCollection AddVivMassTransit(this IServiceCollection services, NanaOptions nanaOptions, List<Type>? sagaStateMachineTypes = null)
         {
             ArgumentNullException.ThrowIfNull(nanaOptions);
 

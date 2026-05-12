@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Viv.Entity.Enums;
 
-namespace Viv.Entity.Chat
+namespace Viv.Entity.Interface
 {
     public interface IChatMessage
     {

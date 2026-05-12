@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
-using Viv.Entity.Chat;
 using Viv.Entity.Enums;
 using Viv.EventContracts.Herta;
+using Viv.Herta.Core.Entity.Message;
 using Viv.Herta.Core.Magic;
 using Viv.Herta.Link.Hubs;
 using Viv.Log;

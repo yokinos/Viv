@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Entity.Chat;
 using Viv.Entity.Enums;
+using Viv.Entity.Interface;
 
-namespace Viv.Entity.Chat.Message
+namespace Viv.Herta.Core.Entity.Message
 {
     public class MediaFileMessage : IChatMessage
     {

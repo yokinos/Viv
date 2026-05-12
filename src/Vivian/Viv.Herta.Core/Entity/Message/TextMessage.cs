@@ -1,19 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Entity.Chat;
 using Viv.Entity.Enums;
+using Viv.Entity.Interface;
 
-namespace Viv.Entity.Chat.Message
+namespace Viv.Herta.Core.Entity.Message
 {
-    public class MixMessage : IChatMessage
+    public class TextMessage : IChatMessage
     {
-        public EmChatMessageType MessageType => EmChatMessageType.Mix;
+        public EmChatMessageType MessageType => EmChatMessageType.Text;
 
         /// <summary>
-        /// 混合消息列表
+        /// 文本消息内容
         /// </summary>
-        public List<IChatMessage> MixList { get; set; }
+        public string Text { get; set; }
 
         /// <summary>
         /// 扩展消息

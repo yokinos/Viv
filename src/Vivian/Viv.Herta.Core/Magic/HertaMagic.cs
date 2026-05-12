@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using Viv.Entity.Chat;
-using Viv.Entity.Chat.Message;
 using Viv.Entity.Enums;
+using Viv.Entity.Interface;
+using Viv.Herta.Core.Entity.Message;
 using Viv.Vva.Extension;
 
 namespace Viv.Herta.Core.Magic

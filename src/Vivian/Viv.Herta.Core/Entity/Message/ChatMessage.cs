@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Interface;
 
-namespace Viv.Entity.Chat
+namespace Viv.Herta.Core.Entity.Message
 {
     /// <summary>
     /// Viv下的Chat 消息体
