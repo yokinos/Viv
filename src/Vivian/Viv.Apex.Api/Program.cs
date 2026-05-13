@@ -18,7 +18,7 @@ public class Program
         builder.AddServiceDefaults();
 
         // 加载 Viv 配置
-        var vivOptions = VivEngine.LoadVivConfig();
+        var vivOptions = VivEngine.LoadVivConfig(builder.Configuration);
         ArgumentNullException.ThrowIfNull(vivOptions);
 
         // Autofac 容器

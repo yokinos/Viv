@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace Viv.Engine.Http
+namespace Viv.Echo.Http
 {
     public class HttpResult<T>
     {
@@ -13,7 +13,7 @@ namespace Viv.Engine.Http
         public string? ResponseJson { get; set; }
 
         public long ElapsedTime { get; set; }
- 
+
         public T? Response { get; set; }
     }
 }

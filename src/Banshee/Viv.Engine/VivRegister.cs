@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Viv.Authentication;
 using Viv.Contracts.Interface;
+using Viv.Echo;
 using Viv.Engine.Cache;
 using Viv.Engine.Options;
 using Viv.Log;
@@ -14,6 +15,7 @@ using Viv.Nana.Core;
 using Viv.Nana.Saga;
 using Viv.Redis;
 using Viv.Sayu;
+using Viv.Sayu.Enums;
 using Viv.Vva;
 using Viv.Vva.Extension;
 using Viv.Vva.Magic;
@@ -45,7 +47,8 @@ namespace Viv.Engine
             RegisterToken(services, options);
             // 注册调度
             RegisterScheduler(services, options);
-
+            // 注册跨服务通信（HTTP + gRPC）
+            RegisterEcho(services, options);
         }
 
         #region 日志
@@ -174,11 +177,21 @@ namespace Viv.Engine
         {
             if (options.SayuOption == null) return;
 
-            if (options.SayuOption.SchedulerType == Sayu.VivSchedulerType.TickerQ)
+            if (options.SayuOption.SchedulerType == VivSchedulerType.TickerQ)
             {
-                Sayu.SayuRegister.Initialize(options.SayuOption);
+                Sayu.SayuRegister.ScanTasks(options.SayuOption);
                 services.AddVivTickerQ(options.SayuOption);
             }
+        }
+
+        #endregion
+
+        #region 跨服务通信 Echo
+
+        private static void RegisterEcho(IServiceCollection services, VivOptions options)
+        {
+            if (options.EchoOption == null) return;
+            EchoRegister.Initialize(services, options.EchoOption);
         }
 
         #endregion

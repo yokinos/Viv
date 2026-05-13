@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Text;
 using Viv.Aoi;
 using Viv.Authentication;
+using Viv.Echo.Options;
 using Viv.Engine.Enums;
 using Viv.Log;
 using Viv.Momo.Options;
 using Viv.Nana.Options;
 using Viv.Redis;
-using Viv.Sayu;
+using Viv.Sayu.Options;
 
 #nullable disable
 namespace Viv.Engine.Options
@@ -56,5 +57,10 @@ namespace Viv.Engine.Options
         /// 定时任务配置
         /// </summary>
         public SayuOptions SayuOption { get; set; }
+
+        /// <summary>
+        /// 跨服务通信配置（HTTP + gRPC）
+        /// </summary>
+        public EchoOptions EchoOption { get; set; }
     }
 }

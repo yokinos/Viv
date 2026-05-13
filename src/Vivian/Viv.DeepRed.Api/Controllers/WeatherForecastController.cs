@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace Viv.Robin.Api.Controllers;
+namespace Viv.DeepRed.Api.Controllers;
 
 [ApiController]
 [Route("[controller]")]

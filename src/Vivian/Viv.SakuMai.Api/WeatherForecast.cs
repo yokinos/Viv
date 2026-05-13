@@ -1,4 +1,4 @@
-namespace Viv.Robin.Api;
+namespace Viv.SakuMai.Api;
 
 public class WeatherForecast
 {

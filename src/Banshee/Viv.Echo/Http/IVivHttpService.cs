@@ -1,8 +1,9 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Viv.Engine.Http
+namespace Viv.Echo.Http
 {
     public interface IVivHttpService
     {

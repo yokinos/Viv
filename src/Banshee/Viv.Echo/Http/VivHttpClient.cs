@@ -1,15 +1,11 @@
 using System.Diagnostics;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Viv.Vva;
 using Viv.Vva.Extension;
 
-namespace Viv.Engine.Http
+namespace Viv.Echo.Http
 {
     public class VivHttpClient : IVivHttpService
     {
@@ -37,8 +33,8 @@ namespace Viv.Engine.Http
 
         public async Task<HttpResult<T>> GetAsync<T>(string url, object query, Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default)
         {
-            var queryDict = new Dictionary<string, string>();
             var properties = VivTypeReflectionCache.GetPropertieList(query.GetType());
+            var queryDict = new Dictionary<string, string>();
 
             foreach (var prop in properties)
             {
@@ -72,7 +68,7 @@ namespace Viv.Engine.Http
             return await UploadFileStreamAsync<T>(url, stream, fileName, fieldName, formData, headers, cancellationToken);
         }
 
-        #region 核心方法
+        #region Core
 
         private async Task<HttpResult<T>> UploadFileStreamAsync<T>(string url, Stream stream, string fileName, string fieldName, Dictionary<string, string>? formData, Dictionary<string, string>? headers, CancellationToken cancellationToken)
         {

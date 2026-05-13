@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Sayu
+namespace Viv.Sayu.Enums
 {
     public enum VivSchedulerType
     {
@@ -18,7 +18,7 @@ namespace Viv.Sayu
         TickerQ,
 
         /// <summary>
-        /// 还未支持（懒）
+        /// [预留]非必要不打算实现
         /// </summary>
         QuartzNet,
     }
