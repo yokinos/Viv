@@ -51,16 +51,11 @@ namespace Viv.Engine
         /// <summary>
         /// 注册Swagger（带JWT授权）
         /// </summary>
-        public static void AddSwagger(this IServiceCollection services)
+        public static void AddSwagger(this IServiceCollection services, OpenApiInfo openApiInfo)
         {
             services.AddSwaggerGen(c =>
             {
-                c.SwaggerDoc("v1", new OpenApiInfo
-                {
-                    Title = "Viv Apex API",
-                    Version = "v1.0.0",
-                    Description = "API接口文档",
-                });
+                c.SwaggerDoc("v1", openApiInfo);
 
                 c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 {

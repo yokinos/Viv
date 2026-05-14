@@ -30,7 +30,7 @@ public class Program
 
         // 基础服务
         builder.Services.AddViv(vivOptions);
-        builder.Services.AddOptions();
+        //builder.Services.AddOptions();
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
         {
@@ -62,7 +62,11 @@ public class Program
             });
         });
 
-        builder.Services.AddSwagger();
+        builder.Services.AddSwagger(new Microsoft.OpenApi.OpenApiInfo()
+        {
+            Title = "Viv Apex API",
+            Version = "1.0.0"
+        });
 
         var app = builder.Build();
         app.MapDefaultEndpoints();

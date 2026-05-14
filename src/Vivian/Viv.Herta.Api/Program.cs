@@ -9,7 +9,7 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
 
-        var vivOptions = VivEngine.LoadVivConfig(builder.Configuration);
+        var vivOptions = VivEngine.LoadVivConfig();
         ArgumentNullException.ThrowIfNull(vivOptions);
 
         builder.Services.AddViv(vivOptions);

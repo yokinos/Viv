@@ -18,7 +18,7 @@ namespace Viv.Echo.Grpc
             ClientInterceptorContext<TRequest, TResponse> context,
             AsyncUnaryCallContinuation<TRequest, TResponse> continuation)
         {
-            var headers = context.Options.Headers ?? new Metadata();
+            var headers = context.Options.Headers ?? [];
             AddVivHeaders(headers);
 
             var newOptions = context.Options.WithHeaders(headers);
