@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Elysia
+namespace Viv.Elysia.Interface
 {
     /// <summary>
     /// 请求Dto的基类接口

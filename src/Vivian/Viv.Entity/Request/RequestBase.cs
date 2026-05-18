@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using Viv.Elysia;
 using Viv.Elysia.Base;
+using Viv.Elysia.Interface;
 using Viv.Elysia.Validator;
 using Viv.Vva.Magic;
 

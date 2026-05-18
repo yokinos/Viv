@@ -1,7 +1,7 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
-using Viv.Elysia;
+using Viv.Elysia.Interface;
 using Viv.Vva;
 using Viv.Vva.Extension;
 
