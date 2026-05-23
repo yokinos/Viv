@@ -17,7 +17,7 @@ namespace Viv.Momo
     /// 通用数据操作工具类
     /// 包含：表名获取、查询条件拼接、SQL模板生成（插入/查询/分页）等核心方法
     /// </summary>
-    public static class SqlMagic
+    public static partial class SqlMagic
     {
         /// <summary>
         /// 缓存实体类型对应的数据库表名称

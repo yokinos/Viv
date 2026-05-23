@@ -10,7 +10,7 @@ namespace Viv.Momo
     /// - 参数化版本：返回 (sql, DynamicParameters)，用于 Dapper 执行
     /// - Raw 版本：返回内联值 SQL 字符串，用于非参数化场景
     /// </summary>
-    public static class CrudMagic
+    public static partial class SqlMagic
     {
         #region 参数化版本
 
@@ -119,7 +119,7 @@ namespace Viv.Momo
                 if (value == null) continue;
 
                 fieldList.Add(name);
-                valueList.Add(SqlMagic.ToDatabaseValue(value, databaseType));
+                valueList.Add(ToDatabaseValue(value, databaseType));
             }
 
             return $"INSERT INTO {FormatName(tableName, databaseType)} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
@@ -138,7 +138,7 @@ namespace Viv.Momo
                 if (ignoreKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
                 var value = property.GetValue(entity);
-                var dbValue = SqlMagic.ToDatabaseValue(value, databaseType);
+                var dbValue = ToDatabaseValue(value, databaseType);
 
                 if (whereKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase))
                 {
@@ -168,7 +168,7 @@ namespace Viv.Momo
                 var value = property.GetValue(entity);
 
                 var line = whereList.Count == 0 ? "WHERE" : "AND";
-                whereList.Add($"{line} {name} = {SqlMagic.ToDatabaseValue(value, databaseType)}");
+                whereList.Add($"{line} {name} = {ToDatabaseValue(value, databaseType)}");
             }
 
             return $"DELETE FROM {FormatName(tableName, databaseType)} {string.Join(" ", whereList)}";

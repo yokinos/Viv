@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Viv.Elysia.Interface
 {
-    public interface IPageRequest : IApiRequest
+    public interface IPageRequest
     {
         /// <summary>
         /// 分页请求页码
