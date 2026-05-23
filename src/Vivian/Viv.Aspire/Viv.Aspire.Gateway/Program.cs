@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Viv.Aspire.Gateway.Magic;
 using Viv.Aspire.Gateway.Options;
+using Viv.Aspire.ServiceDefaults;
 
 namespace Viv.Aspire.Gateway;
 public class Program

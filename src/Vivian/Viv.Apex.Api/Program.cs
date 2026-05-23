@@ -2,6 +2,7 @@ using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using System.Text;
 using Viv.Aoi;
+using Viv.Aspire.ServiceDefaults;
 using Viv.Elysia.Filter;
 using Viv.Engine;
 using Viv.Engine.Conveter;

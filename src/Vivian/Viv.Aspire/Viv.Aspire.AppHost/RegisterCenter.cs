@@ -29,7 +29,7 @@ public static class RegisterCenter
 
 public class InfrastructureParams
 {
-    public IResourceBuilder<ParameterResource> PostgresConnection { get; set; } = default!;
+    public IResourceBuilder<ParameterResource> RedisConfig { get; set; } = default!;
     public IResourceBuilder<ParameterResource> RedisConnection { get; set; } = default!;
     public IResourceBuilder<ParameterResource> RabbitMqHost { get; set; } = default!;
     public IResourceBuilder<ParameterResource> RabbitMqPort { get; set; } = default!;

@@ -1,0 +1,39 @@
+{
+  "RabbitMQConfig": {
+    "Host": "localhost",
+    "Username": "guest",
+    "Password": "guest",
+    "VirtualHost": "/",
+    "Port": 5672
+  },
+  "RedisConfig": {
+    "Host": [ "127.0.0.1" ],
+    "Port": 6379,
+    "Password": "",
+    "RedisMode": 0
+  },
+  "DistributedLogConfig": {
+    "IsEnabled": false,
+    "ELKUrl": "",
+    "ELKUsername": "",
+    "ELKPassword": ""
+  },
+  "DatabaseConfigs": {
+    "DefaultDB": {
+      "DatabaseSouceType": 0,
+      "IsReadWriteSplit": false,
+      "MasterConnectionString": "Server=.;Database=VivMainDB;Uid=sa;Pwd=123456;",
+      "SlaveConnectionString": [],
+      "SagaConnectionString": "",
+      "TickerQConnectionString": ""
+    },
+    "ApexDB": {
+      "DatabaseSouceType": 0,
+      "IsReadWriteSplit": false,
+      "MasterConnectionString": "Server=.;Database=VivApexDB;Uid=sa;Pwd=123456;",
+      "SlaveConnectionString": [],
+      "SagaConnectionString": "",
+      "TickerQConnectionString": ""
+    }
+  }
+}
