@@ -13,6 +13,7 @@ using Viv.Momo.Enums;
 using Viv.Nana;
 using Viv.Nana.Core;
 using Viv.Nana.Saga;
+using StackExchange.Redis;
 using Viv.Redis;
 using Viv.Sayu;
 using Viv.Sayu.Enums;
@@ -80,6 +81,10 @@ namespace Viv.Engine
             {
                 RedisFactory.Initialize(options.CacheOption.RedisOptions);
                 services.AddSingleton<IRedisService, RedisService>();
+
+                // 将 IConnectionMultiplexer 注册到 DI，供 OpenTelemetry Redis 仪表板使用
+                services.AddSingleton<IConnectionMultiplexer>(
+                    RedisFactory.GetConnectionAsync().GetAwaiter().GetResult());
             }
 
             // 内存缓存
