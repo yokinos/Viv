@@ -994,11 +994,13 @@ namespace Viv.Momo.Core
                 var totalCount = context.DbConnection.ExecuteScalar<int>(countSql, parameters, null, _timeOut);
                 if (totalCount > 0)
                 {
+                    var totalPages = CalculateTotalPages(totalCount, pageSize);
                     var list = context.DbConnection.Query<T>(pageSql, parameters, null, true, _timeOut);
                     result.TotalCount = totalCount;
                     result.Items = list;
+                    result.TotalPages = totalPages;
                     result.IsHaveFrontPage = pageIndex > 1;
-                    result.IsHaveNextPage = pageIndex < CalculateTotalPages(totalCount, pageSize);
+                    result.IsHaveNextPage = pageIndex < totalPages;
                 }
                 return result;
             }
@@ -1021,11 +1023,13 @@ namespace Viv.Momo.Core
                 var totalCount = await context.DbConnection.ExecuteScalarAsync<int>(countSql, parameters, null, _timeOut).ConfigureAwait(false);
                 if (totalCount > 0)
                 {
+                    var totalPages = CalculateTotalPages(totalCount, pageSize);
                     var list = await context.DbConnection.QueryAsync<T>(pageSql, parameters, null, _timeOut).ConfigureAwait(false);
                     result.TotalCount = totalCount;
                     result.Items = list;
                     result.IsHaveFrontPage = pageIndex > 1;
-                    result.IsHaveNextPage = pageIndex < CalculateTotalPages(totalCount, pageSize);
+                    result.TotalPages = totalPages;
+                    result.IsHaveNextPage = pageIndex < totalPages;
                 }
                 return result;
             }
