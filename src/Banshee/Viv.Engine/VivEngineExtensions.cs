@@ -7,12 +7,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using Viv.Aoi;
+using Viv.Contracts.Attributes;
+using Viv.Contracts.Enums;
+using Viv.Contracts.Interface;
 using Viv.Engine.Conveter;
 using Viv.Engine.Filter;
 using Viv.Engine.Middleware;
 using Viv.Engine.Options;
+using Viv.Vva.Extension;
 using Viv.Vva.Magic;
 
 namespace Viv.Engine
@@ -34,6 +39,8 @@ namespace Viv.Engine
 
         public static void VivAutofacRegister(this ContainerBuilder builder, DIOptions diOptions, Action<ContainerBuilder> customSet = null)
         {
+            AutoDependencyRegister(builder);
+
             // 可能不需要抽象
             if (diOptions == null) return;
 
@@ -50,6 +57,41 @@ namespace Viv.Engine
                    .InstancePerLifetimeScope();
 
             customSet?.Invoke(builder);
+        }
+
+        /// <summary>
+        /// 自动依赖注入
+        /// </summary>
+        /// <param name="services"></param>
+        private static void AutoDependencyRegister(ContainerBuilder builder)
+        {
+            var typeList = TypeScanMagic.ScanTypes<IDependency>();
+            if (typeList.IsNullOrEmpty())
+                return;
+
+            foreach (var type in typeList)
+            {
+                var attr = type.GetCustomAttribute<VivDependencyAttribute>(false);
+                var lifetime = attr?.Lifetime ?? DependencyLifetime.Scoped;
+                var asSelf = attr?.AsSelf ?? false;
+
+                var registration = asSelf
+                    ? builder.RegisterType(type).AsSelf()
+                    : builder.RegisterType(type).AsImplementedInterfaces();
+
+                switch (lifetime)
+                {
+                    case DependencyLifetime.Singleton:
+                        registration.SingleInstance();
+                        break;
+                    case DependencyLifetime.Transient:
+                        registration.InstancePerDependency();
+                        break;
+                    default:
+                        registration.InstancePerLifetimeScope();
+                        break;
+                }
+            }
         }
 
         /// <summary>

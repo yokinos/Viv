@@ -5,7 +5,7 @@ using System.Text;
 namespace Viv.Contracts.Interface
 {
     /// <summary>
-    /// 基础依赖注入标记（所有生命周期的基接口）
+    /// 基础依赖注入标记 标记后会自动注入
     /// </summary>
     public interface IDependency
     {

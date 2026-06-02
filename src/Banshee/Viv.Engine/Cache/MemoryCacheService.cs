@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Primitives;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
@@ -16,57 +16,57 @@ namespace Viv.Engine.Cache
             _cache = cache;
         }
 
-        public bool Exists(string key)
+        [return: MaybeNull]
+        public T? Get<T>(string key)
         {
-            return _cache.TryGetValue(key, out _);
+            _cache.TryGetValue(key, out T? value);
+            return value;
         }
 
-        public async Task<bool> ExistsAsync(string key, CancellationToken token = default)
+        [return: MaybeNull]
+        public bool TryGet<T>(string key, out T? value)
         {
-            await Task.CompletedTask;
-            return Exists(key);
+            return _cache.TryGetValue(key, out value);
         }
 
-        public T Get<T>(string key)
+        public T GetOrAdd<T>(string key, Func<T> factory, TimeSpan? expire = null)
         {
-            return _cache.Get<T>(key);
+            return _cache.GetOrCreate(key, entry =>
+            {
+                if (expire.HasValue)
+                    entry.SetAbsoluteExpiration(expire.Value);
+                return factory();
+            })!;
         }
 
-        public async Task<T> GetAsync<T>(string key, CancellationToken token = default)
+        [return: MaybeNull]
+        public async ValueTask<T?> GetOrAddAsync<T>(string key, Func<CancellationToken, ValueTask<T>> factory,
+            TimeSpan? expire = null, CancellationToken token = default)
         {
-            await Task.CompletedTask;
-            return Get<T>(key);
+            if (_cache.TryGetValue(key, out T? cached))
+                return cached;
+
+            var value = await factory(token);
+
+            using var entry = _cache.CreateEntry(key);
+            if (expire.HasValue)
+                entry.SetAbsoluteExpiration(expire.Value);
+            entry.Value = value;
+
+            return value;
         }
 
-        public bool Remove(string key)
-        {
-            _cache.Remove(key);
-            return true;
-        }
-
-        public async Task<bool> RemoveAsync(string key, CancellationToken token = default)
-        {
-            await Task.CompletedTask;
-            return Remove(key);
-        }
-
-        public bool Set<T>(string key, T value, TimeSpan? expire = null)
+        public void Set<T>(string key, T value, TimeSpan? expire = null)
         {
             if (expire.HasValue)
-            {
                 _cache.Set(key, value, expire.Value);
-            }
             else
-            {
                 _cache.Set(key, value);
-            }
-            return true;
         }
 
-        public async Task<bool> SetAsync<T>(string key, T value, TimeSpan? expire = null, CancellationToken token = default)
+        public void Remove(string key)
         {
-            await Task.CompletedTask;
-            return Set(key, value, expire);
+            _cache.Remove(key);
         }
     }
 }
