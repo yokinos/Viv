@@ -128,32 +128,31 @@ namespace Viv.Vva.Magic
             if (!RegularConst.RegexCheck(input, RegularConst.IDCardRegex()))
                 return false;
 
+            ReadOnlySpan<char> span = input.AsSpan();
+            if (span.Length != 18) return false;
+
             // 省份代码校验
-            var provinceCodes = new HashSet<string>
-            {
-                "11","12","13","14","15","21","22","23","31","32","33","34","35","36","37",
-                "41","42","43","44","45","46","50","51","52","53","54","61","62","63","64",
-                "65","71","81","82","91"
-            };
-            if (!provinceCodes.Contains(input[..2]))
+            ReadOnlySpan<int> provinceCodes = [11, 12, 13, 14, 15, 21, 22, 23, 31, 32, 33, 34, 35, 36, 37, 41, 42, 43, 44, 45, 46, 50, 51, 52, 53, 54, 61, 62, 63, 64, 65, 71, 81, 82, 91];
+            if (!int.TryParse(span.Slice(0, 2), out int provinceCode) ||
+                !provinceCodes.Contains(provinceCode))
                 return false;
 
-            // 生日合法性校验
-            if (!DateTime.TryParseExact(input.Substring(6, 8), "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out _))
+            // 生日校验
+            if (!DateTime.TryParseExact(span.Slice(6, 8), "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out _))
                 return false;
 
             // 校验位计算
-            char[] checkCodes = ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2'];
-            int[] weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
+            ReadOnlySpan<int> weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
             int total = 0;
             for (int i = 0; i < 17; i++)
             {
-                if (!int.TryParse(input[i].ToString(), out int num))
-                    return false;
-                total += num * weights[i];
+                char c = span[i];
+                if (c < '0' || c > '9') return false;   // 确保数字
+                total += (c - '0') * weights[i];
             }
 
-            return checkCodes[total % 11] == char.ToUpper(input[17]);
+            ReadOnlySpan<char> checkCodes = ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2'];
+            return checkCodes[total % 11] == char.ToUpper(span[17]);
         }
 
         /// <summary>
