@@ -39,7 +39,11 @@ namespace Viv.Engine
 
         public static void VivAutofacRegister(this ContainerBuilder builder, DIOptions diOptions, Action<ContainerBuilder> customSet = null)
         {
+            // 自动依赖注入
             AutoDependencyRegister(builder);
+
+            // 自定义的注入
+            customSet?.Invoke(builder);
 
             // 可能不需要抽象
             if (diOptions == null) return;
@@ -55,14 +59,12 @@ namespace Viv.Engine
             builder.RegisterTypes(repoImplTypes.ToArray())
                    .AsImplementedInterfaces()
                    .InstancePerLifetimeScope();
-
-            customSet?.Invoke(builder);
         }
 
         /// <summary>
         /// 自动依赖注入
         /// </summary>
-        /// <param name="services"></param>
+        /// <param name="builder"></param>
         private static void AutoDependencyRegister(ContainerBuilder builder)
         {
             var typeList = TypeScanMagic.ScanTypes<IDependency>();
@@ -75,22 +77,15 @@ namespace Viv.Engine
                 var lifetime = attr?.Lifetime ?? DependencyLifetime.Scoped;
                 var asSelf = attr?.AsSelf ?? false;
 
-                var registration = asSelf
-                    ? builder.RegisterType(type).AsSelf()
-                    : builder.RegisterType(type).AsImplementedInterfaces();
-
-                switch (lifetime)
+                var registration = asSelf ? builder.RegisterType(type).AsSelf() : builder.RegisterType(type).AsImplementedInterfaces();
+                registration = lifetime switch
                 {
-                    case DependencyLifetime.Singleton:
-                        registration.SingleInstance();
-                        break;
-                    case DependencyLifetime.Transient:
-                        registration.InstancePerDependency();
-                        break;
-                    default:
-                        registration.InstancePerLifetimeScope();
-                        break;
-                }
+                    DependencyLifetime.Singleton => registration.SingleInstance(),
+                    DependencyLifetime.Transient => registration.InstancePerDependency(),
+                    _ => registration.InstancePerLifetimeScope()
+                };
+
+                registration.PreserveExistingDefaults();
             }
         }
 
