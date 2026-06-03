@@ -47,10 +47,9 @@ namespace Viv.Test.TestTask
                 LogOption = new Log.LogOptions
                 {
                     LogType = LogType.Serilog,
-                    IsUseELK = true,
-                    ELKApiKey = string.Empty,
-                    ELKUrl = "https://es.katoumegumi.net",
-                    ELKPassword = "viv_elk_77"
+                    IsUseSeq = true,
+                    SeqApiKey = string.Empty,
+                    SeqUrl = "https://es.katoumegumi.net",
                 },
 
                 // 缓存（二级缓存：内存 + Redis）

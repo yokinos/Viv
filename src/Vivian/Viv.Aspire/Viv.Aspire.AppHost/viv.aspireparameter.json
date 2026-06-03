@@ -14,9 +14,8 @@
   },
   "DistributedLogConfig": {
     "IsEnabled": false,
-    "ELKUrl": "",
-    "ELKUsername": "",
-    "ELKPassword": ""
+    "SeqUrl": "http://localhost:5341",
+    "SeqApiKey": "viv_seq_77"
   },
   "DatabaseConfigs": {
     "DefaultDB": {

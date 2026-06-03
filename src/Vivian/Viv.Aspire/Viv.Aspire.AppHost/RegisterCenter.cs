@@ -14,7 +14,6 @@ public static class RegisterCenter
 
         return new InfrastructureParams
         {
-            PostgresConnection = builder.AddParameter("PostgresConnection"),
             RedisConnection = builder.AddParameter("RedisConnection"),
             RabbitMqHost = builder.AddParameter("RabbitMqHost"),
             RabbitMqPort = builder.AddParameter("RabbitMqPort"),

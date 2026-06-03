@@ -1,37 +1,14 @@
 services:
-  elasticsearch:
-    image: elasticsearch:8.11.0
-    container_name: Viv_Elasticsearch
+  seq:
+    image: datalust/seq:latest
+    container_name: Viv_Seq
     environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ELASTIC_PASSWORD=viv_elk_77
-      - xpack.security.transport.ssl.enabled=false
-      - xpack.security.http.ssl.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
-      - http.host=0.0.0.0 
-      - network.publish_host=0.0.0.0
+      - ACCEPT_EULA=Y
+      - SEQ_API_KEY=viv_seq_77
     ports:
-      - "9200:9200"
-    networks:
-      - viv-net
-    restart: unless-stopped
-
-  kibana:
-    image: kibana:8.11.0
-    container_name: Viv_Kibana
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTICSEARCH_USERNAME=kibana_system   
-      - ELASTICSEARCH_PASSWORD=viv_elk_77      
-      - NODE_OPTIONS=--openssl-legacy-provider
-      - XPACK_SECURITY_ENCRYPTIONKEY=something_long_random_key_123456
-      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=something_long_random_key_654321
-      - I18N_LOCALE=zh-CN
-    ports:
-      - "5601:5601"
-    depends_on:
-      - elasticsearch
+      - "5341:5341"
+    volumes:
+      - seq_data:/data
     networks:
       - viv-net
     restart: unless-stopped
@@ -106,5 +83,6 @@ networks:
     driver: bridge
 
 volumes:
+  seq_data:
   caddy_data:
   caddy_config:

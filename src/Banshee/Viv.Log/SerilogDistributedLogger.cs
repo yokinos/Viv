@@ -1,10 +1,7 @@
-﻿using Elastic.Ingest.Elasticsearch;
-using Elastic.Ingest.Elasticsearch.DataStreams;
-using Elastic.Serilog.Sinks;
-using Elastic.Transport;
-using Serilog;
+﻿using Serilog;
 using System;
 using Viv.Vva;
+using Viv.Vva.Extension;
 
 namespace Viv.Log
 {
@@ -25,27 +22,13 @@ namespace Viv.Log
                  .WriteTo.Console()
                  .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day);
 
-            // 启用 ELK
-            if (options.IsUseELK)
+            // 启用 Seq
+            if (options.IsUseSeq)
             {
-                var elasticUris = new[] { new Uri(options.ELKUrl ?? "http://localhost:9200") };
-                factory.WriteTo.Elasticsearch(elasticUris, opts =>
-                {
-                    opts.DataStream = new DataStreamName("logs", "viv-distributed", "production");
-                    opts.BootstrapMethod = BootstrapMethod.Failure;
-                },
-                transport =>
-                {
-                    // 二选一：账号密码 或 ApiKey
-                    if (!string.IsNullOrEmpty(options.ELKUserName) && !string.IsNullOrEmpty(options.ELKPassword))
-                    {
-                        transport.Authentication(new BasicAuthentication(options.ELKUserName, options.ELKPassword));
-                    }
-                    else if (!string.IsNullOrEmpty(options.ELKApiKey))
-                    {
-                        transport.Authentication(new ApiKey(options.ELKApiKey));
-                    }
-                });
+                factory.WriteTo.Seq(
+                    serverUrl: options.SeqUrl ?? "http://localhost:5341",
+                    apiKey: options.SeqApiKey.IsNullOrEmpty() ? null : options.SeqApiKey
+                );
             }
 
             _logger = factory.CreateLogger();

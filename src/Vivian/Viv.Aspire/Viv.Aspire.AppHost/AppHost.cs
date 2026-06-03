@@ -4,7 +4,6 @@ var builder = DistributedApplication.CreateBuilder(args);
 var infra = RegisterCenter.Register(builder);
 
 var apexApi = builder.AddProject<Projects.Viv_Apex_Api>("viv-apex-api")
-    .WithEnvironment("ConnectionStrings__Postgres", infra.PostgresConnection)
     .WithEnvironment("ConnectionStrings__Redis", infra.RedisConnection)
     .WithEnvironment("RabbitMq__Host", infra.RabbitMqHost)
     .WithEnvironment("RabbitMq__Port", infra.RabbitMqPort)
@@ -16,7 +15,6 @@ var apexApi = builder.AddProject<Projects.Viv_Apex_Api>("viv-apex-api")
     .WithDeveloperCertificateTrust(true);
 
 var hertaApi = builder.AddProject<Projects.Viv_Herta_Api>("viv-herta-api")
-    .WithEnvironment("ConnectionStrings__Postgres", infra.PostgresConnection)
     .WithEnvironment("ConnectionStrings__Redis", infra.RedisConnection)
     .WithEnvironment("RabbitMq__Host", infra.RabbitMqHost)
     .WithEnvironment("RabbitMq__Port", infra.RabbitMqPort)
@@ -28,7 +26,6 @@ var hertaApi = builder.AddProject<Projects.Viv_Herta_Api>("viv-herta-api")
     .WithDeveloperCertificateTrust(true);
 
 var hertaLink = builder.AddProject<Projects.Viv_Herta_Link>("viv-herta-link")
-    .WithEnvironment("ConnectionStrings__Postgres", infra.PostgresConnection)
     .WithEnvironment("ConnectionStrings__Redis", infra.RedisConnection)
     .WithEnvironment("RabbitMq__Host", infra.RabbitMqHost)
     .WithEnvironment("RabbitMq__Port", infra.RabbitMqPort)
@@ -40,7 +37,6 @@ var hertaLink = builder.AddProject<Projects.Viv_Herta_Link>("viv-herta-link")
     .WithDeveloperCertificateTrust(true);
 
 var deepRedApi = builder.AddProject<Projects.Viv_DeepRed_Api>("viv-deepred-api")
-    .WithEnvironment("ConnectionStrings__Postgres", infra.PostgresConnection)
     .WithEnvironment("ConnectionStrings__Redis", infra.RedisConnection)
     .WithEnvironment("RabbitMq__Host", infra.RabbitMqHost)
     .WithEnvironment("RabbitMq__Port", infra.RabbitMqPort)
@@ -52,7 +48,6 @@ var deepRedApi = builder.AddProject<Projects.Viv_DeepRed_Api>("viv-deepred-api")
     .WithDeveloperCertificateTrust(true);
 
 var sakumaiApi = builder.AddProject<Projects.Viv_SakuMai_Api>("viv-sakumai-api")
-    .WithEnvironment("ConnectionStrings__Postgres", infra.PostgresConnection)
     .WithEnvironment("ConnectionStrings__Redis", infra.RedisConnection)
     .WithEnvironment("RabbitMq__Host", infra.RabbitMqHost)
     .WithEnvironment("RabbitMq__Port", infra.RabbitMqPort)

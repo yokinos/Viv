@@ -15,5 +15,5 @@ namespace Viv.Aspire.ServiceDefaults
     public record RabbitMQConfig(string Host, string Username, string Password, string VirtualHost, int Port);
     public record RedisConfig(string[] Host, int Port, string Password, int RedisMode);
     public record DatabaseConfig(int DatabaseSouceType, bool IsReadWriteSplit, string MasterConnectionString, string[] SlaveConnectionString, string SagaConnectionString, string TickerQConnectionString);
-    public record DistributedLogConfig(bool IsEnabled, string ELKUrl, string ELKUsername, string ELKPassword);
+    public record DistributedLogConfig(bool IsEnabled, string SeqUrl, string SeqApiKey);
 }

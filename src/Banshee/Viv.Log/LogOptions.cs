@@ -15,27 +15,28 @@ namespace Viv.Log
         public LogType LogType { get; set; } = LogType.Serilog;
 
         /// <summary>
-        /// 是否使用ELK
+        /// 是否使用Seq
         /// </summary>
-        public bool IsUseELK { get; set; } = false;
+        public bool IsUseSeq { get; set; } = false;
 
         /// <summary>
-        /// ELK地址
+        /// Seq服务地址
         /// </summary>
-        public string ELKUrl { get; set; } = "http://localhost:9200";
+        public string SeqUrl { get; set; } = "http://localhost:5341";
 
-        public string ELKApiKey { get; set; } = string.Empty;
-        public string ELKUserName { get; private set; } = "elastic";
-        public string ELKPassword { get; set; } = "viv_elk_77";
+        /// <summary>
+        /// Seq API Key（可选，不配置则无需认证）
+        /// </summary>
+        public string SeqApiKey { get; set; } = string.Empty;
     }
 
     public class LoggerRegister
     {
         public static void Initialize(LogOptions options)
         {
-            if (options.IsUseELK && options.ELKUrl.IsNullOrEmpty())
+            if (options.IsUseSeq && options.SeqUrl.IsNullOrEmpty())
             {
-                throw new Exception("ELK地址不能为空");
+                throw new Exception("Seq地址不能为空");
             }
 
             VivConfigRegistry.Add(options);
