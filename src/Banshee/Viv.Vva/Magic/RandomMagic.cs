@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 
 namespace Viv.Vva.Magic
 {
@@ -107,5 +108,22 @@ namespace Viv.Vva.Magic
             ArgumentOutOfRangeException.ThrowIfGreaterThan(minValue, maxValue, nameof(minValue));
             return _random.NextInt64(minValue, maxValue);
         }
+    }
+
+
+    /// <summary>
+    /// 提供密码学安全的随机数生成方法（适用于Token、密钥、敏感凭证）
+    /// </summary>
+    public static class SecureRandomMagic
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void NextBytes(Span<byte> buffer) => RandomNumberGenerator.Fill(buffer);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static byte[] NextBytes(int size) => RandomNumberGenerator.GetBytes(size);
+
+        // 注意：安全随机数通常不建议封装成 Next(maxValue)，
+        // 因为取模操作会引入轻微的分布偏差（Modulo Bias），
+        // 如果非要封装，必须使用拒绝采样法（Rejection Sampling）来保证均匀分布。
     }
 }

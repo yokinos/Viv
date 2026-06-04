@@ -2,6 +2,7 @@
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
@@ -13,6 +14,11 @@ namespace Viv.Vva.Magic
     /// </summary>
     public static partial class StringMagic
     {
+        private static ReadOnlySpan<string> Units => new[] { "Byte", "KB", "MB", "GB", "TB", "PB" };
+        private const string Numbers = "0123456789";
+        private const string LowerChars = "abcdefghijklmnopqrstuvwxyz";
+        private const string UpperChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
         private static partial class RegularConst
         {
             [GeneratedRegex(@"^[\w-+]+(\.[\w-+]+)*@[\w-]+(\.[\w-]+)+$", RegexOptions.IgnoreCase | RegexOptions.Compiled, "zh-CN")]
@@ -21,7 +27,7 @@ namespace Viv.Vva.Magic
             [GeneratedRegex(@"^1[3-9]\d{9}$", RegexOptions.Compiled)]
             public static partial Regex MobileRegex();
 
-            [GeneratedRegex(@"(^\d{18}$)|(^\d{17}(\d|X|x)$)", RegexOptions.Compiled)]
+            [GeneratedRegex(@"^(\d{18}|\d{17}[\dXx])$")]
             public static partial Regex IDCardRegex();
 
             [GeneratedRegex(@"^((2[0-4]\d|25[0-5]|[01]?\d\d?)\.){3}(2[0-4]\d|25[0-5]|[01]?\d\d?)$", RegexOptions.Compiled)]
@@ -279,40 +285,58 @@ namespace Viv.Vva.Magic
         {
             if (fileSize < 0) return "0.00 Byte";
 
-            string[] units = ["Byte", "KB", "MB", "GB", "TB", "PB"];
             int unitIndex = 0;
             double size = fileSize;
 
-            while (size >= 1024 && unitIndex < units.Length - 1)
+            while (size >= 1024 && unitIndex < Units.Length - 1)
             {
                 size /= 1024;
                 unitIndex++;
             }
 
-            return $"{size:F2} {units[unitIndex]}";
+            return $"{size:F2} {Units[unitIndex]}";
         }
 
+
+
         /// <summary>
-        /// 生成随机字符串
+        /// 生成安全的随机字符串
         /// </summary>
-        /// <param name="length">字符串长度</param>
-        /// <param name="useNumber">是否使用数字（默认true）</param>
-        /// <param name="useLower">是否使用小写字母（默认true）</param>
-        /// <param name="useUpper">是否使用大写字母（默认false）</param>
-        /// <param name="customChars">自定义字符（可选）</param>
-        /// <exception cref="ArgumentException">无有效字符集时抛出</exception>
-        public static string GenerateRandomString(int length, bool useNumber = true, bool useLower = true, bool useUpper = false, string customChars = "")
+        public static string GenerateSecureString(int length, bool useNumber = true, bool useLower = true, bool useUpper = false, string customChars = "")
         {
             if (length <= 0) return string.Empty;
 
-            var charPool = new StringBuilder();
-            if (useNumber) charPool.Append("0123456789");
-            if (useLower) charPool.Append("abcdefghijklmnopqrstuvwxyz");
-            if (useUpper) charPool.Append("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-            if (!string.IsNullOrEmpty(customChars)) charPool.Append(customChars);
-
+            var charPool = BuildCharPool(useNumber, useLower, useUpper, customChars);
             if (charPool.Length == 0)
-                throw new ArgumentException("至少需要指定一种字符集（数字/小写/大写/自定义）", nameof(customChars));
+                throw new ArgumentException("至少需要指定一种有效的字符集");
+
+            var result = new StringBuilder(length);
+            // 使用加密级别的随机数生成器
+            using var rng = RandomNumberGenerator.Create();
+
+            byte[] randomBytes = new byte[4];
+            for (int i = 0; i < length; i++)
+            {
+                rng.GetBytes(randomBytes);
+                // 将随机字节映射到字符池范围内，保证均匀分布
+                uint randomUint = BitConverter.ToUInt32(randomBytes, 0);
+                int index = (int)(randomUint % (uint)charPool.Length);
+                result.Append(charPool[index]);
+            }
+
+            return result.ToString();
+        }
+
+        /// <summary>
+        /// 生成普通的随机字符串
+        /// </summary>
+        public static string GenerateFastString(int length, bool useNumber = true, bool useLower = true, bool useUpper = false, string customChars = "")
+        {
+            if (length <= 0) return string.Empty;
+
+            var charPool = BuildCharPool(useNumber, useLower, useUpper, customChars);
+            if (charPool.Length == 0)
+                throw new ArgumentException("至少需要指定一种有效的字符集");
 
             var result = new StringBuilder(length);
             for (int i = 0; i < length; i++)
@@ -322,6 +346,16 @@ namespace Viv.Vva.Magic
             }
 
             return result.ToString();
+        }
+
+        private static string BuildCharPool(bool useNumber, bool useLower, bool useUpper, string customChars)
+        {
+            var sb = new StringBuilder(62 + (customChars?.Length ?? 0));
+            if (useNumber) sb.Append(Numbers);
+            if (useLower) sb.Append(LowerChars);
+            if (useUpper) sb.Append(UpperChars);
+            if (!string.IsNullOrEmpty(customChars)) sb.Append(customChars);
+            return sb.ToString();
         }
     }
 }

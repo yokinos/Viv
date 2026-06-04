@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Options;
-using Viv.Aspire.ServiceDefaults;
 using Viv.Engine;
 using Viv.Herta.Link.Extensions;
 using Viv.Herta.Link.Hubs;

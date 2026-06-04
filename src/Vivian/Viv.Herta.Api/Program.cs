@@ -1,4 +1,3 @@
-using Viv.Aspire.ServiceDefaults;
 using Viv.Engine;
 
 namespace Viv.Herta.Api;

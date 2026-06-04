@@ -1,4 +1,3 @@
-using Viv.Aspire.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 

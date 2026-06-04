@@ -7,32 +7,49 @@
     "Port": 5672
   },
   "RedisConfig": {
-    "Host": [ "127.0.0.1" ],
+    "Host": [
+      "localhost"
+    ],
     "Port": 6379,
     "Password": "",
     "RedisMode": 0
   },
   "DistributedLogConfig": {
-    "IsEnabled": false,
+    "IsEnabled": true,
     "SeqUrl": "http://localhost:5341",
-    "SeqApiKey": "viv_seq_77"
+    "SeqApiKey": ""
   },
   "DatabaseConfigs": {
-    "DefaultDB": {
-      "DatabaseSouceType": 0,
+    "ApexDb": {
+      "DatabaseSourceType": 0,
       "IsReadWriteSplit": false,
-      "MasterConnectionString": "Server=.;Database=VivMainDB;Uid=sa;Pwd=123456;",
-      "SlaveConnectionString": [],
-      "SagaConnectionString": "",
-      "TickerQConnectionString": ""
+      "MasterConnectionString": "Server=localhost;Database=OrderDb;User Id=sa;Password=YourStrong!Passw0rd;",
+      "SlaveConnectionString": []
     },
-    "ApexDB": {
-      "DatabaseSouceType": 0,
-      "IsReadWriteSplit": false,
-      "MasterConnectionString": "Server=.;Database=VivApexDB;Uid=sa;Pwd=123456;",
-      "SlaveConnectionString": [],
-      "SagaConnectionString": "",
-      "TickerQConnectionString": ""
+    "DeepReadDb": {
+      "DatabaseSourceType": 0,
+      "IsReadWriteSplit": true,
+      "MasterConnectionString": "Server=localhost;Database=UserDb;User Id=sa;Password=YourStrong!Passw0rd;",
+      "SlaveConnectionString": [
+        "Server=localhost;Database=UserDb_Replica;User Id=readonly_user;Password=ReadOnlyPass;"
+      ]
+    },
+    "HertaDb": {
+      "DatabaseSourceType": 0,
+      "IsReadWriteSplit": true,
+      "MasterConnectionString": "Server=localhost;Database=UserDb;User Id=sa;Password=YourStrong!Passw0rd;",
+      "SlaveConnectionString": [
+        "Server=localhost;Database=UserDb_Replica;User Id=readonly_user;Password=ReadOnlyPass;"
+      ]
     }
+  },
+  "MiddlewareDatabaseConfig": {
+    "DatabaseSourceType": 0,
+    "SagaConnectionString": "Server=localhost;Database=SagaDb;User Id=sa;Password=YourStrong!Passw0rd;",
+    "TickerQConnectionString": "Server=localhost;Database=TickerQDb;User Id=sa;Password=YourStrong!Passw0rd;"
+  },
+  "SeqConfig": {
+    "Url": "http://localhost:5341",
+    "ApiKey": ""
   }
 }

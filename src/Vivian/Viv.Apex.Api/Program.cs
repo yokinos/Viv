@@ -2,7 +2,6 @@ using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using System.Text;
 using Viv.Aoi;
-using Viv.Aspire.ServiceDefaults;
 using Viv.Elysia.Filter;
 using Viv.Engine;
 using Viv.Engine.Conveter;
@@ -17,6 +16,10 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
+
+        // 从Aspire获取各种连接配置
+        //var aspireOptions = builder.Configuration.GetSection("AspireParameter").Value.As<AspireParameter>();
+        //ArgumentNullException.ThrowIfNull(aspireOptions);
 
         // 加载 Viv 配置
         var vivOptions = VivEngine.LoadVivConfig(builder.Configuration);
