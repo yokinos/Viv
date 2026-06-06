@@ -7,14 +7,14 @@ using Viv.Contracts.Interface;
 namespace Viv.Momo.Base
 {
     /// <summary>
-    /// 通用仓库基类
+    /// 仓促实现的基类，用于数据访问层的基类，提供一些通用的方法和属性。
     /// </summary>
-    public abstract class RepositoryBase
+    public abstract class DataAccessBase
     {
         protected readonly IVivContext _vivContext;
         protected readonly IMomoDbContext _dbContext;
 
-        public RepositoryBase(IVivContext context, IMomoDbContext dbContext)
+        public DataAccessBase(IVivContext context, IMomoDbContext dbContext)
         {
             _vivContext = context;
             _dbContext = dbContext;

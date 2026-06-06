@@ -8,7 +8,7 @@ using Viv.Momo.Base;
 
 namespace Viv.Apex.Core.Repository
 {
-    public class UserRepository : RepositoryBase, IUserRepository
+    public class UserRepository : DataAccessBase, IUserRepository
     {
         public UserRepository(IVivContext context, IMomoDbContext dbContext) : base(context, dbContext)
         {
