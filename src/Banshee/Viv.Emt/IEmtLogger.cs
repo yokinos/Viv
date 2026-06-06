@@ -5,7 +5,7 @@ using System.Text;
 namespace Viv.Emt
 {
     /// <summary>
-    /// 分布式日志
+    /// 日志
     /// </summary>
     public interface IEmtLogger
     {

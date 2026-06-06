@@ -6,7 +6,7 @@ using Viv.Vva.Extension;
 namespace Viv.Emt
 {
     /// <summary>
-    /// Serilog 分布式日志（纯代码实现，无注入，无ILogger）
+    /// Serilog
     /// </summary>
     public class SerilogLogger : IEmtLogger
     {
