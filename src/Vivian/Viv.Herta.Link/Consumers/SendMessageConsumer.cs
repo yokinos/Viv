@@ -4,7 +4,7 @@ using Viv.EventContracts.Herta;
 using Viv.Herta.Core.Entity.Message;
 using Viv.Herta.Core.Magic;
 using Viv.Herta.Link.Hubs;
-using Viv.Log;
+using Viv.Emt;
 using Viv.Nana;
 using Viv.Nana.Models;
 
@@ -15,7 +15,7 @@ namespace Viv.Herta.Link.Consumers
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IConnectionPool _connectionPool;
 
-        public SendMessageConsumer(IDistributedLogger logger, IHubContext<ChatHub> hubContext, IConnectionPool connectionPool)
+        public SendMessageConsumer(IEmtLogger logger, IHubContext<ChatHub> hubContext, IConnectionPool connectionPool)
             : base(logger)
         {
             _hubContext = hubContext;

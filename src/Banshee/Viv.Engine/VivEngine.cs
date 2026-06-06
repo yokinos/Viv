@@ -2,7 +2,9 @@
 using Newtonsoft.Json;
 using System.Reflection;
 using System.Text;
+using Viv.Engine.Enums;
 using Viv.Engine.Options;
+using Viv.Vva.Extension;
 
 #nullable disable
 namespace Viv.Engine
@@ -44,7 +46,7 @@ namespace Viv.Engine
         /// <summary>
         /// 从指定 JSON 文件加载（覆盖默认文件名）
         /// </summary>
-        public static VivOptions LoadVivConfig(string configFile)
+        public static VivOptions LoadVivConfig(string configFile= "viv.config.json")
         {
             var options = LoadFromJsonFile(configFile);
             _vivOptions = options;
@@ -53,8 +55,7 @@ namespace Viv.Engine
 
         private static VivOptions LoadFromFile()
         {
-            var serviceName = ResolveServiceName();
-            var configFile = $"viv.{serviceName}.json";
+            var configFile = $"viv.config.json";
             var options = LoadFromJsonFile(configFile);
             _vivOptions = options;
             return options;
@@ -69,24 +70,22 @@ namespace Viv.Engine
             return JsonConvert.DeserializeObject<VivOptions>(json) ?? new VivOptions();
         }
 
-        private static string ResolveServiceName()
+
+        /// <summary>
+        /// 创建默认的Viv配置
+        /// </summary>
+        /// <param name="configuration"></param>
+        /// <returns></returns>
+        public static VivOptions CreateVivDefaultOptionsFromAsipre(IConfiguration configuration,string db)
         {
-            var assemblyName = Assembly.GetEntryAssembly()?.GetName().Name;
+            var aspireOptions = configuration.GetSection("AspireParameter").Value.As<AspireParameter>();
+            ArgumentNullException.ThrowIfNull(aspireOptions);
 
-            if (string.IsNullOrEmpty(assemblyName))
-                return "default";
+            var options = LoadFromJsonFile("viv.config.json");
+            ArgumentNullException.ThrowIfNull(options);
 
-            var segments = assemblyName.Split('.');
-            var serviceSegments = segments
-                .SkipWhile(s => s.Equals("Viv", StringComparison.OrdinalIgnoreCase))
-                .Reverse()
-                .SkipWhile(s => s is "Api" or "Core" or "Link")
-                .Reverse()
-                .ToArray();
 
-            return serviceSegments.Length > 0
-                ? string.Join("-", serviceSegments).ToLowerInvariant()
-                : "default";
+            return options;
         }
     }
 }

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Log
+namespace Viv.Emt
 {
     public enum LogType
     {

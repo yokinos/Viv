@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Log
+namespace Viv.Emt
 {
     /// <summary>
     /// 分布式日志
     /// </summary>
-    public interface IDistributedLogger
+    public interface IEmtLogger
     {
         void Info(string message, params object[] args);
 

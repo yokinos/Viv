@@ -1,11 +1,11 @@
 ﻿using System;
 
-namespace Viv.Log
+namespace Viv.Emt
 {
     /// <summary>
     /// 空日志实现
     /// </summary>
-    public class NoneLogger : IDistributedLogger
+    public class NoneLogger : IEmtLogger
     {
         public NoneLogger() { }
 

@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using Viv.Aoi;
 
-namespace Viv.Log
+namespace Viv.Emt
 {
     /// <summary>
     /// 静态日志工具类（内部使用，提供极简的静态方法日志记录）
@@ -17,10 +17,10 @@ namespace Viv.Log
     ///    - 不同模块使用不同日志配置；
     ///    - 单元测试时轻松模拟日志器。
     /// </remarks>
-    public static class VivWriteLogger
+    public static class EmtWriteLogger
     {
         // 懒加载获取日志器实例
-        private static IDistributedLogger Logger => VivLocator.GetAutofaService<IDistributedLogger>();
+        private static IEmtLogger Logger => VivLocator.GetAutofaService<IEmtLogger>();
 
         /// <summary>
         /// 记录Error级别日志（仅消息）

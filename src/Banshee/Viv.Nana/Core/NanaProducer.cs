@@ -1,6 +1,6 @@
 using MassTransit;
 using Viv.Contracts.Interface;
-using Viv.Log;
+using Viv.Emt;
 using Viv.Nana.Models;
 
 namespace Viv.Nana.Core
@@ -10,13 +10,13 @@ namespace Viv.Nana.Core
         private readonly IVivContext _context;
         private readonly IPublishEndpoint _publishEndpoint;
         private readonly IMessageScheduler _scheduler;
-        private readonly IDistributedLogger _logger;
+        private readonly IEmtLogger _logger;
 
         public NanaProducer(
             IVivContext context,
             IPublishEndpoint publishEndpoint,
             IMessageScheduler scheduler,
-            IDistributedLogger logger)
+            IEmtLogger logger)
         {
             _context = context;
             _publishEndpoint = publishEndpoint;

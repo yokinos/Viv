@@ -3,18 +3,18 @@ using System;
 using Viv.Vva;
 using Viv.Vva.Extension;
 
-namespace Viv.Log
+namespace Viv.Emt
 {
     /// <summary>
     /// Serilog 分布式日志（纯代码实现，无注入，无ILogger）
     /// </summary>
-    public class SerilogDistributedLogger : IDistributedLogger
+    public class SerilogLogger : IEmtLogger
     {
         private readonly ILogger _logger;
 
-        public SerilogDistributedLogger()
+        public SerilogLogger()
         {
-            var options = VivConfigRegistry.Get<LogOptions>() ?? new LogOptions();
+            var options = VivConfigRegistry.Get<EmtOptions>() ?? new EmtOptions();
 
             var factory = new LoggerConfiguration()
                  .MinimumLevel.Debug()

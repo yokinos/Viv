@@ -5,9 +5,9 @@ using System.Text;
 using Viv.Vva;
 using Viv.Vva.Extension;
 
-namespace Viv.Log
+namespace Viv.Emt
 {
-    public class LogOptions
+    public class EmtOptions
     {
         /// <summary>
         /// 日志框架类型  
@@ -32,7 +32,7 @@ namespace Viv.Log
 
     public class LoggerRegister
     {
-        public static void Initialize(LogOptions options)
+        public static void Initialize(EmtOptions options)
         {
             if (options.IsUseSeq && options.SeqUrl.IsNullOrEmpty())
             {

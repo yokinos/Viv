@@ -13,7 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Viv.Aoi\Viv.Aoi.csproj" />
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
-    <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
+    <ProjectReference Include="..\Viv.Emt\Viv.Emt.csproj" />
   </ItemGroup>
 
 </Project>

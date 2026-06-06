@@ -6,7 +6,7 @@ using Viv.Contracts.Interface;
 using Viv.Echo;
 using Viv.Engine.Cache;
 using Viv.Engine.Options;
-using Viv.Log;
+using Viv.Emt;
 using Viv.Momo;
 using Viv.Momo.Core;
 using Viv.Momo.Enums;
@@ -60,11 +60,11 @@ namespace Viv.Engine
             LoggerRegister.Initialize(options.LogOption);
             if (options.LogOption.LogType == LogType.Serilog)
             {
-                services.AddSingleton<IDistributedLogger, SerilogDistributedLogger>();
+                services.AddSingleton<IEmtLogger, SerilogLogger>();
             }
             else
             {
-                services.AddSingleton<IDistributedLogger, NoneLogger>();
+                services.AddSingleton<IEmtLogger, NoneLogger>();
             }
         }
 

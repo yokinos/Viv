@@ -1,5 +1,5 @@
 using MassTransit;
-using Viv.Log;
+using Viv.Emt;
 using Viv.Nana.Core;
 using Viv.Nana.Models;
 
@@ -7,9 +7,9 @@ namespace Viv.Nana
 {
     public abstract class VivConsumer<T> : IConsumer<NanaMessage<T>> where T : VivEvent
     {
-        protected readonly IDistributedLogger _logger;
+        protected readonly IEmtLogger _logger;
 
-        protected VivConsumer(IDistributedLogger logger)
+        protected VivConsumer(IEmtLogger logger)
         {
             _logger = logger;
         }

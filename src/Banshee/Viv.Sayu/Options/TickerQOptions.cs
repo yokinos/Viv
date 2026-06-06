@@ -12,7 +12,7 @@ namespace Viv.Sayu.Options
         /// <summary>
         /// TickerQ 操作用数据库类型
         /// </summary>
-        public DatabaseSouceType DatabaseType { get; set; } = DatabaseSouceType.PostgreSQL;
+        public DatabaseSouceType DatabaseType { get; set; } = DatabaseSouceType.SqlServer;
 
         /// <summary>
         /// 是否启用 TickerQ 仪表盘
@@ -40,7 +40,7 @@ namespace Viv.Sayu.Options
         /// <summary>
         /// 密码
         /// </summary>
-        public string Password { get; set; } = "viv_tickerq_123";
+        public string Password { get; set; } = "viv_tickerq_77";
 
         /// <summary>
         /// 使用ApiKey进行认证

@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
 using Viv.Contracts.Exceptions;
-using Viv.Log;
+using Viv.Emt;
 using Viv.Nana;
 
 namespace Viv.Engine.Filter
@@ -14,12 +14,12 @@ namespace Viv.Engine.Filter
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
     public class VivExceptionFilterAttribute : Attribute, IAsyncExceptionFilter
     {
-        private readonly IDistributedLogger _logger;
+        private readonly IEmtLogger _logger;
 
         /// <summary>
         /// 构造函数：依赖注入（消息生产者 + 日志组件）
         /// </summary>
-        public VivExceptionFilterAttribute(IDistributedLogger logger)
+        public VivExceptionFilterAttribute(IEmtLogger logger)
         {
             _logger = logger;
         }

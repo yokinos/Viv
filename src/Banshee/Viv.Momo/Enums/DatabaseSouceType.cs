@@ -8,14 +8,14 @@ namespace Viv.Momo.Enums
     public enum DatabaseSouceType
     {
         /// <summary>
-        /// PostgreSQL 数据库
-        /// </summary>
-        PostgreSQL = 0,
-
-        /// <summary>
         /// Microsoft SQL Server 数据库
         /// </summary>
-        SqlServer = 1,
+        SqlServer = 0,
+
+        /// <summary>
+        /// PostgreSQL 数据库
+        /// </summary>
+        PostgreSQL = 1,
 
         /// <summary>
         /// SQLite 嵌入式数据库
