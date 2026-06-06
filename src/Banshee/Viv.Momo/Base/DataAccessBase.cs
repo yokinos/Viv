@@ -19,6 +19,5 @@ namespace Viv.Momo.Base
             _vivContext = context;
             _dbContext = dbContext;
         }
-
     }
 }
