@@ -1,7 +1,7 @@
 namespace Viv.Nana.Core
 {
     [Serializable]
-    public abstract class VivEvent
+    public abstract class NanaEvent
     {
         /// <summary>
         /// 消息优先级

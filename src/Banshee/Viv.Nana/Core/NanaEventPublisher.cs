@@ -5,14 +5,14 @@ using Viv.Nana.Models;
 
 namespace Viv.Nana.Core
 {
-    public class NanaProducer : IVivProducer
+    public class NanaEventPublisher : IVivPublisher
     {
         private readonly IVivContext _context;
         private readonly IPublishEndpoint _publishEndpoint;
         private readonly IMessageScheduler _scheduler;
         private readonly IEmtLogger _logger;
 
-        public NanaProducer(
+        public NanaEventPublisher(
             IVivContext context,
             IPublishEndpoint publishEndpoint,
             IMessageScheduler scheduler,
@@ -24,7 +24,7 @@ namespace Viv.Nana.Core
             _logger = logger;
         }
 
-        public async Task<bool> PublishAsync<T>(T content) where T : VivEvent
+        public async Task<bool> PublishAsync<T>(T content) where T : NanaEvent
         {
             if (content is null) return false;
 
@@ -47,7 +47,7 @@ namespace Viv.Nana.Core
             }
         }
 
-        public async Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content) where T : VivEvent
+        public async Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content) where T : NanaEvent
         {
             if (content is null) return false;
             if (delayTTL < TimeSpan.Zero) return false;

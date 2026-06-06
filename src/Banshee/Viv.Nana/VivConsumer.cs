@@ -5,7 +5,7 @@ using Viv.Nana.Models;
 
 namespace Viv.Nana
 {
-    public abstract class VivConsumer<T> : IConsumer<NanaMessage<T>> where T : VivEvent
+    public abstract class VivConsumer<T> : IConsumer<NanaMessage<T>> where T : NanaEvent
     {
         protected readonly IEmtLogger _logger;
 
@@ -31,7 +31,7 @@ namespace Viv.Nana
 
             if (result.IsRequeue)
             {
-                throw new VivMessageConsumeException(result.Message);
+                throw new NanaConsumeException(result.Message);
             }
 
             _logger.Error($"Message consumption failed (not requeued): {result.Message}, MessageId: {context.Message.MessageId}");

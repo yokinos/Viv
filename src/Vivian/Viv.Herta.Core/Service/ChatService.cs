@@ -13,11 +13,11 @@ namespace Viv.Herta.Core.Service
 {
     public class ChatService : IChatService
     {
-        private readonly IVivProducer _vivProducer;
+        private readonly IVivPublisher _vivPublisher;
 
-        public ChatService(IVivProducer vivProducer)
+        public ChatService(IVivPublisher vivPublisher)
         {
-            _vivProducer = vivProducer;
+            _vivPublisher = vivPublisher;
         }
 
         public async Task<VivApiResult> SendMessageAsync(SendMessageRequest request)
@@ -29,7 +29,7 @@ namespace Viv.Herta.Core.Service
             }
 
             var sendMessageEvent = new SendMessageEvent(request.FromUserId, request.TargetId, messaage, request.ReceiverType, request.MessageType);
-            await _vivProducer.PublishAsync(sendMessageEvent);
+            await _vivPublisher.PublishAsync(sendMessageEvent);
 
             return VivApiResult.Success();
         }

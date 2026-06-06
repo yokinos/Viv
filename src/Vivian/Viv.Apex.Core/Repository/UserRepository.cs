@@ -10,7 +10,7 @@ namespace Viv.Apex.Core.Repository
 {
     public class UserRepository : RepositoryBase, IUserRepository
     {
-        public UserRepository(IVivContext context, IVivDbContext dbContext) : base(context, dbContext)
+        public UserRepository(IVivContext context, IMomoDbContext dbContext) : base(context, dbContext)
         {
 
         }

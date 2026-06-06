@@ -12,9 +12,9 @@ namespace Viv.Momo.Base
     public abstract class RepositoryBase
     {
         protected readonly IVivContext _vivContext;
-        protected readonly IVivDbContext _dbContext;
+        protected readonly IMomoDbContext _dbContext;
 
-        public RepositoryBase(IVivContext context, IVivDbContext dbContext)
+        public RepositoryBase(IVivContext context, IMomoDbContext dbContext)
         {
             _vivContext = context;
             _dbContext = dbContext;

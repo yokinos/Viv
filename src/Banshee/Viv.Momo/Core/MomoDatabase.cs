@@ -17,7 +17,7 @@ using Viv.Vva.Magic;
 
 namespace Viv.Momo.Core
 {
-    public class VivDatabase : IDisposable
+    public class MomoDatabase : IDisposable
     {
         protected readonly IVivContext _vivContext;
         protected DatabaseOptions _options;
@@ -33,7 +33,7 @@ namespace Viv.Momo.Core
         private readonly Lock _lock = new();
         private bool _disposed = false;
 
-        public VivDatabase(IVivContext vivContext, IEmtLogger logger)
+        public MomoDatabase(IVivContext vivContext, IEmtLogger logger)
         {
             ArgumentNullException.ThrowIfNull(vivContext);
             _vivContext = vivContext;

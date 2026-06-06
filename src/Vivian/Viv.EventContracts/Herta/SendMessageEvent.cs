@@ -8,7 +8,7 @@ namespace Viv.EventContracts.Herta
     /// <summary>
     /// 发送消息MQ事件
     /// </summary>
-    public class SendMessageEvent : VivEvent
+    public class SendMessageEvent : NanaEvent
     {
         public SendMessageEvent() { }
 

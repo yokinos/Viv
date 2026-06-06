@@ -23,11 +23,11 @@ namespace Viv.Momo.Core
     /// <summary>
     /// Viv 框架下的数据库访问实现（基于 EFCore 与 Dapper，支持 PostgreSQL、SqlServer）
     /// </summary>
-    public class VivDatabaseContext : VivDatabase, IVivDbContext
+    public class MomoDatabaseContext : MomoDatabase, IMomoDbContext
     {
         private bool _disposed;
 
-        public VivDatabaseContext(IVivContext vivContext, IEmtLogger logger)
+        public MomoDatabaseContext(IVivContext vivContext, IEmtLogger logger)
             : base(vivContext, logger) { }
 
         #region Insert
@@ -1308,10 +1308,10 @@ namespace Viv.Momo.Core
 
         #region Other
 
-        public IVivDbContext? CreateContext(DatabaseOptions options)
+        public IMomoDbContext? CreateContext(DatabaseOptions options)
         {
             if (options == null) return null;
-            var dataContext = new VivDatabaseContext(_vivContext, _logger);
+            var dataContext = new MomoDatabaseContext(_vivContext, _logger);
             dataContext.SetOptions(options);
             return dataContext;
         }
@@ -1330,6 +1330,11 @@ namespace Viv.Momo.Core
         public EFAppContext GetEFContext(DbReadWriteType readWriteType)
         {
             return GetAppContext(readWriteType);
+        }
+
+        public IDbConnection GetDbConnection(DbReadWriteType readWriteType = DbReadWriteType.Read)
+        {
+            return GetAppContext(readWriteType).DbConnection;
         }
 
         public async Task SyncTableAsync(bool allowDrop = false, CancellationToken cancellationToken = default)
