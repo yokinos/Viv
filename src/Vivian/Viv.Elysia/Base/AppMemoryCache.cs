@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Redis;
 
 namespace Viv.Elysia.Base
 {
@@ -9,6 +10,13 @@ namespace Viv.Elysia.Base
     /// </summary>
     public class AppMemoryCache
     {
+        private readonly IRedisService _redisService;
+
+        public AppMemoryCache()
+        {
+
+        }
+
         public static string GetAppSecret(long appId)
         {
             return "AppSecret";
