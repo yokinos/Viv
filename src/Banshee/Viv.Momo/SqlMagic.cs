@@ -8,6 +8,7 @@ using System.Text;
 using Viv.Momo.Converter;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
+using Viv.Momo.SqlServer;
 using Viv.Vva;
 using Viv.Vva.Extension;
 
@@ -92,21 +93,42 @@ namespace Viv.Momo
         /// <returns>分页查询SQL + 总数统计SQL</returns>
         public static (string pageSql, string countSql) GetPageSqlTemplate(string sql, int pageIndex, int pageSize, DatabaseSouceType databaseSouceType)
         {
-            var countSql = $"SELECT COUNT(*) FROM ({sql}) AS t";
-            string pageSql;
+            int offset = (pageIndex - 1) * pageSize;
+            var sqlWithoutOrderBy = RemoveOrderBy(sql);
+            var countSql = $"SELECT COUNT(*) FROM ({sqlWithoutOrderBy}) AS t";
 
             if (databaseSouceType == DatabaseSouceType.PostgreSQL)
             {
-                int offset = (pageIndex - 1) * pageSize;
-                pageSql = $"SELECT * FROM ({sql}) AS t LIMIT {pageSize} OFFSET {offset}";
-            }
-            else
-            {
-                int offset = (pageIndex - 1) * pageSize;
-                pageSql = $"SELECT * FROM ({sql}) AS t OFFSET {offset} ROWS FETCH NEXT {pageSize} ROWS ONLY";
+                var pageSql = $"{sql} LIMIT {pageSize} OFFSET {offset}";
+                return (pageSql, countSql);
             }
 
-            return (pageSql, countSql);
+            if (databaseSouceType == DatabaseSouceType.SqlServer)
+            {
+                var analyzer = new MssqlSqlAnalyzer();
+                var analysis = analyzer.Analyze(sql);
+                return (
+                    MssqlPagingSqlBuilder.BuildPageSql(analysis, pageIndex, pageSize),
+                    MssqlPagingSqlBuilder.BuildCountSql(analysis)
+                );
+            }
+
+            throw new NotSupportedException($"Unsupported database type: {databaseSouceType}");
+        }
+
+        private static string RemoveOrderBy(string sql)
+        {
+            if (string.IsNullOrEmpty(sql)) return sql;
+
+            var lastIndex = sql.LastIndexOf("ORDER BY", StringComparison.OrdinalIgnoreCase);
+            if (lastIndex < 0) return sql;
+
+            // 确保不是子查询中的 ORDER BY（后面不能再有右括号）
+            var afterOrderBy = sql.Substring(lastIndex);
+            var closeParenIndex = afterOrderBy.IndexOf(')');
+            if (closeParenIndex >= 0) return sql;
+
+            return sql.Substring(0, lastIndex).TrimEnd();
         }
 
         /// <summary>
