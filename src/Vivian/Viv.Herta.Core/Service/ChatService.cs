@@ -7,7 +7,7 @@ using Viv.Herta.Core.Entity.Dto.Chat;
 using Viv.Herta.Core.IService;
 using Viv.Herta.Core.Magic;
 using Viv.Nana;
-using Viv.Vva.Extension;
+using Viv.Delusion.Extension;
 
 namespace Viv.Herta.Core.Service
 {

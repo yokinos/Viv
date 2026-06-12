@@ -17,7 +17,6 @@
   <ItemGroup>
 	  <ProjectReference Include="..\Viv.Aoi\Viv.Aoi.csproj" />
 	  <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
-	  <ProjectReference Include="..\Viv.Vva\Viv.Vva.csproj" />
   </ItemGroup>
 
 </Project>

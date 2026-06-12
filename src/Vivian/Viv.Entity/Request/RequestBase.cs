@@ -2,10 +2,10 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using Viv.Delusion.Magic;
 using Viv.Elysia.Base;
 using Viv.Elysia.Interface;
 using Viv.Elysia.Validator;
-using Viv.Vva.Magic;
 
 namespace Viv.Entity.Request
 {

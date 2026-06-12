@@ -6,14 +6,14 @@ using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
+using Viv.Delusion;
+using Viv.Delusion.Magic;
 using Viv.Log;
 using Viv.Momo.Base;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
-using Viv.Vva;
-using Viv.Vva.Extension;
-using Viv.Vva.Magic;
+using Viv.Delusion.Extension;
 
 namespace Viv.Momo.Core
 {

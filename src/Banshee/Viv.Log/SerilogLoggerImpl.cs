@@ -1,7 +1,7 @@
 ﻿using Serilog;
 using System;
-using Viv.Vva;
-using Viv.Vva.Extension;
+using Viv.Delusion;
+using Viv.Delusion.Extension;
 
 namespace Viv.Log
 {

@@ -2,7 +2,7 @@ using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 using Viv.Nana.Core;
 using Viv.Nana.Options;
-using Viv.Vva.Extension;
+using Viv.Delusion.Extension;
 
 namespace Viv.Nana
 {

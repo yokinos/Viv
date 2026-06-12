@@ -14,12 +14,12 @@ using Viv.Nana.Core;
 using Viv.Nana.Saga;
 using StackExchange.Redis;
 using Viv.Redis;
-using Viv.Sayu;
-using Viv.Sayu.Enums;
-using Viv.Vva;
-using Viv.Vva.Extension;
-using Viv.Vva.Magic;
+using Viv.Tick;
+using Viv.Tick.Enums;
+using Viv.Delusion.Extension;
 using Viv.Log;
+using Viv.Delusion;
+using Viv.Delusion.Magic;
 
 namespace Viv.Engine
 {
@@ -180,12 +180,12 @@ namespace Viv.Engine
 
         private static void RegisterScheduler(IServiceCollection services, VivOptions options)
         {
-            if (options.SayuOption == null) return;
+            if (options.TickOption == null) return;
 
-            if (options.SayuOption.SchedulerType == VivSchedulerType.TickerQ)
+            if (options.TickOption.SchedulerType == VivSchedulerType.TickerQ)
             {
-                Sayu.SayuRegister.ScanTasks(options.SayuOption);
-                services.AddVivTickerQ(options.SayuOption);
+				Tick.TickRegister.ScanTasks(options.TickOption);
+                services.AddVivTickerQ(options.TickOption);
             }
         }
 

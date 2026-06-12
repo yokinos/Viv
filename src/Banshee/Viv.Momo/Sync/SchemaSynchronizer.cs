@@ -5,11 +5,11 @@ using System.Reflection;
 using Microsoft.Data.SqlClient;
 using Npgsql;
 using Viv.Contracts.Enums;
+using Viv.Delusion.Magic;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
-using Viv.Vva;
-using Viv.Vva.Magic;
+using Viv.Delusion;
 
 namespace Viv.Momo.Sync
 {

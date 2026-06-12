@@ -4,8 +4,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Viv.Contracts.Exceptions;
-using Viv.Vva;
-using Viv.Vva.Extension;
+using Viv.Delusion;
+using Viv.Delusion.Extension;
 
 namespace Viv.Authentication
 {

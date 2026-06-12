@@ -3,10 +3,10 @@ using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Data;
 using System.Reflection;
+using Viv.Delusion.Magic;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
-using Viv.Vva.Magic;
 
 namespace Viv.Momo.Core
 {

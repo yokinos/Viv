@@ -2,8 +2,8 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
-using Viv.Vva;
-using Viv.Vva.Extension;
+using Viv.Delusion;
+using Viv.Delusion.Extension;
 
 namespace Viv.Echo.Http
 {

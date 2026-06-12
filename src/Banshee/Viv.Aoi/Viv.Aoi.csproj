@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
-    <ProjectReference Include="..\Viv.Vva\Viv.Vva.csproj" />
+    <ProjectReference Include="..\Viv.Delusion\Viv.Delusion.csproj" />
   </ItemGroup>
 
 </Project>

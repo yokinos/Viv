@@ -10,12 +10,12 @@
     <ProjectReference Include="..\Viv.Aoi\Viv.Aoi.csproj" />
     <ProjectReference Include="..\Viv.Authentication\Viv.Authentication.csproj" />
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
+    <ProjectReference Include="..\Viv.Delusion\Viv.Delusion.csproj" />
     <ProjectReference Include="..\Viv.Momo\Viv.Momo.csproj" />
     <ProjectReference Include="..\Viv.Nana\Viv.Nana.csproj" />
     <ProjectReference Include="..\Viv.Redis\Viv.Redis.csproj" />
-    <ProjectReference Include="..\Viv.Sayu\Viv.Sayu.csproj" />
     <ProjectReference Include="..\Viv.Echo\Viv.Echo.csproj" />
-    <ProjectReference Include="..\Viv.Vva\Viv.Vva.csproj" />
+    <ProjectReference Include="..\Viv.Tick\Viv.Tick.csproj" />
   </ItemGroup>
 
 </Project>

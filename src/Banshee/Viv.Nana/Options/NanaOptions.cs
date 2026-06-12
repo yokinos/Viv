@@ -1,5 +1,5 @@
+using Viv.Delusion.Magic;
 using Viv.Momo.Enums;
-using Viv.Vva.Magic;
 
 namespace Viv.Nana.Options
 {

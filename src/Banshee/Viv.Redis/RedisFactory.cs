@@ -6,10 +6,10 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Viv.Aoi;
+using Viv.Delusion;
 using Viv.Log;
 using Viv.Redis.DbAllocator;
-using Viv.Vva;
-using Viv.Vva.Extension;
+using Viv.Delusion.Extension;
 
 namespace Viv.Redis
 {

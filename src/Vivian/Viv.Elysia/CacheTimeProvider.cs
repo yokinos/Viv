@@ -1,5 +1,5 @@
 ﻿using System;
-using Viv.Vva.Magic;
+using Viv.Delusion.Magic;
 
 namespace Viv.Elysia
 {

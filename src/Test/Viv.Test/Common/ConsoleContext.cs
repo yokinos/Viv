@@ -4,8 +4,8 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using Viv.Delusion.Magic;
 using Viv.Test.Core;
-using Viv.Vva.Magic;
 
 namespace Viv.Test.Common
 {

@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Viv.Authentication;
 using Viv.Contracts.Interface;
 using Viv.Redis;
-using Viv.Vva.Extension;
+using Viv.Delusion.Extension;
 
 namespace Viv.Engine.Middleware
 {

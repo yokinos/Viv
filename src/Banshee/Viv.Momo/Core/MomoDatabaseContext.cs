@@ -10,13 +10,13 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
+using Viv.Delusion.Generic;
 using Viv.Log;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
 using Viv.Momo.Sync;
-using Viv.Vva.Extension;
-using Viv.Vva.Generic;
+using Viv.Delusion.Extension;
 
 namespace Viv.Momo.Core
 {

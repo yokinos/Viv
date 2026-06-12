@@ -1,10 +1,10 @@
 using MassTransit;
+using Viv.Delusion;
+using Viv.Delusion.Magic;
 using Viv.Nana.Core;
 using Viv.Nana.Options;
 using Viv.Nana.Saga;
-using Viv.Vva;
-using Viv.Vva.Extension;
-using Viv.Vva.Magic;
+using Viv.Delusion.Extension;
 
 namespace Viv.Nana
 {

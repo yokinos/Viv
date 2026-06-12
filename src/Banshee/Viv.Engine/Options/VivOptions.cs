@@ -8,7 +8,7 @@ using Viv.Engine.Enums;
 using Viv.Momo.Options;
 using Viv.Nana.Options;
 using Viv.Redis;
-using Viv.Sayu.Options;
+using Viv.Tick.Options;
 using Viv.Log;
 
 #nullable disable
@@ -56,7 +56,7 @@ namespace Viv.Engine.Options
         /// <summary>
         /// 定时任务配置
         /// </summary>
-        public SayuOptions SayuOption { get; set; }
+        public TickOptions TickOption { get; set; }
 
         /// <summary>
         /// 跨服务通信配置（HTTP + gRPC）

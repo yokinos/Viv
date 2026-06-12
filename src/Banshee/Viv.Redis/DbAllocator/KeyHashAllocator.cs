@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Vva.Magic;
+using Viv.Delusion.Magic;
 
 namespace Viv.Redis.DbAllocator
 {

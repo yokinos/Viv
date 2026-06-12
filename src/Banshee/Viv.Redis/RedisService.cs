@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
 using Viv.Redis.DbAllocator;
-using Viv.Vva.Extension;
+using Viv.Delusion.Extension;
 
 #nullable disable
 namespace Viv.Redis

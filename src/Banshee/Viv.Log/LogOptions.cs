@@ -2,8 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Vva;
-using Viv.Vva.Extension;
+using Viv.Delusion;
+using Viv.Delusion.Extension;
 
 namespace Viv.Log
 {

@@ -25,7 +25,7 @@ namespace Viv.Test.TestTask
                 DIOption = new DIOptions
                 {
                     // 服务自动注册
-                    ServiceImplementation = new Vva.Magic.FilterTypeOptions
+                    ServiceImplementation = new Delusion.Magic.FilterTypeOptions
                     {
                         AssemblyName = "Viv.Apex.Core",
                         NameSpace = "Viv.Apex.Core.Service",
@@ -34,7 +34,7 @@ namespace Viv.Test.TestTask
                     },
 
                     // 仓储自动注册
-                    RepositoryImplementation = new Vva.Magic.FilterTypeOptions
+                    RepositoryImplementation = new Delusion.Magic.FilterTypeOptions
                     {
                         AssemblyName = "Viv.Apex.Core",
                         NameSpace = "Viv.Apex.Core.Repository",
@@ -97,7 +97,7 @@ namespace Viv.Test.TestTask
                     Timeout = 30,
                     EntityTypeOptions =
                     [
-                        new Vva.Magic.FilterTypeOptions
+                        new Delusion.Magic.FilterTypeOptions
                         {
                             AssemblyName = "Viv.Entity.Apex",
                             NameSpace = "Viv.Entity.Apex.Database",

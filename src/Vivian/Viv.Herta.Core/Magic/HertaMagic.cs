@@ -5,7 +5,7 @@ using System.Text;
 using Viv.Entity.Enums;
 using Viv.Entity.Interface;
 using Viv.Herta.Core.Entity.Message;
-using Viv.Vva.Extension;
+using Viv.Delusion.Extension;
 
 namespace Viv.Herta.Core.Magic
 {

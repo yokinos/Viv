@@ -1,6 +1,6 @@
 ﻿using System.Threading;
-using Viv.Vva.Extension;
-using Viv.Vva.Magic;
+using Viv.Delusion.Magic;
+using Viv.Delusion.Extension;
 
 namespace Viv.Redis
 {

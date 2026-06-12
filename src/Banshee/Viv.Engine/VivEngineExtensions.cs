@@ -13,12 +13,12 @@ using Viv.Aoi;
 using Viv.Contracts.Attributes;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Interface;
+using Viv.Delusion.Magic;
 using Viv.Engine.Conveter;
 using Viv.Engine.Filter;
 using Viv.Engine.Middleware;
 using Viv.Engine.Options;
-using Viv.Vva.Extension;
-using Viv.Vva.Magic;
+using Viv.Delusion.Extension;
 
 namespace Viv.Engine
 {

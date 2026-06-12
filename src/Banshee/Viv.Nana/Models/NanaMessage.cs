@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Delusion.Magic;
 using Viv.Nana.Core;
-using Viv.Vva.Magic;
 
 namespace Viv.Nana.Models
 {

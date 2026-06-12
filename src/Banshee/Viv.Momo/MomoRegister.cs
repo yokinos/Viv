@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Delusion;
 using Viv.Momo.Options;
-using Viv.Vva;
-using Viv.Vva.Extension;
+using Viv.Delusion.Extension;
 
 namespace Viv.Momo
 {
