@@ -1,6 +1,6 @@
 namespace Viv.Echo.Grpc
 {
-    [AttributeUsage(AttributeTargets.Interface, Inherited = false)]
+    [AttributeUsage(AttributeTargets.Class, Inherited = false)]
     public class GrpcClientAttribute : Attribute
     {
         public GrpcClientAttribute(string name, string address)
