@@ -12,11 +12,9 @@ namespace Viv.Entity.Database.Apex
     /// 客户端应用表
     /// 设计：每个客户端应用对应一个独立 AppId
     /// 同一应用不同平台 = 不同 AppId
-    /// 同一应用不同版本 = 共用同一个 AppId（版本管理见 <see cref="VivClientAppVersion"/>）
+    /// 同一应用不同版本 = 共用同一个 AppId（版本管理见 <see cref="AtClientAppVersion"/>）
     /// </summary>
-    [Table("VivClientApp")]
-    [Serializable]
-    public class VivClientApp : EntityBase, ISoftDelete
+    public class AtClientApp : EntityBase, ISoftDelete
     {
         /// <summary>
         /// 客户端应用程序名称

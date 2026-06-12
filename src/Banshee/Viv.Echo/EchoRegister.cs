@@ -19,7 +19,17 @@ namespace Viv.Echo
             }
 
             services.AddTransient<VivGrpcInterceptor>();
-            services.AddVivGrpcClients(options);
+
+            if (options.GrpcEndpoints.Count > 0)
+            {
+                // 旧的配置方式 — 兼容过渡期
+                services.AddVivGrpcClientsFromConfig(options);
+            }
+            else
+            {
+                // 新方式 — Source Generator 自动生成
+                services.AddVivGrpcClients();
+            }
         }
     }
 }

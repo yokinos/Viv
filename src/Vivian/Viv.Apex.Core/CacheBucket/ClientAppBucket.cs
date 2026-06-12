@@ -17,7 +17,7 @@ namespace Viv.Apex.Core.CacheBucket
         /// <summary>
         /// 客户端应用缓存
         /// </summary>
-        public VivClientApp? ClientApp { get; set; }
+        public AtClientApp? ClientApp { get; set; }
 
         public TimeSpan CacheTime => CacheTimeProvider.GetRandomDays();
 

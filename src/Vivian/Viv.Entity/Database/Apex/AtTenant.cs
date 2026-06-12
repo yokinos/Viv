@@ -12,8 +12,7 @@ namespace Viv.Entity.Database.Apex
     /// 多租户 SaaS系统的核心实体
     /// 如果当前不是SaaS系统,则无需使用此实体
     /// </summary>
-    [Table("VivTenant")]
-    public class VivTenant : EntityBase, ISoftDelete
+    public class AtTenant : EntityBase, ISoftDelete
     {
         /// <summary>
         /// 租户名称

@@ -10,8 +10,4 @@
     <ProjectReference Include="..\Viv.Elysia\Viv.Elysia.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Database\DeepRed\" />
-  </ItemGroup>
-
 </Project>

@@ -14,8 +14,7 @@ namespace Viv.Entity.Database.Herta
     /// 1. 所有需要使用聊天功能的用户都要在这里独立注册，包括系统用户和第三方用户
     /// 2. 共享Apex的App与租户设计
     /// </summary>
-    [Table("ExChatUser")]
-    public class ExChatUser : EntityBase, ITenant, ISoftDelete
+    public class EtChatUser : EntityBase, ITenant, ISoftDelete
     {
         /// <summary>
         /// 租户ID

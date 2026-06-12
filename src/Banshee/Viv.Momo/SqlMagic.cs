@@ -6,11 +6,11 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using Viv.Delusion;
+using Viv.Delusion.Extension;
 using Viv.Momo.Converter;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.SqlServer;
-using Viv.Delusion.Extension;
 
 namespace Viv.Momo
 {
@@ -107,10 +107,8 @@ namespace Viv.Momo
             {
                 var analyzer = new MssqlSqlAnalyzer();
                 var analysis = analyzer.Analyze(sql);
-                return (
-                    MssqlPagingSqlBuilder.BuildPageSql(analysis, pageIndex, pageSize),
-                    MssqlPagingSqlBuilder.BuildCountSql(analysis)
-                );
+
+                return (analysis.BuildPageSql(pageIndex, pageSize), analysis.BuildCountSql());
             }
 
             throw new NotSupportedException($"Unsupported database type: {databaseSouceType}");

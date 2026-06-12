@@ -1,13 +1,13 @@
-using System.Linq.Expressions;
-using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System.Linq.Expressions;
+using System.Reflection;
 using TickerQ.Dashboard.DependencyInjection;
 using TickerQ.DependencyInjection;
 using TickerQ.EntityFrameworkCore.DbContextFactory;
 using TickerQ.EntityFrameworkCore.DependencyInjection;
-using Viv.Momo.Enums;
 using Viv.Delusion.Extension;
+using Viv.Momo.Enums;
 using Viv.Tick.Options;
 
 namespace Viv.Tick
@@ -79,7 +79,7 @@ namespace Viv.Tick
             var mapMethod = builder.GetType().GetMethods()
                 .FirstOrDefault(m => m.Name == "MapTicker" && m.IsGenericMethodDefinition);
             if (mapMethod == null) return;
-            
+
             var genericMap = mapMethod.MakeGenericMethod(desc.TaskType);
 
             // 参数类型：Action<TickerConfigurator<T>>

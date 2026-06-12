@@ -1,17 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Momo.SqlServer;
 
-namespace Viv.Momo.SqlServer
+namespace Viv.Momo
 {
-
-    /// <summary>
-    /// MSSQL 分页 SQL 构建器。
-    /// 只负责基于分析结果生成 CountSql 和 PageSql。
-    /// </summary>
-    public sealed class MssqlPagingSqlBuilder
+    public static class MomoExtension
     {
-        public static string BuildCountSql(TSqlAnalysis analysis, string alias = "T")
+        public static string BuildCountSql(this TSqlAnalysis analysis, string alias = "T")
         {
             ArgumentNullException.ThrowIfNull(analysis);
 
@@ -21,7 +17,7 @@ namespace Viv.Momo.SqlServer
             return $"SELECT COUNT(1)FROM ({analysis.BaseSql}) AS {alias}".Trim();
         }
 
-        public static string BuildPageSql(TSqlAnalysis analysis, int pageIndex, int pageSize)
+        public static string BuildPageSql(this TSqlAnalysis analysis, int pageIndex, int pageSize)
         {
             ArgumentNullException.ThrowIfNull(analysis);
             if (pageIndex < 1)
@@ -41,5 +37,4 @@ namespace Viv.Momo.SqlServer
             return $"{analysis.BaseSql} {analysis.OrderBySql} OFFSET {offset} ROWS FETCH NEXT {pageSize} ROWS ONLY".Trim();
         }
     }
-
 }

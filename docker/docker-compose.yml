@@ -23,27 +23,16 @@ services:
       - viv-net
     restart: unless-stopped
 
-  postgresql:
-    image: postgres:latest
-    container_name: Viv_PostgreSql
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: Viv_SQLServer
     environment:
-      POSTGRES_PASSWORD: viv_pgsql_77
-      POSTGRES_USER: postgres
-      POSTGRES_DB: postgres
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=viv_sqlserver_77
     ports:
-      - "5432:5432"
-    networks:
-      - viv-net
-    restart: unless-stopped
-
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: Viv_pgAdmin
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=viv@test.com
-      - PGADMIN_DEFAULT_PASSWORD=viv_pgadmin_77
-    ports:
-      - "5050:80"
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
     networks:
       - viv-net
     restart: unless-stopped
@@ -61,7 +50,7 @@ services:
     networks:
       - viv-net
     restart: unless-stopped
-   
+
   caddy:
     image: caddy:latest
     container_name: Viv-Caddy
@@ -84,5 +73,6 @@ networks:
 
 volumes:
   seq_data:
+  sqlserver_data:
   caddy_data:
   caddy_config:
