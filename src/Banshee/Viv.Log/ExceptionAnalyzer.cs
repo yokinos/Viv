@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Emt
+namespace Viv.Log
 {
     public class ExceptionAnalyzer
     {

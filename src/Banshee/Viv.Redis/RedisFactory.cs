@@ -6,7 +6,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Viv.Aoi;
-using Viv.Emt;
+using Viv.Log;
 using Viv.Redis.DbAllocator;
 using Viv.Vva;
 using Viv.Vva.Extension;
@@ -57,7 +57,7 @@ namespace Viv.Redis
         /// <summary>
         /// 分布式日志
         /// </summary>
-        private static IEmtLogger? _logger;
+        private static ILoggerContract? _logger;
 
         public RedisFactory()
         {
@@ -69,7 +69,7 @@ namespace Viv.Redis
                 DbSelectorType.None => new NoneAllocator(),
                 _ => new NoneAllocator(),
             };
-            _logger = VivLocator.GetAutofaService<IEmtLogger>();
+            _logger = VivLocator.GetAutofaService<ILoggerContract>();
         }
 
         /// <summary>

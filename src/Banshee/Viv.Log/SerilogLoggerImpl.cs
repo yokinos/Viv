@@ -3,7 +3,7 @@ using System;
 using Viv.Vva;
 using Viv.Vva.Extension;
 
-namespace Viv.Emt
+namespace Viv.Log
 {
     /// <summary>
     /// Serilog

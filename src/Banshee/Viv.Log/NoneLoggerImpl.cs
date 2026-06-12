@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Viv.Emt
+namespace Viv.Log
 {
     /// <summary>
     /// 空日志实现

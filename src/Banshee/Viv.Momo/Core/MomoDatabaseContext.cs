@@ -10,7 +10,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
-using Viv.Emt;
+using Viv.Log;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
@@ -27,7 +27,7 @@ namespace Viv.Momo.Core
     {
         private bool _disposed;
 
-        public MomoDatabaseContext(IVivContext vivContext, IEmtLogger logger)
+        public MomoDatabaseContext(IVivContext vivContext, ILoggerContract logger)
             : base(vivContext, logger) { }
 
         #region Insert

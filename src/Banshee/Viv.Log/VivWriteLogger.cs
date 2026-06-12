@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using Viv.Aoi;
 
-namespace Viv.Emt
+namespace Viv.Log
 {
     /// <summary>
     /// 静态日志工具类（内部使用，提供极简的静态方法日志记录）

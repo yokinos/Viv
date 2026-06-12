@@ -6,7 +6,7 @@ using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
-using Viv.Emt;
+using Viv.Log;
 using Viv.Momo.Base;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
@@ -21,7 +21,7 @@ namespace Viv.Momo.Core
     {
         protected readonly IVivContext _vivContext;
         protected DatabaseOptions _options;
-        protected readonly IEmtLogger _logger;
+        protected readonly ILoggerContract _logger;
 
         protected EFAppContext? _writeDbContext;
         protected EFAppContext? _readDbContext;
@@ -33,7 +33,7 @@ namespace Viv.Momo.Core
         private readonly Lock _lock = new();
         private bool _disposed = false;
 
-        public MomoDatabase(IVivContext vivContext, IEmtLogger logger)
+        public MomoDatabase(IVivContext vivContext, ILoggerContract logger)
         {
             ArgumentNullException.ThrowIfNull(vivContext);
             _vivContext = vivContext;

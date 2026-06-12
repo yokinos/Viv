@@ -13,8 +13,7 @@ namespace Viv.Momo.SqlServer
     {
         public static string BuildCountSql(TSqlAnalysis analysis, string alias = "T")
         {
-            if (analysis == null)
-                throw new ArgumentNullException(nameof(analysis));
+            ArgumentNullException.ThrowIfNull(analysis);
 
             if (string.IsNullOrWhiteSpace(alias))
                 throw new ArgumentException("别名不能为空。", nameof(alias));
@@ -24,9 +23,7 @@ namespace Viv.Momo.SqlServer
 
         public static string BuildPageSql(TSqlAnalysis analysis, int pageIndex, int pageSize)
         {
-            if (analysis == null)
-                throw new ArgumentNullException(nameof(analysis));
-
+            ArgumentNullException.ThrowIfNull(analysis);
             if (pageIndex < 1)
                 throw new ArgumentOutOfRangeException(nameof(pageIndex), "pageIndex 必须大于等于 1。");
 

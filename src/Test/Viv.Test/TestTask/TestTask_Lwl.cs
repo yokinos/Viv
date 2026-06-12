@@ -3,10 +3,10 @@ using Viv.Aoi;
 using Viv.Authentication.Enums;
 using Viv.Engine.Enums;
 using Viv.Engine.Options;
-using Viv.Emt;
 using Viv.Momo.Interface;
 using Viv.Redis;
 using Viv.Test.Core;
+using Viv.Log;
 
 namespace Viv.Test.TestTask
 {
@@ -44,7 +44,7 @@ namespace Viv.Test.TestTask
                 },
 
                 // 日志
-                LogOption = new Emt.EmtOptions
+                LogOption = new Log.LogOptions
                 {
                     LogType = LogType.Serilog,
                     IsUseSeq = true,

@@ -5,11 +5,11 @@ using Viv.Aoi;
 using Viv.Authentication;
 using Viv.Echo.Options;
 using Viv.Engine.Enums;
-using Viv.Emt;
 using Viv.Momo.Options;
 using Viv.Nana.Options;
 using Viv.Redis;
 using Viv.Sayu.Options;
+using Viv.Log;
 
 #nullable disable
 namespace Viv.Engine.Options
@@ -36,7 +36,7 @@ namespace Viv.Engine.Options
         /// <summary>
         /// 日志设置
         /// </summary>
-        public EmtOptions LogOption { get; set; }
+        public LogOptions LogOption { get; set; }
 
         /// <summary>
         /// 数据库设置

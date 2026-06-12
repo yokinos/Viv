@@ -5,7 +5,7 @@ using System.Text;
 using Viv.Vva;
 using Viv.Vva.Extension;
 
-namespace Viv.Emt
+namespace Viv.Log
 {
     public class LogOptions
     {
