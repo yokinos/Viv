@@ -64,17 +64,17 @@ namespace Viv.Engine
 
         public static VivApiResult Success(string message = "successful", object? data = null)
         {
-            return ApiRsult(ResultCode.Success, message, data);
+            return ApiRsult(ApiResultCode.Success, message, data);
         }
 
         public static VivApiResult Error(string message, object? data = null)
         {
-            return ApiRsult(ResultCode.Error, message, data);
+            return ApiRsult(ApiResultCode.Error, message, data);
         }
 
-        public static VivApiResult ApiRsult(int code, string message, object? data = null)
+        public static VivApiResult ApiRsult(ApiResultCode code, string message, object? data = null)
         {
-            return new VivApiResult(code, message, data);
+            return new VivApiResult((int)code, message, data);
         }
     }
 }

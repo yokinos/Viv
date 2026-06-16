@@ -25,7 +25,7 @@ namespace Viv.Elysia.Filter
                     var errMsg = request.Validate();
                     if (!string.IsNullOrEmpty(errMsg))
                     {
-                        context.Result = VivApiResult.ApiRsult(ResultCode.Error, errMsg);
+                        context.Result = VivApiResult.ApiRsult(ApiResultCode.Error, errMsg);
                         context.HttpContext.Response.StatusCode = (int)HttpStatusCode.OK;
                         return;
                     }

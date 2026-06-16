@@ -41,7 +41,7 @@ namespace Viv.Engine.Filter
             {
                 _logger.Warning($"[Token无效]请求地址：{path}，信息：{ex.Message}");
                 context.HttpContext.Response.StatusCode = 401;
-                context.Result = VivApiResult.ApiRsult(ResultCode.TokenInvalid, "Token无效或已过期");
+                context.Result = VivApiResult.ApiRsult(ApiResultCode.TokenInvalid, "Token无效或已过期");
                 context.ExceptionHandled = true;
                 return;
             }
@@ -49,7 +49,7 @@ namespace Viv.Engine.Filter
             {
                 var realEx = ex.InnerException ?? ex;
                 _logger.Error($"[全局未捕获异常]请求地址：{path}，消息：{ex.Message}", realEx);
-                context.Result = VivApiResult.ApiRsult(ResultCode.ServerError, "服务器异常");
+                context.Result = VivApiResult.ApiRsult(ApiResultCode.ServerError, "服务器异常");
                 context.ExceptionHandled = true;
             }
 

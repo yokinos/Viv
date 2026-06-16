@@ -1,0 +1,163 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Text;
+
+namespace Viv.Engine
+{
+    /// <summary>
+    /// 接口统一通用业务状态码
+    /// 规则说明：
+    /// 1. 2xx 正数区间：全部代表请求正常成功类状态
+    /// 2. -2xx 区间：参数校验、通用基础业务拦截错误
+    /// 3. -4xx 区间：登录、Token、签名、账号身份相关鉴权错误
+    /// 4. -6xx 区间：功能接口、数据、渠道访问权限类错误
+    /// 5. -7xx 区间：数据/资源不存在类统一错误
+    /// 6. -5xx 区间：服务底层、中间件、第三方、事务系统异常
+    /// 7. 业务细分场景错误统一使用 BusinessError = -200，自定义提示文案即可，不新增业务专属枚举值
+    /// </summary>
+    public enum ApiResultCode
+    {
+        #region 2xx 成功区间-请求正常处理完成
+        /// <summary>
+        /// 请求处理成功
+        /// </summary>
+        [Description("请求处理成功")]
+        Success = 200,
+
+        /// <summary>资源创建成功，适用于新增操作</summary>
+        [Description("资源创建成功")]
+        Created = 201,
+
+        /// <summary>任务已接收，后台异步执行，当前无即时返回结果</summary>
+        [Description("任务已接收，异步处理中")]
+        Accepted = 202,
+
+        /// <summary>查询逻辑正常，但未查询到任何匹配数据</summary>
+        [Description("查询成功，无匹配数据")]
+        NoContent = 204,
+        #endregion
+
+        #region -2xx 参数&基础业务拦截区间
+        /// <summary>通用业务自定义失败，所有细分业务场景统一使用该编码，文案动态传入</summary>
+        [Description("业务操作失败")]
+        Error = -200,
+
+        /// <summary>接口必填参数缺失，未传递关键入参</summary>
+        [Description("缺少必要请求参数")]
+        ParamMissing = -201,
+
+        /// <summary>参数格式不符合约定，如日期、手机号、数字格式错误</summary>
+        [Description("请求参数格式不合法")]
+        ParamFormatError = -202,
+
+        /// <summary>参数数值超出业务允许区间，如负数、超过最大值等</summary>
+        [Description("参数值超出允许范围")]
+        ParamRangeInvalid = -203,
+
+        /// <summary>重复提交操作，防重复点击、重复下单场景使用</summary>
+        [Description("重复操作，请勿重复提交")]
+        DuplicateSubmit = -204,
+
+        /// <summary>唯一索引冲突，数据库已存在相同唯一数据</summary>
+        [Description("数据已存在，无法重复新增")]
+        DataExists = -205,
+
+        /// <summary>接口请求频率超限，触发限流拦截</summary>
+        [Description("请求频次过高，请稍后重试")]
+        RequestLimit = -206,
+
+        /// <summary>文件上传失败，包含格式不支持、大小超限、上传IO异常</summary>
+        [Description("文件上传失败")]
+        UploadError = -207,
+        #endregion
+
+        #region -4xx 身份鉴权 Token 登录相关区间
+        /// <summary>请求头未携带Token身份凭证</summary>
+        [Description("身份凭证为空，请登录后操作")]
+        TokenEmpty = -400,
+
+        /// <summary>Token解析失败、篡改、非法加密，凭证无效</summary>
+        [Description("身份凭证无效")]
+        TokenInvalid = -401,
+
+        /// <summary>Token已过有效期，需重新登录获取新凭证</summary>
+        [Description("登录身份已过期，请重新登录")]
+        TokenExpired = -402,
+
+        /// <summary>账号异地登录，服务端主动使当前Token失效下线</summary>
+        [Description("账号已在其他终端登录，已强制下线")]
+        TokenKickOut = -403,
+
+        /// <summary>接口请求签名校验失败，请求参数被篡改</summary>
+        [Description("请求签名校验不通过")]
+        SignError = -404,
+
+        /// <summary>登录账号或密码校验不匹配</summary>
+        [Description("账号或登录凭证错误")]
+        LoginFailed = -405,
+
+        /// <summary>账号后台被管理员冻结、禁用，禁止登录访问</summary>
+        [Description("当前账号已被禁用")]
+        AccountDisabled = -406,
+
+        /// <summary>图形/短信验证码错误或超过有效时效</summary>
+        [Description("验证码错误或已失效")]
+        CaptchaError = -407,
+        #endregion
+
+        #region -6xx 功能&数据&渠道权限区间
+        /// <summary>登录账号无当前接口访问操作权限</summary>
+        [Description("无接口操作权限")]
+        NoPermission = -601,
+
+        /// <summary>账号仅能操作自身数据，越权访问他人业务数据拦截</summary>
+        [Description("无当前数据访问权限")]
+        DataScopeDenied = -602,
+
+        /// <summary>接口仅对内开放，不允许外网/前端直接调用</summary>
+        [Description("该接口未对外开放访问")]
+        ApiNotOpen = -603,
+
+        /// <summary>第三方渠道、商户应用未完成授权配置</summary>
+        [Description("应用/渠道未完成授权")]
+        ChannelUnauthorized = -604,
+        #endregion
+
+        #region -7xx 资源数据不存在区间
+        /// <summary>查询/操作的数据库实体、文件、配置资源不存在</summary>
+        [Description("请求的资源不存在")]
+        NotFound = -701,
+        #endregion
+
+        #region -5xx 系统底层中间件异常区间
+        /// <summary>未捕获全局未知服务异常，兜底错误码</summary>
+        [Description("服务器内部未知异常")]
+        ServerError = -500,
+
+        /// <summary>数据库增删改查执行异常、连接失败、SQL报错</summary>
+        [Description("数据库操作异常")]
+        DatabaseError = -501,
+
+        /// <summary>Redis缓存读写、连接、序列化异常</summary>
+        [Description("缓存服务操作异常")]
+        CacheError = -502,
+
+        /// <summary>RabbitMQ等消息队列生产/消费、连接异常</summary>
+        [Description("消息队列服务异常")]
+        MqError = -503,
+
+        /// <summary>调用微信、OSS、短信等第三方外部接口报错</summary>
+        [Description("调用外部第三方服务失败")]
+        ThirdApiError = -504,
+
+        /// <summary>Saga、分布式事务执行回滚失败</summary>
+        [Description("分布式事务执行失败")]
+        DistributedTransError = -505,
+
+        /// <summary>服务熔断、降级、流量保护拦截</summary>
+        [Description("服务触发限流熔断")]
+        ServiceFuse = -506
+        #endregion
+    }
+}

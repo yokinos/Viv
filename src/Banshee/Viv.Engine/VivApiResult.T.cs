@@ -23,17 +23,17 @@ namespace Viv.Engine
 
         public static VivApiResult<T> Success(string message = "successful", T? data = default)
         {
-            return ApiRsult(ResultCode.Success, message, data);
+            return ApiRsult(ApiResultCode.Success, message, data);
         }
 
         public static VivApiResult<T> Error(string message, T? data = default)
         {
-            return ApiRsult(ResultCode.Error, message, data);
+            return ApiRsult(ApiResultCode.Error, message, data);
         }
 
-        public static VivApiResult<T> ApiRsult(int code, string message, T? data = default)
+        public static VivApiResult<T> ApiRsult(ApiResultCode code, string message, T? data = default)
         {
-            return new VivApiResult<T>(code, message, data);
+            return new VivApiResult<T>((int)code, message, data);
         }
     }
 }

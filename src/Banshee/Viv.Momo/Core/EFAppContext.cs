@@ -76,12 +76,14 @@ namespace Viv.Momo.Core
             switch (_options.DatabaseSouce)
             {
                 case DatabaseSouceType.PostgreSQL:
-                    optionsBuilder.UseNpgsql(connectionString)
-                        .UseQueryTrackingBehavior(queryTrackingBehavior);
+                    optionsBuilder.UseNpgsql(connectionString, x => x.EnableRetryOnFailure())
+                        .UseQueryTrackingBehavior(queryTrackingBehavior)
+                        .UseSnakeCaseNamingConvention();
                     break;
                 case DatabaseSouceType.SqlServer:
-                    optionsBuilder.UseSqlServer(connectionString)
-                        .UseQueryTrackingBehavior(queryTrackingBehavior);
+                    optionsBuilder.UseSqlServer(connectionString, x => x.EnableRetryOnFailure())
+                        .UseQueryTrackingBehavior(queryTrackingBehavior)
+                        .UseSnakeCaseNamingConvention();
                     break;
                 default:
                     throw new NotSupportedException($"不支持的数据库类型：{_options.DatabaseSouce}");
