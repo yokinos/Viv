@@ -6,6 +6,6 @@ namespace Viv.Momo.Interface
 {
     public interface ITenant
     {
-        public long TenantId { get; set; }
+        long TenantId { get; set; }
     }
 }

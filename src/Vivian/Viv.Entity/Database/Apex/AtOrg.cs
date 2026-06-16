@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
 using Viv.Entity.Enums;
 using Viv.Momo.Base;
@@ -8,27 +7,17 @@ using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
-    public class AtTenant : EntityBase, ISoftDelete
+    public class AtOrg : EntityBase, ISoftDelete
     {
         /// <summary>
-        /// 机构Id
-        /// </summary>
-        public long OrgId { get; set; }
-
-        /// <summary>
-        /// 租户名称
+        /// 组织名称
         /// </summary>
         public string? Name { get; set; }
 
         /// <summary>
-        /// 机构编码
+        /// 组织代码
         /// </summary>
-        public string? TenantCode { get; set; }
-
-        /// <summary>
-        /// 备注
-        /// </summary>
-        public string? Remark { get; set; }
+        public string? OrgCode { get; set; }
 
         /// <summary>
         /// 状态

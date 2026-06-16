@@ -8,10 +8,14 @@ namespace Viv.Entity.Database.DeepRed
 {
     public class VtUser : EntityBase, ITenant, ISoftDelete
     {
+        public long TenantId { get; set; }
         public string Name { get; set; }
         public string NickName { get; set; }
         public string Phone { get; set; }
-        public long TenantId { get; set; }
+        public string Email { get; set; }
+        public string AvatarUrl { get; set; }
+        public string Password { get; set; }
+        public string Salt { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime? DeletedAt { get; set; }
     }

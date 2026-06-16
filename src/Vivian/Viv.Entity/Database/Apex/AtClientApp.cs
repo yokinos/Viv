@@ -25,7 +25,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 客户端平台类型
         /// </summary>
-        public EmAppPlatform Platform { get; set; }
+        public EmAppPlatform? Platform { get; set; }
 
         /// <summary>
         /// 密钥
@@ -35,7 +35,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 应用来源
         /// </summary>
-        public EmAppSouce Source { get; set; }
+        public EmAppSouce? Source { get; set; }
 
         /// <summary>
         /// Android 应用包名
@@ -58,12 +58,12 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人
         /// </summary>
-        public long CreatedBy { get; set; }
+        public long? CreatedBy { get; set; }
 
         /// <summary>
         /// 更新时间
@@ -73,7 +73,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 更新人
         /// </summary>
-        public long UpdatedBy { get; set; }
+        public long? UpdatedBy { get; set; }
 
         /// <summary>
         /// 是否删除

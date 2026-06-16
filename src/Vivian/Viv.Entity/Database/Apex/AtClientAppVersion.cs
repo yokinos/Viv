@@ -15,7 +15,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 客户端AppId
         /// </summary>
-        public long AppId { get; set; }
+        public long? AppId { get; set; }
 
         /// <summary>
         /// 版本号（不为空 且自增）
@@ -32,8 +32,14 @@ namespace Viv.Entity.Database.Apex
         /// </summary>
         public string? Version { get; set; }
 
-
+        /// <summary>
+        /// 是否删除
+        /// </summary>
         public bool IsDeleted { get; set; }
+
+        /// <summary>
+        /// 删除时间
+        /// </summary>
         public DateTime? DeletedAt { get; set; }
     }
 }
