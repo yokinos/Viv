@@ -62,7 +62,7 @@
     "Port": 5672,
     "UserName": "Viv",
     "Password": "viv_rabbitmq_77",
-    "VirtualHost": "/Viv",
+    "VirtualHost": "VivNet",
     "RetryCount": 3,
     "ConsumerTypes": [],
     "SagaDatabaseSouce": 0,
