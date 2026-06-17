@@ -8,7 +8,7 @@ namespace Viv.Entity.Enums
     /// <summary>
     /// 应用客户端平台
     /// </summary>
-    public enum EmAppPlatform
+    public enum EmAppPlatform : byte
     {
         /// <summary>
         /// Web 网页端

@@ -18,12 +18,8 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
 
-        // 从Aspire获取各种连接配置
-        //var aspireOptions = builder.Configuration.GetSection("AspireParameter").Value.As<AspireParameter>();
-        //ArgumentNullException.ThrowIfNull(aspireOptions);
-
         // 加载 Viv 配置
-        var vivOptions = VivEngine.LoadVivConfig(builder.Configuration);
+        var vivOptions = VivEngine.LoadVivConfig();
         ArgumentNullException.ThrowIfNull(vivOptions);
 
         // Autofac 容器

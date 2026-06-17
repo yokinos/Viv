@@ -3,10 +3,11 @@ using Viv.Aoi;
 using Viv.Authentication.Enums;
 using Viv.Engine.Enums;
 using Viv.Engine.Options;
+using Viv.Log;
+using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Redis;
 using Viv.Test.Core;
-using Viv.Log;
 
 namespace Viv.Test.TestTask
 {
@@ -48,8 +49,8 @@ namespace Viv.Test.TestTask
                 {
                     LogType = LogType.Serilog,
                     IsUseSeq = true,
-                    SeqApiKey = string.Empty,
-                    SeqUrl = "https://es.katoumegumi.net",
+                    SeqApiKey = "WpoE1USw5Or3ZtiUuzOr",
+                    SeqUrl = "https://seq.katoumegumi.net",
                 },
 
                 // 缓存（二级缓存：内存 + Redis）
@@ -79,8 +80,10 @@ namespace Viv.Test.TestTask
                 NanaOption = new Nana.Options.NanaOptions
                 {
                     Host = "43.228.79.205",
+                    SagaDatabaseSouce = Momo.Enums.DatabaseSouceType.SqlServer,
+                    SagaConnectionString = "server=43.228.79.109;user id=sa;password=viv_sqlserver_77;database=viv_saga_core;min pool size=4;max pool size=512;TrustServerCertificate=true;",
                     Port = 5672,
-                    UserName = "guest",
+                    UserName = "Viv",
                     Password = "viv_rabbitmq_77",
                     VirtualHost = "/Viv",
                     RetryCount = 3,
@@ -90,8 +93,8 @@ namespace Viv.Test.TestTask
                 // 数据库（读写分离 + 自动实体扫描）
                 DatabaseOption = new Momo.Options.DatabaseOptions
                 {
-                    DatabaseSouce = Momo.Enums.DatabaseSouceType.PostgreSQL,
-                    MasterConnectionString = "Server=43.228.79.205;Database=viv_apex;User Id=sa;Password=viv_pgsql_77;",
+                    DatabaseSouce = Momo.Enums.DatabaseSouceType.SqlServer,
+                    MasterConnectionString = "server=43.228.79.109;user id=sa;password=viv_sqlserver_77;database=viv_apex_master;min pool size=4;max pool size=512;TrustServerCertificate=true;",
                     SlaveConnectionStrings = [],
                     IsReadWriteSplit = false,
                     Timeout = 30,
@@ -99,8 +102,8 @@ namespace Viv.Test.TestTask
                     [
                         new Delusion.Magic.FilterTypeOptions
                         {
-                            AssemblyName = "Viv.Entity.Apex",
-                            NameSpace = "Viv.Entity.Apex.Database",
+                            AssemblyName = "Viv.Entity",
+                            NameSpace = "Viv.Entity.Database.Apex",
                             BaseType = typeof(IEntity)
                         }
                     ]
@@ -112,6 +115,23 @@ namespace Viv.Test.TestTask
                     Audience = string.Empty,
                     ExpireMinutes = 120,
                     Issuer = string.Empty
+                },
+                EchoOption = new()
+                {
+                    EnableGrpc = true,
+                    EnableHttp = true,
+                },
+                TickOption = new()
+                {
+                    SchedulerType =  Tick.Enums.VivSchedulerType.TickerQ,
+                    TaskTypes = [],
+                    TickerQ  = new Tick.Options.TickerQOptions
+                    {
+                        ConnectionString = "server=43.228.79.109;user id=sa;password=viv_sqlserver_77;database=viv_tickerq_core;min pool size=4;max pool size=512;TrustServerCertificate=true;",
+                        DashboardOptions = new Tick.Options.TickerQDashboradOptions(),
+                        DatabaseType = DatabaseSouceType.SqlServer,
+                        EnableDashboard = true,
+                    }
                 }
             };
 

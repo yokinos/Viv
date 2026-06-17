@@ -7,27 +7,52 @@ using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
-    public class AtOrg : EntityBase, ISoftDelete
+    public class AtMenu : EntityBase, ISoftDelete
     {
         /// <summary>
-        /// 组织名称
+        /// 菜单名称
         /// </summary>
         public string? Name { get; set; }
 
         /// <summary>
-        /// 组织代码
+        /// 菜单路径
         /// </summary>
-        public string? OrgCode { get; set; }
+        public string? Path { get; set; }
 
         /// <summary>
-        /// 组织Logo
+        /// 菜单图标
         /// </summary>
-        public string? LogoUrl { get; set; }
+        public string? Icon { get; set; }
+
+        /// <summary>
+        /// 菜单排序
+        /// </summary>
+        public int? Sort { get; set; }
+
+        /// <summary>
+        /// 菜单类型
+        /// </summary>
+        public string? Type { get; set; }
+
+        /// <summary>
+        /// 菜单描述
+        /// </summary>
+        public string? Description { get; set; }
+
+        /// <summary>
+        /// 父菜单ID
+        /// </summary>
+        public int? ParentId { get; set; }
 
         /// <summary>
         /// 状态
         /// </summary>
-        public EmStatus? Status { get; set; }
+        public EmStatus Status { get; set; }
+
+        /// <summary>
+        /// 是否显示
+        /// </summary>
+        public bool IsVisible { get; set; }
 
         /// <summary>
         /// 是否删除

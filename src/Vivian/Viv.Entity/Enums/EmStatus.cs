@@ -5,7 +5,7 @@ using Viv.Elysia.Attributes;
 
 namespace Viv.Entity.Enums
 {
-    public enum EmStatus
+    public enum EmStatus : byte
     {
         /// <summary>
         /// 正常

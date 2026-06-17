@@ -35,7 +35,7 @@ namespace Viv.Tick.Options
         /// <summary>
         /// 账号
         /// </summary>
-        public string UserName { get; set; } = "Viv";
+        public string UserName { get; set; } = "viv";
 
         /// <summary>
         /// 密码

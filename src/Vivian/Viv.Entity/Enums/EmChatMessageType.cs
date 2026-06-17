@@ -5,7 +5,7 @@ using Viv.Elysia.Attributes;
 
 namespace Viv.Entity.Enums
 {
-    public enum EmChatMessageType
+    public enum EmChatMessageType : byte
     {
         /// <summary>
         /// 文本消息

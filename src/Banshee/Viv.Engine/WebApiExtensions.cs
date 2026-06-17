@@ -2,11 +2,13 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerUI;
 using System.Reflection;
 using System.Text;
 using Viv.Engine.Enums;
+using Viv.Engine.Filter;
 using Viv.Engine.Interface;
 
 namespace Viv.Engine
@@ -55,6 +57,7 @@ namespace Viv.Engine
         {
             services.AddSwaggerGen(c =>
             {
+                c.OperationAsyncFilter<VivApiResultGenericResponseFilter>();
                 c.SwaggerDoc("v1", openApiInfo);
 
                 c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme

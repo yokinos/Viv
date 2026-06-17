@@ -1,21 +1,6 @@
 {
   "Env": 0,
-  "DIOption": {
-    "ServiceImplementation": {
-      "AssemblyName": "Viv.Apex.Core",
-      "NameSpace": "Viv.Apex.Core.Service",
-      "BaseType": null,
-      "ClassNameEndWith": "Service",
-      "ClassNameStart": ""
-    },
-    "RepositoryImplementation": {
-      "AssemblyName": "Viv.Apex.Core",
-      "NameSpace": "Viv.Apex.Core.Repository",
-      "BaseType": null,
-      "ClassNameEndWith": "Repository",
-      "ClassNameStart": ""
-    }
-  },
+  "DIOption": null,
   "CacheOption": {
     "CacheProviderType": 1,
     "RedisOptions": {
@@ -39,24 +24,9 @@
     "LogType": 1,
     "IsUseSeq": true,
     "SeqUrl": "https://seq.katoumegumi.net",
-    "SeqApiKey": "WpoE1USw5Or3ZtiUuzOr"
+    "SeqApiKey": "4anRXThj5MCRu752YEiA"
   },
-  "DatabaseOption": {
-    "DatabaseSouce": 0,
-    "IsReadWriteSplit": false,
-    "MasterConnectionString": "server=43.228.79.109;user id=sa;password=viv_sqlserver_77;database=viv_apex_master;min pool size=4;max pool size=512;TrustServerCertificate=true;",
-    "SlaveConnectionStrings": [],
-    "Timeout": 30,
-    "EntityTypeOptions": [
-      {
-        "AssemblyName": "Viv.Entity",
-        "NameSpace": "Viv.Entity.Database.Apex",
-        "BaseType": "Viv.Momo.Interface.IEntity, Viv.Momo, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-        "ClassNameEndWith": "",
-        "ClassNameStart": ""
-      }
-    ]
-  },
+  "DatabaseOption": null,
   "NanaOption": {
     "Host": "43.228.79.205",
     "Port": 5672,
@@ -75,7 +45,21 @@
     "Issuer": "",
     "Audience": ""
   },
-  "TickOption": null,
+  "TickOption": {
+    "SchedulerType": 1,
+    "TickerQ": {
+      "ConnectionString": "server=43.228.79.109;user id=sa;password=viv_sqlserver_77;database=viv_tickerq_core;min pool size=4;max pool size=512;TrustServerCertificate=true;",
+      "DatabaseType": 0,
+      "EnableDashboard": true,
+      "DashboardOptions": {
+        "DashboardPath": "/tickerq",
+        "UserName": "viv",
+        "Password": "viv_tickerq_77",
+        "WebApiKey": ""
+      }
+    },
+    "TaskTypes": []
+  },
   "EchoOption": {
     "EnableHttp": true,
     "EnableGrpc": true

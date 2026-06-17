@@ -7,23 +7,8 @@ using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
-    public class AtOrg : EntityBase, ISoftDelete
+    public class AtRole : EntityBase, ISoftDelete
     {
-        /// <summary>
-        /// 组织名称
-        /// </summary>
-        public string? Name { get; set; }
-
-        /// <summary>
-        /// 组织代码
-        /// </summary>
-        public string? OrgCode { get; set; }
-
-        /// <summary>
-        /// 组织Logo
-        /// </summary>
-        public string? LogoUrl { get; set; }
-
         /// <summary>
         /// 状态
         /// </summary>

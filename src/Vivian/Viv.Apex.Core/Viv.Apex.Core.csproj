@@ -13,8 +13,4 @@
     <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Entity\Dto\Account\Output\" />
-  </ItemGroup>
-
 </Project>

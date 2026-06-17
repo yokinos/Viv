@@ -8,7 +8,7 @@ namespace Viv.Entity.Enums
     /// <summary>
     /// 消息接收方类型
     /// </summary>
-    public enum EmChatReceiverType
+    public enum EmChatReceiverType : byte
     {
         /// <summary>
         /// 单人 / 私聊

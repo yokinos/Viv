@@ -6,7 +6,7 @@ using Viv.Elysia.Attributes;
 
 namespace Viv.Entity.Enums
 {
-    public enum EmGender
+    public enum EmGender : byte
     {
         /// <summary>
         /// 未知

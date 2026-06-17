@@ -5,7 +5,7 @@ using Viv.Elysia.Attributes;
 
 namespace Viv.Entity.Enums
 {
-    public enum EmMediaFileType
+    public enum EmMediaFileType : byte
     {
         [EnumName("图片")]
         Image = 1,

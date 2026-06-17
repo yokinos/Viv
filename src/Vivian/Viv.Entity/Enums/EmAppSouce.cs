@@ -8,10 +8,10 @@ namespace Viv.Entity.Enums
     /// <summary>
     /// 应用来源类型
     /// </summary>
-    public enum EmAppSouce
+    public enum EmAppSouce : byte
     {
         /// <summary>
-        /// 官方自营应用（Viv 框架原生）
+        /// 官方自营应用
         /// </summary>
         [EnumName("官方自营应用")]
         Viv = 0,
