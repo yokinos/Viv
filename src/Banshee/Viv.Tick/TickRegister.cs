@@ -1,15 +1,17 @@
-using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
 using Viv.Delusion;
-using Viv.Delusion.Magic;
 using Viv.Delusion.Extension;
+using Viv.Delusion.Magic;
 using Viv.Tick.Attributes;
 using Viv.Tick.Options;
+using Viv.Tick.TickerQCore;
 
 namespace Viv.Tick
 {
     public static class TickRegister
     {
+        private static readonly object _lock = new();
         private static readonly List<TickerQTaskDescriptor> _pendingTasks = [];
 
         public static void Initialize(TickOptions options)
@@ -23,13 +25,18 @@ namespace Viv.Tick
         /// 用于 RobinExtensions 或 Program.cs 中显式注册
         /// </summary>
         public static IServiceCollection AddVivTickerQTask<T>(this IServiceCollection services, string cron)
-            where T : class
+            where T : class, ITickerQTask
         {
-            _pendingTasks.Add(new TickerQTaskDescriptor
+            ArgumentNullException.ThrowIfNull(services);
+            if (string.IsNullOrWhiteSpace(cron))
+                throw new ArgumentException("Cron expression cannot be null or empty.", nameof(cron));
+
+            AddPendingTask(new TickerQTaskDescriptor
             {
                 TaskType = typeof(T),
-                Cron = cron
+                Cron = cron.Trim()
             });
+
             return services;
         }
 
@@ -38,18 +45,29 @@ namespace Viv.Tick
         /// </summary>
         public static void ScanTasks(TickOptions options)
         {
-            if (options.TaskTypes.IsNullOrEmpty()) return;
+            ArgumentNullException.ThrowIfNull(options);
+
+            if (options.TaskTypes.IsNullOrEmpty())
+                return;
 
             var taskImplTypes = TypeScanMagic.ScanRange(options.TaskTypes);
+
             foreach (var type in taskImplTypes)
             {
-                var cronAttr = type.GetCustomAttribute<VivCronAttribute>();
-                if (cronAttr == null) continue;
+                if (type.IsAbstract || type.IsInterface)
+                    continue;
 
-                _pendingTasks.Add(new TickerQTaskDescriptor
+                if (!typeof(ITickerQTask).IsAssignableFrom(type))
+                    continue;
+
+                var cronAttr = type.GetCustomAttribute<VivCronAttribute>();
+                if (cronAttr == null || string.IsNullOrWhiteSpace(cronAttr.Cron))
+                    continue;
+
+                AddPendingTask(new TickerQTaskDescriptor
                 {
                     TaskType = type,
-                    Cron = cronAttr.Cron
+                    Cron = cronAttr.Cron.Trim()
                 });
             }
         }
@@ -59,9 +77,32 @@ namespace Viv.Tick
         /// </summary>
         internal static List<TickerQTaskDescriptor> CollectPendingTasks()
         {
-            var tasks = new List<TickerQTaskDescriptor>(_pendingTasks);
-            _pendingTasks.Clear();
-            return tasks;
+            lock (_lock)
+            {
+                var tasks = _pendingTasks
+                    .DistinctBy(x => x.TaskType)
+                    .ToList();
+
+                _pendingTasks.Clear();
+                return tasks;
+            }
+        }
+
+        private static void AddPendingTask(TickerQTaskDescriptor descriptor)
+        {
+            ArgumentNullException.ThrowIfNull(descriptor);
+            if (descriptor.TaskType == null)
+                throw new ArgumentException("TaskType cannot be null.", nameof(descriptor));
+            if (string.IsNullOrWhiteSpace(descriptor.Cron))
+                throw new ArgumentException("Cron cannot be null or empty.", nameof(descriptor));
+
+            lock (_lock)
+            {
+                if (_pendingTasks.Any(x => x.TaskType == descriptor.TaskType))
+                    return;
+
+                _pendingTasks.Add(descriptor);
+            }
         }
     }
 
