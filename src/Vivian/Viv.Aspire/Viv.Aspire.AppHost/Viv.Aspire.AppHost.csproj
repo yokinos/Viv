@@ -1,4 +1,4 @@
-﻿<Project Sdk="Aspire.AppHost.Sdk/13.1.0">
+﻿<Project Sdk="Aspire.AppHost.Sdk/13.4.5">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -7,6 +7,10 @@
     <Nullable>enable</Nullable>
     <UserSecretsId>4aebb5cf-c4bf-438d-823d-2bffac23f28b</UserSecretsId>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Redis" Version="13.4.5" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Viv.Apex.Api\Viv.Apex.Api.csproj" />
