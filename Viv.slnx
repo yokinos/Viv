@@ -6,8 +6,8 @@
     <Project Path="src/Banshee/Viv.Contracts/Viv.Contracts.csproj" Id="144cfe27-7b72-44fc-84b5-75f5c445a624" />
     <Project Path="src/Banshee/Viv.Delusion/Viv.Delusion.csproj" Id="84932db9-d330-40dc-bd2c-e3f02aee6070" />
     <Project Path="src/Banshee/Viv.Echo/Viv.Echo.csproj" />
-    <Project Path="src/Banshee/Viv.Forge/Viv.Forge.csproj" />
     <Project Path="src/Banshee/Viv.Engine/Viv.Engine.csproj" Id="be371f7c-f2e3-4fd5-b0f0-8122cc7c565c" />
+    <Project Path="src/Banshee/Viv.Forge/Viv.Forge.csproj" />
     <Project Path="src/Banshee/Viv.Log/Viv.Log.csproj" Id="7d692cdd-d7df-4ad5-a468-c917fb419aef" />
     <Project Path="src/Banshee/Viv.Momo/Viv.Momo.csproj" Id="51d56628-8714-42f2-bcb7-b7606977eb48" />
     <Project Path="src/Banshee/Viv.Nana/Viv.Nana.csproj" Id="e894e65e-43a7-465b-8fb4-53e30e86eba2" />

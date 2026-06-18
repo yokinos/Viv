@@ -124,7 +124,6 @@ namespace Viv.Test.TestTask
                 TickOption = new()
                 {
                     SchedulerType =  Tick.Enums.VivSchedulerType.TickerQ,
-                    TaskTypes = [],
                     TickerQ  = new Tick.Options.TickerQOptions
                     {
                         ConnectionString = "server=43.228.79.109;user id=sa;password=viv_sqlserver_77;database=viv_tickerq_core;min pool size=4;max pool size=512;TrustServerCertificate=true;",

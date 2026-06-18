@@ -184,7 +184,6 @@ namespace Viv.Engine
 
             if (options.TickOption.SchedulerType == VivSchedulerType.TickerQ)
             {
-                TickRegister.ScanTasks(options.TickOption);
                 services.AddVivTickerQ(options.TickOption);
             }
         }

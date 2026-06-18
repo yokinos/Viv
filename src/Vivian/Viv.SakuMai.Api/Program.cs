@@ -1,6 +1,7 @@
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using System.Text;
+using TickerQ.DependencyInjection;
 using Viv.Aoi;
 using Viv.Echo.Grpc;
 using Viv.Elysia.Filter;
@@ -96,6 +97,7 @@ public class Program
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapControllers();
+        app.UseTickerQ();
         app.Run();
     }
 }

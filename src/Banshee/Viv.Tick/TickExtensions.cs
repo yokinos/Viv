@@ -20,8 +20,6 @@ namespace Viv.Tick
             ArgumentNullException.ThrowIfNull(options.TickerQ);
             var tickerOpt = options.TickerQ;
 
-            var descriptors = TickRegister.CollectPendingTasks();
-
             services.AddTickerQ(opt =>
             {
                 if (!tickerOpt.ConnectionString.IsNullOrEmpty())
@@ -60,41 +58,9 @@ namespace Viv.Tick
                         }
                     });
                 }
-
-                foreach (var desc in descriptors)
-                {
-                    MapTaskViaReflection(opt, desc);
-                }
             });
 
             return services;
-        }
-
-        /// <summary>
-        /// 通过反射调用 opt.MapTicker&lt;T&gt;(cfg => cfg.SetCron(cron))
-        /// </summary>
-        private static void MapTaskViaReflection(object builder, TickerQTaskDescriptor desc)
-        {
-            // 找 ITickerQBuilder.MapTicker<T>(Action<TickerConfigurator<T>>) 泛型方法
-            var mapMethod = builder.GetType().GetMethods()
-                .FirstOrDefault(m => m.Name == "MapTicker" && m.IsGenericMethodDefinition);
-            if (mapMethod == null) return;
-
-            var genericMap = mapMethod.MakeGenericMethod(desc.TaskType);
-
-            // 参数类型：Action<TickerConfigurator<T>>
-            var actionType = genericMap.GetParameters()[0].ParameterType;
-            var configType = actionType.GenericTypeArguments[0];
-
-            // 构造: configurator => configurator.SetCron(cron)
-            var cfgParam = Expression.Parameter(configType, "cfg");
-            var setCron = configType.GetMethod("SetCron", [typeof(string)]);
-            if (setCron == null) return;
-
-            var body = Expression.Call(cfgParam, setCron, Expression.Constant(desc.Cron));
-            var lambda = Expression.Lambda(actionType, body, cfgParam);
-
-            genericMap.Invoke(builder, [lambda.Compile()]);
         }
     }
 }

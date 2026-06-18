@@ -8,7 +8,5 @@ namespace Viv.Tick.Options
         public VivSchedulerType SchedulerType { get; set; } = VivSchedulerType.TickerQ;
 
         public TickerQOptions? TickerQ { get; set; }
-
-        public List<FilterTypeOptions> TaskTypes { get; set; } = [];
     }
 }
