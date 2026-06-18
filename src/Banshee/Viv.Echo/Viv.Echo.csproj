@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -7,16 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Grpc.Net.ClientFactory" Version="2.67.0" />
-    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+    <PackageReference Include="Grpc.Net.ClientFactory" Version="2.80.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.35.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
     <ProjectReference Include="..\Viv.Delusion\Viv.Delusion.csproj" />
-    <ProjectReference Include="..\Viv.Forge\Viv.Forge.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Viv.Forge\Viv.Forge.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

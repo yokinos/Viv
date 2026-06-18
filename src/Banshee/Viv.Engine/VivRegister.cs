@@ -38,6 +38,8 @@ namespace Viv.Engine
 
             // 注册日志
             RegisterLogger(services, options);
+            // 注册跨服务通信（HTTP + gRPC）
+            RegisterEcho(services, options);
             // 注册缓存
             RegisterCache(services, options);
             // 注册消息队列
@@ -48,8 +50,6 @@ namespace Viv.Engine
             RegisterToken(services, options);
             // 注册调度
             RegisterScheduler(services, options);
-            // 注册跨服务通信（HTTP + gRPC）
-            RegisterEcho(services, options);
         }
 
         #region 日志

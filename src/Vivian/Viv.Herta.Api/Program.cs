@@ -21,7 +21,7 @@ public class Program
         // 加载 Viv 配置
         var vivOptions = VivEngine.LoadVivConfig();
         ArgumentNullException.ThrowIfNull(vivOptions);
-
+        
         // Autofac 容器
         builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
         builder.Host.ConfigureContainer<ContainerBuilder>(container =>

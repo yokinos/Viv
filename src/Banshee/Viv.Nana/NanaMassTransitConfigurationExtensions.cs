@@ -16,6 +16,24 @@ namespace Viv.Nana
 
             services.AddMassTransit(x =>
             {
+                x.AddDelayedMessageScheduler();
+
+                x.UsingRabbitMq((context, cfg) =>
+                {
+                    cfg.UseDelayedMessageScheduler();
+
+                    cfg.Host(new Uri(rabbitUri), h =>
+                    {
+                        h.Username(nanaOptions.UserName);
+                        h.Password(nanaOptions.Password);
+                    });
+
+                    cfg.UseMessageRetry(r =>
+                        r.Interval(nanaOptions.RetryCount, TimeSpan.FromSeconds(1)));
+
+                    cfg.ConfigureEndpoints(context);
+                });
+
                 // 注册消费者
                 if (!nanaOptions.ConsumerTypes.IsNullOrEmpty())
                 {
@@ -27,22 +45,6 @@ namespace Viv.Nana
                 {
                     NanaRegister.AddVivSagas(x, sagaStateMachineTypes);
                 }
-
-                x.UsingRabbitMq((context, cfg) =>
-                {
-                    cfg.Host(new Uri(rabbitUri), h =>
-                    {
-                        h.Username(nanaOptions.UserName);
-                        h.Password(nanaOptions.Password);
-                    });
-
-                    cfg.UseDelayedMessageScheduler();
-
-                    cfg.UseMessageRetry(r =>
-                        r.Interval(nanaOptions.RetryCount, TimeSpan.FromSeconds(1)));
-
-                    cfg.ConfigureEndpoints(context);
-                });
             });
 
             return services;
