@@ -57,7 +57,6 @@ namespace Viv.Engine
         {
             services.AddSwaggerGen(c =>
             {
-                c.OperationAsyncFilter<VivApiResultGenericResponseFilter>();
                 c.SwaggerDoc("v1", openApiInfo);
 
                 c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme

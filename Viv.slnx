@@ -25,7 +25,6 @@
     <Project Path="src/Vivian/Viv.Entity/Viv.Entity.csproj" Id="9630f360-f175-4db4-b06c-72b2730bf351" />
     <Project Path="src/Vivian/Viv.EventContracts/Viv.EventContracts.csproj" Id="d57ba383-4d07-4564-8be6-5dcbddbab6b6" />
     <Project Path="src/Vivian/Viv.Sdk/Viv.Sdk.csproj" Id="c5bf3413-d555-4a9e-bd82-16ceb43b0206" />
-    <Project Path="src/Vivian/Viv.Toolkit/Viv.Toolkit.csproj" Id="bd421f34-2543-4f9a-91cc-23b79c7e6907" />
   </Folder>
   <Folder Name="/src/Vivian/Apex/">
     <Project Path="src/Vivian/Viv.Apex.Api/Viv.Apex.Api.csproj" />

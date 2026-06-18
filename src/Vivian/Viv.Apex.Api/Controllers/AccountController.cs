@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Net;
+using Viv.Apex.Core.Entity.Dto.Account.Output;
 using Viv.Apex.Core.Entity.Dto.Account.Request;
 using Viv.Apex.Core.IService;
 
@@ -18,6 +20,7 @@ namespace Viv.Apex.Api.Controllers
         }
 
         [AllowAnonymous]
+        [ProducesResponseType(typeof(ApexLoginOutput), (int)HttpStatusCode.OK)]
         [HttpPost("apexLogin")]
         public async Task<IActionResult> ApexLoginAsync(ApexLoginRequest request)
         {

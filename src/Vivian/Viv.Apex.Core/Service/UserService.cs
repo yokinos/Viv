@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Apex.Core.Entity.Dto.Account.Output;
 using Viv.Apex.Core.Entity.Dto.Account.Request;
 using Viv.Apex.Core.IRepository;
 using Viv.Apex.Core.IService;
@@ -17,9 +18,9 @@ namespace Viv.Apex.Core.Service
             _userRepository = userRepository;
         }
 
-        public async Task<VivApiResult> LoginAsync(ApexLoginRequest request)
+        public async Task<VivApiResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
         {
-            return VivApiResult.ApiRsult(ApiResultCode.Success, "Login successful");
+            return VivApiResult<ApexLoginOutput>.ApiRsult(ApiResultCode.Success, "Login successful");
         }
     }
 }
