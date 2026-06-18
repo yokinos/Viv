@@ -81,7 +81,7 @@ namespace Viv.Test.TestTask
                 {
                     Host = "43.228.79.205",
                     SagaDatabaseSouce = Momo.Enums.DatabaseSouceType.SqlServer,
-                    SagaConnectionString = "server=43.228.79.109;user id=sa;password=viv_sqlserver_77;database=viv_saga_core;min pool size=4;max pool size=512;TrustServerCertificate=true;",
+                    SagaConnectionString = "server=43.228.79.205;user id=sa;password=viv_sqlserver_77;database=viv_saga_core;min pool size=4;max pool size=512;TrustServerCertificate=true;",
                     Port = 5672,
                     UserName = "Viv",
                     Password = "viv_rabbitmq_77",
@@ -94,7 +94,7 @@ namespace Viv.Test.TestTask
                 DatabaseOption = new Momo.Options.DatabaseOptions
                 {
                     DatabaseSouce = Momo.Enums.DatabaseSouceType.SqlServer,
-                    MasterConnectionString = "server=43.228.79.109;user id=sa;password=viv_sqlserver_77;database=viv_apex_master;min pool size=4;max pool size=512;TrustServerCertificate=true;",
+                    MasterConnectionString = "server=43.228.79.205;user id=sa;password=viv_sqlserver_77;database=viv_apex_master;min pool size=4;max pool size=512;TrustServerCertificate=true;",
                     SlaveConnectionStrings = [],
                     IsReadWriteSplit = false,
                     Timeout = 30,
@@ -126,7 +126,7 @@ namespace Viv.Test.TestTask
                     SchedulerType =  Tick.Enums.VivSchedulerType.TickerQ,
                     TickerQ  = new Tick.Options.TickerQOptions
                     {
-                        ConnectionString = "server=43.228.79.109;user id=sa;password=viv_sqlserver_77;database=viv_tickerq_core;min pool size=4;max pool size=512;TrustServerCertificate=true;",
+                        ConnectionString = "server=43.228.79.205;user id=sa;password=viv_sqlserver_77;database=viv_tickerq_core;min pool size=4;max pool size=512;TrustServerCertificate=true;",
                         DashboardOptions = new Tick.Options.TickerQDashboradOptions(),
                         DatabaseType = DatabaseSouceType.SqlServer,
                         EnableDashboard = true,

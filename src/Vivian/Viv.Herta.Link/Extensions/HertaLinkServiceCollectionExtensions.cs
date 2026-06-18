@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Viv.Engine;
 using Viv.Herta.Core.IService;
 using Viv.Herta.Link.Hubs;
 using Viv.Herta.Link.Options;
@@ -21,11 +22,7 @@ namespace Viv.Herta.Link.Extensions
                 o.EnableDetailedErrors = options.EnableDetailedErrors;
             });
 
-            if (!string.IsNullOrWhiteSpace(options.RedisConnectionString))
-            {
-                signalR.AddStackExchangeRedis(options.RedisConnectionString);
-            }
-
+            signalR.AddStackExchangeRedis(VivEngine.VivOptions.CacheOption.RedisOptions.ConnectionString);
             return services;
         }
     }

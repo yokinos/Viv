@@ -44,7 +44,7 @@
   "DatabaseOption": {
     "DatabaseSouce": 0,
     "IsReadWriteSplit": false,
-    "MasterConnectionString": "server=43.228.79.109;user id=sa;password=viv_sqlserver_77;database=viv_deepred_master;min pool size=4;max pool size=512;TrustServerCertificate=true;",
+    "MasterConnectionString": "server=43.228.79.205;user id=sa;password=viv_sqlserver_77;database=viv_deepred_master;min pool size=4;max pool size=512;TrustServerCertificate=true;",
     "SlaveConnectionStrings": [],
     "Timeout": 30,
     "EntityTypeOptions": [
@@ -66,7 +66,7 @@
     "RetryCount": 3,
     "ConsumerTypes": [],
     "SagaDatabaseSouce": 0,
-    "SagaConnectionString": "server=43.228.79.109;user id=sa;password=viv_sqlserver_77;database=viv_saga_core;min pool size=4;max pool size=512;TrustServerCertificate=true;"
+    "SagaConnectionString": "server=43.228.79.205;user id=sa;password=viv_sqlserver_77;database=viv_saga_core;min pool size=4;max pool size=512;TrustServerCertificate=true;"
   },
   "TokenOption": {
     "TokenType": 0,

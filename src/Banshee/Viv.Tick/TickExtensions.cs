@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using System.Linq.Expressions;
-using System.Reflection;
+using Microsoft.Extensions.Hosting;
 using TickerQ.Dashboard.DependencyInjection;
 using TickerQ.DependencyInjection;
 using TickerQ.EntityFrameworkCore.DbContextFactory;
@@ -22,7 +21,7 @@ namespace Viv.Tick
 
             services.AddTickerQ(opt =>
             {
-                if (!tickerOpt.ConnectionString.IsNullOrEmpty())
+                if (!string.IsNullOrEmpty(tickerOpt.ConnectionString))
                 {
                     opt.AddOperationalStore(efOpt =>
                     {
@@ -48,11 +47,11 @@ namespace Viv.Tick
                     opt.AddDashboard(dashboard =>
                     {
                         dashboard.SetBasePath(tickerOpt.DashboardOptions.DashboardPath);
-                        if (!tickerOpt.DashboardOptions.UserName.IsNullOrEmpty() && !tickerOpt.DashboardOptions.Password.IsNullOrEmpty())
+                        if (!string.IsNullOrEmpty(tickerOpt.DashboardOptions.UserName) && !string.IsNullOrEmpty(tickerOpt.DashboardOptions.Password))
                         {
                             dashboard.WithBasicAuth(tickerOpt.DashboardOptions.UserName, tickerOpt.DashboardOptions.Password);
                         }
-                        else if (!tickerOpt.DashboardOptions.WebApiKey.IsNullOrEmpty())
+                        else if (!string.IsNullOrEmpty(tickerOpt.DashboardOptions.WebApiKey))
                         {
                             dashboard.WithApiKey(tickerOpt.DashboardOptions.WebApiKey);
                         }
@@ -60,7 +59,31 @@ namespace Viv.Tick
                 }
             });
 
+            // 注册后台服务，程序启动自动执行迁移、缺失表自动创建
+            services.AddHostedService<TickerQAutoMigrateHostService>();
+
             return services;
+        }
+    }
+
+    /// <summary>
+    /// 程序启动自动执行TickerQ迁移，无表自动新建
+    /// </summary>
+    internal class TickerQAutoMigrateHostService : BackgroundService
+    {
+        private readonly IServiceScopeFactory _scopeFactory;
+
+        public TickerQAutoMigrateHostService(IServiceScopeFactory scopeFactory)
+        {
+            _scopeFactory = scopeFactory;
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var dbCtx = scope.ServiceProvider.GetRequiredService<TickerQDbContext>();
+            // 自动创建缺失表、增量更新表结构
+            await dbCtx.Database.MigrateAsync(stoppingToken);
         }
     }
 }

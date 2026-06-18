@@ -1,7 +1,9 @@
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using System.Text;
 using TickerQ.DependencyInjection;
+using TickerQ.EntityFrameworkCore.DbContextFactory;
 using Viv.Aoi;
 using Viv.Echo.Grpc;
 using Viv.Elysia.Filter;
@@ -36,7 +38,7 @@ public class Program
         // gRPC 客户端注册（Viv.Forge 编译时生成）
         if (vivOptions.EchoOption?.EnableGrpc == true)
         {
-            builder.Services.AddVivSdkGrpcClients();
+            //builder.Services.AddVivSdkGrpcClients();
         }
         //builder.Services.AddOptions();
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -85,6 +87,11 @@ public class Program
         {
             app.VivUseSwagger(vivOptions.Env);
         }
+
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TickerQDbContext>();
+        db.Database.Migrate();
+
 
         app.UseMiddleware<NotFoundMiddleware>();
         app.UseMiddleware<VivContextMiddleware>();

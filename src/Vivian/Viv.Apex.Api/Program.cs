@@ -35,7 +35,7 @@ public class Program
         // gRPC 客户端注册（Viv.Forge 编译时生成）
         if (vivOptions.EchoOption?.EnableGrpc == true)
         {
-            builder.Services.AddVivSdkGrpcClients();
+            // builder.Services.AddVivSdkGrpcClients();
         }
         //builder.Services.AddOptions();
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
