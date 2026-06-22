@@ -47,7 +47,7 @@ namespace Viv.Momo.Sync
         public SchemaSynchronizer(DatabaseOptions dbOptions, bool nonPkNullable = true)
         {
             _dbOptions = dbOptions;
-            _dbType = dbOptions.DatabaseSouce;
+            _dbType = dbOptions.DatabaseSource;
             _entityFilters = dbOptions.EntityTypeOptions ?? [];
             _nonPkNullable = nonPkNullable;
         }

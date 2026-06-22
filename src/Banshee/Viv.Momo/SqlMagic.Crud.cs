@@ -15,7 +15,7 @@ namespace Viv.Momo
         #region 参数化版本
 
         public static (string sql, DynamicParameters parameters) CreateInsertSql(
-            string tableName, object entity, DatabaseSourceType databaseType, string ignoreKeys = "")
+            string tableName, object entity, DatabaseSourceType databaseSource, string ignoreKeys = "")
         {
             var fieldList = new List<string>();
             var valueList = new List<string>();
@@ -25,7 +25,7 @@ namespace Viv.Momo
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseType);
+                var name = FormatName(property.Name, databaseSource);
                 if (ignoreKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
                 var value = property.GetValue(entity);
@@ -37,12 +37,12 @@ namespace Viv.Momo
                 parameters.Add(paramName, value);
             }
 
-            var sql = $"INSERT INTO {FormatName(tableName, databaseType)} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
+            var sql = $"INSERT INTO {FormatName(tableName, databaseSource)} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
             return (sql, parameters);
         }
 
         public static (string sql, DynamicParameters parameters) CreateUpdateSql(
-            string tableName, object entity, string whereKeys, DatabaseSourceType databaseType, string ignoreKeys = "")
+            string tableName, object entity, string whereKeys, DatabaseSourceType databaseSource, string ignoreKeys = "")
         {
             var setList = new List<string>();
             var whereList = new List<string>();
@@ -52,7 +52,7 @@ namespace Viv.Momo
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseType);
+                var name = FormatName(property.Name, databaseSource);
                 if (ignoreKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
                 var value = property.GetValue(entity);
@@ -72,12 +72,12 @@ namespace Viv.Momo
 
             if (whereList.Count == 0) throw new ArgumentException("WhereKeys is empty.");
 
-            var sql = $"UPDATE {FormatName(tableName, databaseType)} SET {string.Join(",", setList)} {string.Join(" ", whereList)}";
+            var sql = $"UPDATE {FormatName(tableName, databaseSource)} SET {string.Join(",", setList)} {string.Join(" ", whereList)}";
             return (sql, parameters);
         }
 
         public static (string sql, DynamicParameters parameters) CreateDeleteSql(
-            string tableName, object entity, DatabaseSourceType databaseType)
+            string tableName, object entity, DatabaseSourceType databaseSource)
         {
             var whereList = new List<string>();
             var parameters = new DynamicParameters();
@@ -86,7 +86,7 @@ namespace Viv.Momo
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseType);
+                var name = FormatName(property.Name, databaseSource);
                 var value = property.GetValue(entity);
                 var paramName = $"@p{idx++}";
                 parameters.Add(paramName, value);
@@ -95,7 +95,7 @@ namespace Viv.Momo
                 whereList.Add($"{line} {name} = {paramName}");
             }
 
-            var sql = $"DELETE FROM {FormatName(tableName, databaseType)} {string.Join(" ", whereList)}";
+            var sql = $"DELETE FROM {FormatName(tableName, databaseSource)} {string.Join(" ", whereList)}";
             return (sql, parameters);
         }
 
@@ -104,7 +104,7 @@ namespace Viv.Momo
         #region Raw 版本（内联值，非参数化）
 
         public static string CreateInsertSqlRaw(
-            string tableName, object entity, DatabaseSourceType databaseType, string ignoreKeys = "")
+            string tableName, object entity, DatabaseSourceType databaseSource, string ignoreKeys = "")
         {
             var fieldList = new List<string>();
             var valueList = new List<string>();
@@ -112,21 +112,21 @@ namespace Viv.Momo
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseType);
+                var name = FormatName(property.Name, databaseSource);
                 if (ignoreKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
                 var value = property.GetValue(entity);
                 if (value == null) continue;
 
                 fieldList.Add(name);
-                valueList.Add(ToDatabaseValue(value, databaseType));
+                valueList.Add(ToDatabaseValue(value, databaseSource));
             }
 
-            return $"INSERT INTO {FormatName(tableName, databaseType)} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
+            return $"INSERT INTO {FormatName(tableName, databaseSource)} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
         }
 
         public static string CreateUpdateSqlRaw(
-            string tableName, object entity, string whereKeys, DatabaseSourceType databaseType, string ignoreKeys = "")
+            string tableName, object entity, string whereKeys, DatabaseSourceType databaseSource, string ignoreKeys = "")
         {
             var setList = new List<string>();
             var whereList = new List<string>();
@@ -134,11 +134,11 @@ namespace Viv.Momo
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseType);
+                var name = FormatName(property.Name, databaseSource);
                 if (ignoreKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
                 var value = property.GetValue(entity);
-                var dbValue = ToDatabaseValue(value, databaseType);
+                var dbValue = ToDatabaseValue(value, databaseSource);
 
                 if (whereKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase))
                 {
@@ -153,32 +153,32 @@ namespace Viv.Momo
 
             if (whereList.Count == 0) throw new ArgumentException("WhereKeys is empty.");
 
-            return $"UPDATE {FormatName(tableName, databaseType)} SET {string.Join(",", setList)} {string.Join(" ", whereList)}";
+            return $"UPDATE {FormatName(tableName, databaseSource)} SET {string.Join(",", setList)} {string.Join(" ", whereList)}";
         }
 
         public static string CreateDeleteSqlRaw(
-            string tableName, object entity, DatabaseSourceType databaseType)
+            string tableName, object entity, DatabaseSourceType databaseSource)
         {
             var whereList = new List<string>();
             var propertieList = VivTypeReflectionCache.GetPropertieList(entity.GetType());
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseType);
+                var name = FormatName(property.Name, databaseSource);
                 var value = property.GetValue(entity);
 
                 var line = whereList.Count == 0 ? "WHERE" : "AND";
-                whereList.Add($"{line} {name} = {ToDatabaseValue(value, databaseType)}");
+                whereList.Add($"{line} {name} = {ToDatabaseValue(value, databaseSource)}");
             }
 
-            return $"DELETE FROM {FormatName(tableName, databaseType)} {string.Join(" ", whereList)}";
+            return $"DELETE FROM {FormatName(tableName, databaseSource)} {string.Join(" ", whereList)}";
         }
 
         #endregion
 
-        private static string FormatName(string name, DatabaseSourceType databaseType)
+        private static string FormatName(string name, DatabaseSourceType databaseSource)
         {
-            return databaseType switch
+            return databaseSource switch
             {
                 DatabaseSourceType.PostgreSQL => name.ToLowerInvariant(),
                 _ => name

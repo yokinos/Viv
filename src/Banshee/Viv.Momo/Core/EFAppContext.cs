@@ -73,7 +73,7 @@ namespace Viv.Momo.Core
             var connectionString = GetConnectionString();
             var queryTrackingBehavior = _dbReadWriteType == DbReadWriteType.Read ? QueryTrackingBehavior.NoTracking : QueryTrackingBehavior.TrackAll;
 
-            switch (_options.DatabaseSouce)
+            switch (_options.DatabaseSource)
             {
                 case DatabaseSourceType.PostgreSQL:
                     optionsBuilder.UseNpgsql(connectionString, x => x.EnableRetryOnFailure())
@@ -86,7 +86,7 @@ namespace Viv.Momo.Core
                         .UseSnakeCaseNamingConvention();
                     break;
                 default:
-                    throw new NotSupportedException($"不支持的数据库类型：{_options.DatabaseSouce}");
+                    throw new NotSupportedException($"不支持的数据库类型：{_options.DatabaseSource}");
             }
         }
 

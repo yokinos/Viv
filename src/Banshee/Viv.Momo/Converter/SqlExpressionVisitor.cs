@@ -11,17 +11,17 @@ namespace Viv.Momo.Converter
         public StringBuilder Sql { get; } = new();
         public Dictionary<string, object> Parameters { get; } = new();
         private int _paramIndex;
-        private readonly DatabaseSourceType _databaseSourceType;
+        private readonly DatabaseSourceType _databaseSource;
 
-        public SqlExpressionVisitor(DatabaseSourceType databaseSourceType)
+        public SqlExpressionVisitor(DatabaseSourceType databaseSource)
         {
-            _databaseSourceType = databaseSourceType;
+            _databaseSource = databaseSource;
         }
 
         // 根据数据库类型引用标识符
         private string QuoteIdentifier(string name)
         {
-            return _databaseSourceType switch
+            return _databaseSource switch
             {
                 DatabaseSourceType.SqlServer => $"[{name}]",
                 DatabaseSourceType.PostgreSQL => $"{name.ToLowerInvariant()}",

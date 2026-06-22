@@ -29,7 +29,7 @@ namespace Viv.Tick
                     {
                         efOpt.UseTickerQDbContext<TickerQDbContext>(dbOpt =>
                         {
-                            switch (tickerOpt.DatabaseType)
+                            switch (tickerOpt.databaseSource)
                             {
                                 case DatabaseSourceType.PostgreSQL:
                                     dbOpt.UseNpgsql(tickerOpt.ConnectionString, sql => sql.MigrationsAssembly(tickerOpt.AssemblyName));
@@ -38,7 +38,7 @@ namespace Viv.Tick
                                     dbOpt.UseSqlServer(tickerOpt.ConnectionString, sql => sql.MigrationsAssembly(tickerOpt.AssemblyName));
                                     break;
                                 default:
-                                    throw new NotSupportedException($"TickerQ 暂不支持数据库类型: {tickerOpt.DatabaseType}");
+                                    throw new NotSupportedException($"TickerQ 暂不支持数据库类型: {tickerOpt.databaseSource}");
                             }
                         }, schema: tickerOpt.EFCoreSchemaName);
                     });

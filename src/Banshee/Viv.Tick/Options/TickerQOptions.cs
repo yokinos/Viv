@@ -12,7 +12,7 @@ namespace Viv.Tick.Options
         /// <summary>
         /// TickerQ 操作用数据库类型
         /// </summary>
-        public DatabaseSourceType DatabaseType { get; set; } = DatabaseSourceType.SqlServer;
+        public DatabaseSourceType DatabaseSource { get; set; } = DatabaseSourceType.SqlServer;
 
         public string EFCoreSchemaName { get; set; } = "dbo";
 

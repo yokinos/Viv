@@ -43,7 +43,7 @@ namespace Viv.Nana.Options
         /// <summary>
         /// Saga 持久化数据库类型（PostgreSQL / SqlServer）
         /// </summary>
-        public DatabaseSourceType SagaDatabaseSouce { get; set; } = DatabaseSourceType.PostgreSQL;
+        public DatabaseSourceType SagaDatabaseSource { get; set; } = DatabaseSourceType.PostgreSQL;
 
         /// <summary>
         /// Saga 持久化数据库连接字符串（不配则不启用 Saga）

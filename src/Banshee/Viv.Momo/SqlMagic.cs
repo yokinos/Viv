@@ -31,7 +31,7 @@ namespace Viv.Momo
         /// </summary>
         /// <typeparam name="T">实体类型</typeparam>
         /// <returns>数据库表名称</returns>
-        public static string GetTableName<T>(DatabaseSourceType databaseSouceType)
+        public static string GetTableName<T>(DatabaseSourceType databaseSource)
         {
             var entityType = typeof(T);
             if (!_tableNameCache.TryGetValue(entityType, out var tableName))
@@ -41,12 +41,12 @@ namespace Viv.Momo
                 _tableNameCache[entityType] = tableName;
             }
 
-            return QuoteIdentifier(tableName, databaseSouceType);
+            return QuoteIdentifier(tableName, databaseSource);
         }
 
-        public static string QuoteIdentifier(string field, DatabaseSourceType databaseSouceType)
+        public static string QuoteIdentifier(string field, DatabaseSourceType databaseSource)
         {
-            return databaseSouceType switch
+            return databaseSource switch
             {
                 DatabaseSourceType.SqlServer => $"[{field}]",
                 DatabaseSourceType.PostgreSQL => $"{field.ToLowerInvariant()}",
@@ -60,12 +60,12 @@ namespace Viv.Momo
         /// </summary>
         /// <param name="tableName">数据库表名称</param>
         /// <param name="type">实体类型（用于反射获取字段名）</param>
-        /// <param name="databaseSouceType">数据库类型（PostgreSQL/SQL Server等）</param>
+        /// <param name="databaseSource">数据库类型（PostgreSQL/SQL Server等）</param>
         /// <returns>带参数占位符的INSERT SQL语句</returns>
-        public static string GetInsertSqlTemplate(string tableName, Type type, DatabaseSourceType databaseSouceType)
+        public static string GetInsertSqlTemplate(string tableName, Type type, DatabaseSourceType databaseSource)
         {
             var propertyNameList = VivTypeReflectionCache.GetPropertyNameList(type);
-            var nameListLower = propertyNameList.Select(x => QuoteIdentifier(x, databaseSouceType)).ToList();
+            var nameListLower = propertyNameList.Select(x => QuoteIdentifier(x, databaseSource)).ToList();
             var sql = $"INSERT INTO {tableName}({string.Join(",", nameListLower)}) VALUES({string.Join(",", nameListLower.Select(x => $"@{x}"))})";
             return sql;
         }
@@ -75,11 +75,11 @@ namespace Viv.Momo
         /// 适配PostgreSQL（表名小写）和SQL Server（表名加方括号）
         /// </summary>
         /// <param name="tableName">数据库表名称</param>
-        /// <param name="databaseSouceType">数据库类型（PostgreSQL/SQL Server等）</param>
+        /// <param name="databaseSource">数据库类型（PostgreSQL/SQL Server等）</param>
         /// <returns>带参数占位符@Id的SELECT SQL语句</returns>
-        public static string GetFindSqlTemplate(string tableName, DatabaseSourceType databaseSouceType)
+        public static string GetFindSqlTemplate(string tableName, DatabaseSourceType databaseSource)
         {
-            return $"SELECT * FROM {tableName} WHERE {QuoteIdentifier("Id", databaseSouceType)} = @Id";
+            return $"SELECT * FROM {tableName} WHERE {QuoteIdentifier("Id", databaseSource)} = @Id";
         }
 
         /// <summary>
@@ -89,21 +89,21 @@ namespace Viv.Momo
         /// <param name="sql">原始查询SQL（如：SELECT * FROM table WHERE ...）</param>
         /// <param name="pageIndex">页码（从1开始）</param>
         /// <param name="pageSize">每页条数</param>
-        /// <param name="databaseSouceType">数据库类型（PostgreSQL/SQL Server等）</param>
+        /// <param name="databaseSource">数据库类型（PostgreSQL/SQL Server等）</param>
         /// <returns>分页查询SQL + 总数统计SQL</returns>
-        public static (string pageSql, string countSql) GetPageSqlTemplate(string sql, int pageIndex, int pageSize, DatabaseSourceType databaseSouceType)
+        public static (string pageSql, string countSql) GetPageSqlTemplate(string sql, int pageIndex, int pageSize, DatabaseSourceType databaseSource)
         {
             int offset = (pageIndex - 1) * pageSize;
             var sqlWithoutOrderBy = RemoveOrderBy(sql);
             var countSql = $"SELECT COUNT(*) FROM ({sqlWithoutOrderBy}) AS t";
 
-            if (databaseSouceType == DatabaseSourceType.PostgreSQL)
+            if (databaseSource == DatabaseSourceType.PostgreSQL)
             {
                 var pageSql = $"{sql} LIMIT {pageSize} OFFSET {offset}";
                 return (pageSql, countSql);
             }
 
-            if (databaseSouceType == DatabaseSourceType.SqlServer)
+            if (databaseSource == DatabaseSourceType.SqlServer)
             {
                 var analyzer = new MssqlSqlAnalyzer();
                 var analysis = analyzer.Analyze(sql);
@@ -111,7 +111,7 @@ namespace Viv.Momo
                 return (analysis.BuildPageSql(pageIndex, pageSize), analysis.BuildCountSql());
             }
 
-            throw new NotSupportedException($"Unsupported database type: {databaseSouceType}");
+            throw new NotSupportedException($"Unsupported database type: {databaseSource}");
         }
 
         private static string RemoveOrderBy(string sql)
@@ -135,17 +135,17 @@ namespace Viv.Momo
         /// <typeparam name="T"></typeparam>
         /// <param name="tableName"></param>
         /// <param name="expression"></param>
-        /// <param name="databaseSouceType"></param>
+        /// <param name="databaseSource"></param>
         /// <returns></returns>
         public static (string sql, Dictionary<string, object> parameter) GetDeleteSql<T>(
           string tableName,
           Expression<Func<T, bool>> expression,
-          DatabaseSourceType databaseSouceType)
+          DatabaseSourceType databaseSource)
         {
             if (expression == null)
                 return (string.Empty, []);
 
-            var (where, parameters) = ExpressionToSqlConverter.Convert(expression, databaseSouceType);
+            var (where, parameters) = ExpressionToSqlConverter.Convert(expression, databaseSource);
             var sql = $"DELETE FROM {tableName} WHERE {where}";
             return (sql, parameters);
         }
@@ -156,21 +156,21 @@ namespace Viv.Momo
         /// <typeparam name="T">实体类型</typeparam>
         /// <param name="tableName">表名</param>
         /// <param name="expression">过滤条件</param>
-        /// <param name="databaseType">数据库类型</param>
+        /// <param name="databaseSource">数据库类型</param>
         /// <returns>SQL + 参数</returns>
         public static (string sql, Dictionary<string, object> parameter) GetSoftDeleteSql<T>(
             string tableName,
             Expression<Func<T, bool>> expression,
-            DatabaseSourceType databaseType) where T : IEntity, ISoftDelete
+            DatabaseSourceType databaseSource) where T : IEntity, ISoftDelete
         {
             if (expression == null)
                 return (string.Empty, []);
 
-            var isDeletedCol = QuoteIdentifier(nameof(ISoftDelete.IsDeleted), databaseType);
-            var deletedAtCol = QuoteIdentifier(nameof(ISoftDelete.DeletedAt), databaseType);
+            var isDeletedCol = QuoteIdentifier(nameof(ISoftDelete.IsDeleted), databaseSource);
+            var deletedAtCol = QuoteIdentifier(nameof(ISoftDelete.DeletedAt), databaseSource);
 
             string dateValue, boolValue;
-            switch (databaseType)
+            switch (databaseSource)
             {
                 case DatabaseSourceType.PostgreSQL:
                     dateValue = "NOW()";
@@ -184,7 +184,7 @@ namespace Viv.Momo
                     return (string.Empty, []);
             }
 
-            var (whereSql, parameters) = ExpressionToSqlConverter.Convert(expression, databaseType);
+            var (whereSql, parameters) = ExpressionToSqlConverter.Convert(expression, databaseSource);
             var sql = $"UPDATE {tableName} SET {isDeletedCol} = {boolValue}, {deletedAtCol} = {dateValue} WHERE {whereSql}";
             return (sql, parameters);
         }
@@ -193,7 +193,7 @@ namespace Viv.Momo
         /// 将 CLR 值转换为数据库兼容的 SQL 字面量（兼容 PostgreSQL 和 SQL Server）
         /// 字符串会做单引号转义，非参数化场景使用
         /// </summary>
-        public static string ToDatabaseValue(object? value, DatabaseSourceType databaseSouceType)
+        public static string ToDatabaseValue(object? value, DatabaseSourceType databaseSource)
         {
             if (value == null) return "NULL";
 
@@ -207,7 +207,7 @@ namespace Viv.Momo
                 nameof(Double) or nameof(Single) or nameof(Int16) or nameof(UInt32) or nameof(UInt64) or
                 nameof(UInt16) => value.ToString()!,
 
-                nameof(Boolean) => databaseSouceType switch
+                nameof(Boolean) => databaseSource switch
                 {
                     DatabaseSourceType.PostgreSQL => (bool)value ? "true" : "false",
                     DatabaseSourceType.SqlServer => (bool)value ? "1" : "0",

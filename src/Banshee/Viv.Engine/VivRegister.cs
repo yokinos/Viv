@@ -127,7 +127,7 @@ namespace Viv.Engine
 
             services.AddDbContext<VivSagaDbContext>(dbOpt =>
             {
-                switch (nanaOpt.SagaDatabaseSouce)
+                switch (nanaOpt.SagaDatabaseSource)
                 {
                     case DatabaseSourceType.PostgreSQL:
                         dbOpt.UseNpgsql(connectionString);
@@ -136,7 +136,7 @@ namespace Viv.Engine
                         dbOpt.UseSqlServer(connectionString);
                         break;
                     default:
-                        throw new NotSupportedException($"Saga 不支持该数据库类型：{nanaOpt.SagaDatabaseSouce}");
+                        throw new NotSupportedException($"Saga 不支持该数据库类型：{nanaOpt.SagaDatabaseSource}");
                 }
             }, contextLifetime: ServiceLifetime.Scoped);
 

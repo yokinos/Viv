@@ -14,12 +14,12 @@ namespace Viv.Momo.Converter
         /// 将表达式解析为 通用参数化 SQL
         /// 自动适配：MSSQL / PostgreSQL
         /// </summary>
-        public static (string sql, Dictionary<string, object> parameter) Convert<T>(Expression<Func<T, bool>> expression, DatabaseSourceType databaseSouceType)
+        public static (string sql, Dictionary<string, object> parameter) Convert<T>(Expression<Func<T, bool>> expression, DatabaseSourceType databaseSource)
         {
             if (expression == null)
                 return (string.Empty, []);
 
-            var visitor = new SqlExpressionVisitor(databaseSouceType);
+            var visitor = new SqlExpressionVisitor(databaseSource);
             visitor.Visit(expression);
 
             return (visitor.Sql.ToString(), visitor.Parameters);
