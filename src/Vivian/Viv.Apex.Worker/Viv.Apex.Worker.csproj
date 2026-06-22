@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Viv.Apex.Core\Viv.Apex.Core.csproj" />
     <ProjectReference Include="..\Viv.Aspire\Viv.Aspire.ServiceDefaults\Viv.Aspire.ServiceDefaults.csproj" />
   </ItemGroup>
 </Project>
