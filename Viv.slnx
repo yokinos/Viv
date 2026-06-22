@@ -29,6 +29,7 @@
   <Folder Name="/src/Vivian/Apex/">
     <Project Path="src/Vivian/Viv.Apex.Api/Viv.Apex.Api.csproj" />
     <Project Path="src/Vivian/Viv.Apex.Core/Viv.Apex.Core.csproj" Id="ea22c3ae-b774-45a4-b55c-328ce12c4213" />
+    <Project Path="src/Vivian/Viv.Apex.Worker/Viv.Apex.Worker.csproj" />
   </Folder>
   <Folder Name="/src/Vivian/Aspire/">
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.AppHost/Viv.Aspire.AppHost.csproj" Id="fbb6390a-0c47-4336-bac9-6c43cb13cb98" />
@@ -38,6 +39,7 @@
   <Folder Name="/src/Vivian/DeepRed/">
     <Project Path="src/Vivian/Viv.DeepRed.Api/Viv.DeepRed.Api.csproj" />
     <Project Path="src/Vivian/Viv.DeepRed.Core/Viv.DeepRed.Core.csproj" Id="13fbeb5a-0504-4851-a62f-53c3c9f1d5e0" />
+    <Project Path="src/Vivian/Viv.DeepRed.Worker/Viv.DeepRed.Worker.csproj" />
   </Folder>
   <Folder Name="/src/Vivian/Herta/">
     <Project Path="src/Vivian/Viv.Herta.Api/Viv.Herta.Api.csproj" />

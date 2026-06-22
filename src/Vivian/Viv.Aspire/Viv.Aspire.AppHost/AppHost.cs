@@ -23,4 +23,8 @@ builder.AddProject<Projects.Viv_Aspire_Gateway>("viv-aspire-gateway")
     .WithReference(sakumaiApi)
     .WithDeveloperCertificateTrust(true);
 
+builder.AddProject<Projects.Viv_Apex_Worker>("viv-apex-worker");
+
+builder.AddProject<Projects.Viv_DeepRed_Worker>("viv-deepred-worker");
+
 builder.Build().Run();
