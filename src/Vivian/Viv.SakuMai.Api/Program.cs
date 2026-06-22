@@ -88,11 +88,6 @@ public class Program
             app.VivUseSwagger(vivOptions.Env);
         }
 
-        using var scope = app.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<TickerQDbContext>();
-        db.Database.Migrate();
-
-
         app.UseMiddleware<NotFoundMiddleware>();
         app.UseMiddleware<VivContextMiddleware>();
 

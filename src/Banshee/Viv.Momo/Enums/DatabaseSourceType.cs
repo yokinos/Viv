@@ -5,7 +5,7 @@ namespace Viv.Momo.Enums
     /// <summary>
     /// 数据库类型
     /// </summary>
-    public enum DatabaseSouceType
+    public enum DatabaseSourceType
     {
         /// <summary>
         /// Microsoft SQL Server 数据库

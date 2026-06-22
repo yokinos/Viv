@@ -12,7 +12,7 @@ namespace Viv.Momo.Options
     /// </summary>
     public class DatabaseOptions
     {
-        public DatabaseSouceType DatabaseSouce { get; set; } = DatabaseSouceType.PostgreSQL;
+        public DatabaseSourceType DatabaseSouce { get; set; } = DatabaseSourceType.PostgreSQL;
 
         /// <summary>
         /// 是否读写分离

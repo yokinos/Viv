@@ -75,12 +75,12 @@ namespace Viv.Momo.Core
 
             switch (_options.DatabaseSouce)
             {
-                case DatabaseSouceType.PostgreSQL:
+                case DatabaseSourceType.PostgreSQL:
                     optionsBuilder.UseNpgsql(connectionString, x => x.EnableRetryOnFailure())
                         .UseQueryTrackingBehavior(queryTrackingBehavior)
                         .UseSnakeCaseNamingConvention();
                     break;
-                case DatabaseSouceType.SqlServer:
+                case DatabaseSourceType.SqlServer:
                     optionsBuilder.UseSqlServer(connectionString, x => x.EnableRetryOnFailure())
                         .UseQueryTrackingBehavior(queryTrackingBehavior)
                         .UseSnakeCaseNamingConvention();

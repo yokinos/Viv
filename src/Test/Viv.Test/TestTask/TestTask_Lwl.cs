@@ -80,7 +80,7 @@ namespace Viv.Test.TestTask
                 NanaOption = new Nana.Options.NanaOptions
                 {
                     Host = "43.228.79.205",
-                    SagaDatabaseSouce = Momo.Enums.DatabaseSouceType.SqlServer,
+                    SagaDatabaseSouce = Momo.Enums.DatabaseSourceType.SqlServer,
                     SagaConnectionString = "server=43.228.79.205;user id=sa;password=viv_sqlserver_77;database=viv_saga_core;min pool size=4;max pool size=512;TrustServerCertificate=true;",
                     Port = 5672,
                     UserName = "Viv",
@@ -93,7 +93,7 @@ namespace Viv.Test.TestTask
                 // 数据库（读写分离 + 自动实体扫描）
                 DatabaseOption = new Momo.Options.DatabaseOptions
                 {
-                    DatabaseSouce = Momo.Enums.DatabaseSouceType.SqlServer,
+                    DatabaseSouce = Momo.Enums.DatabaseSourceType.SqlServer,
                     MasterConnectionString = "server=43.228.79.205;user id=sa;password=viv_sqlserver_77;database=viv_apex_master;min pool size=4;max pool size=512;TrustServerCertificate=true;",
                     SlaveConnectionStrings = [],
                     IsReadWriteSplit = false,
@@ -128,7 +128,7 @@ namespace Viv.Test.TestTask
                     {
                         ConnectionString = "server=43.228.79.205;user id=sa;password=viv_sqlserver_77;database=viv_tickerq_core;min pool size=4;max pool size=512;TrustServerCertificate=true;",
                         DashboardOptions = new Tick.Options.TickerQDashboradOptions(),
-                        DatabaseType = DatabaseSouceType.SqlServer,
+                        DatabaseType = DatabaseSourceType.SqlServer,
                         EnableDashboard = true,
                     }
                 }

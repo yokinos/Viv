@@ -1,12 +1,12 @@
 ﻿using TickerQ.Utilities.Base;
+using TickerQ.Utilities.Interfaces;
 using Viv.Delusion;
 using Viv.Log;
 using Viv.Nana;
-using Viv.Tick.TickerQCore;
 
 namespace Viv.SakuMai.Api.Jobs
 {
-    public class Interval30SecondJob : ITickerQTask
+    public class Interval30SecondJob
     {
         private readonly ILoggerContract _logger;
         private readonly IVivPublisher _vivPublisher;
@@ -18,11 +18,9 @@ namespace Viv.SakuMai.Api.Jobs
         }
 
         [TickerFunction(nameof(Interval30SecondJob), "*/30 * * * * *")]
-        public async Task<FuncResult> ExecuteAsync(TickerFunctionContext context, CancellationToken cancellationToken = default)
+        public async Task ExecuteAsync(TickerFunctionContext context, CancellationToken cancellationToken = default)
         {
             _logger.Info("Executing Interval30SecondJob...");
-
-            return FuncResult.Success();
         }
     }
 }

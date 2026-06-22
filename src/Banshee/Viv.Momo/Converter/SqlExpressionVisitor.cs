@@ -11,9 +11,9 @@ namespace Viv.Momo.Converter
         public StringBuilder Sql { get; } = new();
         public Dictionary<string, object> Parameters { get; } = new();
         private int _paramIndex;
-        private readonly DatabaseSouceType _databaseSourceType;
+        private readonly DatabaseSourceType _databaseSourceType;
 
-        public SqlExpressionVisitor(DatabaseSouceType databaseSourceType)
+        public SqlExpressionVisitor(DatabaseSourceType databaseSourceType)
         {
             _databaseSourceType = databaseSourceType;
         }
@@ -23,8 +23,8 @@ namespace Viv.Momo.Converter
         {
             return _databaseSourceType switch
             {
-                DatabaseSouceType.SqlServer => $"[{name}]",
-                DatabaseSouceType.PostgreSQL => $"{name.ToLowerInvariant()}",
+                DatabaseSourceType.SqlServer => $"[{name}]",
+                DatabaseSourceType.PostgreSQL => $"{name.ToLowerInvariant()}",
                 _ => name
             };
         }

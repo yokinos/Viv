@@ -5,7 +5,9 @@ using TickerQ.Dashboard.DependencyInjection;
 using TickerQ.DependencyInjection;
 using TickerQ.EntityFrameworkCore.DbContextFactory;
 using TickerQ.EntityFrameworkCore.DependencyInjection;
+using TickerQ.Utilities.Interfaces;
 using Viv.Delusion.Extension;
+using Viv.Delusion.Magic;
 using Viv.Momo.Enums;
 using Viv.Tick.Options;
 
@@ -29,16 +31,16 @@ namespace Viv.Tick
                         {
                             switch (tickerOpt.DatabaseType)
                             {
-                                case DatabaseSouceType.PostgreSQL:
-                                    dbOpt.UseNpgsql(tickerOpt.ConnectionString);
+                                case DatabaseSourceType.PostgreSQL:
+                                    dbOpt.UseNpgsql(tickerOpt.ConnectionString, sql => sql.MigrationsAssembly(tickerOpt.AssemblyName));
                                     break;
-                                case DatabaseSouceType.SqlServer:
-                                    dbOpt.UseSqlServer(tickerOpt.ConnectionString);
+                                case DatabaseSourceType.SqlServer:
+                                    dbOpt.UseSqlServer(tickerOpt.ConnectionString, sql => sql.MigrationsAssembly(tickerOpt.AssemblyName));
                                     break;
                                 default:
                                     throw new NotSupportedException($"TickerQ 暂不支持数据库类型: {tickerOpt.DatabaseType}");
                             }
-                        });
+                        }, schema: tickerOpt.EFCoreSchemaName);
                     });
                 }
 
@@ -59,31 +61,7 @@ namespace Viv.Tick
                 }
             });
 
-            // 注册后台服务，程序启动自动执行迁移、缺失表自动创建
-            services.AddHostedService<TickerQAutoMigrateHostService>();
-
             return services;
-        }
-    }
-
-    /// <summary>
-    /// 程序启动自动执行TickerQ迁移，无表自动新建
-    /// </summary>
-    internal class TickerQAutoMigrateHostService : BackgroundService
-    {
-        private readonly IServiceScopeFactory _scopeFactory;
-
-        public TickerQAutoMigrateHostService(IServiceScopeFactory scopeFactory)
-        {
-            _scopeFactory = scopeFactory;
-        }
-
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var dbCtx = scope.ServiceProvider.GetRequiredService<TickerQDbContext>();
-            // 自动创建缺失表、增量更新表结构
-            await dbCtx.Database.MigrateAsync(stoppingToken);
         }
     }
 }

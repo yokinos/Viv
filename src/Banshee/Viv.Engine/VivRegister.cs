@@ -129,10 +129,10 @@ namespace Viv.Engine
             {
                 switch (nanaOpt.SagaDatabaseSouce)
                 {
-                    case DatabaseSouceType.PostgreSQL:
+                    case DatabaseSourceType.PostgreSQL:
                         dbOpt.UseNpgsql(connectionString);
                         break;
-                    case DatabaseSouceType.SqlServer:
+                    case DatabaseSourceType.SqlServer:
                         dbOpt.UseSqlServer(connectionString);
                         break;
                     default:

@@ -12,7 +12,11 @@ namespace Viv.Tick.Options
         /// <summary>
         /// TickerQ 操作用数据库类型
         /// </summary>
-        public DatabaseSouceType DatabaseType { get; set; } = DatabaseSouceType.SqlServer;
+        public DatabaseSourceType DatabaseType { get; set; } = DatabaseSourceType.SqlServer;
+
+        public string EFCoreSchemaName { get; set; } = "dbo";
+
+        public string? AssemblyName { get; set; }
 
         /// <summary>
         /// 是否启用 TickerQ 仪表盘

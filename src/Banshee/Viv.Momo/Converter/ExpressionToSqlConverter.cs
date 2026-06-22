@@ -14,7 +14,7 @@ namespace Viv.Momo.Converter
         /// 将表达式解析为 通用参数化 SQL
         /// 自动适配：MSSQL / PostgreSQL
         /// </summary>
-        public static (string sql, Dictionary<string, object> parameter) Convert<T>(Expression<Func<T, bool>> expression, DatabaseSouceType databaseSouceType)
+        public static (string sql, Dictionary<string, object> parameter) Convert<T>(Expression<Func<T, bool>> expression, DatabaseSourceType databaseSouceType)
         {
             if (expression == null)
                 return (string.Empty, []);

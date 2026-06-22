@@ -15,7 +15,7 @@ namespace Viv.Momo
         #region 参数化版本
 
         public static (string sql, DynamicParameters parameters) CreateInsertSql(
-            string tableName, object entity, DatabaseSouceType databaseType, string ignoreKeys = "")
+            string tableName, object entity, DatabaseSourceType databaseType, string ignoreKeys = "")
         {
             var fieldList = new List<string>();
             var valueList = new List<string>();
@@ -42,7 +42,7 @@ namespace Viv.Momo
         }
 
         public static (string sql, DynamicParameters parameters) CreateUpdateSql(
-            string tableName, object entity, string whereKeys, DatabaseSouceType databaseType, string ignoreKeys = "")
+            string tableName, object entity, string whereKeys, DatabaseSourceType databaseType, string ignoreKeys = "")
         {
             var setList = new List<string>();
             var whereList = new List<string>();
@@ -77,7 +77,7 @@ namespace Viv.Momo
         }
 
         public static (string sql, DynamicParameters parameters) CreateDeleteSql(
-            string tableName, object entity, DatabaseSouceType databaseType)
+            string tableName, object entity, DatabaseSourceType databaseType)
         {
             var whereList = new List<string>();
             var parameters = new DynamicParameters();
@@ -104,7 +104,7 @@ namespace Viv.Momo
         #region Raw 版本（内联值，非参数化）
 
         public static string CreateInsertSqlRaw(
-            string tableName, object entity, DatabaseSouceType databaseType, string ignoreKeys = "")
+            string tableName, object entity, DatabaseSourceType databaseType, string ignoreKeys = "")
         {
             var fieldList = new List<string>();
             var valueList = new List<string>();
@@ -126,7 +126,7 @@ namespace Viv.Momo
         }
 
         public static string CreateUpdateSqlRaw(
-            string tableName, object entity, string whereKeys, DatabaseSouceType databaseType, string ignoreKeys = "")
+            string tableName, object entity, string whereKeys, DatabaseSourceType databaseType, string ignoreKeys = "")
         {
             var setList = new List<string>();
             var whereList = new List<string>();
@@ -157,7 +157,7 @@ namespace Viv.Momo
         }
 
         public static string CreateDeleteSqlRaw(
-            string tableName, object entity, DatabaseSouceType databaseType)
+            string tableName, object entity, DatabaseSourceType databaseType)
         {
             var whereList = new List<string>();
             var propertieList = VivTypeReflectionCache.GetPropertieList(entity.GetType());
@@ -176,11 +176,11 @@ namespace Viv.Momo
 
         #endregion
 
-        private static string FormatName(string name, DatabaseSouceType databaseType)
+        private static string FormatName(string name, DatabaseSourceType databaseType)
         {
             return databaseType switch
             {
-                DatabaseSouceType.PostgreSQL => name.ToLowerInvariant(),
+                DatabaseSourceType.PostgreSQL => name.ToLowerInvariant(),
                 _ => name
             };
         }
