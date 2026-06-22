@@ -21,11 +21,21 @@ namespace Viv.Nana.Models
         /// </summary>
         public bool IsRequeue { get; set; }
 
-        public SubscribeResult(bool isSuccess, bool isRequeue, string message = "")
+        public SubscribeResult(bool isSuccess, bool isRequeue = false, string message = "")
         {
             IsSuccess = isSuccess;
             IsRequeue = isRequeue;
             Message = message;
+        }
+
+        public static SubscribeResult Success()
+        {
+            return new SubscribeResult(true, false);
+        }
+
+        public static SubscribeResult Fail(bool isRequeue, string message)
+        {
+            return new SubscribeResult(false, isRequeue, message);
         }
     }
 }

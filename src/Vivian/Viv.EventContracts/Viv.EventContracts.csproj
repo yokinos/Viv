@@ -10,8 +10,4 @@
     <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Apex\" />
-  </ItemGroup>
-
 </Project>
