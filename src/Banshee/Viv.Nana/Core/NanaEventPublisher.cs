@@ -1,7 +1,6 @@
 using MassTransit;
 using Viv.Contracts.Interface;
 using Viv.Log;
-using Viv.Nana.Models;
 
 namespace Viv.Nana.Core
 {
