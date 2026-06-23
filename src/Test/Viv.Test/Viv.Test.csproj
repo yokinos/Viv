@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Banshee\Viv.Cli\Viv.Cli.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
   </ItemGroup>
 
