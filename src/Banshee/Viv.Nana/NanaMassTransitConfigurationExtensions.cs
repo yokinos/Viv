@@ -1,8 +1,8 @@
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
+using Viv.Delusion.Extension;
 using Viv.Nana.Core;
 using Viv.Nana.Options;
-using Viv.Delusion.Extension;
 
 namespace Viv.Nana
 {
@@ -34,8 +34,7 @@ namespace Viv.Nana
                         h.Password(nanaOptions.Password);
                     });
 
-                    cfg.UseMessageRetry(r =>
-                        r.Interval(nanaOptions.RetryCount, TimeSpan.FromSeconds(1)));
+                    cfg.UseMessageRetry(r => r.Interval(nanaOptions.RetryCount, TimeSpan.FromSeconds(1)));
 
                     // Exchange = NanaMessage<T> 中 T 的命名空间
                     cfg.MessageTopology.SetEntityNameFormatter(VivEntityNameFormatter.Instance);
