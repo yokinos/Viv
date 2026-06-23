@@ -72,8 +72,8 @@
     "TokenType": 0,
     "SecretKey": "VivsK2pR5xQ8dGjN3mL6tHfBvYwApex",
     "ExpireMinutes": 120,
-    "Issuer": "",
-    "Audience": ""
+    "Issuer": "viv.system.net",
+    "Audience": "viv.system.net"
   },
   "TickOption": null,
   "EchoOption": {
