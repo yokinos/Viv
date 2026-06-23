@@ -1,6 +1,6 @@
-using System.Reflection;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using System.Reflection;
 
 namespace Viv.Cli
 {
@@ -71,10 +71,7 @@ namespace Viv.Cli
 
         public void PrintBanner()
         {
-            AnsiConsole.Write(
-                new FigletText(_options.BannerTitle)
-                    .Color(_options.BannerColor));
-
+            AnsiConsole.Write(new FigletText(_options.BannerTitle).Color(_options.BannerColor));
             var hint = _options.HintText ?? "输入命令执行 | --help 查看帮助 | exit 退出";
             AnsiConsole.MarkupLine($"[grey]{hint}[/]");
             AnsiConsole.WriteLine();
@@ -107,8 +104,7 @@ namespace Viv.Cli
                     var cmdConfigType = cmdConfig.GetType();
 
                     // 描述（含别名提示）
-                    cmdConfigType.GetMethod("WithDescription")
-                        ?.Invoke(cmdConfig, [attr.FullDescription]);
+                    cmdConfigType.GetMethod("WithDescription")?.Invoke(cmdConfig, [attr.FullDescription]);
 
                     // 别名运行时生效
                     if (attr.Names.Length > 1)
@@ -123,8 +119,7 @@ namespace Viv.Cli
                 }
                 catch (Exception ex)
                 {
-                    AnsiConsole.MarkupLine(
-                        $"[yellow]警告: 无法注册命令 [bold]{attr.Name}[/] ({type.Name}): {Markup.Escape(ex.Message)}[/]");
+                    AnsiConsole.MarkupLine($"[yellow]警告: 无法注册命令 [bold]{attr.Name}[/] ({type.Name}): {Markup.Escape(ex.Message)}[/]");
                 }
             }
         }

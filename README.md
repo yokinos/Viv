@@ -236,7 +236,7 @@ public class User : IEntity
 }
 ```
 
-### Service（自动注册到 DI）
+### Service（自动注册到 DI，返回 VivApiResult）
 
 ```csharp
 namespace Viv.Apex.Core.Service;
@@ -247,27 +247,25 @@ public class UserService : IUserService
 
     public UserService(IVivDbContext db) => _db = db;
 
-    public async Task<User?> GetByIdAsync(long id)
-        => await _db.FindAsync<User>(id);
-
-    public async Task<List<User>> SearchAsync(string keyword)
-        => await _db.FindListAsync<User>(u => u.Name.Contains(keyword));
+    public async Task<VivApiResult<User>> GetByIdAsync(long id)
+    {
+        var user = await _db.FindAsync<User>(id);
+        return user is not null
+            ? VivApiResult<User>.Success(data: user)
+            : VivApiResult<User>.Error("用户不存在");
+    }
 }
 ```
 
-### Controller
+### Controller（一行透传）
 
 ```csharp
 [ApiController, Route("api/[controller]")]
-public class UserController(UserService svc) : ControllerBase
+public class UserController(IUserService svc) : ControllerBase
 {
     [HttpGet("{id}")]
-    public async Task<VivApiResult> Get(long id)
-    {
-        var user = await svc.GetByIdAsync(id);
-        return user is not null ? VivApiResult.Success(data: user)
-                                : VivApiResult.Error("用户不存在");
-    }
+    public Task<IActionResult> Get(long id)
+        => svc.GetByIdAsync(id);
 }
 ```
 
