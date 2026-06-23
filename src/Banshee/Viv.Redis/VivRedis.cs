@@ -15,6 +15,10 @@ namespace Viv.Redis
     /// </summary>
     public class VivRedis : RedisFactory
     {
+        public VivRedis()
+        {
+
+        }
 
         /// <summary>
         /// 异步执行单个Key的Redis操作（自动路由到对应Db，内置异常捕获）

@@ -16,14 +16,16 @@ namespace Viv.Engine
             Data = data;
         }
 
-        /// <summary>
-        /// 数据
-        /// </summary>
         public new T? Data { get; set; }
 
-        public static VivApiResult<T> Success(string message = "successful", T? data = default)
+        public static VivApiResult<T> Success(string message, T? data = default)
         {
             return ApiRsult(ApiResultCode.Success, message, data);
+        }
+
+        public static VivApiResult<T> Success(T? data = default)
+        {
+            return ApiRsult(ApiResultCode.Success, "successful", data);
         }
 
         public static VivApiResult<T> Error(string message, T? data = default)

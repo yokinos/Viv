@@ -62,9 +62,14 @@ namespace Viv.Engine
             await response.WriteAsync(jsonString);
         }
 
-        public static VivApiResult Success(string message = "successful", object? data = null)
+        public static VivApiResult Success(string message, object? data = null)
         {
             return ApiRsult(ApiResultCode.Success, message, data);
+        }
+
+        public static VivApiResult Success(object? data = null)
+        {
+            return ApiRsult(ApiResultCode.Success, "successful", data);
         }
 
         public static VivApiResult Error(string message, object? data = null)

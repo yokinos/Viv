@@ -1,6 +1,7 @@
 ﻿using TickerQ.Utilities.Base;
 using TickerQ.Utilities.Interfaces;
 using Viv.Delusion;
+using Viv.EventContracts.Apex;
 using Viv.Log;
 using Viv.Nana;
 
@@ -20,7 +21,11 @@ namespace Viv.SakuMai.Api.Jobs
         [TickerFunction(nameof(Interval30SecondJob), "*/30 * * * * *")]
         public async Task ExecuteAsync(TickerFunctionContext context, CancellationToken cancellationToken = default)
         {
-            _logger.Info("Executing Interval30SecondJob...");
+            await _vivPublisher.PublishAsync(new TestApexEvent()
+            {
+                IsJob = true,
+                TestTime = DateTime.UtcNow,
+            }, cancellationToken);
         }
     }
 }

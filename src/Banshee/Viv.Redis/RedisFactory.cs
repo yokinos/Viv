@@ -69,6 +69,7 @@ namespace Viv.Redis
                 DbSelectorType.None => new NoneAllocator(),
                 _ => new NoneAllocator(),
             };
+
             _logger = VivLocator.GetAutofaService<ILoggerContract>();
         }
 
@@ -277,11 +278,11 @@ namespace Viv.Redis
         {
             if (ex == null)
             {
-                _logger.Error(message);
+                _logger?.Error(message);
             }
             else
             {
-                _logger.Error(message, ex);
+                _logger?.Error(message, ex);
             }
         }
 

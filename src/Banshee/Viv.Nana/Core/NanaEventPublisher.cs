@@ -24,7 +24,7 @@ namespace Viv.Nana.Core
             _logger = logger;
         }
 
-        public async Task<bool> PublishAsync<T>(T content) where T : NanaEvent
+        public async Task<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
         {
             if (content is null) return false;
 
@@ -37,7 +37,7 @@ namespace Viv.Nana.Core
 
             try
             {
-                await _publishEndpoint.Publish(message);
+                await _publishEndpoint.Publish(message, cancellationToken);
                 return true;
             }
             catch (Exception ex)
@@ -47,7 +47,7 @@ namespace Viv.Nana.Core
             }
         }
 
-        public async Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content) where T : NanaEvent
+        public async Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
         {
             if (content is null) return false;
             if (delayTTL < TimeSpan.Zero) return false;
@@ -61,7 +61,7 @@ namespace Viv.Nana.Core
 
             try
             {
-                await _scheduler.SchedulePublish(delayTTL, message);
+                await _scheduler.SchedulePublish(delayTTL, message, cancellationToken);
                 return true;
             }
             catch (Exception ex)

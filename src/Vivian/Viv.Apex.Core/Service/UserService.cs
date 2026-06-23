@@ -20,7 +20,7 @@ namespace Viv.Apex.Core.Service
 
         public async Task<VivApiResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
         {
-            return VivApiResult<ApexLoginOutput>.ApiRsult(ApiResultCode.Success, "Login successful");
+            return VivApiResult<ApexLoginOutput>.Success("Login successful");
         }
     }
 }

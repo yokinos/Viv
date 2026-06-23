@@ -18,6 +18,12 @@ namespace Viv.Nana
             {
                 x.AddDelayedMessageScheduler();
 
+                if (!nanaOptions.ConsumerTypes.IsNullOrEmpty())
+                    NanaRegister.AddVivConsumers(x, nanaOptions.ConsumerTypes);
+
+                if (!sagaStateMachineTypes.IsNullOrEmpty())
+                    NanaRegister.AddVivSagas(x, sagaStateMachineTypes);
+
                 x.UsingRabbitMq((context, cfg) =>
                 {
                     cfg.UseDelayedMessageScheduler();
@@ -31,21 +37,15 @@ namespace Viv.Nana
                     cfg.UseMessageRetry(r =>
                         r.Interval(nanaOptions.RetryCount, TimeSpan.FromSeconds(1)));
 
-                    cfg.ConfigureEndpoints(context);
+                    // Exchange = NanaMessage<T> 中 T 的命名空间
+                    cfg.MessageTopology.SetEntityNameFormatter(VivEntityNameFormatter.Instance);
+
+                    // Queue = {Name}Queue，Saga 走默认
+                    cfg.ConfigureEndpoints(context, VivNanaEndpointNameFormatter.Instance);
                 });
-
-                // 注册消费者
-                if (!nanaOptions.ConsumerTypes.IsNullOrEmpty())
-                {
-                    NanaRegister.AddVivConsumers(x, nanaOptions.ConsumerTypes);
-                }
-
-                // 注册 Saga
-                if (!sagaStateMachineTypes.IsNullOrEmpty())
-                {
-                    NanaRegister.AddVivSagas(x, sagaStateMachineTypes);
-                }
             });
+
+            services.AddScoped<IVivPublisher, NanaEventPublisher>();
 
             return services;
         }
