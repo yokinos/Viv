@@ -21,6 +21,6 @@ namespace Viv.Nana.Core
         /// <summary>
         /// 消息消费失败允许重试次数 这个次数归零 就不再重试（入库等待人工干预）
         /// </summary>
-        public int TryCount { get; set; } = 10;
+        public int TryCount { get; set; } = 5;
     }
 }

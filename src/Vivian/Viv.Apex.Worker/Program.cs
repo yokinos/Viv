@@ -1,3 +1,5 @@
+using Viv.Engine;
+
 namespace Viv.Apex.Worker;
 
 public class Program
@@ -6,9 +8,8 @@ public class Program
     {
         var builder = Host.CreateApplicationBuilder(args);
         builder.AddServiceDefaults();
+        builder.AddVivWorker();
         builder.Services.AddHostedService<Worker>();
-
-        var host = builder.Build();
-        host.Run();
+        builder.RunVivWorker();
     }
 }

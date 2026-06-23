@@ -7,6 +7,6 @@ namespace Viv.EventContracts.Apex
 {
     public class TestApexEvent : NanaEvent
     {
-
+        public DateTime TestTime { get; set; }
     }
 }
