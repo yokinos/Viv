@@ -10,7 +10,7 @@
 
 # Viv
 
-基于 **.NET 10** 的微服务基础设施框架，提供从数据访问、消息队列、缓存、认证到网关编排的一站式解决方案。目标是让业务开发只需关注 **Service + Repository**，其余由框架统一处理。
+基于 **.NET 10** 的微服务基础设施框架。从数据访问、消息队列、缓存、认证到网关编排，提供一站式解决方案。业务开发只需关注 **Service + Repository**，基础设施由框架统一处理。
 
 ```
    ██╗   ██╗██╗██╗   ██╗
@@ -23,12 +23,55 @@
 
 ---
 
-## 命名由来
+## 命名
 
-| 层级 | 代号 | 含义 |
+| 层级 | 代号 | 定位 |
 |:--|:--|:--|
-| **Banshee** | 报丧女妖 | 框架层 — 女妖在幕后沉默地驱动一切 |
-| **Vivian** | 薇薇安 | 应用层 — 站在台前与用户交互的存在 |
+| **Banshee** | 报丧女妖 | 框架层 — 幕后驱动一切基础设施 |
+| **Vivian** | 薇薇安 | 应用层 — 台前承载业务逻辑 |
+
+---
+
+## 架构
+
+```
+                  ┌─────────────────────┐
+                  │  Viv.Aspire.AppHost  │  Aspire 统一编排
+                  └──────────┬──────────┘
+                             │
+                  ┌──────────▼──────────┐
+                  │  Viv.Aspire.Gateway  │  YARP 反向代理 + 限流 + 缓存
+                  └──────────┬──────────┘
+                             │
+         ┌───────────────────┼───────────────────┐
+         │                   │                   │
+   ┌─────▼─────┐  ┌─────▼─────┐  ┌─────▼─────┐
+   │ Apex.Api  │  │DeepRed.Api│  │Herta.Api  │  ...  Vivian 服务
+   │Apex.Worker│  │D.R.Worker │  │Herta.Link │
+   └─────┬─────┘  └─────┬─────┘  └─────┬─────┘
+         │              │              │
+         └──────────────┼──────────────┘
+                        │
+        ┌───────────────┼───────────────┐
+        │               │               │
+  ┌─────▼─────┐  ┌─────▼─────┐  ┌─────▼─────┐
+  │   Momo    │  │   Nana    │  │   Redis   │  Banshee 基础设施
+  │ EF+Dapper │  │MassTransit│  │  缓存/锁   │
+  │ 读写分离   │  │+RabbitMQ  │  │           │
+  └───────────┘  └───────────┘  └───────────┘
+```
+
+### 请求管线
+
+```
+Request
+  → NotFoundMiddleware         404 拦截
+  → VivContextMiddleware        解析 Header → IVivContext（多租户）
+  → RequestFilterAttribute     请求校验（Elysia）
+  → VivExceptionFilter         全局异常捕获
+  → Controller Action          业务处理
+  → VivApiResult               统一响应 { Code, Message, Data }
+```
 
 ---
 
@@ -37,284 +80,218 @@
 ```
 Viv/
 ├── src/
-│   ├── Banshee/                          # 框架层（不可单独运行）
-│   │   ├── Viv.Contracts/                # 基础契约 — 根接口、枚举、异常定义
-│   │   ├── Viv.Vva/                      # 通用工具库 — ID生成器、类型扫描、加密、对象映射
-│   │   ├── Viv.Aoi/                      # 依赖注入桥接 — MS DI ↔ Autofac 服务定位器
-│   │   ├── Viv.Engine/                   # 核心引擎 — 配置加载、统一注册、中间件、API响应封装
-│   │   ├── Viv.Log/                      # 日志抽象 — Serilog / 空实现切换
-│   │   ├── Viv.Momo/                     # 数据库 — EF Core + Dapper 混合，读写分离
-│   │   ├── Viv.Nana/                     # 消息队列 — MassTransit + RabbitMQ，支持延迟消息
-│   │   ├── Viv.Redis/                    # 缓存 — StackExchange.Redis，多模式多库分配
-│   │   └── Viv.Authentication/           # 认证 — JWT 令牌签发与校验
+│   ├── Banshee/                          # 框架层
+│   │   ├── Viv.Contracts/                # 基础接口与枚举
+│   │   ├── Viv.Delusion/                 # 通用工具 — 类型扫描、对象映射、加密
+│   │   ├── Viv.Aoi/                      # DI 桥接 — MS DI ↔ Autofac
+│   │   ├── Viv.Engine/                   # 核心引擎 — 配置加载、统一注册、启动扩展
+│   │   ├── Viv.Cli/                      # CLI 框架 — REPL + 命令自动发现
+│   │   ├── Viv.Log/                      # 日志 — Serilog / Seq
+│   │   ├── Viv.Momo/                     # 数据库 — EF Core + Dapper 混合
+│   │   ├── Viv.Nana/                     # 消息队列 — MassTransit + RabbitMQ
+│   │   ├── Viv.Redis/                    # 缓存 — StackExchange.Redis
+│   │   ├── Viv.Authentication/           # 认证 — JWT
+│   │   ├── Viv.Echo/                     # 跨服务通信 — HTTP + gRPC
+│   │   ├── Viv.Tick/                     # 后台调度 — TickerQ
+│   │   └── Viv.Forge/                    # 代码生成
 │   │
 │   ├── Vivian/                           # 应用层
-│   │   ├── Viv.Entity/                   # 数据库实体定义
-│   │   ├── Viv.Elysia/                   # 请求校验管线 — 自动验证、统一过滤
-│   │   ├── Viv.Apex.Core/                # 核心业务 — Service + Repository 实现
-│   │   ├── Viv.Apex.Api/                 # 主 API 服务入口
-│   │   ├── Viv.Herta.Api/                # Herta API 服务
-│   │   ├── Viv.Herta.Link/               # Herta Link 服务
-│   │   ├── Viv.Robin.Api/                # Robin API 服务
-│   │   ├── Viv.Toolkit/                  # CLI 工具集
+│   │   ├── Viv.Entity/                   # 数据库实体
+│   │   ├── Viv.Elysia/                   # 请求校验管线
+│   │   ├── Viv.EventContracts/           # 跨服务消息定义
 │   │   ├── Viv.Sdk/                      # 公共 SDK
-│   │   └── Viv.Aspire/                   # .NET Aspire 编排
-│   │       ├── Viv.Aspire.AppHost/        #   AppHost — 统一启动所有服务
-│   │       ├── Viv.Aspire.Gateway/        #   Gateway — YARP 反向代理 + 限流 + 缓存
-│   │       └── Viv.Aspire.ServiceDefaults/ #  OpenTelemetry、健康检查、服务发现
+│   │   │
+│   │   ├── Viv.Apex.Core/                # Apex 业务核心
+│   │   ├── Viv.Apex.Api/                 # Apex API 服务
+│   │   ├── Viv.Apex.Worker/              # Apex 消息消费者
+│   │   │
+│   │   ├── Viv.DeepRed.Core/             # DeepRed 业务核心
+│   │   ├── Viv.DeepRed.Api/              # DeepRed API 服务
+│   │   ├── Viv.DeepRed.Worker/           # DeepRed 消息消费者
+│   │   │
+│   │   ├── Viv.Herta.Core/               # Herta 业务核心
+│   │   ├── Viv.Herta.Api/                # Herta API 服务
+│   │   ├── Viv.Herta.Link/               # Herta SignalR 实时通讯
+│   │   │
+│   │   ├── Viv.SakuMai.Api/              # SakuMai API（TickerQ 集成）
+│   │   │
+│   │   └── Viv.Aspire/
+│   │       ├── Viv.Aspire.AppHost/        # 统一编排启动
+│   │       ├── Viv.Aspire.Gateway/        # YARP 反向代理
+│   │       └── Viv.Aspire.ServiceDefaults/ # OpenTelemetry + 健康检查
 │   │
 │   └── Test/
-│       └── Viv.Test/                     # 测试
-```
-
----
-
-## 架构总览
-
-```
-                    ┌─────────────┐
-                    │   Client    │
-                    └──────┬──────┘
-                           │
-                    ┌──────▼──────┐
-                    │   Gateway   │  ← YARP 反向代理
-                    │ 限流/缓存/JWT│    请求头转发 (X-User-Id, Viv_AppId, Viv_TenantId...)
-                    └──────┬──────┘
-                           │
-            ┌──────────────┼──────────────┐
-            │              │              │
-      ┌─────▼─────┐  ┌────▼────┐  ┌─────▼─────┐
-      │ Apex.Api  │  │Herta.* │  │ Robin.Api │  ← Vivian 业务服务
-      └─────┬─────┘  └────┬────┘  └─────┬─────┘
-            │              │              │
-            └──────────────┼──────────────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────▼────┐ ┌────▼────┐ ┌─────▼────┐
-        │  Momo    │ │  Nana   │ │  Redis   │  ← Banshee 基础设施
-        │ DB 读写分离│ │ RabbitMQ│ │ 缓存/锁  │
-        └──────────┘ └─────────┘ └──────────┘
-```
-
-### 请求处理管线
-
-```
-HTTP Request
-  → NotFoundMiddleware         (处理 404)
-  → VivContextMiddleware       (解析 Header → IVivContext)
-  → RequestFilterAttribute     (Elysia 请求校验)
-  → VivExceptionFilter         (全局异常捕获 → VivApiResult)
-  → Controller Action
-  → VivApiResult               (统一响应 {Code, Message, Data})
+│       └── Viv.Test/                     # CLI 命令集
 ```
 
 ---
 
 ## 快速开始
 
-### 1. 环境要求
+### 环境
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - PostgreSQL 16+ 或 SQL Server 2022+
 - Redis 7.x
 - RabbitMQ 3.x
 
-### 2. 克隆并启动
+### 启动
 
 ```bash
-git clone <your-repo-url>
+git clone <repo-url>
 cd Viv
 
-# 通过 Aspire 一键启动全部服务
+# 一键启动全部服务
 dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.AppHost
+
+# 或单独启动
+dotnet run --project src/Vivian/Viv.Apex.Api
+dotnet run --project src/Vivian/Viv.Apex.Worker
+dotnet run --project src/Vivian/Viv.Herta.Link
 ```
 
-> Aspire 会自动编排 Apex.Api + Herta.Api + Herta.Link + Robin.Api 的启动。Gateway 尚在联调中，可先以各 API 直连模式开发。
+### 添加新服务 — 三行代码起步
 
-### 3. 配置文件
+```csharp
+// ── API ──
+var builder = WebApplication.CreateBuilder(args);
+builder.AddServiceDefaults();
+builder.AddVivApi("Viv NewApi API", mvc => mvc.Filters.Add<RequestFilterAttribute>());
+builder.RunVivApi(app => app.MapDefaultEndpoints());
 
-每个 API 项目的根目录下都有一个 `viv.config.json`，完整配置示例：
+// ── Worker ──
+var builder = Host.CreateApplicationBuilder(args);
+builder.AddServiceDefaults();
+builder.AddVivWorker();
+builder.Services.AddHostedService<Worker>();
+builder.RunVivWorker();
+```
+
+`AddVivApi` / `AddVivWorker` 自动完成：配置加载 → Autofac 容器 → MVC/Swagger/CORS → 中间件管线。`viv.config.json` 放到项目根目录即可。
+
+---
+
+## 配置：`viv.config.json`
 
 ```jsonc
 {
-  "Env": 0,                     // 0=Dev, 1=Test, 2=PreRelease, 3=Production
+  "Env": 0,                              // 0=Dev 1=Test 2=PreRelease 3=Production
   "DIOption": {
-    "ServiceImplementation": {
+    "ServiceImplementation": {           // Service 自动扫描注册
       "AssemblyName": "Viv.Apex.Core",
       "NameSpace": "Viv.Apex.Core.Service",
-      "ClassNameEndWith": "Service"       // 自动扫描以 Service 结尾的类
+      "ClassNameEndWith": "Service"
     },
-    "RepositoryImplementation": {
+    "RepositoryImplementation": {        // Repository 自动扫描注册
       "AssemblyName": "Viv.Apex.Core",
       "NameSpace": "Viv.Apex.Core.Repository",
       "ClassNameEndWith": "Repository"
     }
   },
-  "CacheOption": {
-    "CacheProviderType": 1,              // 0=无, 1=Redis
-    "IsEnableMemoryCache": true,         // 同时启用内存缓存
-    "RedisOptions": {
-      "RedisMode": 0,                    // 0=单机, 1=集群, 2=哨兵
-      "ConnectionString": "localhost:6379,password=vivRedis"
-    }
-  },
-  "LogOption": {
-    "LogType": 1                         // 0=None, 1=Serilog
-  },
   "DatabaseOption": {
-    "DatabaseSouce": 1,                  // 0=SqlServer, 1=PostgreSQL
-    "IsReadWriteSplit": true,
-    "MasterConnectionString": "Server=localhost;Database=vivApex;...",
-    "SlaveConnectionStrings": [
-      "Server=localhost;Database=vivApexRead;..."
-    ],
-    "Timeout": 30,
-    "EntityTypeOptions": [{              // 自动扫描数据库实体
+    "DatabaseSource": 0,                 // 0=SqlServer 1=PostgreSQL
+    "IsReadWriteSplit": false,
+    "MasterConnectionString": "Server=...;Database=viv;...",
+    "SlaveConnectionStrings": [],
+    "EntityTypeOptions": [{              // 实体自动扫描
       "AssemblyName": "Viv.Entity",
-      "NameSpace": "Viv.Entity.Database",
+      "NameSpace": "Viv.Entity.Database.Apex",
       "BaseType": "Viv.Momo.Interface.IEntity"
     }]
   },
   "NanaOption": {
-    "Host": "localhost",
-    "Port": 5672,
-    "UserName": "viv",
-    "Password": "vivRabbitMQ",
-    "VirtualHost": "/Viv",
-    "RetryCount": 3,
+    "Host": "localhost", "Port": 5672,
+    "UserName": "viv", "Password": "***",
+    "VirtualHost": "/Viv", "RetryCount": 3,
     "ConsumerTypes": []                  // 消费者类型扫描规则
   },
-  "TokenOption": {
-    "TokenType": 0,                      // 0=JWT
-    "SecretKey": "your-secret-key",
-    "ExpireMinutes": 120
-  }
+  "CacheOption": {
+    "CacheProviderType": 1,              // 0=None 1=Redis
+    "IsEnableMemoryCache": true,
+    "RedisOptions": { "ConnectionString": "localhost:6379" }
+  },
+  "LogOption": { "LogType": 1 },        // 0=None 1=Serilog
+  "TokenOption": { "TokenType": 0, "SecretKey": "***", "ExpireMinutes": 120 },
+  "EchoOption": { "EnableHttp": true, "EnableGrpc": true },
+  "TickOption": { ... }                 // TickerQ 调度配置
 }
 ```
 
-### 4. 编写第一个业务
+---
 
-**定义实体：**
+## 编写业务代码
+
+### 实体
 
 ```csharp
 using Viv.Momo.Interface;
 
-namespace Viv.Entity.Database;
+namespace Viv.Entity.Database.Apex;
 
 public class User : IEntity
 {
     public long Id { get; set; }
     public string Name { get; set; }
     public string Email { get; set; }
-    public DateTime CreatedAt { get; set; }
 }
 ```
 
-**编写 Service：**
+### Service（自动注册到 DI）
 
 ```csharp
-using Viv.Momo;
-using Viv.Engine;
-using Viv.Entity.Database;
-
 namespace Viv.Apex.Core.Service;
 
-public class UserService : IUserService  // 自动扫描注册到 DI
+public class UserService : IUserService
 {
     private readonly IVivDbContext _db;
 
-    public UserService(IVivDbContext db)
-    {
-        _db = db;
-    }
+    public UserService(IVivDbContext db) => _db = db;
 
     public async Task<User?> GetByIdAsync(long id)
         => await _db.FindAsync<User>(id);
-
-    public async Task<bool> CreateAsync(User user)
-    {
-        user.CreatedAt = DateTime.UtcNow;
-        return await _db.InsertAsync(user);
-    }
 
     public async Task<List<User>> SearchAsync(string keyword)
         => await _db.FindListAsync<User>(u => u.Name.Contains(keyword));
 }
 ```
 
-**编写 Controller：**
+### Controller
 
 ```csharp
-using Microsoft.AspNetCore.Mvc;
-using Viv.Engine;
-using Viv.Apex.Core.Service;
-
-[ApiController]
-[Route("api/[controller]")]
-public class UserController : ControllerBase
+[ApiController, Route("api/[controller]")]
+public class UserController(UserService svc) : ControllerBase
 {
-    private readonly UserService _userService;
-
-    public UserController(UserService userService)
-    {
-        _userService = userService;
-    }
-
     [HttpGet("{id}")]
     public async Task<VivApiResult> Get(long id)
     {
-        var user = await _userService.GetByIdAsync(id);
-        return user is not null
-            ? VivApiResult.Success(data: user)
-            : VivApiResult.Error("用户不存在");
-    }
-
-    [HttpPost]
-    public async Task<VivApiResult> Create(User user)
-    {
-        var ok = await _userService.CreateAsync(user);
-        return ok
-            ? VivApiResult.Success("创建成功")
-            : VivApiResult.Error("创建失败");
+        var user = await svc.GetByIdAsync(id);
+        return user is not null ? VivApiResult.Success(data: user)
+                                : VivApiResult.Error("用户不存在");
     }
 }
 ```
 
-### 5. 发布消息
+### 消息生产者
 
 ```csharp
-public class OrderService
+public class OrderService(IVivPublisher producer)
 {
-    private readonly IVivProducer _producer;
-
-    public OrderService(IVivProducer producer)
+    public async Task PlaceAsync()
     {
-        _producer = producer;
-    }
-
-    public async Task PlaceOrderAsync()
-    {
-        // 即时消息
-        await _producer.PublishAsync(new OrderCreatedMessage { OrderId = 1 });
-
-        // 延迟消息（30分钟后检查支付状态）
-        await _producer.PublishDelayAsync(
-            TimeSpan.FromMinutes(30),
-            new CheckPaymentMessage { OrderId = 1 }
-        );
+        await producer.PublishAsync(new OrderCreated { OrderId = 1 });
+        await producer.PublishDelayAsync(TimeSpan.FromMinutes(30),
+            new CheckPayment { OrderId = 1 });
     }
 }
 ```
 
-**消费消息：**
+### 消息消费者
 
 ```csharp
-public class OrderCreatedConsumer : VivConsumer<OrderCreatedMessage>
+public class OrderCreatedConsumer : VivConsumer<OrderCreated>
 {
     public override async Task<SubscribeResult> ReceiveMessageAsync(
-        NanaMessage<OrderCreatedMessage> message,
-        CancellationToken cancellationToken)
+        NanaMessage<OrderCreated> message, CancellationToken ct)
     {
         // 处理业务...
         return SubscribeResult.Success();
@@ -324,76 +301,62 @@ public class OrderCreatedConsumer : VivConsumer<OrderCreatedMessage>
 
 ---
 
-## Momo 数据库
+## Viv.Cli — 命令行工具框架
 
-Momo 采用 **EF Core + Dapper 混合**策略：
+引 `Viv.Cli`，写 `[VivCommand]`，自动扫描注册：
 
-| 数据量 | 执行引擎 | 说明 |
-|:--|:--|:--|
-| < `EFMaxCount` | EF Core | 利用变更追踪，批量较小 |
-| ≥ `EFMaxCount` | Dapper | 纯 SQL，高吞吐量 |
-
-**读写分离**：`EFAppContext` 在构造时就锁定读库或写库，读操作随机选取从库，写操作始终走主库。
-
-**软删除**：实现 `ISoftDelete` 接口即可。
-
-**多租户**：通过 `IVivContext.TenantId` 隔离数据。
-
----
-
-## Nana 消息队列
-
-基于 MassTransit + RabbitMQ，提供：
-
-- **即时消息** — `PublishAsync<T>()`
-- **延迟消息** — `PublishDelayAsync<T>(TimeSpan)`
-- **自动重试** — 默认 3 次，间隔 1 秒
-- **失败重入队** — `SubscribeResult.Requeue()` 将消息退回队列
-
----
-
-## 网关 Gateway 🚧
-
-> 基于 YARP 反向代理，目前还在联调阶段，核心逻辑已搭建，待 YARP 配置调通。
-
-| 功能 | 实现 | 状态 |
-|:--|:--|:--|
-| 反向代理 | YARP + 服务发现 | 🚧 联调中 |
-| 限流 | 固定窗口算法，支持自定义策略 | ✅ |
-| 输出缓存 | 按策略配置过期时间 | ✅ |
-| 身份传递 | JWT 解析后通过 `X-User-Id` / `X-User-Name` Header 转发 | ✅ |
-| 会话亲和性 | Session Affinity | 🚧 |
-| 被动健康检查 | Passive Health Checks | 🚧 |
-
----
-
-## API 统一响应
-
-所有接口返回 `VivApiResult`：
-
-```json
+```csharp
+[VivCommand("migrate", "执行数据库迁移")]           // 单命令
+[VivCommand("clear, cl", "清除屏幕")]               // 多别名
+public class Cmd_Migrate : AsyncCommand
 {
-  "code": 200,
-  "message": "successful",
-  "data": { ... }
+    public override Task<int> ExecuteAsync(CommandContext ctx) { ... }
 }
 ```
 
-| 状态码 | 含义 |
+内置 `clear`（别名 `cl`）命令。交互输入和格式化输出：
+
+```csharp
+var name = InputMagic.GetInput("请输入名称");         // 必填
+var pwd  = InputMagic.GetInput("密码", secret: true); // 隐藏
+if (InputMagic.Confirm("确认?")) { ... }             // y/n
+
+Out.PrintlnSuccess("完成");
+Out.PrintlnFormatJson(someObject);                   // JSON Panel
+```
+
+---
+
+## Momo 数据库
+
+| 数据量 | 引擎 | 说明 |
+|:--|:--|:--|
+| < `EFMaxCount` | EF Core | 变更追踪 |
+| ≥ `EFMaxCount` | Dapper | 纯 SQL 高吞吐 |
+
+- **读写分离** — `EFAppContext` 构造时锁定读写方向
+- **多租户** — 通过 `IVivContext.TenantId` 自动隔离
+- **软删除** — 实现 `ISoftDelete` 即可
+
+## Nana 消息队列
+
+MassTransit + RabbitMQ，内置重试（默认 3 次）和 Saga 状态机支持。`SubscribeResult.Requeue()` 将失败消息退队重试。
+
+## API 统一响应
+
+```json
+{ "code": 200, "message": "successful", "data": { ... } }
+```
+
+| code | 含义 |
 |:--|:--|
 | `200` | 成功 |
 | `-200` | 通用业务错误 |
 | `-400` | Token 无效 |
-| `-401` | 认证失败 / 签名错误 |
-| `-403` | 无权限 |
 | `-404` | 资源不存在 |
 | `-500` | 服务端异常 |
 
----
-
 ## 多租户
-
-通过 HTTP Header 传递租户上下文：
 
 | Header | 说明 |
 |:--|:--|
@@ -401,26 +364,7 @@ Momo 采用 **EF Core + Dapper 混合**策略：
 | `Viv_TenantId` | 租户 ID |
 | `Viv_UserId` | 用户 ID |
 
-`VivContextMiddleware` 自动将 Header 注入到 `IVivContext`，数据库操作基于 `TenantId` 隔离。
-
----
-
-## 当前进度
-
-- [x] Banshee 框架核心（DI、日志、配置）
-- [x] Momo 数据库读写分离 + EF/Dapper 混合
-- [x] Nana 消息队列（MassTransit + RabbitMQ）
-- [x] Redis 缓存（单机 / 集群 / 哨兵）
-- [x] JWT 认证
-- [x] .NET Aspire 编排（AppHost + ServiceDefaults）
-- [ ] YARP 网关 — 正在联调
-- [ ] 业务模块（Apex / Herta / Robin 业务实现）
-- [ ] **分布式 IM** — 基于 WebSocket 的实时通讯系统
-  - [ ] WebSocket 长连接管理
-  - [ ] 消息路由与广播
-  - [ ] 离线消息存储
-  - [ ] 已读/未读状态同步
-  - [ ] 在线状态感知
+`VivContextMiddleware` 自动解析 Header 注入 `IVivContext`。
 
 ---
 

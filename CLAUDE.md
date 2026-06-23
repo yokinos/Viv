@@ -11,72 +11,161 @@ dotnet build
 # Run the Aspire AppHost (orchestrator that launches all services)
 dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.AppHost
 
-# Run a specific API project directly
+# Run a specific API
 dotnet run --project src/Vivian/Viv.Apex.Api
-```
 
-There is no test runner configured — Viv.Test is a console project (`dotnet run --project src/Test/Viv.Test`).
+# Run a specific Worker
+dotnet run --project src/Vivian/Viv.Apex.Worker
+
+# Run the CLI test harness
+dotnet run --project src/Test/Viv.Test
+```
 
 ## Architecture
 
-The solution splits into two namespaces: **Banshee** (framework/infrastructure) and **Vivian** (application/business).
+The solution splits into two top-level namespaces: **Banshee** (framework) and **Vivian** (application). A third namespace, **Test**, holds CLI tooling.
 
-### Banshee — the Viv framework
+---
+
+### Banshee — the Viv framework (`src/Banshee/`)
 
 | Project | Role |
 |---|---|
 | `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums |
-| `Viv.Vva` | Utility library — Snowflake ID generators, `TypeScanMagic` (assembly type scanning), encryption, `ObjectMapper`, `VivConfigRegistry` |
-| `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope` |
-| `Viv.Engine` | Core wiring — `VivEngine.LoadVivConfig("viv.config.json")` loads all config, `VivRegister` wires every Banshee subsystem into DI, `VivOptions` is the single config root |
-| `Viv.Log` | Logging — `IDistributedLogger` with Serilog or no-op backend |
-| `Viv.Momo` | Database — `IVivDbContext` provides full CRUD via `VivDatabaseContext`, backed by **EF Core + Dapper** hybrid. `EFAppContext` resolves read/write connections at init time |
-| `Viv.Nana` | Messaging — `IVivProducer`/`NanaProducer` (publish + delayed publish), `VivConsumer<T>` base class, all built on **MassTransit + RabbitMQ** |
-| `Viv.Redis` | Redis cache — `IRedisService`/`RedisService` with pluggable DB allocation |
-| `Viv.Authentication` | JWT tokens via `ITokenService`/`JwtTokenService` |
+| `Viv.Delusion` | Utility library — `TypeScanMagic` (assembly type scanning), `ObjectMapper` (Emit + Expression-based), encryption, common extensions |
+| `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios |
+| `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig("viv.config.json")` deserializes all config into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` and `VivWorkerExtensions` for one-liner startup |
+| `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
+| `Viv.Momo` | Database — `IVivDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server |
+| `Viv.Nana` | Messaging — `IVivPublisher` / `NanaEventPublisher` (publish + delayed publish); `VivConsumer<T>` base class; built on **MassTransit + RabbitMQ**; Saga support with EF Core state persistence |
+| `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`) |
+| `Viv.Authentication` | JWT — `ITokenService` / `JwtTokenService`; token type configurable per `TokenOption` |
+| `Viv.Echo` | Service-to-service communication — HTTP + gRPC clients |
+| `Viv.Tick` | Background scheduling — `TickerQ` integration for cron/interval job execution with dashboard |
+| `Viv.Cli` | **CLI framework** — `VivCliHost` (REPL loop + Spectre.Console.Cli `CommandApp`); `[VivCommand]` auto-discovery; built-in `Cmd_Clear`; `Out` (formatted output) and `InputMagic` (interactive input) utilities |
+| `Viv.Forge` | Code generation — compile-time gRPC client generation via `Viv.Forge` |
 
-### Vivian — the application layer
+---
+
+### Vivian — the application layer (`src/Vivian/`)
+
+**Domain projects (DDD-style per bounded context):**
+
+| Domain | Core | Api | Worker |
+|---|---|---|---|
+| **Apex** | `Viv.Apex.Core` | `Viv.Apex.Api` | `Viv.Apex.Worker` |
+| **DeepRed** | `Viv.DeepRed.Core` | `Viv.DeepRed.Api` | `Viv.DeepRed.Worker` |
+| **Herta** | `Viv.Herta.Core` | `Viv.Herta.Api` + `Viv.Herta.Link` (SignalR) | — |
+| **SakuMai** | — | `Viv.SakuMai.Api` (TickerQ integrated) | — |
+
+**Shared/cross-cutting:**
 
 | Project | Role |
 |---|---|
-| `Viv.Entity` | EF entity classes (Apex domain: `VivClientApp`, `VivClientAppVersion`) |
-| `Viv.Elysia` | Request validation pipeline — `RequestFilterAttribute`, `RequestValidator<T>` |
-| `Viv.Apex.Core` | Business logic — Services + Repositories (Service/Repository pattern) |
-| `Viv.Apex.Api` | Main Web API host |
-| `Viv.Herta.Link` / `Viv.Herta.Api` / `Viv.Robin.Api` | Additional API services (template/prototype) |
-| `Viv.Toolkit` | CLI tools |
-| `Viv.Sdk` | Shared SDK library |
+| `Viv.Entity` | EF entity classes organized by domain (e.g. `Database/Apex/`) |
+| `Viv.Elysia` | Request validation pipeline — `RequestFilterAttribute`, `RequestValidator<T>`, `AppMemoryCache` |
+| `Viv.EventContracts` | Shared message/event class definitions for inter-service messaging |
+| `Viv.Sdk` | Shared SDK — gRPC client stubs, shared DTOs |
 
-### Aspire orchestration
+### Aspire orchestration (`src/Vivian/Viv.Aspire/`)
 
 | Project | Role |
 |---|---|
-| `Viv.Aspire.AppHost` | .NET Aspire orchestrator — launches all services |
-| `Viv.Aspire.Gateway` | **YARP** reverse proxy with rate limiting, output cache, JWT auth token forwarding |
-| `Viv.Aspire.ServiceDefaults` | OpenTelemetry, `/health` + `/alive` endpoints, service discovery, resilience |
+| `Viv.Aspire.AppHost` | .NET Aspire orchestrator — launches all services with dependency ordering |
+| `Viv.Aspire.Gateway` | **YARP** reverse proxy — rate limiting, output cache, JWT token forwarding to downstream services |
+| `Viv.Aspire.ServiceDefaults` | OpenTelemetry tracing/metrics, `/health` + `/alive` endpoints, service discovery, HTTP resilience |
 
-## Key patterns
+### Test (`src/Test/`)
+
+| Project | Role |
+|---|---|
+| `Viv.Test` | CLI command suite — built on `Viv.Cli`; commands auto-discovered via `[VivCommand]` |
+
+---
+
+## Key Patterns
+
+### Startup: one-liner API & Worker
+
+Do **not** copy `Program.cs` boilerplate. Use the framework extension methods:
+
+```csharp
+// ── API ──────────────────────────────────────────
+var builder = WebApplication.CreateBuilder(args);
+builder.AddServiceDefaults();
+builder.AddVivApi("Viv XXX API", mvc => mvc.Filters.Add<RequestFilterAttribute>());
+builder.RunVivApi(app => app.MapDefaultEndpoints());
+
+// ── Worker ────────────────────────────────────────
+var builder = Host.CreateApplicationBuilder(args);
+builder.AddServiceDefaults();
+builder.AddVivWorker();
+builder.Services.AddHostedService<Worker>();
+builder.RunVivWorker();
+```
+
+- `AddVivApi` / `AddVivWorker` handle config load, Autofac setup, `AddViv()`, MVC/filters, CORS, Swagger, and encoding registration.
+- `RunVivApi` handles Build → VivLocator → Swagger UI (dev) → middleware pipeline → Run. Accepts an `Action<WebApplication>? configure` for custom endpoints (`UseTickerQ()`, `MapHub()`, etc.).
+- `RunVivWorker` handles Build → VivLocator → Run.
+- `AddServiceDefaults()` and `MapDefaultEndpoints()` are **caller-side** Aspire concerns; the framework does not reference Aspire.
 
 ### Configuration: `viv.config.json`
 
-Every API project has a `viv.config.json` at its root. `VivEngine.LoadVivConfig()` deserializes it into `VivOptions`, which contains sub-sections for logging, caching (Redis/memory), database (PostgreSQL/SQL Server with read-write split), messaging (RabbitMQ), and JWT.
+Every API and Worker project requires a `viv.config.json` at its root. `VivEngine.LoadVivConfig()` deserializes it into `VivOptions`, whose sub-sections drive all subsystem wiring:
 
-### DI: Autofac + MS DI hybrid
+| Section | Drives |
+|---|---|
+| `DIOption` | Type-scanning rules for Service/Repository auto-registration |
+| `LogOption` | Logging backend (Serilog → Seq) |
+| `CacheOption` | Redis connection + memory cache toggle |
+| `DatabaseOption` | Database type, read-write split, entity scan targets |
+| `NanaOption` | RabbitMQ host/port/credentials, consumer type list, retry count, Saga DB |
+| `TokenOption` | JWT secret/expiry/issuer |
+| `EchoOption` | gRPC + HTTP client enable/disable |
+| `TickOption` | TickerQ scheduler config |
 
-`builder.Services.AddViv(vivOptions)` registers all framework services. Business-layer services and repositories are registered via **type scanning** driven by `DIOptions` — you specify assembly name, namespace, and class name suffix (e.g., `"ClassNameEndWith": "Service"`). `VivLocator` provides static access to both containers for scenarios where constructor injection isn't available.
+### DI: Autofac root + MS DI delegation
 
-### Database: EF Core + Dapper hybrid
+`builder.Services.AddViv(vivOptions)` registers all Banshee services into MS DI. The `AutofacServiceProviderFactory` sets Autofac as the root container — all MS DI registrations are delegated to Autofac for resolution.
 
-`VivDatabaseContext` (implements `IVivDbContext`) uses EF Core for small batches and Dapper for large ones (configurable via `EFMaxCount`). `EFAppContext` pins to read or write at construction time — reads randomly select a slave connection, writes always use the master. Both PostgreSQL and SQL Server are supported.
+Business-layer services and repositories are registered via **type scanning** driven by `DIOption` — assembly name, namespace, and class name suffix (e.g., `"ClassNameEndWith": "Service"`).
 
-### Multi-tenancy via headers
+- **API:** `builder.Host.UseServiceProviderFactory(...)` + `ConfigureContainer(...)`
+- **Worker:** `builder.ConfigureContainer(new AutofacServiceProviderFactory(), ...)`
 
-`VivContextMiddleware` reads `Viv_AppId`, `Viv_TenantId`, `Viv_UserId` from HTTP headers and sets them on `IVivContext` (scoped, backed by `AsyncLocal<long>`). Database operations use `TenantId` for logical isolation.
+`VivLocator.Initialize()` is called during startup and provides static access for scenarios where constructor injection is unavailable.
+
+### Messaging (Nana)
+
+- **Producer:** `IVivPublisher.PublishAsync<T>()` / `PublishDelayAsync<T>(TimeSpan)` — messages must extend `NanaEvent` (not `VivMessage`).
+- **Consumer:** Extend `VivConsumer<T>`, override `ReceiveMessageAsync()` — return `SubscribeResult` to indicate success or requeue.
+- **Configuration:** `NanaOption.ConsumerTypes` lists classes to register as MassTransit consumers via `TypeScanMagic`. The Worker's `AddViv()` call automatically wires MassTransit + RabbitMQ with the configured host and retry policy.
+
+### Database (Momo)
+
+`VivDatabaseContext` (implements `IVivDbContext`) uses EF Core for small operations and Dapper for bulk queries (threshold: `EFMaxCount`). `EFAppContext` is created as either read or write — reads randomly select a slave connection, writes always use the master. Entities are auto-scanned via `DatabaseOption.EntityTypeOptions`.
+
+### Multi-tenancy
+
+`VivContextMiddleware` reads `Viv_AppId`, `Viv_TenantId`, `Viv_UserId` from HTTP headers and hydrates `IVivContext` (scoped, backed by `AsyncLocal<long>`). Database operations use `TenantId` for logical row isolation.
 
 ### Unified API response
 
-Controllers return `VivApiResult` (implements `IActionResult`) — a `{ Code, Message, Data }` envelope with consistent JSON formatting.
+Controllers return `VivApiResult` (implements `IActionResult`) — a `{ Code, Message, Data }` envelope. `Newtonsoft.Json` is used for serialization with `VivContractResolver` and `yyyy-MM-dd HH:mm:ss` date format. Model validation is suppressed via `SuppressModelStateInvalidFilter = true`; validation is handled by the `RequestFilterAttribute` pipeline instead.
 
-### Messaging
+### CLI commands (Viv.Cli)
 
-`IVivProducer.PublishAsync<T>()` and `PublishDelayAsync<T>(TimeSpan)` wrap MassTransit. Messages must extend `VivMessage`. Consumers extend `VivConsumer<T>`, overriding `ReceiveMessageAsync` — return `SubscribeResult` to control success/requeue.
+Create a command by implementing `AsyncCommand` and decorating it with `[VivCommand]`:
+
+```csharp
+[VivCommand("migrate", "执行数据库迁移")]
+public class Cmd_Migrate : AsyncCommand
+{
+    public override Task<int> ExecuteAsync(CommandContext context) { ... }
+}
+```
+
+- Drop into `Commands/` — auto-discovered at startup.
+- Support aliases: `[VivCommand("clear, cl", "清除屏幕")]` → help displays `清除屏幕（别名: cl）`.
+- Built-in commands: `clear` (aliased `cl`) always available.
+- Interactive input via `InputMagic.GetInput()` / `.Confirm()` / `.Select()`; formatted output via `Out.Println()` / `.PrintlnError()` / `.PrintlnFormatJson()`.
