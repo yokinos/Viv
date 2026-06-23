@@ -15,8 +15,7 @@ namespace Viv.Cli
         /// <param name="secret">是否隐藏输入（密码等）</param>
         public static string GetInput(string prompt, bool allowEmpty = false, bool secret = false)
         {
-            var textPrompt = new TextPrompt<string>($"[blue]{prompt}[/]")
-                .PromptStyle("blue");
+            var textPrompt = new TextPrompt<string>($"[blue]{prompt}[/]").PromptStyle("blue");
 
             if (allowEmpty) textPrompt.AllowEmpty();
             if (secret) textPrompt.Secret();
@@ -37,10 +36,7 @@ namespace Viv.Cli
         /// </summary>
         public static string Select(string prompt, params string[] choices)
         {
-            return AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title($"[blue]{prompt}[/]")
-                    .AddChoices(choices));
+            return AnsiConsole.Prompt(new SelectionPrompt<string>().Title($"[blue]{prompt}[/]").AddChoices(choices));
         }
     }
 }
