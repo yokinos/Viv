@@ -4,7 +4,6 @@ using System.Text;
 using Viv.EventContracts.Apex;
 using Viv.Log;
 using Viv.Nana;
-using Viv.Nana.Models;
 
 namespace Viv.Apex.Worker.Consemer
 {

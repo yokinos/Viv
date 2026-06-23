@@ -5,7 +5,6 @@ using Viv.Herta.Core.Entity.Message;
 using Viv.Herta.Core.Magic;
 using Viv.Herta.Link.Hubs;
 using Viv.Nana;
-using Viv.Nana.Models;
 using Viv.Log;
 
 namespace Viv.Herta.Link.Consumers

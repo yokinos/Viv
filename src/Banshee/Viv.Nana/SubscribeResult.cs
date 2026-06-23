@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Nana.Models
+namespace Viv.Nana
 {
     public class SubscribeResult
     {

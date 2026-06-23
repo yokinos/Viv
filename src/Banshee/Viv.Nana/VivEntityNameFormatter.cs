@@ -1,5 +1,4 @@
 using MassTransit;
-using Viv.Nana.Models;
 
 namespace Viv.Nana
 {

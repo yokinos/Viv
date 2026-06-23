@@ -4,7 +4,7 @@ using System.Text;
 using Viv.Delusion.Magic;
 using Viv.Nana.Core;
 
-namespace Viv.Nana.Models
+namespace Viv.Nana
 {
     /// <summary>
     /// 信封
