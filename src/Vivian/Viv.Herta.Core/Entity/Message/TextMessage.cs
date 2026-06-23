@@ -13,7 +13,7 @@ namespace Viv.Herta.Core.Entity.Message
         /// <summary>
         /// 文本消息内容
         /// </summary>
-        public string Text { get; set; }
+        public string? Text { get; set; }
 
         /// <summary>
         /// 扩展消息

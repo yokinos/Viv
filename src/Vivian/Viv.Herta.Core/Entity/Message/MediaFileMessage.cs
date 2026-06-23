@@ -13,7 +13,7 @@ namespace Viv.Herta.Core.Entity.Message
         /// <summary>
         /// 文件消息列表
         /// </summary>
-        public List<MediaFileInfo> FileList { get; set; }
+        public List<MediaFileInfo>? FileList { get; set; }
 
         /// <summary>
         /// 扩展消息
@@ -27,6 +27,6 @@ namespace Viv.Herta.Core.Entity.Message
         public EmMediaFileType FileType { get; set; }
         public string FileName { get; set; } = string.Empty;
         public long FileSize { get; set; }
-        public string FileSizeFormatted { get; set; }
+        public string? FileSizeFormatted { get; set; }
     }
 }

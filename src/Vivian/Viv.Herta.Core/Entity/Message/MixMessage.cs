@@ -13,7 +13,7 @@ namespace Viv.Herta.Core.Entity.Message
         /// <summary>
         /// 混合消息列表
         /// </summary>
-        public List<IChatMessage> MixList { get; set; }
+        public List<IChatMessage>? MixList { get; set; }
 
         /// <summary>
         /// 扩展消息
