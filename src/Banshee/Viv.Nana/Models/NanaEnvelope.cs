@@ -6,12 +6,16 @@ using Viv.Nana.Core;
 
 namespace Viv.Nana.Models
 {
-    public class NanaMessage<T> where T : NanaEvent
+    /// <summary>
+    /// 信封
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public class NanaEnvelope<T> where T : NanaEvent
     {
-        public NanaMessage() { }
+        public NanaEnvelope() { }
 
         /// <summary>
-        /// 消息Id
+        /// 消息Id 也就是邮戳的了
         /// </summary>
         public long MessageId { get; set; } = IdMagic.NextId();
 

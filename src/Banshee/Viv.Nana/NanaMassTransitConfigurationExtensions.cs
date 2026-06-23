@@ -36,7 +36,7 @@ namespace Viv.Nana
 
                     cfg.UseMessageRetry(r => r.Interval(nanaOptions.RetryCount, TimeSpan.FromSeconds(1)));
 
-                    // Exchange = NanaMessage<T> 中 T 的命名空间
+                    // Exchange = NanaEnvelope<T> 中 T 的命名空间
                     cfg.MessageTopology.SetEntityNameFormatter(VivEntityNameFormatter.Instance);
 
                     // Queue = {Name}Queue，Saga 走默认

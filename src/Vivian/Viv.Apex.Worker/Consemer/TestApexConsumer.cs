@@ -15,7 +15,7 @@ namespace Viv.Apex.Worker.Consemer
 
         }
 
-        public async override Task<SubscribeResult> ReceiveMessageAsync(NanaMessage<TestApexEvent> message, CancellationToken cancellationToken = default)
+        public async override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> message, CancellationToken cancellationToken = default)
         {
             _logger.Debug("Apex Consumer Execute Success");
             await Task.CompletedTask;

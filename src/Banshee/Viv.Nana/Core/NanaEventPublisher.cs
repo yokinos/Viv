@@ -28,7 +28,7 @@ namespace Viv.Nana.Core
         {
             if (content is null) return false;
 
-            var message = new NanaMessage<T>
+            var message = new NanaEnvelope<T>
             {
                 AppId = _context.AppId,
                 TenantId = _context.TenantId,
@@ -52,7 +52,7 @@ namespace Viv.Nana.Core
             if (content is null) return false;
             if (delayTTL < TimeSpan.Zero) return false;
 
-            var message = new NanaMessage<T>
+            var message = new NanaEnvelope<T>
             {
                 AppId = _context.AppId,
                 TenantId = _context.TenantId,

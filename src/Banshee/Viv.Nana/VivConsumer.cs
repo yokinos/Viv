@@ -16,7 +16,7 @@ namespace Viv.Nana
     /// 4. 返回 Fail(IsRequeue: false) → 仅记录错误日志，消息直接丢弃不回队
     /// </summary>
     /// <typeparam name="T">消息体类型，必须继承 <see cref="NanaEvent"/></typeparam>
-    public abstract class VivConsumer<T> : IConsumer<NanaMessage<T>> where T : NanaEvent
+    public abstract class VivConsumer<T> : IConsumer<NanaEnvelope<T>> where T : NanaEvent
     {
         protected readonly ILoggerContract _logger;
 
@@ -28,12 +28,12 @@ namespace Viv.Nana
         /// <summary>
         /// 业务消费逻辑 — 子类只需实现这个方法，框架处理重试、异常、日志
         /// </summary>
-        public abstract Task<SubscribeResult> ReceiveMessageAsync(NanaMessage<T> message, CancellationToken cancellationToken = default);
+        public abstract Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<T> message, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// MassTransit 消费入口（框架内部调用，子类不必关心）
         /// </summary>
-        public async Task Consume(ConsumeContext<NanaMessage<T>> context)
+        public async Task Consume(ConsumeContext<NanaEnvelope<T>> context)
         {
             if (context == null || context.Message == null || context.Message.Content == null)
                 return;

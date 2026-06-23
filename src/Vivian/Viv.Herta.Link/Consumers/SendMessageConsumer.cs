@@ -22,7 +22,7 @@ namespace Viv.Herta.Link.Consumers
             _connectionPool = connectionPool;
         }
 
-        public override async Task<SubscribeResult> ReceiveMessageAsync(NanaMessage<SendMessageEvent> message, CancellationToken cancellationToken = default)
+        public override async Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<SendMessageEvent> message, CancellationToken cancellationToken = default)
         {
             var evt = message.Content;
             if (evt == null)

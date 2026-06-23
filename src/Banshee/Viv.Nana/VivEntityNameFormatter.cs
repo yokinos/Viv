@@ -4,8 +4,8 @@ using Viv.Nana.Models;
 namespace Viv.Nana
 {
     /// <summary>
-    /// Exchange 命名规则：对于 NanaMessage&lt;T&gt;，取 T 的命名空间
-    /// 例：NanaMessage&lt;TestApexEvent&gt; → Viv.EventContracts.Apex
+    /// Exchange 命名规则：对于 NanaEnvelope&lt;T&gt;，取 T 的命名空间
+    /// 例：NanaEnvelope&lt;TestApexEvent&gt; → Viv.EventContracts.Apex
     /// </summary>
     public class VivEntityNameFormatter : IEntityNameFormatter
     {
@@ -15,8 +15,8 @@ namespace Viv.Nana
         {
             var type = typeof(T);
 
-            // NanaMessage<T> → 用 T 的命名空间
-            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(NanaMessage<>))
+            // NanaEnvelope<T> → 用 T 的命名空间
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(NanaEnvelope<>))
             {
                 var innerType = type.GetGenericArguments()[0];
                 return innerType.Namespace ?? "Viv";
