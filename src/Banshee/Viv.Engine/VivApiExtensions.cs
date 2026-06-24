@@ -75,7 +75,8 @@ namespace Viv.Engine
 
             builder.Services.AddOpenApi(options =>
             {
-                options.AddOperationTransformer(new VivOpenApiOperationTransformer());
+                options.AddOperationTransformer<VivOpenApiOperationTransformer>();
+                options.AddSchemaTransformer<VivOpenApiSchemaTransformer>();
             });
 
             // 跨域

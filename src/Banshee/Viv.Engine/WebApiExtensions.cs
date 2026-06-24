@@ -48,7 +48,6 @@ namespace Viv.Engine
             {
                 options.Title = title;
                 options.Theme = ScalarTheme.Purple;
-                options.OpenApiRoutePattern = "/openapi/v1.json";
                 options.Authentication = new ScalarAuthenticationOptions
                 {
                     PreferredSecuritySchemes = ["Bearer"]
