@@ -73,7 +73,10 @@ namespace Viv.Engine
                 };
             });
 
-            builder.Services.AddOpenApi();
+            builder.Services.AddOpenApi(options =>
+            {
+                options.AddOperationTransformer(new VivOpenApiOperationTransformer());
+            });
 
             // 跨域
             var corsPolicyName = Assembly.GetEntryAssembly()?.GetName().Name ?? "VivApi";
