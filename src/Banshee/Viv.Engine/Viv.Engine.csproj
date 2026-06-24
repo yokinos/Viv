@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.13.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Viv.Aoi\Viv.Aoi.csproj" />
     <ProjectReference Include="..\Viv.Authentication\Viv.Authentication.csproj" />
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />

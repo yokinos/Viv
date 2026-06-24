@@ -19,6 +19,11 @@ namespace Viv.Apex.Api.Controllers
             _userService = userService;
         }
 
+        /// <summary>
+        /// 登录
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [AllowAnonymous]
         [ProducesResponseType(typeof(ApexLoginOutput), (int)HttpStatusCode.OK)]
         [HttpPost("apexLogin")]
