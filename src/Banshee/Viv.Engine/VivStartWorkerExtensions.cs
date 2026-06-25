@@ -8,7 +8,7 @@ using Viv.Aoi;
 
 namespace Viv.Engine
 {
-    public static class VivWorkerExtensions
+    public static class VivStartWorkerExtensions
     {
         /// <summary>
         /// 配置 Viv Worker 基础服务：加载配置、Autofac 容器、AddViv、编码注册

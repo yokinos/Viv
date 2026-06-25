@@ -15,7 +15,7 @@ using Viv.Engine.VivOpenApi;
 
 namespace Viv.Engine
 {
-    public static class VivApiExtensions
+    public static class VivStartApiExtensions
     {
         private const string ApiTitleKey = "__VivApiTitle";
 
