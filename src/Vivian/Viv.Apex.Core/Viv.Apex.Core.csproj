@@ -1,16 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<NoWarn>$(NoWarn);CS1591</NoWarn>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
-    <ProjectReference Include="..\Viv.Elysia\Viv.Elysia.csproj" />
-    <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
+		<ProjectReference Include="..\Viv.Elysia\Viv.Elysia.csproj" />
+		<ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
+	</ItemGroup>
 
 </Project>

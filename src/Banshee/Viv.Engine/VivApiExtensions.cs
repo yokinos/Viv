@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Scalar.AspNetCore;
+using Serilog;
 using System.Reflection;
 using System.Text;
 using System.Xml.Linq;
@@ -12,6 +13,7 @@ using Viv.Aoi;
 using Viv.Engine.Conveter;
 using Viv.Engine.Filter;
 using Viv.Engine.Middleware;
+using Viv.Engine.VivOpenApi;
 
 namespace Viv.Engine
 {
@@ -41,6 +43,11 @@ namespace Viv.Engine
             {
                 container.VivAutofacRegister(vivOptions.DIOption);
             });
+
+            if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
+            {
+                builder.Host.UseSerilog();
+            }
 
             // 基础服务
             builder.Services.AddViv(vivOptions);

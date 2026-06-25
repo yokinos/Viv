@@ -6,6 +6,9 @@ namespace Viv.Apex.Core.Entity.Dto.Account.Output
 {
     public class ApexLoginOutput
     {
+        /// <summary>
+        /// 访问令牌
+        /// </summary>
         public string AccessToken { get; set; }
 
         public string RefreshToken { get; set; }

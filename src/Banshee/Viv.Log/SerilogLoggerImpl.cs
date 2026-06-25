@@ -14,24 +14,7 @@ namespace Viv.Log
 
         public SerilogLoggerImpl()
         {
-            var options = VivConfigRegistry.Get<LogOptions>() ?? new LogOptions();
-
-            var factory = new LoggerConfiguration()
-                 .MinimumLevel.Debug()
-                 .Enrich.FromLogContext()
-                 .WriteTo.Console()
-                 .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day);
-
-            // 启用 Seq
-            if (options.IsUseSeq)
-            {
-                factory.WriteTo.Seq(
-                    serverUrl: options.SeqUrl ?? "http://localhost:5341",
-                    apiKey: options.SeqApiKey.IsNullOrEmpty() ? null : options.SeqApiKey
-                );
-            }
-
-            _logger = factory.CreateLogger();
+            _logger = Serilog.Log.Logger;
         }
 
         public void Debug(string message, params object[] args) => _logger.Debug(message, args);

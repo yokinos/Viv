@@ -60,6 +60,7 @@ namespace Viv.Engine
             LoggerRegister.Initialize(options.LogOption);
             if (options.LogOption.LogType == LogType.Serilog)
             {
+                SerilogProvider.Initialize();
                 services.AddSingleton<ILoggerContract, SerilogLoggerImpl>();
             }
             else

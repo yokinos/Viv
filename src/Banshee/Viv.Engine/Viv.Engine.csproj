@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="VivOpenApiOperationTransformer.cs" />
+    <Compile Remove="VivOpenApiSchemaTransformer.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.13.1" />
   </ItemGroup>

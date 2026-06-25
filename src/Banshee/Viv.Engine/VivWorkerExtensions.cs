@@ -1,6 +1,8 @@
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Serilog;
 using System.Text;
 using Viv.Aoi;
 
@@ -26,8 +28,14 @@ namespace Viv.Engine
             // 基础服务
             builder.Services.AddViv(vivOptions);
 
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
+            {
+                // Serilog 替换宿主 ILogger
+                builder.Logging.ClearProviders();
+                builder.Logging.AddSerilog(dispose: false);
+            }
 
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             return builder;
         }
 
