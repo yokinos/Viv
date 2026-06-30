@@ -66,6 +66,19 @@ namespace Viv.Delusion.Extension
         }
 
         /// <summary>
+        /// [扩展方法] 内存分页
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="self"></param>
+        /// <param name="pageSize"></param>
+        /// <param name="pageIndex"></param>
+        /// <returns></returns>
+        public static IEnumerable<T> Page<T>(this IEnumerable<T> self, int pageSize, int pageIndex)
+        {
+            return self.Skip(pageSize * (pageIndex - 1)).Take(pageSize);
+        }
+
+        /// <summary>
         /// [扩展方法] 将扁平集合生成树形结构（递归构建）
         /// </summary>
         /// <typeparam name="T">源集合元素类型</typeparam>
