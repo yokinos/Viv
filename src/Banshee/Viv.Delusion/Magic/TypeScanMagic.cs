@@ -4,27 +4,33 @@ using Viv.Delusion.Extension;
 namespace Viv.Delusion.Magic
 {
     /// <summary>
-    /// 类型扫描工具 — 按 FilterTypeOptions 精确控制，或按基类型/接口全域扫描
+    /// 类型扫描工具 - 支持按过滤条件扫描，或按基类型/接口/Attribute 扫描
     /// </summary>
     public static class TypeScanMagic
     {
+        #region 基础过滤扫描
+
         /// <summary>
-        /// 按 <see cref="FilterTypeOptions"/> 指定的程序集、命名空间、基类型、命名规则扫描
+        /// 按 FilterTypeOptions 指定的程序集、命名空间、基类型、命名规则、Attribute 扫描
         /// </summary>
-        /// <param name="filter">扫描条件（AssemblyName 必填）</param>
-        /// <returns>符合条件的非抽象类列表</returns>
         public static List<Type> Scan(FilterTypeOptions filter)
         {
-            var result = new List<Type>();
+            ArgumentNullException.ThrowIfNull(filter);
+
+            if (string.IsNullOrWhiteSpace(filter.AssemblyName))
+                throw new ArgumentException("程序集名称不能为空", nameof(filter));
+
             var assembly = Assembly.Load(filter.AssemblyName);
-            var types = assembly.GetExportedTypes();
+            var types = GetLoadableTypes(assembly);
+
+            var result = new List<Type>();
 
             foreach (var type in types)
             {
-                if (!type.IsClass || type.IsAbstract)
+                if (!IsCandidateClass(type))
                     continue;
 
-                if (!MatchNamespace(type, filter.NameSpace))
+                if (!MatchNamespace(type, filter.Namespace))
                     continue;
 
                 if (!MatchNamePattern(type, filter))
@@ -33,144 +39,360 @@ namespace Viv.Delusion.Magic
                 if (filter.BaseType != null && !MatchBaseType(type, filter.BaseType))
                     continue;
 
+                if (filter.AttributeType != null && !HasAttribute(type, filter.AttributeType))
+                    continue;
+
                 result.Add(type);
             }
 
-            return result;
+            return result.Distinct().ToList();
         }
 
         /// <summary>
-        /// 批量扫描多个过滤条件（去重由调用方自行处理）
+        /// 批量扫描多个过滤条件
         /// </summary>
-        public static List<Type> ScanRange(List<FilterTypeOptions> filters)
+        public static List<Type> ScanRange(IEnumerable<FilterTypeOptions> filters)
         {
+            ArgumentNullException.ThrowIfNull(filters);
+
             var result = new List<Type>();
+
             foreach (var filter in filters)
+            {
+                if (filter == null)
+                    continue;
+
                 result.AddRange(Scan(filter));
-            return result;
+            }
+
+            return result.Distinct().ToList();
         }
 
+        #endregion
+
+        #region 基类型 / 接口扫描
+
         /// <summary>
-        /// 扫描所有已加载程序集中实现了 <typeparamref name="TBase"/> 的非抽象类
+        /// 扫描所有已加载程序集中实现了 TBase 的非抽象类
         /// </summary>
-        /// <typeparam name="TBase">目标基类型或接口</typeparam>
-        /// <param name="matchPredicate">额外筛选条件（可选）</param>
         public static List<Type> ScanTypes<TBase>(Func<Type, bool>? matchPredicate = null)
             => ScanTypes(typeof(TBase), matchPredicate);
 
         /// <summary>
-        /// 扫描指定程序集中实现了 <typeparamref name="TBase"/> 的非抽象类
+        /// 扫描指定程序集中实现了 TBase 的非抽象类
         /// </summary>
-        /// <typeparam name="TBase">目标基类型或接口</typeparam>
-        /// <param name="assemblyNames">目标程序集名称（匹配 FullName 前缀）</param>
-        /// <param name="matchPredicate">额外筛选条件（可选）</param>
-        public static List<Type> ScanTypes<TBase>(List<string> assemblyNames, Func<Type, bool>? matchPredicate = null)
+        public static List<Type> ScanTypes<TBase>(IEnumerable<string> assemblyNames, Func<Type, bool>? matchPredicate = null)
             => ScanTypes(typeof(TBase), assemblyNames, matchPredicate);
 
         /// <summary>
-        /// 扫描所有已加载程序集中实现了 <paramref name="targetType"/> 的非抽象类
+        /// 扫描所有已加载程序集中实现了 targetType 的非抽象类
         /// </summary>
-        /// <param name="targetType">目标基类型或接口</param>
-        /// <param name="matchPredicate">额外筛选条件（可选）</param>
-        /// <exception cref="ArgumentNullException">targetType 为 null 时抛出</exception>
         public static List<Type> ScanTypes(Type targetType, Func<Type, bool>? matchPredicate = null)
         {
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.FullName))
-                .ToList();
-            return ScanTypes(targetType, assemblies, matchPredicate);
-        }
-
-        /// <summary>
-        /// 扫描指定程序集中实现了 <paramref name="targetType"/> 的非抽象类
-        /// </summary>
-        /// <param name="targetType">目标基类型或接口</param>
-        /// <param name="assemblyNames">目标程序集名称（匹配 FullName 前缀）</param>
-        /// <param name="matchPredicate">额外筛选条件（可选）</param>
-        /// <exception cref="ArgumentException">assemblyNames 为 null 或空时抛出</exception>
-        public static List<Type> ScanTypes(Type targetType, List<string> assemblyNames, Func<Type, bool>? matchPredicate = null)
-        {
-            if (assemblyNames == null || !assemblyNames.Any())
-                throw new ArgumentException("程序集名称列表不能为空", nameof(assemblyNames));
+            ArgumentNullException.ThrowIfNull(targetType);
 
             var assemblies = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => !a.IsDynamic
-                         && !string.IsNullOrEmpty(a.FullName)
-                         && assemblyNames.Any(name => a.FullName.StartsWith($"{name},")))
+                .Where(a => !a.IsDynamic)
                 .ToList();
 
             return ScanTypes(targetType, assemblies, matchPredicate);
         }
 
         /// <summary>
-        /// 核心扫描 — 遍历指定程序集，找出所有非抽象、实现了 targetType 且满足额外条件的类
+        /// 扫描指定程序集名称中的实现了 targetType 的非抽象类
         /// </summary>
-        private static List<Type> ScanTypes(Type targetType, List<Assembly> assemblies, Func<Type, bool>? matchPredicate = null)
+        public static List<Type> ScanTypes(Type targetType, IEnumerable<string> assemblyNames, Func<Type, bool>? matchPredicate = null)
         {
-            if (targetType == null)
-                throw new ArgumentNullException(nameof(targetType));
-            if (!assemblies.Any())
-                return [];
+            ArgumentNullException.ThrowIfNull(targetType);
+            ArgumentNullException.ThrowIfNull(assemblyNames);
+
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => !a.IsDynamic)
+                .Where(a =>
+                {
+                    var name = a.GetName().Name;
+                    return !string.IsNullOrWhiteSpace(name)
+                           && assemblyNames.Any(x =>
+                               string.Equals(x, name, StringComparison.OrdinalIgnoreCase));
+                })
+                .ToList();
+
+            return ScanTypes(targetType, assemblies, matchPredicate);
+        }
+
+        /// <summary>
+        /// 扫描指定程序集对象中实现了 targetType 的非抽象类
+        /// </summary>
+        public static List<Type> ScanTypes(Type targetType, IEnumerable<Assembly> assemblies, Func<Type, bool>? matchPredicate = null)
+        {
+            ArgumentNullException.ThrowIfNull(targetType);
+            ArgumentNullException.ThrowIfNull(assemblies);
+
+            return ScanInternal(assemblies, type =>
+            {
+                if (type == targetType)
+                    return false;
+
+                if (!targetType.IsAssignableFrom(type))
+                    return false;
+
+                if (matchPredicate != null && !matchPredicate(type))
+                    return false;
+
+                return true;
+            });
+        }
+
+        /// <summary>
+        /// 扫描所有已加载程序集中实现了指定接口的非抽象类
+        /// </summary>
+        public static List<Type> ScanByInterface<TInterface>() where TInterface : class
+            => ScanTypes(typeof(TInterface));
+
+        /// <summary>
+        /// 扫描指定程序集名称中实现了指定接口的非抽象类
+        /// </summary>
+        public static List<Type> ScanByInterface<TInterface>(IEnumerable<string> assemblyNames, Func<Type, bool>? matchPredicate = null)
+            where TInterface : class
+            => ScanTypes(typeof(TInterface), assemblyNames, matchPredicate);
+
+        /// <summary>
+        /// 扫描所有已加载程序集中实现了指定接口的非抽象类
+        /// </summary>
+        public static List<Type> ScanByInterface(Type interfaceType, Func<Type, bool>? matchPredicate = null)
+            => ScanTypes(interfaceType, matchPredicate);
+
+        /// <summary>
+        /// 扫描指定程序集名称中实现了指定接口的非抽象类
+        /// </summary>
+        public static List<Type> ScanByInterface(Type interfaceType, IEnumerable<string> assemblyNames, Func<Type, bool>? matchPredicate = null)
+            => ScanTypes(interfaceType, assemblyNames, matchPredicate);
+
+        #endregion
+
+        #region Attribute 扫描
+
+        /// <summary>
+        /// 扫描所有已加载程序集中带有指定 Attribute 的类型
+        /// </summary>
+        public static List<Type> ScanByAttribute<TAttribute>() where TAttribute : Attribute
+            => ScanByAttribute(typeof(TAttribute));
+
+        /// <summary>
+        /// 扫描指定程序集中的类型，并要求带有指定 Attribute
+        /// </summary>
+        public static List<Type> ScanByAttribute<TAttribute>(string assemblyName) where TAttribute : Attribute
+            => ScanByAttribute(typeof(TAttribute), assemblyName);
+
+        /// <summary>
+        /// 扫描所有已加载程序集中带有指定 Attribute 的类型
+        /// </summary>
+        private static List<Type> ScanByAttribute(Type attributeType)
+        {
+            ArgumentNullException.ThrowIfNull(attributeType);
+
+            if (!typeof(Attribute).IsAssignableFrom(attributeType))
+                throw new ArgumentException($"{attributeType.FullName} 不是 Attribute 类型", nameof(attributeType));
+
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => !a.IsDynamic)
+                .ToList();
+
+            return ScanByAttributeInternal(attributeType, assemblies);
+        }
+
+        /// <summary>
+        /// 扫描指定程序集名称中带有指定 Attribute 的类型
+        /// </summary>
+        public static List<Type> ScanByAttribute(Type attributeType, string assemblyName)
+        {
+            ArgumentNullException.ThrowIfNull(attributeType);
+
+            if (!typeof(Attribute).IsAssignableFrom(attributeType))
+                throw new ArgumentException($"{attributeType.FullName} 不是 Attribute 类型", nameof(attributeType));
+
+            if (string.IsNullOrWhiteSpace(assemblyName))
+                throw new ArgumentException("程序集名称不能为空", nameof(assemblyName));
+
+            var assembly = Assembly.Load(assemblyName);
+            return ScanByAttributeInternal(attributeType, new List<Assembly> { assembly });
+        }
+
+        /// <summary>
+        /// 扫描所有已加载程序集中带有指定 Attribute 的类型，并附加过滤条件
+        /// </summary>
+        public static List<Type> Scan<TAttribute>(FilterTypeOptions filter) where TAttribute : Attribute
+        {
+            ArgumentNullException.ThrowIfNull(filter);
+
+            var copy = new FilterTypeOptions
+            {
+                AssemblyName = filter.AssemblyName,
+                Namespace = filter.Namespace,
+                BaseType = filter.BaseType,
+                AttributeType = typeof(TAttribute),
+                ClassNameStartsWith = filter.ClassNameStartsWith,
+                ClassNameEndsWith = filter.ClassNameEndsWith
+            };
+
+            return Scan(copy);
+        }
+
+        /// <summary>
+        /// 扫描所有已加载程序集中带有指定 Attribute 的类型
+        /// </summary>
+        public static List<Type> Scan<TAttribute>() where TAttribute : Attribute
+        {
+            return ScanByAttribute<TAttribute>();
+        }
+
+        /// <summary>
+        /// 扫描指定程序集中的类型，并要求带有指定 Attribute
+        /// </summary>
+        public static List<Type> Scan<TAttribute>(string assemblyName) where TAttribute : Attribute
+        {
+            return ScanByAttribute<TAttribute>(assemblyName);
+        }
+
+        #endregion
+
+        #region 内部实现
+
+        private static List<Type> ScanInternal(IEnumerable<Assembly> assemblies, Func<Type, bool> predicate)
+        {
+            ArgumentNullException.ThrowIfNull(assemblies);
+            ArgumentNullException.ThrowIfNull(predicate);
 
             var result = new List<Type>();
 
             foreach (var assembly in assemblies)
             {
-                try
-                {
-                    var types = assembly.GetTypes();
-                    var filtered = types.Where(t =>
-                        t is { IsAbstract: false, IsInterface: false }
-                        && targetType.IsAssignableFrom(t)
-                        && t != targetType);
+                var types = GetLoadableTypes(assembly);
 
-                    if (matchPredicate != null)
-                        filtered = filtered.Where(matchPredicate);
+                var filtered = types.Where(type =>
+                    type != null &&
+                    IsCandidateClass(type) &&
+                    predicate(type));
 
-                    result.AddRange(filtered);
-                }
-                catch (ReflectionTypeLoadException) { }
+                result.AddRange(filtered);
             }
 
-            return result;
+            return result.Distinct().ToList();
         }
 
-        /// <summary>
-        /// 命名空间匹配：未配置命名空间视为全通过
-        /// </summary>
-        private static bool MatchNamespace(Type type, string? nameSpace)
+        private static List<Type> ScanByAttributeInternal(Type attributeType, IEnumerable<Assembly> assemblies)
         {
-            if (string.IsNullOrEmpty(nameSpace))
-                return true;
-            return !type.Namespace.IsNullOrEmpty() && type.Namespace!.StartsWith(nameSpace);
+            ArgumentNullException.ThrowIfNull(attributeType);
+            ArgumentNullException.ThrowIfNull(assemblies);
+
+            var result = new List<Type>();
+
+            foreach (var assembly in assemblies)
+            {
+                var types = GetLoadableTypes(assembly);
+
+                var filtered = types.Where(type =>
+                    type != null &&
+                    IsCandidateClass(type) &&
+                    HasAttribute(type, attributeType));
+
+                result.AddRange(filtered);
+            }
+
+            return result.Distinct().ToList();
+        }
+
+        private static Type[] GetLoadableTypes(Assembly assembly)
+        {
+            if (assembly == null)
+                return [];
+
+            try
+            {
+                return assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                if (ex.Types == null)
+                    return [];
+
+                return ex.Types.Where(t => t != null).Cast<Type>().ToArray();
+            }
         }
 
         /// <summary>
-        /// 类名前缀 / 后缀匹配
+        /// 是否为候选类
+        /// </summary>
+        private static bool IsCandidateClass(Type type)
+        {
+            return type.IsClass && !type.IsAbstract && !type.IsInterface;
+        }
+
+        /// <summary>
+        /// 命名空间匹配
+        /// </summary>
+        private static bool MatchNamespace(Type type, string? namespacePrefix)
+        {
+            if (string.IsNullOrWhiteSpace(namespacePrefix))
+                return true;
+
+            return !string.IsNullOrWhiteSpace(type.Namespace)
+                   && type.Namespace.StartsWith(namespacePrefix, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// 类名前后缀匹配
         /// </summary>
         private static bool MatchNamePattern(Type type, FilterTypeOptions filter)
         {
-            if (!filter.ClassNameStart.IsNullOrEmpty() && !type.Name.StartsWith(filter.ClassNameStart))
+            if (!string.IsNullOrWhiteSpace(filter.ClassNameStartsWith) &&
+                !type.Name.StartsWith(filter.ClassNameStartsWith, StringComparison.Ordinal))
+            {
                 return false;
-            if (!filter.ClassNameEndWith.IsNullOrEmpty() && !type.Name.EndsWith(filter.ClassNameEndWith))
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.ClassNameEndsWith) &&
+                !type.Name.EndsWith(filter.ClassNameEndsWith, StringComparison.Ordinal))
+            {
                 return false;
+            }
+
             return true;
         }
 
         /// <summary>
-        /// 基类型匹配：普通类型用 IsAssignableFrom，开放泛型用接口泛型定义比对
+        /// 基类型匹配
         /// </summary>
         private static bool MatchBaseType(Type type, Type baseType)
         {
+            if (baseType == null)
+                return false;
+
             if (baseType.IsGenericTypeDefinition)
             {
                 return type.GetInterfaces()
-                    .Any(i => i.IsGenericType
-                           && i.GetGenericTypeDefinition() == baseType);
+                    .Any(i => i.IsGenericType &&
+                              i.GetGenericTypeDefinition() == baseType);
             }
 
             return baseType.IsAssignableFrom(type);
         }
+
+        /// <summary>
+        /// 是否包含指定 Attribute
+        /// </summary>
+        private static bool HasAttribute(Type type, Type attributeType)
+        {
+            if (attributeType == null)
+                return false;
+
+            if (!typeof(Attribute).IsAssignableFrom(attributeType))
+                throw new ArgumentException($"{attributeType.FullName} 不是 Attribute 类型", nameof(attributeType));
+
+            return type.GetCustomAttributes(attributeType, inherit: false).Any();
+        }
+
+        #endregion
     }
 
     /// <summary>
@@ -179,14 +401,14 @@ namespace Viv.Delusion.Magic
     public class FilterTypeOptions
     {
         /// <summary>
-        /// 要扫描的程序集名称（必填，Assembly.Load 的参数）
+        /// 要扫描的程序集名称（Assembly.Load 参数）
         /// </summary>
         public string AssemblyName { get; set; } = string.Empty;
 
         /// <summary>
-        /// 类型所在命名空间（可选，匹配前缀）
+        /// 类型所在命名空间（可选，前缀匹配）
         /// </summary>
-        public string NameSpace { get; set; } = string.Empty;
+        public string Namespace { get; set; } = string.Empty;
 
         /// <summary>
         /// 目标基类型、接口或开放泛型定义（可选）
@@ -194,13 +416,18 @@ namespace Viv.Delusion.Magic
         public Type? BaseType { get; set; }
 
         /// <summary>
-        /// 类型名称以此结束（可选）
+        /// 目标 Attribute 类型（可选）
         /// </summary>
-        public string ClassNameEndWith { get; set; } = string.Empty;
+        public Type? AttributeType { get; set; }
 
         /// <summary>
         /// 类型名称以此开始（可选）
         /// </summary>
-        public string ClassNameStart { get; set; } = string.Empty;
+        public string ClassNameStartsWith { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 类型名称以此结束（可选）
+        /// </summary>
+        public string ClassNameEndsWith { get; set; } = string.Empty;
     }
 }

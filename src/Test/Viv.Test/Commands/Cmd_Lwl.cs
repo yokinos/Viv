@@ -25,14 +25,14 @@ namespace Viv.Test.Commands
                     ServiceImplementation = new Delusion.Magic.FilterTypeOptions
                     {
                         AssemblyName = "Viv.Apex.Core",
-                        NameSpace = "Viv.Apex.Core.Service",
-                        ClassNameEndWith = "Service"
+                        Namespace = "Viv.Apex.Core.Service",
+                        ClassNameEndsWith = "Service"
                     },
                     RepositoryImplementation = new Delusion.Magic.FilterTypeOptions
                     {
                         AssemblyName = "Viv.Apex.Core",
-                        NameSpace = "Viv.Apex.Core.Repository",
-                        ClassNameEndWith = "Repository"
+                        Namespace = "Viv.Apex.Core.Repository",
+                        ClassNameEndsWith = "Repository"
                     }
                 },
 
@@ -91,7 +91,7 @@ namespace Viv.Test.Commands
                         new Delusion.Magic.FilterTypeOptions
                         {
                             AssemblyName = "Viv.Entity",
-                            NameSpace = "Viv.Entity.Database.Apex",
+                            Namespace = "Viv.Entity.Database.Apex",
                             BaseType = typeof(IEntity)
                         }
                     ]

@@ -3,17 +3,17 @@
   "DIOption": {
     "ServiceImplementation": {
       "AssemblyName": "Viv.Herta.Core",
-      "NameSpace": "Viv.Herta.Core.Service",
+      "Namespace": "Viv.Herta.Core.Service",
       "BaseType": null,
-      "ClassNameEndWith": "Service",
-      "ClassNameStart": ""
+      "ClassNameEndsWith": "Service",
+      "ClassNameStartsWith": ""
     },
     "RepositoryImplementation": {
       "AssemblyName": "Viv.Herta.Core",
-      "NameSpace": "Viv.Herta.Core.Repository",
+      "Namespace": "Viv.Herta.Core.Repository",
       "BaseType": null,
-      "ClassNameEndWith": "Repository",
-      "ClassNameStart": ""
+      "ClassNameEndsWith": "Repository",
+      "ClassNameStartsWith": ""
     }
   },
   "CacheOption": {
@@ -50,10 +50,10 @@
     "EntityTypeOptions": [
       {
         "AssemblyName": "Viv.Entity",
-        "NameSpace": "Viv.Entity.Database.Herta",
+        "Namespace": "Viv.Entity.Database.Herta",
         "BaseType": "Viv.Momo.Interface.IEntity, Viv.Momo, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-        "ClassNameEndWith": "",
-        "ClassNameStart": ""
+        "ClassNameEndsWith": "",
+        "ClassNameStartsWith": ""
       }
     ]
   },
