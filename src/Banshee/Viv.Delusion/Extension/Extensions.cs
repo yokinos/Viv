@@ -247,5 +247,27 @@ namespace Viv.Delusion.Extension
             if (self is null) return defaultvalue;
             return Encoding.UTF8.GetBytes(self.ToJson());
         }
+
+        /// <summary>
+        /// [扩展方法] 获取指定类型的自定义 Attribute，未找到时返回 null
+        /// </summary>
+        /// <typeparam name="T">目标 Attribute 类型</typeparam>
+        /// <param name="self">Type / MethodInfo / PropertyInfo / Assembly / ParameterInfo 等</param>
+        /// <returns>
+        /// 找到的 Attribute 实例：
+        /// 1. 存在 → 返回第一个匹配的 T 类型实例（含继承链）
+        /// 2. 不存在 → 返回 null
+        /// </returns>
+        /// <example>
+        /// 示例1：type.GetAttribute&lt;VivCommandAttribute&gt;() → VivCommandAttribute 实例 或 null
+        /// 示例2：method.GetAttribute&lt;HttpPostAttribute&gt;() → HttpPostAttribute 实例 或 null
+        /// </example>
+        [return: MaybeNull]
+        public static T GetAttribute<T>(this ICustomAttributeProvider self) where T : Attribute
+        {
+            ArgumentNullException.ThrowIfNull(self);
+            var attributes = self.GetCustomAttributes(typeof(T), true);
+            return attributes.Length > 0 ? (T)attributes[0] : default;
+        }
     }
 }

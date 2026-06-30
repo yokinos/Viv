@@ -1,13 +1,13 @@
 using Spectre.Console.Cli;
 using Viv.Aoi;
 using Viv.Authentication.Enums;
+using Viv.Cli;
 using Viv.Engine.Enums;
 using Viv.Engine.Options;
 using Viv.Log;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Redis;
-using Viv.Cli;
 
 namespace Viv.Test.Commands
 {
