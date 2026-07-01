@@ -7,6 +7,8 @@ namespace Viv.Echo.Http
 {
     public interface IVivHttpService
     {
+        HttpClient HttpClient { get; }
+
         Task<HttpResult<T>> GetAsync<T>(string url, Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default);
 
         Task<HttpResult<T>> GetAsync<T>(string url, Dictionary<string, string>? query = null, Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default);

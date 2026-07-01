@@ -21,8 +21,7 @@ namespace Viv.Aoi
         /// </summary>
         public static void Initialize(IServiceProvider serviceProvider)
         {
-            if (serviceProvider == null)
-                throw new ArgumentNullException(nameof(serviceProvider));
+            ArgumentNullException.ThrowIfNull(serviceProvider);
 
             if (_initialized)
                 throw new InvalidOperationException("请勿重复初始化！");

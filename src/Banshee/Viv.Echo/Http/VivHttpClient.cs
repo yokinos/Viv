@@ -16,6 +16,8 @@ namespace Viv.Echo.Http
             _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         }
 
+        public HttpClient HttpClient => _httpClientFactory.CreateClient();
+
         public async Task<HttpResult<T>> GetAsync<T>(string url, Dictionary<string, string>? headers = null, CancellationToken cancellationToken = default)
         {
             return await SendAsync<T>(HttpMethod.Get, url, null, headers, cancellationToken);

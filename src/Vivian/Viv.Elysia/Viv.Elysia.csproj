@@ -9,7 +9,9 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="MiniExcel" Version="1.36.0" />
+		<PackageReference Include="MiniExcel" Version="1.45.0" />
+		<PackageReference Include="SkiaSharp" Version="4.148.0" />
+		<PackageReference Include="SkiaSharp.QrCode" Version="0.12.0" />
 	</ItemGroup>
 
 	<ItemGroup>
