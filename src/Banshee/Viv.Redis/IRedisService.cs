@@ -369,7 +369,7 @@ namespace Viv.Redis
         /// <param name="expire">锁过期时间（必须>0，防止死锁）</param>
         /// <param name="isReentrant">是否启用重入，默认true</param>
         /// <returns>true=加锁/重入成功，false=加锁失败</returns>
-        bool AcquireLock(string lockKey, string lockHolderId, TimeSpan expire, bool isReentrant = true);
+        bool AcquireLock(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true);
 
         /// <summary>
         /// 释放分布式锁
@@ -378,7 +378,7 @@ namespace Viv.Redis
         /// <param name="lockHolderId">锁持有者唯一标识（必须与加锁时一致）</param>
         /// <param name="enableReentrant">是否启用重入，需和加锁时一致</param>
         /// <returns>true=释放/重入次数减1成功，false=锁不属于当前持有者/锁不存在</returns>
-        bool ReleaseLock(string lockKey, string lockHolderId, bool enableReentrant = true);
+        bool ReleaseLock(string lockKey, string? lockHolderId = null, bool enableReentrant = true);
 
         /// <summary>
         /// 强制释放锁（仅管理员/应急场景使用）
@@ -395,7 +395,7 @@ namespace Viv.Redis
         /// <param name="expire">锁过期时间</param>
         /// <param name="isReentrant">是否启用重入，默认true</param>
         /// <returns>true=加锁/重入成功，false=加锁失败</returns>
-        Task<bool> AcquireLockAsync(string lockKey, string lockHolderId, TimeSpan expire, bool isReentrant = true);
+        Task<bool> AcquireLockAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true);
 
         /// <summary>
         /// 释放分布式锁
@@ -404,7 +404,7 @@ namespace Viv.Redis
         /// <param name="lockHolderId">锁持有者唯一标识</param>
         /// <param name="isReentrant">是否启用重入，需和加锁时一致</param>
         /// <returns>true=释放/重入次数减1成功，false=锁不属于当前持有者/锁不存在</returns>
-        Task<bool> ReleaseLockAsync(string lockKey, string lockHolderId, bool isReentrant = true);
+        Task<bool> ReleaseLockAsync(string lockKey, string? lockHolderId = null, bool isReentrant = true);
 
         /// <summary>
         /// 强制释放锁（仅管理员/应急场景使用）

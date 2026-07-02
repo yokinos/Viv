@@ -7,8 +7,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
-using Viv.Redis.DbAllocator;
 using Viv.Delusion.Extension;
+using Viv.Redis.DbAllocator;
 
 #nullable disable
 namespace Viv.Redis
@@ -444,7 +444,7 @@ namespace Viv.Redis
         /// <summary>
         /// 获取可重入分布式锁（同步，无续期，建议使用异步版本）
         /// </summary>
-        public bool AcquireLock(string lockKey, string lockHolderId, TimeSpan expire, bool isReentrant = true)
+        public bool AcquireLock(string lockKey, TimeSpan expire, string lockHolderId = null, bool isReentrant = true)
         {
             if (lockHolderId.IsNullOrEmpty())
                 lockHolderId = LockHolderContext.CurrentHolderId;
@@ -481,7 +481,7 @@ namespace Viv.Redis
         /// <summary>
         /// 【异步】获取可重入分布式锁（带自动续期）
         /// </summary>
-        public async Task<bool> AcquireLockAsync(string lockKey, string lockHolderId, TimeSpan expire, bool isReentrant = true)
+        public async Task<bool> AcquireLockAsync(string lockKey, TimeSpan expire, string lockHolderId = null, bool isReentrant = true)
         {
             if (lockHolderId.IsNullOrEmpty())
                 lockHolderId = LockHolderContext.CurrentHolderId;
@@ -525,7 +525,7 @@ namespace Viv.Redis
         /// <summary>
         /// 释放可重入分布式锁（同步）
         /// </summary>
-        public bool ReleaseLock(string lockKey, string lockHolderId, bool isReentrant = true)
+        public bool ReleaseLock(string lockKey, string lockHolderId = null, bool isReentrant = true)
         {
             if (lockHolderId.IsNullOrEmpty())
                 lockHolderId = LockHolderContext.CurrentHolderId;
@@ -578,7 +578,7 @@ namespace Viv.Redis
         /// <summary>
         /// 释放可重入分布式锁（异步，自动停止续期）
         /// </summary>
-        public async Task<bool> ReleaseLockAsync(string lockKey, string lockHolderId, bool isReentrant = true)
+        public async Task<bool> ReleaseLockAsync(string lockKey, string lockHolderId = null, bool isReentrant = true)
         {
             if (lockHolderId.IsNullOrEmpty())
                 lockHolderId = LockHolderContext.CurrentHolderId;

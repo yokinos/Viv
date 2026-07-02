@@ -20,6 +20,6 @@ namespace Viv.Elysia.Interface
         /// 获取分页查询的SQL语句
         /// </summary>
         /// <returns></returns>
-        string GetPageSql();
+        (string sql, object parameters) GetSqlQuery();
     }
 }
