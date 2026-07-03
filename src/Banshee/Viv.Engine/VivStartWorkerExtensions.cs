@@ -1,10 +1,13 @@
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using System.Text;
 using Viv.Aoi;
+using Viv.Contracts.Interface;
+using Viv.Engine.Impl;
 
 namespace Viv.Engine
 {
@@ -27,6 +30,7 @@ namespace Viv.Engine
 
             // 基础服务
             builder.Services.AddViv(vivOptions);
+            builder.Services.AddScoped<IAiClientFactory, AiClientFactory>();
 
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
             {

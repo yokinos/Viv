@@ -2,14 +2,17 @@ using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using System.Reflection;
 using System.Text;
 using Viv.Aoi;
+using Viv.Contracts.Interface;
 using Viv.Engine.Conveter;
 using Viv.Engine.Filter;
+using Viv.Engine.Impl;
 using Viv.Engine.Middleware;
 using Viv.Engine.VivOpenApi;
 
@@ -49,6 +52,7 @@ namespace Viv.Engine
 
             // 基础服务
             builder.Services.AddViv(vivOptions);
+            builder.Services.AddScoped<IAiClientFactory, AiClientFactory>();
 
             // gRPC 客户端（Viv.Forge 编译时生成，按需取消注释）
             if (vivOptions.EchoOption?.EnableGrpc == true)

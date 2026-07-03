@@ -10,6 +10,7 @@ using Viv.Nana.Options;
 using Viv.Redis;
 using Viv.Tick.Options;
 using Viv.Log;
+using Viv.Contracts.Options;
 
 #nullable disable
 namespace Viv.Engine.Options
@@ -62,5 +63,10 @@ namespace Viv.Engine.Options
         /// 跨服务通信配置（HTTP + gRPC）
         /// </summary>
         public EchoOptions EchoOption { get; set; }
+
+        /// <summary>
+        /// 默认的OpenAI配置（用于调用OpenAI API）
+        /// </summary>
+        public OpenAIOptions OpenAIOption { get; set; }
     }
 }

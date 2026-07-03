@@ -14,7 +14,7 @@ namespace Viv.Test.Commands
     [VivCommand("lwl", "输出 Viv 完整配置 JSON")]
     public class Cmd_Lwl : AsyncCommand
     {
-        public override Task<int> ExecuteAsync(CommandContext context)
+        protected override Task<int> ExecuteAsync(CommandContext context, CancellationToken cancellationToken)
         {
             var options = new VivOptions
             {
