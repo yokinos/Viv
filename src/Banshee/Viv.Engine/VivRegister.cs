@@ -4,7 +4,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Viv.Authentication;
 using Viv.Contracts.Interface;
 using Viv.Echo;
-using Viv.Engine.Cache;
 using Viv.Engine.Options;
 using Viv.Momo;
 using Viv.Momo.Core;
@@ -20,6 +19,7 @@ using Viv.Delusion.Extension;
 using Viv.Log;
 using Viv.Delusion;
 using Viv.Delusion.Magic;
+using Viv.Engine.Impl;
 
 namespace Viv.Engine
 {

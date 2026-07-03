@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
 
-namespace Viv.Engine.Cache
+namespace Viv.Engine.Impl
 {
     public class MemoryCacheService : IMemoryCacheService
     {
