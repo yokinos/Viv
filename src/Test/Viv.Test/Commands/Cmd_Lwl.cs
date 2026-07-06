@@ -2,7 +2,7 @@ using Spectre.Console.Cli;
 using Viv.Aoi;
 using Viv.Authentication.Enums;
 using Viv.Cli;
-using Viv.Engine.Enums;
+using Viv.Contracts.Enums;
 using Viv.Engine.Options;
 using Viv.Log;
 using Viv.Momo.Enums;

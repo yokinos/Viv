@@ -14,7 +14,7 @@ using Viv.Engine.Filter;
 using Viv.Engine.Middleware;
 using Viv.Sandrone.Conveter;
 using Viv.Sandrone.Impl;
-using Viv.Sandrone.VivOpenApi;
+using Viv.Sandrone.OpenApi;
 
 namespace Viv.Engine
 {

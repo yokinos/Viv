@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 using Viv.Authentication;
+using Viv.Contracts.Enums;
 using Viv.Contracts.Interface;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
@@ -80,7 +81,7 @@ namespace Viv.Engine
             if (options.CacheOption == null) return;
 
             // Redis 缓存
-            if (options.CacheOption.CacheProviderType == Enums.DistributedCacheType.Redis)
+            if (options.CacheOption.CacheProviderType == DistributedCacheType.Redis)
             {
                 RedisFactory.Initialize(options.CacheOption.RedisOptions);
                 services.AddSingleton<IRedisService, RedisService>();

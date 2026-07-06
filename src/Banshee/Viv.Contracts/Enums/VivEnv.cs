@@ -1,4 +1,4 @@
-﻿namespace Viv.Engine.Enums
+﻿namespace Viv.Contracts.Enums
 {
     /// <summary>
     /// Viv 框架运行环境枚举

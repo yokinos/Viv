@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Engine.Enums
+namespace Viv.Contracts.Enums
 {
     /// <summary>
     /// 分布式缓存类型

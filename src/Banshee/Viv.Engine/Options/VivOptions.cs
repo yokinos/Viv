@@ -4,13 +4,13 @@ using System.Text;
 using Viv.Aoi;
 using Viv.Authentication;
 using Viv.Echo.Options;
-using Viv.Engine.Enums;
 using Viv.Momo.Options;
 using Viv.Nana.Options;
 using Viv.Redis;
 using Viv.Tick.Options;
 using Viv.Log;
 using Viv.Contracts.Options;
+using Viv.Contracts.Enums;
 
 #nullable disable
 namespace Viv.Engine.Options

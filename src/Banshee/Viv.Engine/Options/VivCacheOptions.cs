@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Engine.Enums;
+using Viv.Contracts.Enums;
 using Viv.Redis;
 
 #nullable disable
