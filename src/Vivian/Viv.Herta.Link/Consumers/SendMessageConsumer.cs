@@ -29,7 +29,7 @@ namespace Viv.Herta.Link.Consumers
 
             var body = HertaMagic.GetChatMessage(evt.MessageType, evt.Message);
 
-            var chatMessage = new ChatMessage
+            var chatMessage = new HertaChatMessage
             {
                 Id = message.MessageId,
                 AppId = message.AppId,

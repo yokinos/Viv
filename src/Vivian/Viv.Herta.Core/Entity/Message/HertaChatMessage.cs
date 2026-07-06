@@ -8,7 +8,7 @@ namespace Viv.Herta.Core.Entity.Message
     /// <summary>
     /// Viv下的Chat 消息体
     /// </summary>
-    public class ChatMessage
+    public class HertaChatMessage
     {
         /// <summary>
         /// 客户端AppId,标识由哪个客户端发的消息
