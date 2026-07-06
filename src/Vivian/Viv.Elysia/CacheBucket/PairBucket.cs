@@ -1,5 +1,5 @@
 using Viv.Delusion.Extension;
-using Viv.Elysia.Interface;
+using Viv.Momo.Interface;
 
 namespace Viv.Elysia.CacheBucket
 {

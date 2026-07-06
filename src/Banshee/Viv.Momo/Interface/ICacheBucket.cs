@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Elysia.Interface
+namespace Viv.Momo.Interface
 {
     public interface ICacheBucket
     {

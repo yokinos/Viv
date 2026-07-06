@@ -1,11 +1,11 @@
 using System.Diagnostics.CodeAnalysis;
 using Viv.Contracts.Interface;
-using Viv.Elysia.Interface;
 using Viv.Log;
 using Viv.Momo;
+using Viv.Momo.Interface;
 using Viv.Redis;
 
-namespace Viv.Elysia.DataAccess
+namespace Viv.Momo.Base
 {
     /// <summary>
     /// 数据访问缓存基类 — Cache-Aside 模式

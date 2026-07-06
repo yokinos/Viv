@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Contracts.Interface;
+using Viv.Log;
 
 namespace Viv.Momo.Base
 {
@@ -13,11 +14,13 @@ namespace Viv.Momo.Base
     {
         protected readonly IVivContext _vivContext;
         protected readonly IMomoDbContext _dbContext;
+        protected readonly ILoggerContract _logger;
 
-        public DataAccessBase(IVivContext context, IMomoDbContext dbContext)
+        public DataAccessBase(IVivContext context, IMomoDbContext dbContext, ILoggerContract logger)
         {
             _vivContext = context;
             _dbContext = dbContext;
+            _logger = logger;
         }
     }
 }

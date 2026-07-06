@@ -22,6 +22,7 @@
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
     <ProjectReference Include="..\Viv.Delusion\Viv.Delusion.csproj" />
     <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
+    <ProjectReference Include="..\Viv.Redis\Viv.Redis.csproj" />
   </ItemGroup>
 
 </Project>
