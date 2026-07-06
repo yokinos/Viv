@@ -6,14 +6,14 @@ using Viv.Entity.Interface;
 
 namespace Viv.Herta.Core.Entity.Message
 {
-    public class MixMessage : IChatMessage
+    public class MixMessage : IHertaChatMessage
     {
         public EmChatMessageType MessageType => EmChatMessageType.Mix;
 
         /// <summary>
         /// 混合消息列表
         /// </summary>
-        public List<IChatMessage>? MixList { get; set; }
+        public List<IHertaChatMessage>? MixList { get; set; }
 
         /// <summary>
         /// 扩展消息

@@ -6,8 +6,9 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Viv.Contracts.Interface;
+using Viv.Contracts.Options;
 
-namespace Viv.Engine.Impl
+namespace Viv.Sandrone.Impl
 {
     public class AiClientFactory : IAiClientFactory
     {
@@ -26,9 +27,10 @@ namespace Viv.Engine.Impl
         [return: MaybeNull]
         public IChatClient GetDefaultClient()
         {
-            var option = VivEngine.VivOptions.OpenAIOption;
+            var option = Viv.Delusion.VivConfigRegistry.Get<OpenAIOptions>();
             if (option == null) return default;
             return CreateClient(option.ApiUrl, option.ApiKey, option.Model);
         }
     }
 }
+ 

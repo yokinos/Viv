@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
 
-namespace Viv.Engine.Impl
+namespace Viv.Sandrone.Impl
 {
     public class MemoryCacheService : IMemoryCacheService
     {

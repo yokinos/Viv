@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace Viv.Engine.Conveter
+namespace Viv.Sandrone.Conveter
 {
     public class VivContractResolver : DefaultContractResolver
     {

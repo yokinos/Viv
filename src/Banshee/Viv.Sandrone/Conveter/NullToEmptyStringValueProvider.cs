@@ -1,7 +1,7 @@
 ﻿using Newtonsoft.Json.Serialization;
 using System.Reflection;
 
-namespace Viv.Engine.Conveter
+namespace Viv.Sandrone.Conveter
 {
     /// <summary>
     /// 字符串属性值提供器：序列化时将 null 转为空字符串，反序列化时 Trim 字符串。

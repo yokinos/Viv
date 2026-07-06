@@ -10,11 +10,11 @@ using System.Reflection;
 using System.Text;
 using Viv.Aoi;
 using Viv.Contracts.Interface;
-using Viv.Engine.Conveter;
 using Viv.Engine.Filter;
-using Viv.Engine.Impl;
 using Viv.Engine.Middleware;
-using Viv.Engine.VivOpenApi;
+using Viv.Sandrone.Conveter;
+using Viv.Sandrone.Impl;
+using Viv.Sandrone.VivOpenApi;
 
 namespace Viv.Engine
 {
@@ -52,7 +52,6 @@ namespace Viv.Engine
 
             // 基础服务
             builder.Services.AddViv(vivOptions);
-            builder.Services.AddScoped<IAiClientFactory, AiClientFactory>();
 
             // gRPC 客户端（Viv.Forge 编译时生成，按需取消注释）
             if (vivOptions.EchoOption?.EnableGrpc == true)

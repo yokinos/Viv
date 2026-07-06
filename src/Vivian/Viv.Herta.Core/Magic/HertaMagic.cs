@@ -12,7 +12,7 @@ namespace Viv.Herta.Core.Magic
     public class HertaMagic
     {
         [return:MaybeNull]
-        public static IChatMessage GetChatMessage(EmChatMessageType messageType, string json)
+        public static IHertaChatMessage GetChatMessage(EmChatMessageType messageType, string json)
         {
             return messageType switch
             {

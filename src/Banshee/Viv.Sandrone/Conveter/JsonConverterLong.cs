@@ -1,7 +1,7 @@
 ﻿using Newtonsoft.Json;
 using System;
 
-namespace Viv.Engine.Conveter
+namespace Viv.Sandrone.Conveter
 {
     public class JsonConverterLong : JsonConverter
     {

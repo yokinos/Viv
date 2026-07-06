@@ -6,7 +6,7 @@ using Viv.Entity.Interface;
 
 namespace Viv.Herta.Core.Entity.Message
 {
-    public class MediaFileMessage : IChatMessage
+    public class MediaFileMessage : IHertaChatMessage
     {
         public EmChatMessageType MessageType => EmChatMessageType.MediaFile;
 

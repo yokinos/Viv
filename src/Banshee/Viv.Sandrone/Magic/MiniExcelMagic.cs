@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using MiniExcelLibs;
 using Viv.Delusion.Extension;
 
-namespace Viv.Elysia.Magic
+namespace Viv.Sandrone.Magic
 {
     /// <summary>
     /// MiniExcel 封装 — 导入导出

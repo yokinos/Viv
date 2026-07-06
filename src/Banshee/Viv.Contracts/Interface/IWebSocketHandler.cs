@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Engine.Interface
+namespace Viv.Contracts.Interface
 {
     public interface IWebSocketHandler
     {

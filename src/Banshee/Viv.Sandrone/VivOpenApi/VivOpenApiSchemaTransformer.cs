@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using System.Xml.Linq;
 
-namespace Viv.Engine.VivOpenApi
+namespace Viv.Sandrone.VivOpenApi
 {
     public sealed class VivOpenApiSchemaTransformer : IOpenApiSchemaTransformer
     {

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Elysia.Magic
+namespace Viv.Sandrone.Magic
 {
     public class NpoiExcelMagic
     {

@@ -12,7 +12,7 @@ namespace Viv.EventContracts.Herta
     {
         public SendMessageEvent() { }
 
-        public SendMessageEvent(long fromUserId, long targetId, IChatMessage message, EmChatReceiverType receiverType, EmChatMessageType messageType)
+        public SendMessageEvent(long fromUserId, long targetId, IHertaChatMessage message, EmChatReceiverType receiverType, EmChatMessageType messageType)
         {
             FromUserId = fromUserId;
             TargetId = targetId;
@@ -43,7 +43,7 @@ namespace Viv.EventContracts.Herta
 
         /// <summary>
         /// 消息[Json]
-        /// <see cref="IChatMessage"/>
+        /// <see cref="IHertaChatMessage"/>
         /// </summary>
         public string Message { get; private set; }
     }

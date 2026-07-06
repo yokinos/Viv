@@ -7,7 +7,7 @@ using Viv.Entity.Interface;
 
 namespace Viv.Herta.Core.Entity.Message
 {
-    public class CommandMessage : IChatMessage
+    public class CommandMessage : IHertaChatMessage
     {
         public EmChatMessageType MessageType => EmChatMessageType.Command;
 

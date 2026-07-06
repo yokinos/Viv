@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Xml.Linq;
 
-namespace Viv.Engine.VivOpenApi;
+namespace Viv.Sandrone.VivOpenApi;
 
 internal static class VivOpenApiXmlDocHelper
 {

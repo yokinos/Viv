@@ -5,7 +5,7 @@ using Viv.Entity.Enums;
 
 namespace Viv.Entity.Interface
 {
-    public interface IChatMessage
+    public interface IHertaChatMessage
     {
         /// <summary>
         /// 消息类型

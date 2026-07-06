@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	  
+  </PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+		<PackageReference Include="Scalar.AspNetCore" Version="2.16.9" />
+		<PackageReference Include="MiniExcel" Version="1.45.0" />
+		<PackageReference Include="SkiaSharp" Version="4.148.0" />
+		<PackageReference Include="SkiaSharp.QrCode" Version="0.12.0" />
+	</ItemGroup>
+	
+  <ItemGroup>
+    <ProjectReference Include="..\Viv.Aoi\Viv.Aoi.csproj" />
+    <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
+    <ProjectReference Include="..\Viv.Delusion\Viv.Delusion.csproj" />
+    <ProjectReference Include="..\Viv.Echo\Viv.Echo.csproj" />
+    <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
+  </ItemGroup>
+
+</Project>

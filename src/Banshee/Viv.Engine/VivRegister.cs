@@ -1,25 +1,25 @@
 ﻿using MassTransit.EntityFrameworkCoreIntegration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 using Viv.Authentication;
 using Viv.Contracts.Interface;
+using Viv.Delusion;
+using Viv.Delusion.Extension;
+using Viv.Delusion.Magic;
 using Viv.Echo;
 using Viv.Engine.Options;
+using Viv.Log;
 using Viv.Momo;
 using Viv.Momo.Core;
 using Viv.Momo.Enums;
 using Viv.Nana;
 using Viv.Nana.Core;
 using Viv.Nana.Saga;
-using StackExchange.Redis;
 using Viv.Redis;
+using Viv.Sandrone.Impl;
 using Viv.Tick;
 using Viv.Tick.Enums;
-using Viv.Delusion.Extension;
-using Viv.Log;
-using Viv.Delusion;
-using Viv.Delusion.Magic;
-using Viv.Engine.Impl;
 
 namespace Viv.Engine
 {
@@ -50,6 +50,8 @@ namespace Viv.Engine
             RegisterToken(services, options);
             // 注册调度
             RegisterScheduler(services, options);
+            // 注册其他服务
+            RegisterOtherServices(services, options);
         }
 
         #region 日志
@@ -197,6 +199,20 @@ namespace Viv.Engine
         {
             if (options.EchoOption == null) return;
             EchoRegister.Initialize(services, options.EchoOption);
+        }
+
+        #endregion
+
+        #region 其他服务注册
+
+        public static void RegisterOtherServices(IServiceCollection services, VivOptions options)
+        {
+            if (options.OpenAIOption != null)
+            {
+                VivConfigRegistry.Add(options.OpenAIOption);
+            }
+
+            services.AddScoped<IAiClientFactory, AiClientFactory>();
         }
 
         #endregion

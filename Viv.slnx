@@ -13,6 +13,7 @@
     <Project Path="src/Banshee/Viv.Momo/Viv.Momo.csproj" Id="51d56628-8714-42f2-bcb7-b7606977eb48" />
     <Project Path="src/Banshee/Viv.Nana/Viv.Nana.csproj" Id="e894e65e-43a7-465b-8fb4-53e30e86eba2" />
     <Project Path="src/Banshee/Viv.Redis/Viv.Redis.csproj" Id="681e717d-013f-40c7-9bba-589b9ddf3629" />
+    <Project Path="src/Banshee/Viv.Sandrone/Viv.Sandrone.csproj" Id="ba236dd9-a8cd-4150-bc58-16aea65e2704" />
     <Project Path="src/Banshee/Viv.Tick/Viv.Tick.csproj" Id="a978f93b-3dc9-4a71-96cb-515815b9ae3f" />
   </Folder>
   <Folder Name="/src/Doc/">

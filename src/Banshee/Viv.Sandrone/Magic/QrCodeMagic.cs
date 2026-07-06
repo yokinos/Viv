@@ -3,7 +3,7 @@ using SkiaSharp.QrCode;
 using Viv.Aoi;
 using Viv.Echo.Http;
 
-namespace Viv.Elysia.Magic
+namespace Viv.Sandrone.Magic
 {
     /// <summary>
     /// 二维码生成 — 支持 PNG 字节数组、Base64 字符串、本地文件输出，可嵌入中心 Logo（本地文件或网络图片）

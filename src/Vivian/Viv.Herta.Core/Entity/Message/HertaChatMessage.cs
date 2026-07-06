@@ -34,7 +34,7 @@ namespace Viv.Herta.Core.Entity.Message
         /// <summary>
         /// 消息内容
         /// </summary>
-        public IChatMessage? Body { get; set; }
+        public IHertaChatMessage? Body { get; set; }
 
         /// <summary>
         /// 消息发送的时间
