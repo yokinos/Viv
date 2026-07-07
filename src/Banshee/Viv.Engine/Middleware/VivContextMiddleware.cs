@@ -9,7 +9,7 @@ using Viv.Delusion.Extension;
 namespace Viv.Engine.Middleware
 {
     /// <summary>
-    /// [中间件] 注册Viv框架下的各种Context（微服务网关版）
+    /// [中间件] 注册Viv框架下的各种Context
     /// </summary>
     public class VivContextMiddleware
     {
