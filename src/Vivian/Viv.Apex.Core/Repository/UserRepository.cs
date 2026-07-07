@@ -30,7 +30,7 @@ namespace Viv.Apex.Core.Repository
         public override async Task<EntityBucket<AtUser>?> GetDbAsync(params object[] keys)
         {
             var userId = keys[0].As<long>();
-            var user = await _dbContext.FindAsync<AtUser>(userId);
+            var user = await _dbContext.SingleOrDefaultAsync<AtUser>(x => x.Id == userId && x.IsDeleted == false);
             if (user == null) return null;
             return new EntityBucket<AtUser>() { Entity = user };
         }
