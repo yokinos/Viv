@@ -1,22 +1,19 @@
-﻿ using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using Viv.Contracts.Enums;
 using Viv.Delusion.Extension;
 
 namespace Viv.Engine.Middleware
 {
-    /// <summary>
-    /// 404统一处理中间件
-    /// 区分Ajax/接口请求与页面请求，分别返回JSON和重定向页面
-    /// </summary>
-    public class NotFoundMiddleware
+    public class ApiStartedMiddleware
     {
         private readonly RequestDelegate _next;
 
-        public NotFoundMiddleware(RequestDelegate next)
+        public ApiStartedMiddleware(RequestDelegate next)
         {
             _next = next;
         }

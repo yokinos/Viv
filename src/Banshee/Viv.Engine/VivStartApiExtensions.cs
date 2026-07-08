@@ -119,7 +119,7 @@ namespace Viv.Engine
                 app.VivUseScalar(apiTitle);
             }
 
-            app.UseMiddleware<NotFoundMiddleware>();
+            app.UseMiddleware<ApiStartedMiddleware>();
             app.UseMiddleware<VivContextMiddleware>();
 
             app.UseStaticFiles();

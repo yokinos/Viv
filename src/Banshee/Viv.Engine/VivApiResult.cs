@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
+using Viv.Delusion.Extension;
 using Viv.Sandrone.Conveter;
 
 namespace Viv.Engine
@@ -77,8 +78,9 @@ namespace Viv.Engine
             return ApiRsult(ApiResultCode.Error, message, data);
         }
 
-        public static VivApiResult ApiRsult(ApiResultCode code, string message, object? data = null)
+        public static VivApiResult ApiRsult(ApiResultCode code, string? message = null, object? data = null)
         {
+            message ??= code.GetDescription();
             return new VivApiResult((int)code, message, data);
         }
     }

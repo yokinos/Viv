@@ -111,7 +111,16 @@ namespace Viv.Engine
         /// <returns></returns>
         public static string GetJwtToken(this HttpContext context)
         {
-            return context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+            return context.Request.Headers.Authorization.ToString().Replace("Bearer ", "");
+        }
+
+        public static async Task SetApiResponse(this HttpContext context, ApiResultCode code)
+        {
+            var result = VivApiResult.ApiRsult(code);
+            context.Response.Clear();
+            context.Response.StatusCode = 200;
+            context.Response.ContentType = "application/json;charset=UTF-8";
+            await context.Response.WriteAsync(result.ToJson(), Encoding.UTF8);
         }
     }
 }

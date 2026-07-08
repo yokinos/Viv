@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Delusion.Extension;
 
 namespace Viv.Engine
 {
@@ -33,8 +34,9 @@ namespace Viv.Engine
             return ApiRsult(ApiResultCode.Error, message, data);
         }
 
-        public static VivApiResult<T> ApiRsult(ApiResultCode code, string message, T? data = default)
+        public static VivApiResult<T> ApiRsult(ApiResultCode code, string? message = null, T? data = default)
         {
+            message ??= code.GetDescription();
             return new VivApiResult<T>((int)code, message, data);
         }
     }
