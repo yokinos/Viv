@@ -39,7 +39,7 @@ namespace Viv.Engine.Filter
 
             var realEx = ex.InnerException ?? ex;
             _logger.Error($"[全局未捕获异常]请求地址：{path}，消息：{ex.Message}", realEx);
-            context.Result = VivApiResult.ApiRsult(ApiResultCode.ServerError, "服务器异常");
+            context.Result = VivApiResult.ApiRsult(ApiResultCode.ServerError);
             context.ExceptionHandled = true;
 
             await Task.CompletedTask;
