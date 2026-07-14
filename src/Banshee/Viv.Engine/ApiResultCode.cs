@@ -89,15 +89,15 @@ namespace Viv.Engine
         #region -4xx 身份鉴权 Token 登录相关区间
 
         /// <summary>
-        /// 请求头未携带Token身份凭证
+        /// 账号异地登录
         /// </summary>
-        [Description("身份凭证为空，请登录后操作")]
+        [Description("账号异地登录")]
         TokenEmpty = -400,
 
         /// <summary>
-        /// Token解析失败、篡改、非法加密，凭证无效
+        /// 请求头未携带Token身份凭证
         /// </summary>
-        [Description("身份凭证无效")]
+        [Description("身份凭证为空，请登录后操作")]
         TokenInvalid = -401,
 
         /// <summary>
@@ -107,34 +107,16 @@ namespace Viv.Engine
         TokenExpired = -402,
 
         /// <summary>
-        /// 账号异地登录，服务端主动使当前Token失效下线
+        /// 身份凭证无效
         /// </summary>
-        [Description("账号已在其他终端登录，已强制下线")]
+        [Description("身份凭证无效")]
         TokenKickOut = -403,
 
         /// <summary>
-        /// 接口请求签名校验失败，请求参数被篡改
+        /// 请求的资源不存在
         /// </summary>
-        [Description("请求签名校验不通过")]
-        SignError = -404,
-
-        /// <summary>
-        /// 登录账号或密码校验不匹配
-        /// </summary>
-        [Description("账号或登录凭证错误")]
-        LoginFailed = -405,
-
-        /// <summary>
-        /// 账号后台被管理员冻结、禁用，禁止登录访问
-        /// </summary>
-        [Description("当前账号已被禁用")]
-        AccountDisabled = -406,
-
-        /// <summary>
-        /// 图形/短信验证码错误或超过有效时效
-        /// </summary>
-        [Description("验证码错误或已失效")]
-        CaptchaError = -407,
+        [Description("请求的资源不存在")]
+        NotFound = -404,
 
         #endregion
 
