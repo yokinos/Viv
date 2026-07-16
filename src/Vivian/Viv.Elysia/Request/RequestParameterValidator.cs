@@ -5,13 +5,13 @@ using Viv.Delusion;
 using Viv.Elysia.Interface;
 using Viv.Delusion.Extension;
 
-namespace Viv.Elysia.Validator
+namespace Viv.Elysia.Request
 {
     /// <summary>
     /// 实体模型校验工具（遇到第一个错误立即返回）
     /// 自动从 [Display(Name="")] 读取友好字段名
     /// </summary>
-    public static class RequestValidator
+    public static class RequestParameterValidator
     {
         /// <summary>
         /// 校验对象，返回第一条错误信息

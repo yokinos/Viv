@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using Viv.Elysia.Request;
 using Viv.Entity.Enums;
-using Viv.Entity.Request;
 
 namespace Viv.Herta.Core.Entity.Dto.Chat
 {
-    public class SendMessageRequest : RequestBase
+    public class SendMessageRequest : ApiRequestBase
     {
         /// <summary>
         /// [可选]发送方的Id 不选默认为当前登录人的Id

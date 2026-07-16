@@ -10,9 +10,10 @@ namespace Viv.Elysia.Interface
     public interface IApiRequest
     {
         /// <summary>
-        /// 校验请求参数
+        /// 校验参数
         /// </summary>
+        /// <param name="isSkipSignValidate">是否跳过签名验证</param>
         /// <returns></returns>
-        string Validate(bool useBaseValidation = true);
+        string Validate(bool isSkipSignValidate = true);
     }
 }

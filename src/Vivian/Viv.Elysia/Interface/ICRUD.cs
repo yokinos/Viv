@@ -28,6 +28,6 @@ namespace Viv.Elysia.Interface
 
         Task<bool> SoftDeleteAsync<T>(Func<T, bool> predicate) where T : IEntity, ISoftDelete;
 
-        Task<PagedList<T>> GetPageAsync<T>(IPageRequest request) where T : IEntity;
+        Task<PagedList<T>> GetPageAsync<T>(IApiPagedRequest request) where T : IEntity;
     }
 }

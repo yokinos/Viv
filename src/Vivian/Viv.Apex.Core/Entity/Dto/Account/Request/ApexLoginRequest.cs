@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
-using Viv.Entity.Request;
+using Viv.Elysia.Request;
 
 namespace Viv.Apex.Core.Entity.Dto.Account.Request
 {
-    public class ApexLoginRequest : RequestBase
+    public class ApexLoginRequest : ApiRequestBase
     {
         /// <summary>
         /// 账户名

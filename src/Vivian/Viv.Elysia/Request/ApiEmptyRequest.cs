@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Entity.Request
+namespace Viv.Elysia.Request
 {
-    public class ApiEmptyRequest : RequestBase
+    public class ApiEmptyRequest : ApiRequestBase
     {
 
     }

@@ -4,7 +4,10 @@ using System.Text;
 
 namespace Viv.Elysia.Interface
 {
-    public interface IPageRequest
+    /// <summary>
+    /// 分页请求
+    /// </summary>
+    public interface IApiPagedRequest
     {
         /// <summary>
         /// 分页请求页码

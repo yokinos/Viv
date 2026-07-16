@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
-using Viv.Entity.Request;
+using Viv.Elysia.Request;
 
 namespace Viv.Herta.Core.Entity.Dto.Account.Request
 {
-    public class HertaLoginRequest : RequestBase
+    public class HertaLoginRequest : ApiRequestBase
     {
         /// <summary>
         /// 机构编码（标识是哪家机构的账号登录的）
