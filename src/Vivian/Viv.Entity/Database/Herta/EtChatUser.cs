@@ -1,18 +1,16 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Text;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Herta
 {
     /// <summary>
-    /// 所有的会使用聊天的用户都要在这里注册
-    /// 设计方式：
-    /// 1. 所有需要使用聊天功能的用户都要在这里独立注册，包括系统用户和第三方用户
-    /// 2. 共享Apex的App与租户设计
+    /// 聊天模块用户表
+    /// 设计说明：
+    /// 1. 所有需要使用聊天功能的主体在此注册（业务用户、机器人、管理员）
+    /// 2. 聊天模块独立ID体系，外部业务自行存储 ChatUserId 关联本表，本表不存储外部业务ID
+    /// 3. 租户隔离，独立维护聊天昵称、头像、登录凭证、发言权限
     /// </summary>
     public class EtChatUser : EntityBase, ITenant, ISoftDelete
     {
@@ -22,48 +20,69 @@ namespace Viv.Entity.Database.Herta
         public long TenantId { get; set; }
 
         /// <summary>
-        /// 用户名称
-        /// </summary>
-        [StringLength(100)]
-        public string? Name { get; set; }
-
-        /// <summary>
-        /// 用户昵称
+        /// 聊天展示昵称
         /// </summary>
         [StringLength(100)]
         public string? NickName { get; set; }
 
         /// <summary>
-        /// 登录编码（可以是手机号，邮箱，或者其他唯一标识）
-        /// 内部系统注册或第三方注册时传入 注意需要第三方自己保存
+        /// 个性签名
+        /// </summary>
+        [StringLength(200)]
+        public string? Signature { get; set; }
+
+        /// <summary>
+        /// 登录唯一标识
         /// </summary>
         [StringLength(64)]
         public string? LoginCode { get; set; }
 
         /// <summary>
-        /// 密码
+        /// 密码哈希
         /// </summary>
-        [StringLength(32)]
+        [StringLength(64)]
         public string? Password { get; set; }
 
         /// <summary>
-        /// 盐
+        /// 密码盐值
         /// </summary>
+        [StringLength(32)]
         public string? Salt { get; set; }
 
         /// <summary>
-        /// 头像
+        /// 头像地址
         /// </summary>
         [StringLength(255)]
         public string? Avatar { get; set; }
 
         /// <summary>
-        /// 聊天角色
+        /// 聊天身份角色 0普通用户 1客服 2机器人 3超管
         /// </summary>
-        public long RoleId { get; set; }
+        public int ChatRole { get; set; }
 
+        /// <summary>
+        /// 是否永久禁言
+        /// </summary>
+        public bool IsMute { get; set; }
+
+        /// <summary>
+        /// 禁言到期时间，null代表永久禁言
+        /// </summary>
+        public DateTime? MuteEndAt { get; set; }
+
+        /// <summary>
+        /// 上次上线时间
+        /// </summary>
+        public DateTime? LastOnlineAt { get; set; }
+
+        /// <summary>
+        /// 软删除标记
+        /// </summary>
         public bool IsDeleted { get; set; }
 
+        /// <summary>
+        /// 删除时间
+        /// </summary>
         public DateTime? DeletedAt { get; set; }
     }
 }
