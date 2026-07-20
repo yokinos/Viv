@@ -13,9 +13,9 @@ namespace Viv.SakuMai.Api.Jobs
     public class EveryDayDaily3AMJob
     {
         private readonly ILoggerContract _logger;
-        private readonly IVivPublisher _vivPublisher;
+        private readonly IVivEventPublisher _vivPublisher;
 
-        public EveryDayDaily3AMJob(ILoggerContract logger, IVivPublisher vivPublisher)
+        public EveryDayDaily3AMJob(ILoggerContract logger, IVivEventPublisher vivPublisher)
         {
             _logger = logger;
             _vivPublisher = vivPublisher;

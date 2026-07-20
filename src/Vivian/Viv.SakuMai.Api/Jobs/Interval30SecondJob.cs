@@ -11,10 +11,10 @@ namespace Viv.SakuMai.Api.Jobs
     public class Interval30SecondJob
     {
         private readonly ILoggerContract _logger;
-        private readonly IVivPublisher _vivPublisher;
+        private readonly IVivEventPublisher _vivPublisher;
         private readonly IRedisService _redisService;
 
-        public Interval30SecondJob(ILoggerContract logger, IVivPublisher vivPublisher, IRedisService redisService)
+        public Interval30SecondJob(ILoggerContract logger, IVivEventPublisher vivPublisher, IRedisService redisService)
         {
             _logger = logger;
             _vivPublisher = vivPublisher;

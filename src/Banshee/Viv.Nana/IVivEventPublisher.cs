@@ -5,7 +5,7 @@ using Viv.Nana.Core;
 
 namespace Viv.Nana
 {
-    public interface IVivPublisher
+    public interface IVivEventPublisher
     {
         /// <summary>
         /// 发布普通消息

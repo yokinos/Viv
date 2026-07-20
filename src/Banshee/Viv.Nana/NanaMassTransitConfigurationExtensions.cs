@@ -44,7 +44,7 @@ namespace Viv.Nana
                 });
             });
 
-            services.AddScoped<IVivPublisher, NanaEventPublisher>();
+            services.AddScoped<IVivEventPublisher, NanaEventPublisher>();
 
             return services;
         }

@@ -13,9 +13,9 @@ namespace Viv.Herta.Core.Service
 {
     public class ChatService : IChatService
     {
-        private readonly IVivPublisher _vivPublisher;
+        private readonly IVivEventPublisher _vivPublisher;
 
-        public ChatService(IVivPublisher vivPublisher)
+        public ChatService(IVivEventPublisher vivPublisher)
         {
             _vivPublisher = vivPublisher;
         }

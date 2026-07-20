@@ -121,7 +121,7 @@ namespace Viv.Engine
             // 注册 MassTransit + RabbitMQ（Saga 类型传进去）
             services.AddVivMassTransit(options.NanaOption, enableSaga ? sagaTypes : null);
 
-            services.AddScoped<IVivPublisher, NanaEventPublisher>();
+            services.AddScoped<IVivEventPublisher, NanaEventPublisher>();
         }
 
         private static void RegisterSagaDbContext(IServiceCollection services, VivOptions options, List<Type> sagaStateMachineTypes)

@@ -4,7 +4,7 @@ using Viv.Log;
 
 namespace Viv.Nana.Core
 {
-    public class NanaEventPublisher : IVivPublisher
+    public class NanaEventPublisher : IVivEventPublisher
     {
         private readonly IVivContext _context;
         private readonly IPublishEndpoint _publishEndpoint;
