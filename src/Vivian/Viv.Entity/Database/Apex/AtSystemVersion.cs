@@ -7,67 +7,77 @@ using Viv.Momo.Interface;
 namespace Viv.Entity.Database.Apex
 {
     /// <summary>
-    /// 租户表
-    /// 一对多关联 AtOrg 组织表，一个组织下可创建多个租户
+    /// 系统售卖版本主表
+    /// 仅存储套餐基础信息，各App独立权限存放于AtSystemVersionAppRelation
     /// </summary>
-    public class AtTenant : EntityBase, ISoftDelete
+    public class AtSystemVersion : EntityBase, ISoftDelete
     {
         /// <summary>
-        /// 所属组织Id（关联AtOrg.Id）
-        /// </summary>
-        public long OrgId { get; set; }
-
-        /// <summary>
-        /// 租户名称
+        /// 版本套餐名称
         /// </summary>
         [StringLength(100)]
         public string? Name { get; set; }
 
         /// <summary>
-        /// 租户唯一编码
+        /// 套餐唯一编码
         /// </summary>
         [StringLength(64)]
-        public string? TenantCode { get; set; }
+        public string? Code { get; set; }
 
         /// <summary>
-        /// 租户独立访问域名
+        /// 售卖套餐类型
         /// </summary>
-        [StringLength(200)]
-        public string? Domain { get; set; }
+        public EmSystemSaleType SaleType { get; set; }
 
         /// <summary>
-        /// 备注说明
+        /// 套餐价格（单位：分）
+        /// </summary>
+        public long Price { get; set; }
+
+        /// <summary>
+        /// 套餐有效期天数，0=永久有效
+        /// </summary>
+        public int ValidDays { get; set; }
+
+        /// <summary>
+        /// 套餐介绍
+        /// </summary>
+        [StringLength(2000)]
+        public string? Description { get; set; }
+
+        /// <summary>
+        /// 套餐状态 0停用 1启用
+        /// </summary>
+        public EmStatus Status { get; set; }
+
+        /// <summary>
+        /// 备注
         /// </summary>
         [StringLength(500)]
         public string? Remark { get; set; }
 
         /// <summary>
-        /// 租户状态 0禁用 1启用
-        /// </summary>
-        public EmStatus Status { get; set; }
-
-        /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime? CreatedAt { get; set; }
+        public DateTime CreatedAt { get; set; }
 
         /// <summary>
-        /// 创建人账号ID
+        /// 创建人ID
         /// </summary>
         public long? CreatedBy { get; set; }
 
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime? UpdatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
 
         /// <summary>
-        /// 更新人账号ID
+        /// 更新人ID
         /// </summary>
         public long? UpdatedBy { get; set; }
 
         /// <summary>
-        /// 是否软删除
+        /// 是否删除
         /// </summary>
         public bool IsDeleted { get; set; }
 

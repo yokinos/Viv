@@ -1,5 +1,4 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations;
 using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
@@ -7,62 +6,58 @@ using Viv.Momo.Interface;
 namespace Viv.Entity.Database.Apex
 {
     /// <summary>
-    /// 租户表
-    /// 一对多关联 AtOrg 组织表，一个组织下可创建多个租户
+    /// 套餐与客户端应用关联表
+    /// 一套版本可绑定多个App，每个App独立配置一套功能掩码
     /// </summary>
-    public class AtTenant : EntityBase, ISoftDelete
+    public class AtSystemVersionAppRelation : EntityBase, ISoftDelete
     {
         /// <summary>
-        /// 所属组织Id（关联AtOrg.Id）
+        /// 套餐主表Id（关联AtSystemVersion.Id）
         /// </summary>
-        public long OrgId { get; set; }
+        public long SystemVersionId { get; set; }
 
         /// <summary>
-        /// 租户名称
+        /// 客户端应用Id（关联AtClientApp.Id）
         /// </summary>
-        [StringLength(100)]
-        public string? Name { get; set; }
+        public long ClientAppId { get; set; }
 
         /// <summary>
-        /// 租户唯一编码
+        /// 当前App对应的主菜单权限掩码
         /// </summary>
-        [StringLength(64)]
-        public string? TenantCode { get; set; }
+        public ulong MenuMask { get; set; }
 
         /// <summary>
-        /// 租户独立访问域名
+        /// 当前App对应的子页面权限掩码
         /// </summary>
-        [StringLength(200)]
-        public string? Domain { get; set; }
+        public ulong SubPageMask { get; set; }
 
         /// <summary>
-        /// 备注说明
+        /// 当前App对应的操作按钮权限掩码
         /// </summary>
-        [StringLength(500)]
-        public string? Remark { get; set; }
+        public ulong ButtonMask { get; set; }
 
         /// <summary>
-        /// 租户状态 0禁用 1启用
+        /// 本条App权限启用状态
         /// </summary>
         public EmStatus Status { get; set; }
 
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime? CreatedAt { get; set; }
+        public DateTime CreatedAt { get; set; }
 
         /// <summary>
-        /// 创建人账号ID
+        /// 创建人ID
         /// </summary>
         public long? CreatedBy { get; set; }
 
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime? UpdatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
 
         /// <summary>
-        /// 更新人账号ID
+        /// 更新人ID
         /// </summary>
         public long? UpdatedBy { get; set; }
 

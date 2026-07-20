@@ -61,7 +61,7 @@ namespace Viv.Entity.Database.Herta
         public DateTime? LastMessageTime { get; set; }
 
         /// <summary>
-        /// 软删除标记（隐藏会话）
+        /// 软删除标记
         /// </summary>
         public bool IsDeleted { get; set; }
 

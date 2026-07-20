@@ -7,42 +7,47 @@ using Viv.Momo.Interface;
 namespace Viv.Entity.Database.Apex
 {
     /// <summary>
-    /// 租户表
-    /// 一对多关联 AtOrg 组织表，一个组织下可创建多个租户
+    /// 菜单子页面表
+    /// 依附主页面菜单，管理页面内嵌/弹窗子页面
     /// </summary>
-    public class AtTenant : EntityBase, ISoftDelete
+    public class AtMenuSubPage : EntityBase, ISoftDelete
     {
         /// <summary>
-        /// 所属组织Id（关联AtOrg.Id）
+        /// 主页面菜单Id（关联AtMenu.Id，仅Type=Page）
         /// </summary>
-        public long OrgId { get; set; }
+        public long MenuId { get; set; }
 
         /// <summary>
-        /// 租户名称
+        /// 子页面名称
         /// </summary>
         [StringLength(100)]
         public string? Name { get; set; }
 
         /// <summary>
-        /// 租户唯一编码
-        /// </summary>
-        [StringLength(64)]
-        public string? TenantCode { get; set; }
-
-        /// <summary>
-        /// 租户独立访问域名
+        /// 前端路由/组件标识
         /// </summary>
         [StringLength(200)]
-        public string? Domain { get; set; }
+        public string? Code { get; set; }
 
         /// <summary>
-        /// 备注说明
+        /// 子页面路径
+        /// </summary>
+        [StringLength(500)]
+        public string? Path { get; set; }
+
+        /// <summary>
+        /// 排序
+        /// </summary>
+        public int Sort { get; set; }
+
+        /// <summary>
+        /// 备注描述
         /// </summary>
         [StringLength(500)]
         public string? Remark { get; set; }
 
         /// <summary>
-        /// 租户状态 0禁用 1启用
+        /// 状态 0禁用 1启用
         /// </summary>
         public EmStatus Status { get; set; }
 
@@ -52,7 +57,7 @@ namespace Viv.Entity.Database.Apex
         public DateTime? CreatedAt { get; set; }
 
         /// <summary>
-        /// 创建人账号ID
+        /// 创建人ID
         /// </summary>
         public long? CreatedBy { get; set; }
 
@@ -62,12 +67,12 @@ namespace Viv.Entity.Database.Apex
         public DateTime? UpdatedAt { get; set; }
 
         /// <summary>
-        /// 更新人账号ID
+        /// 更新人ID
         /// </summary>
         public long? UpdatedBy { get; set; }
 
         /// <summary>
-        /// 是否软删除
+        /// 是否删除
         /// </summary>
         public bool IsDeleted { get; set; }
 

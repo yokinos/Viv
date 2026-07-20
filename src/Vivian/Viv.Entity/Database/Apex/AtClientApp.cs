@@ -1,7 +1,5 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Text;
 using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
@@ -17,6 +15,12 @@ namespace Viv.Entity.Database.Apex
     public class AtClientApp : EntityBase, ISoftDelete
     {
         /// <summary>
+        /// 对外唯一鉴权AppId
+        /// </summary>
+        [StringLength(64)]
+        public string? AppId { get; set; }
+
+        /// <summary>
         /// 客户端应用程序名称
         /// </summary>
         [StringLength(100)]
@@ -25,17 +29,18 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 客户端平台类型
         /// </summary>
-        public EmAppPlatform? Platform { get; set; }
+        public EmAppPlatform Platform { get; set; }
 
         /// <summary>
         /// 密钥
         /// </summary>
+        [StringLength(512)]
         public string? AppSecret { get; set; }
 
         /// <summary>
         /// 应用来源
         /// </summary>
-        public EmAppSouce? Source { get; set; }
+        public EmAppSouce Source { get; set; }
 
         /// <summary>
         /// Android 应用包名

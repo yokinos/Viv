@@ -1,56 +1,42 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations;
-using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
     /// <summary>
-    /// 角色表
+    /// 组织应用关联表
+    /// 配置该组织整体可使用的客户端应用，包含组织专属定制App
     /// </summary>
-    public class AtRole : EntityBase, ISoftDelete
+    public class AtOrgAppRelation : EntityBase, ISoftDelete
     {
         /// <summary>
-        /// 角色名称
+        /// 组织Id（关联AtOrg.Id）
         /// </summary>
-        [StringLength(100)]
-        public string? Name { get; set; }
+        public long OrgId { get; set; }
 
         /// <summary>
-        /// 角色唯一编码
+        /// 客户端应用Id（关联AtClientApp.Id）
         /// </summary>
-        [StringLength(64)]
-        public string? RoleCode { get; set; }
-
-        /// <summary>
-        /// 角色备注
-        /// </summary>
-        [StringLength(500)]
-        public string? Remark { get; set; }
-
-        /// <summary>
-        /// 状态 0禁用 1启用
-        /// </summary>
-        public EmStatus Status { get; set; }
+        public long ClientAppId { get; set; }
 
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime? CreatedAt { get; set; }
+        public DateTime CreatedAt { get; set; }
 
         /// <summary>
-        /// 创建人用户ID
+        /// 创建人
         /// </summary>
         public long? CreatedBy { get; set; }
 
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime? UpdatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
 
         /// <summary>
-        /// 更新人用户ID
+        /// 更新人
         /// </summary>
         public long? UpdatedBy { get; set; }
 
