@@ -32,7 +32,7 @@ namespace Viv.Apex.Core.Repository
             var userId = keys[0].As<long>();
             var user = await _dbContext.SingleOrDefaultAsync<AtUser>(x => x.Id == userId && x.IsDeleted == false);
             if (user == null) return null;
-            return new EntityBucket<AtUser>() { Entity = user };
+            return new EntityBucket<AtUser>(user);
         }
     }
 }
