@@ -5,6 +5,13 @@ namespace Viv.Elysia.CacheBucket
 {
     public class EntityBucket<T> : ICacheBucket
     {
+        public EntityBucket() { }
+
+        public EntityBucket(T entity)
+        {
+            Entity = entity;
+        }
+
         public T? Entity { get; set; }
 
         public TimeSpan CacheTime => CacheTimeProvider.GetRandomDays();

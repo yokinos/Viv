@@ -31,6 +31,8 @@ namespace Viv.Momo.Base
         private static readonly TimeSpan NullValueCacheTime = TimeSpan.FromMinutes(2);
         private static readonly TimeSpan LockExpireTime = TimeSpan.FromSeconds(5);
 
+        private static readonly T NullPlaceholder = new();
+
         protected DataAccessCacheBase(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, ILoggerContract logger)
         {
             _redisService = redisService;
@@ -90,7 +92,7 @@ namespace Viv.Momo.Base
                     else
                     {
                         // 缓存空对象，防止穿透
-                        await _redisService.AddAsync(cacheKey, new T(), NullValueCacheTime).ConfigureAwait(false);
+                        await _redisService.AddAsync(cacheKey, NullPlaceholder, NullValueCacheTime).ConfigureAwait(false);
                     }
 
                     return dbValue;
