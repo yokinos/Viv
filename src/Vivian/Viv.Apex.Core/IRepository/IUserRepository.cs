@@ -7,6 +7,6 @@ namespace Viv.Apex.Core.IRepository
 {
     public interface IUserRepository
     {
-        Task<AtUser> GetAsync(long userId);
+        Task<AtUser?> GetAsync(long userId);
     }
 }
