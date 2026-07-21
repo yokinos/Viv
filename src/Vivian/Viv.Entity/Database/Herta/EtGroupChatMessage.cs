@@ -21,9 +21,14 @@ namespace Viv.Entity.Database.Herta
         public long GroupChatId { get; set; }
 
         /// <summary>
+        /// 会话Id
+        /// </summary>
+        public long SessionId { get; set; }
+
+        /// <summary>
         /// 发送人用户ID
         /// </summary>
-        public long SenderUserId { get; set; }
+        public long UserId { get; set; }
 
         /// <summary>
         /// 消息类型

@@ -16,14 +16,19 @@ namespace Viv.Entity.Database.Herta
         public long TenantId { get; set; }
 
         /// <summary>
+        /// 会话Id
+        /// </summary>
+        public long SessionId { get; set; }
+
+        /// <summary>
         /// 发送人聊天账号ID（关联EtChatUser.Id）
         /// </summary>
-        public long SenderChatUserId { get; set; }
+        public long UserId { get; set; }
 
         /// <summary>
         /// 接收人聊天账号ID（关联EtChatUser.Id）
         /// </summary>
-        public long ReceiverChatUserId { get; set; }
+        public long ReceiverUserId { get; set; }
 
         /// <summary>
         /// 回复引用的消息Id
