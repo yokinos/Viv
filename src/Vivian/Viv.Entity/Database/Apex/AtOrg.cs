@@ -29,6 +29,18 @@ namespace Viv.Entity.Database.Apex
         public string? OrgCode { get; set; }
 
         /// <summary>
+        /// 组织层级深度，平台=0，一级代理=1，二级代理=2
+        /// </summary>
+        public int Level { get; set; }
+
+        /// <summary>
+        /// 全路径Id，逗号分隔，用于快速递归查询上级链路
+        /// 例：0,10,25 代表 平台(0)→一级代理(10)→当前二级代理(25)
+        /// </summary>
+        [StringLength(1000)]
+        public string? OrgPath { get; set; }
+
+        /// <summary>
         /// 组织Logo地址
         /// </summary>
         [StringLength(800)]

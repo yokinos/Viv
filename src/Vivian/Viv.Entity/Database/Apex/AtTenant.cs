@@ -8,12 +8,11 @@ namespace Viv.Entity.Database.Apex
 {
     /// <summary>
     /// 租户表
-    /// 一对多关联 AtOrg 组织表，一个组织下可创建多个租户
     /// </summary>
     public class AtTenant : EntityBase, ISoftDelete
     {
         /// <summary>
-        /// 所属组织Id（关联AtOrg.Id）
+        /// 所属组织Id，关联AtOrg.Id
         /// </summary>
         public long OrgId { get; set; }
 
@@ -27,24 +26,28 @@ namespace Viv.Entity.Database.Apex
         /// 租户唯一编码
         /// </summary>
         [StringLength(64)]
-        public string? TenantCode { get; set; }
+        public string? Code { get; set; }
 
         /// <summary>
-        /// 租户独立访问域名
+        /// 租户购买的系统售卖版本Id（关联AtSystemVersion.Id）
         /// </summary>
-        [StringLength(200)]
-        public string? Domain { get; set; }
+        public long SystemVersionId { get; set; }
 
         /// <summary>
-        /// 备注说明
+        /// 到期时间，null代表永久有效
+        /// </summary>
+        public DateTime? ExpireTime { get; set; }
+
+        /// <summary>
+        /// 租户状态
+        /// </summary>
+        public EmStatus Status { get; set; }
+
+        /// <summary>
+        /// 备注
         /// </summary>
         [StringLength(500)]
         public string? Remark { get; set; }
-
-        /// <summary>
-        /// 租户状态 0禁用 1启用
-        /// </summary>
-        public EmStatus Status { get; set; }
 
         /// <summary>
         /// 创建时间
@@ -52,7 +55,7 @@ namespace Viv.Entity.Database.Apex
         public DateTime? CreatedAt { get; set; }
 
         /// <summary>
-        /// 创建人账号ID
+        /// 创建人ID
         /// </summary>
         public long? CreatedBy { get; set; }
 
@@ -62,7 +65,7 @@ namespace Viv.Entity.Database.Apex
         public DateTime? UpdatedAt { get; set; }
 
         /// <summary>
-        /// 更新人账号ID
+        /// 更新人ID
         /// </summary>
         public long? UpdatedBy { get; set; }
 

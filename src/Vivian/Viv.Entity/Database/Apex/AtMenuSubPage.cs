@@ -18,6 +18,11 @@ namespace Viv.Entity.Database.Apex
         public long MenuId { get; set; }
 
         /// <summary>
+        /// 位索引，菜单类型独立自增
+        /// </summary>
+        public int BitIndex { get; set; }
+
+        /// <summary>
         /// 子页面名称
         /// </summary>
         [StringLength(100)]

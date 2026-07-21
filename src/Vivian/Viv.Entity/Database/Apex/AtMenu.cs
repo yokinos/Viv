@@ -18,6 +18,11 @@ namespace Viv.Entity.Database.Apex
         public long ClientAppId { get; set; }
 
         /// <summary>
+        /// 位索引，菜单类型独立自增
+        /// </summary>
+        public int BitIndex { get; set; }
+
+        /// <summary>
         /// 父菜单Id，顶级菜单为0
         /// </summary>
         public long ParentId { get; set; }
