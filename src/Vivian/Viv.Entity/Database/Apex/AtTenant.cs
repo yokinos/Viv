@@ -17,6 +17,11 @@ namespace Viv.Entity.Database.Apex
         public long OrgId { get; set; }
 
         /// <summary>
+        /// 所属公司Id，关联AtCompany.Id
+        /// </summary>
+        public long? CompanyId { get; set; }
+
+        /// <summary>
         /// 租户名称
         /// </summary>
         [StringLength(100)]

@@ -7,7 +7,8 @@ using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
-    /// <summary>系统全局配置表
+    /// <summary>
+    /// 系统全局配置表
     /// 支持全局/组织/租户范围配置，关联配置分组Id
     /// </summary>
     public class AtSystemSetting : EntityBase, ISoftDelete

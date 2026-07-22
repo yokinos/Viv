@@ -13,6 +13,11 @@ namespace Viv.Entity.Database.Apex
     public class AtSystemVersion : EntityBase, ISoftDelete
     {
         /// <summary>
+        /// 所属组织Id，关联AtOrg.Id
+        /// </summary>
+        public long OrgId { get; set; }
+
+        /// <summary>
         /// 版本套餐名称
         /// </summary>
         [StringLength(100)]
