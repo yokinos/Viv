@@ -20,18 +20,32 @@ namespace Viv.Delusion.Mapper
     /// </remarks>
     public static class ObjectMapper
     {
-        /// <summary>Unix时间纪元（1970-01-01 00:00:00 UTC）</summary>
+        /// <summary>
+        /// Unix时间纪元（1970-01-01 00:00:00 UTC）
+        /// </summary>
         private static readonly DateTimeOffset _unixEpoch = new(1970, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        /// <summary>Unix时间纪元（DateTime UTC版本）</summary>
+
+        /// <summary>
+        /// Unix时间纪元（DateTime UTC版本）
+        /// </summary>
         private static readonly DateTime _unixEpochDateTimeUtc = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        /// <summary>Unix时间戳秒/毫秒判断阈值（1万亿：超过则判定为毫秒级）</summary>
+
+        /// <summary>
+        /// Unix时间戳秒/毫秒判断阈值（1万亿：超过则判定为毫秒级）
+        /// </summary>
         private const long MillisecondsThreshold = 1_000_000_000_000L;
-        /// <summary>布尔值识别关键字（忽略大小写）</summary>
+
+        /// <summary>
+        /// 布尔值识别关键字（忽略大小写）
+        /// </summary>
         private static readonly HashSet<string> _trueKeywords = new(StringComparer.OrdinalIgnoreCase)
         {
             "是", "对", "正确", "YES", "OK", "1", "成功", "Y"
         };
-        /// <summary>字符串转基础类型的解析器映射表</summary>
+
+        /// <summary>
+        /// 字符串转基础类型的解析
+        /// 器映射表</summary>
         private static readonly Dictionary<Type, Func<string, CultureInfo, object?, object?>> stringParsers;
 
         static ObjectMapper()

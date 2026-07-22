@@ -15,7 +15,7 @@ namespace Viv.Delusion.Snowflake
 
         private long _lastTimestamp = -1L;     // 上一次生成ID的时间戳
         private long _sequence = 0L;           // 当前序列号
-        private readonly object _lockObj = new(); // 线程安全锁
+        private readonly Lock _lockObj = new(); // 线程安全锁
 
         public LeafSnowflakeIdGenerator([AllowNull]SnowflakeOptions options)
         {
