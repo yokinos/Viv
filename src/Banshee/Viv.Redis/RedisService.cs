@@ -6,9 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
-using Viv.Redis.DbAllocator;
 
 #nullable disable
 namespace Viv.Redis
