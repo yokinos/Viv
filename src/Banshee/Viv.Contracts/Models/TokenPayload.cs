@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Authentication
+namespace Viv.Contracts.Models
 {
     /// <summary>
     /// 令牌载荷模型（统一JWT/PASETO的载荷数据）

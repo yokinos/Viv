@@ -4,10 +4,13 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Viv.Contracts.Exceptions;
+using Viv.Contracts.Interface;
+using Viv.Contracts.Models;
+using Viv.Contracts.Options;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
 
-namespace Viv.Authentication
+namespace Viv.Sandrone.Impl
 {
     /// <summary>
     /// JWT令牌服务实现（基于微软官方包）

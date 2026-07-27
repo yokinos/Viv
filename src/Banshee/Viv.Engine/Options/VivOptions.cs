@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Text;
 using Viv.Aoi;
-using Viv.Authentication;
 using Viv.Clockwork.Options;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Options;

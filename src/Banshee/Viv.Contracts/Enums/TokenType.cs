@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Authentication.Enums
+namespace Viv.Contracts.Enums
 {
     /// <summary>
     /// 令牌类型枚举（支持JWT/PASETO）

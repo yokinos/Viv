@@ -1,8 +1,8 @@
 using Spectre.Console.Cli;
 using Viv.Aoi;
-using Viv.Authentication.Enums;
 using Viv.Cli;
 using Viv.Contracts.Enums;
+using Viv.Contracts.Options;
 using Viv.Engine.Options;
 using Viv.Log;
 using Viv.Momo.Enums;
@@ -97,7 +97,7 @@ namespace Viv.Test.Commands
                     ]
                 },
 
-                TokenOption = new Authentication.TokenOptions
+                TokenOption = new TokenOptions
                 {
                     TokenType = TokenType.Jwt,
                     SecretKey = "VivsK2pR5xQ8dGjN3mL6tHfBvYwApex",

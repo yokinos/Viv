@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Contracts.Models;
 
-namespace Viv.Authentication
+namespace Viv.Contracts.Interface
 {
     /// <summary>
     /// 令牌服务抽象接口（统一JWT/PASETO操作）
@@ -28,7 +29,7 @@ namespace Viv.Authentication
         /// </summary>
         /// <param name="token">令牌字符串</param>
         /// <returns>解析后的载荷模型</returns>
-        /// <exception cref="Contracts.Exceptions.InvalidTokenException">令牌无效时抛出</exception>
+        /// <exception cref="Exceptions.InvalidTokenException">令牌无效时抛出</exception>
         TokenPayload ParseToken(string token);
     }
 }

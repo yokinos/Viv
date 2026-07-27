@@ -2,7 +2,6 @@
   <Folder Name="/src/" />
   <Folder Name="/src/Banshee/">
     <Project Path="src/Banshee/Viv.Aoi/Viv.Aoi.csproj" Id="67f8aa78-ac0b-458f-85dc-4011a9aaaf30" />
-    <Project Path="src/Banshee/Viv.Authentication/Viv.Authentication.csproj" Id="4f3a38c0-fa59-43f9-8b2f-f643dd4b61f7" />
     <Project Path="src/Banshee/Viv.Cli/Viv.Cli.csproj" />
     <Project Path="src/Banshee/Viv.Clockwork/Viv.Clockwork.csproj" Id="4c480410-df3f-44e5-b633-306470809d50" />
     <Project Path="src/Banshee/Viv.Contracts/Viv.Contracts.csproj" Id="144cfe27-7b72-44fc-84b5-75f5c445a624" />

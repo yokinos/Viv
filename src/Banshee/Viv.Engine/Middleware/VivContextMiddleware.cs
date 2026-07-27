@@ -2,7 +2,6 @@
 using System;
 using System.Text;
 using System.Threading.Tasks;
-using Viv.Authentication;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Redis;

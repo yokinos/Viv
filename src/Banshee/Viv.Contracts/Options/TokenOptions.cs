@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Authentication.Enums;
+using Viv.Contracts.Enums;
 
-namespace Viv.Authentication
+namespace Viv.Contracts.Options
 {
     public class TokenOptions
     {

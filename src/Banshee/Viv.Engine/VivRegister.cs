@@ -2,7 +2,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
-using Viv.Authentication;
 using Viv.Clockwork;
 using Viv.Clockwork.Enums;
 using Viv.Contracts.Enums;
