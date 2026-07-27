@@ -6,14 +6,14 @@ using TickerQ.DependencyInjection;
 using TickerQ.EntityFrameworkCore.DbContextFactory;
 using TickerQ.EntityFrameworkCore.DependencyInjection;
 using TickerQ.Utilities.Interfaces;
+using Viv.Clockwork.Options;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
 using Viv.Momo.Enums;
-using Viv.Tick.Options;
 
-namespace Viv.Tick
+namespace Viv.Clockwork
 {
-    public static class TickExtensions
+    public static class ClockworkExtensions
     {
         public static IServiceCollection AddVivTickerQ(this IServiceCollection services, TickOptions options)
         {

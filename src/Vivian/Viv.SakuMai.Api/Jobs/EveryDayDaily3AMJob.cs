@@ -3,7 +3,7 @@ using TickerQ.Utilities.Interfaces;
 using Viv.Delusion;
 using Viv.Log;
 using Viv.Nana;
-using Viv.Tick;
+using Viv.Clockwork;
 
 namespace Viv.SakuMai.Api.Jobs
 {

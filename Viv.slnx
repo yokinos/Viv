@@ -4,6 +4,7 @@
     <Project Path="src/Banshee/Viv.Aoi/Viv.Aoi.csproj" Id="67f8aa78-ac0b-458f-85dc-4011a9aaaf30" />
     <Project Path="src/Banshee/Viv.Authentication/Viv.Authentication.csproj" Id="4f3a38c0-fa59-43f9-8b2f-f643dd4b61f7" />
     <Project Path="src/Banshee/Viv.Cli/Viv.Cli.csproj" />
+    <Project Path="src/Banshee/Viv.Clockwork/Viv.Clockwork.csproj" Id="4c480410-df3f-44e5-b633-306470809d50" />
     <Project Path="src/Banshee/Viv.Contracts/Viv.Contracts.csproj" Id="144cfe27-7b72-44fc-84b5-75f5c445a624" />
     <Project Path="src/Banshee/Viv.Delusion/Viv.Delusion.csproj" Id="84932db9-d330-40dc-bd2c-e3f02aee6070" />
     <Project Path="src/Banshee/Viv.Echo/Viv.Echo.csproj" />
@@ -14,7 +15,6 @@
     <Project Path="src/Banshee/Viv.Nana/Viv.Nana.csproj" Id="e894e65e-43a7-465b-8fb4-53e30e86eba2" />
     <Project Path="src/Banshee/Viv.Redis/Viv.Redis.csproj" Id="681e717d-013f-40c7-9bba-589b9ddf3629" />
     <Project Path="src/Banshee/Viv.Sandrone/Viv.Sandrone.csproj" Id="ba236dd9-a8cd-4150-bc58-16aea65e2704" />
-    <Project Path="src/Banshee/Viv.Tick/Viv.Tick.csproj" Id="a978f93b-3dc9-4a71-96cb-515815b9ae3f" />
   </Folder>
   <Folder Name="/src/Doc/">
     <File Path="docker-compose.yml" />

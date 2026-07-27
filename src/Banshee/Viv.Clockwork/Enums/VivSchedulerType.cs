@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Tick.Enums
+namespace Viv.Clockwork.Enums
 {
     public enum VivSchedulerType
     {

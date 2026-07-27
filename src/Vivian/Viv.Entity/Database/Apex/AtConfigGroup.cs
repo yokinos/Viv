@@ -1,6 +1,5 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
-using Viv.Entity.Base;
 using Viv.Entity.Enums;
 using Viv.Entity.Interface;
 using Viv.Momo.Base;

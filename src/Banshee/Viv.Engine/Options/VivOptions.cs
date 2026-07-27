@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Text;
 using Viv.Aoi;
 using Viv.Authentication;
+using Viv.Clockwork.Options;
+using Viv.Contracts.Enums;
+using Viv.Contracts.Options;
 using Viv.Echo.Options;
+using Viv.Log;
 using Viv.Momo.Options;
 using Viv.Nana.Options;
 using Viv.Redis;
-using Viv.Tick.Options;
-using Viv.Log;
-using Viv.Contracts.Options;
-using Viv.Contracts.Enums;
 
 #nullable disable
 namespace Viv.Engine.Options
@@ -68,5 +68,10 @@ namespace Viv.Engine.Options
         /// 默认的OpenAI配置（用于调用OpenAI API）
         /// </summary>
         public OpenAIOptions OpenAIOption { get; set; }
+
+        /// <summary>
+        /// S3 配置（用于存储和检索文件）
+        /// </summary>
+        public S3Options S3Option { get; set; }
     }
 }

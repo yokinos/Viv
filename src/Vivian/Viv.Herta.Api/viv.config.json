@@ -79,5 +79,16 @@
   "EchoOption": {
     "EnableHttp": true,
     "EnableGrpc": true
+  },
+  "S3Option": {
+    "Endpoint": "https://s3.katoumegumi.net",
+    "UseHttps": true,
+    "Port": 443,
+    "AccessKey": "Y3Dh8CFQKoGRxmwrIbql",
+    "SecretKey": "E56obpSjBXdYZzx8DO0qlgGFkrtaRHv4In3LQich",
+    "Region": "us-east-1",
+    "UploadBucket": "vivbucket",
+    "UploadPresignExpireSeconds": 900,
+    "DownloadPresignExpireSeconds": 900
   }
 }

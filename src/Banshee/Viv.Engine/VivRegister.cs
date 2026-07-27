@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 using Viv.Authentication;
+using Viv.Clockwork;
+using Viv.Clockwork.Enums;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Interface;
 using Viv.Delusion;
@@ -19,8 +21,6 @@ using Viv.Nana.Core;
 using Viv.Nana.Saga;
 using Viv.Redis;
 using Viv.Sandrone.Impl;
-using Viv.Tick;
-using Viv.Tick.Enums;
 
 namespace Viv.Engine
 {
@@ -87,8 +87,7 @@ namespace Viv.Engine
                 services.AddSingleton<IRedisService, RedisService>();
 
                 // 将 IConnectionMultiplexer 注册到 DI，供 OpenTelemetry Redis 仪表板使用
-                services.AddSingleton<IConnectionMultiplexer>(
-                    RedisFactory.GetConnectionAsync().GetAwaiter().GetResult());
+                // services.AddSingleton(RedisFactory.GetConnectionAsync().GetAwaiter().GetResult());
             }
 
             // 内存缓存
@@ -120,7 +119,6 @@ namespace Viv.Engine
 
             // 注册 MassTransit + RabbitMQ（Saga 类型传进去）
             services.AddVivMassTransit(options.NanaOption, enableSaga ? sagaTypes : null);
-
             services.AddScoped<IVivEventPublisher, NanaEventPublisher>();
         }
 
@@ -214,6 +212,13 @@ namespace Viv.Engine
             }
 
             services.AddScoped<IAiClientFactory, AiClientFactory>();
+
+            if (options.S3Option != null)
+            {
+                VivConfigRegistry.Add(options.S3Option);
+            }
+
+            services.AddSingleton<IS3Service, VivS3Service>();
         }
 
         #endregion

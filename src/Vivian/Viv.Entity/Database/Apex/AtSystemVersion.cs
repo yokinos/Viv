@@ -32,7 +32,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 售卖套餐类型
         /// </summary>
-        public EmSystemSaleType SaleType { get; set; }
+        //public EmSystemSaleType SaleType { get; set; }
 
         /// <summary>
         /// 套餐价格（单位：分）

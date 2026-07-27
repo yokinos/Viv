@@ -1,7 +1,7 @@
-﻿using Viv.Delusion.Magic;
-using Viv.Tick.Enums;
+﻿using Viv.Clockwork.Enums;
+using Viv.Delusion.Magic;
 
-namespace Viv.Tick.Options
+namespace Viv.Clockwork.Options
 {
     public class TickOptions
     {

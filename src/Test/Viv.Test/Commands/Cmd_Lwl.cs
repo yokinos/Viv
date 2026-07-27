@@ -110,11 +110,11 @@ namespace Viv.Test.Commands
 
                 TickOption = new()
                 {
-                    SchedulerType = Tick.Enums.VivSchedulerType.TickerQ,
-                    TickerQ = new Tick.Options.TickerQOptions
+                    SchedulerType = Clockwork.Enums.VivSchedulerType.TickerQ,
+                    TickerQ = new Clockwork.Options.TickerQOptions
                     {
                         ConnectionString = "server=43.228.79.205;user id=sa;password=viv_sqlserver_77;database=viv_tickerq_core;min pool size=4;max pool size=512;TrustServerCertificate=true;",
-                        DashboardOptions = new Tick.Options.TickerQDashboradOptions(),
+                        DashboardOptions = new Clockwork.Options.TickerQDashboradOptions(),
                         DatabaseSource = DatabaseSourceType.SqlServer,
                         EnableDashboard = true,
                     }

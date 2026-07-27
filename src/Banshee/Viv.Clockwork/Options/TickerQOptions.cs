@@ -1,6 +1,6 @@
 ﻿using Viv.Momo.Enums;
 
-namespace Viv.Tick.Options
+namespace Viv.Clockwork.Options
 {
     public class TickerQOptions
     {
