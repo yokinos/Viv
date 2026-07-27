@@ -10,17 +10,17 @@ namespace Viv.Contracts.Models
     public class TokenPayload
     {
         /// <summary>
-        /// 隶属Viv平台的哪个App
+        /// Viv下的客户端AppId
         /// </summary>
         public long AppId { get; set; }
 
         /// <summary>
-        /// 多租户Id
+        /// 多租户Id(不一定会有)
         /// </summary>
         public long TenantId { get; set; }
 
         /// <summary>
-        /// 用户ID
+        /// 用户Id 
         /// </summary>
         public long UserId { get; set; }
 
