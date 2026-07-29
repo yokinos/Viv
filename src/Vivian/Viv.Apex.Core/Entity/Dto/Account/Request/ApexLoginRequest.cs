@@ -12,6 +12,7 @@ namespace Viv.Apex.Core.Entity.Dto.Account.Request
         /// 账户名
         /// </summary>
         [Required]
+        [StringLength(20)]
         [Display(Name = "账户名")]
         public string? UserName { get; set; }
 
@@ -19,6 +20,7 @@ namespace Viv.Apex.Core.Entity.Dto.Account.Request
         /// [必传]密码
         /// </summary>
         [Required]
+        [StringLength(20)]
         [Display(Name = "密码")]
         public string? Password { get; set; }
     }

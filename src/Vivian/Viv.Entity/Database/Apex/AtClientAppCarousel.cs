@@ -31,6 +31,11 @@ namespace Viv.Entity.Database.Apex
         public string? ImageUrl { get; set; }
 
         /// <summary>
+        /// 轮播位置
+        /// </summary>
+        public byte? Position { get; set; }
+
+        /// <summary>
         /// 跳转类型
         /// </summary>
         public EmCarouselJumpType JumpType { get; set; }

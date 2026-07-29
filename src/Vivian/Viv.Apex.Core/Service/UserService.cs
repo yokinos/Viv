@@ -14,16 +14,17 @@ namespace Viv.Apex.Core.Service
     public class UserService : IUserService
     {
         private readonly IUserRepository _userRepository;
-        private readonly IAiClientFactory _aiClientFactory;
-
-        public UserService(IUserRepository userRepository, IAiClientFactory aiClientFactory)
+        public UserService(IUserRepository userRepository)
         {
             _userRepository = userRepository;
-            _aiClientFactory = aiClientFactory;
         }
 
         public async Task<VivApiResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
         {
+
+
+
+
             return VivApiResult<ApexLoginOutput>.Success("Login successful");
         }
     }

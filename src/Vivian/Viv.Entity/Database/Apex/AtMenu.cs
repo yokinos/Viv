@@ -7,7 +7,7 @@ using Viv.Momo.Interface;
 namespace Viv.Entity.Database.Apex
 {
     /// <summary>
-    /// 菜单表
+    /// 菜单主表（对应前端路由目录/一级页面）
     /// 按ClientAppId隔离不同客户端应用菜单，全局顶层表无租户隔离
     /// </summary>
     public class AtMenu : EntityBase, ISoftDelete
@@ -28,19 +28,37 @@ namespace Viv.Entity.Database.Apex
         public long ParentId { get; set; }
 
         /// <summary>
-        /// 菜单名称
+        /// 前端路由name（唯一标识，对应路由name字段，例：list）
+        /// </summary>
+        [StringLength(100)]
+        public string? RouteName { get; set; }
+
+        /// <summary>
+        /// 菜单名称（meta.title，展示侧边栏文字）
         /// </summary>
         [StringLength(100)]
         public string? Name { get; set; }
 
         /// <summary>
-        /// 前端路由路径 / 外链地址
+        /// 前端路由路径 / 外链地址（对应path）
         /// </summary>
         [StringLength(500)]
         public string? Path { get; set; }
 
         /// <summary>
-        /// 菜单图标
+        /// 前端组件标识（对应component，例：LAYOUT、/list/base/index）
+        /// </summary>
+        [StringLength(500)]
+        public string? Component { get; set; }
+
+        /// <summary>
+        /// 重定向路由地址（对应redirect）
+        /// </summary>
+        [StringLength(500)]
+        public string? Redirect { get; set; }
+
+        /// <summary>
+        /// 菜单图标（meta.icon）
         /// </summary>
         [StringLength(500)]
         public string? Icon { get; set; }
@@ -51,7 +69,7 @@ namespace Viv.Entity.Database.Apex
         public int Sort { get; set; }
 
         /// <summary>
-        /// 菜单类型：目录/页面/按钮
+        /// 菜单类型：0目录/1页面/2按钮
         /// </summary>
         public byte Type { get; set; }
 
@@ -72,7 +90,7 @@ namespace Viv.Entity.Database.Apex
         public bool IsOpenNewTab { get; set; }
 
         /// <summary>
-        /// 路由页面是否持久缓存
+        /// 路由页面是否持久缓存（meta.keepAlive）
         /// </summary>
         public bool IsKeepAlive { get; set; }
 
@@ -82,7 +100,7 @@ namespace Viv.Entity.Database.Apex
         public EmStatus Status { get; set; }
 
         /// <summary>
-        /// 是否侧边栏显示
+        /// 是否侧边栏显示（meta.hidden反向）
         /// </summary>
         public bool IsVisible { get; set; }
 

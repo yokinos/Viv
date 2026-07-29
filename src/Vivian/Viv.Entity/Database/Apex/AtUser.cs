@@ -10,9 +10,24 @@ namespace Viv.Entity.Database.Apex
     public class AtUser : EntityBase, ISoftDelete
     {
         /// <summary>
+        /// 用户类型
+        /// </summary>
+        public EmUserType UserType { get; set; }
+
+        /// <summary>
         /// 所属组织Id，关联AtOrg.Id
         /// </summary>
-        public long OrgId { get; set; }
+        public long? OrgId { get; set; }
+
+        /// <summary>
+        /// 所属机构Id，关联AtTenant.Id
+        /// </summary>
+        public long? TenantId { get; set; }
+
+        /// <summary>
+        /// ChatId
+        /// </summary>
+        public long? ConnectionId { get; set; }
 
         /// <summary>
         /// 用户名称
