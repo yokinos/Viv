@@ -18,5 +18,12 @@ namespace Viv.Delusion
         {
             return new FuncResult<T> { IsSuccess = true, Message = msg, Data = data };
         }
+
+        public static FuncResult<T> Failed(string msg)
+        {
+            return new FuncResult<T> { IsSuccess = false, Message = msg };
+        }
+
+
     }
 }

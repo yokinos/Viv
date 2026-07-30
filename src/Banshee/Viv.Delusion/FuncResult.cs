@@ -29,7 +29,7 @@ namespace Viv.Delusion
             return new FuncResult { IsSuccess = true, Message = msg, Data = data };
         }
 
-        public static FuncResult Fail(string msg)
+        public static FuncResult Failed(string msg)
         {
             return new FuncResult { IsSuccess = false, Message = msg };
         }
