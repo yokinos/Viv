@@ -19,7 +19,7 @@ namespace Viv.Apex.Core.Impl.Login
             throw new NotImplementedException();
         }
 
-        public Task<bool> LogoutAsync(long appId, long userId)
+        public Task<bool> LogoutAsync(ApexLoginoutRequest request)
         {
             throw new NotImplementedException();
         }

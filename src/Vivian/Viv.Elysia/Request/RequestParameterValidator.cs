@@ -1,174 +1,189 @@
 ﻿using System;
+using System.Collections;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Viv.Delusion;
-using Viv.Elysia.Interface;
 using Viv.Delusion.Extension;
-using System.ComponentModel;
+using Viv.Elysia.Interface;
 
 namespace Viv.Elysia.Request
 {
     /// <summary>
-    /// 实体模型校验工具（遇到第一个错误立即返回）
-    /// 自动从 [Display(Name="")] 读取友好字段名
+    /// 实体模型校验工具
     /// </summary>
     public static class RequestParameterValidator
     {
-        /// <summary>
-        /// 校验对象，返回第一条错误信息
-        /// </summary>
-        public static string Validate(object obj)
+        public static string Validate(object obj, HashSet<object> validatingObjects)
         {
             if (obj == null)
-                return "校验对象不能为 null";
-
-            var properties = VivTypeReflectionCache.GetPropertieList(obj.GetType());
-            if (properties.IsNullOrEmpty())
-                return string.Empty;
-
-            foreach (var property in properties)
             {
-                var attributes = property.GetCustomAttributes(true);
-                if (attributes.IsNullOrEmpty())
-                    continue;
+                return "校验对象不能为 null";
+            }
 
-                object? value = property.GetValue(obj);
-                if (value != null && value is IApiRequest request)
+            validatingObjects ??= new HashSet<object>(ReferenceEqualityComparer.Instance);
+
+            var objectType = obj.GetType();
+
+            if (IsSimpleType(objectType))
+            {
+                return string.Empty;
+            }
+
+            // 防止对象之间相互引用导致无限递归
+            if (!objectType.IsValueType)
+            {
+                if (validatingObjects.Contains(obj))
                 {
-                    var msg = request.Validate(true);
-                    if (!string.IsNullOrEmpty(msg))
-                    {
-                        return msg;
-                    }
+                    return string.Empty;
                 }
-                else
+
+                validatingObjects.Add(obj);
+            }
+
+            try
+            {
+                // 先执行类型级别校验
+                var typeValidationError = ValidateTypeAttributes(obj);
+                if (!string.IsNullOrEmpty(typeValidationError))
                 {
-                    if (value != null && IsCustomModelType(property.PropertyType))
+                    return typeValidationError;
+                }
+
+                var properties = VivTypeReflectionCache.GetPropertieList(objectType);
+                if (properties.IsNullOrEmpty())
+                {
+                    return ValidateObjectSelf(obj);
+                }
+
+                foreach (var property in properties)
+                {
+                    if (property == null || property.GetIndexParameters().Length > 0 || property.GetMethod == null)
                     {
-                        string nestedError = Validate(value);
+                        continue;
+                    }
+
+                    object? value;
+
+                    try
+                    {
+                        value = property.GetValue(obj);
+                    }
+                    catch (Exception ex)
+                    {
+                        return $"{GetDisplayName(property)} 读取失败：{ex.Message}";
+                    }
+
+                    var displayName = GetDisplayName(property);
+
+                    // 先递归校验复杂对象和集合对象
+                    if (value != null)
+                    {
+                        var nestedError = ValidateNestedValue(value, validatingObjects);
                         if (!string.IsNullOrEmpty(nestedError))
+                        {
                             return nestedError;
+                        }
+                    }
+
+                    // 再执行当前属性上的 DataAnnotations 校验
+                    var propertyError = ValidateProperty(obj, property, value, displayName);
+
+                    if (!string.IsNullOrEmpty(propertyError))
+                    {
+                        return propertyError;
                     }
                 }
 
-                // 读取友好名称：优先 [Display(Name)]，没有则用属性名
-                var displayName = GetDisplayName(property);
-                foreach (var attr in attributes)
+                // 最后执行 IValidatableObject 校验
+                return ValidateObjectSelf(obj);
+            }
+            finally
+            {
+                if (!objectType.IsValueType)
                 {
-                    // 必填
-                    if (attr is RequiredAttribute required)
+                    validatingObjects.Remove(obj);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 校验嵌套对象、IApiRequest 或集合元素。
+        /// </summary>
+        private static string ValidateNestedValue(object value, HashSet<object> validatingObjects)
+        {
+            if (value == null)
+            {
+                return string.Empty;
+            }
+
+            if (value is IApiRequest request)
+            {
+                return request.Validate(true) ?? string.Empty;
+            }
+
+            if (value is IEnumerable enumerable &&
+                value is not string)
+            {
+                foreach (var item in enumerable)
+                {
+                    if (item == null)
                     {
-                        bool isEmpty = value is null || value == DBNull.Value || string.IsNullOrWhiteSpace(value.ToString());
-                        if (isEmpty)
-                        {
-                            return required.ErrorMessage.Nvl($"{displayName} 不能为空");
-                        }
+                        continue;
                     }
 
-                    // 字符串长度
-                    if (attr is StringLengthAttribute strLen)
+                    var itemError = ValidateNestedValue(item, validatingObjects);
+                    if (!string.IsNullOrEmpty(itemError))
                     {
-                        if (value is string strValue)
-                        {
-                            bool invalid = strValue.Length < strLen.MinimumLength || strValue.Length > strLen.MaximumLength;
-                            if (invalid)
-                            {
-                                return strLen.ErrorMessage.Nvl($"{displayName} 长度必须在 {strLen.MinimumLength} ~ {strLen.MaximumLength} 之间");
-                            }
-                        }
+                        return itemError;
                     }
+                }
 
-                    // 范围
-                    if (attr is RangeAttribute range && value is IComparable comparable)
-                    {
-                        if (!range.IsValid(comparable))
-                        {
-                            return range.ErrorMessage.Nvl($"{displayName} 必须在 {range.Minimum} ~ {range.Maximum} 之间");
-                        }
-                    }
+                return string.Empty;
+            }
 
-                    // 最小长度
-                    if (attr is MinLengthAttribute minLen)
-                    {
-                        if (value is string strVal && strVal.Length < minLen.Length)
-                        {
-                            return minLen.ErrorMessage.Nvl($"{displayName} 长度不能小于 {minLen.Length} 位");
-                        }
-                    }
+            if (!IsCustomModelType(value.GetType()))
+            {
+                return string.Empty;
+            }
 
-                    // 最大长度
-                    if (attr is MaxLengthAttribute maxLen)
-                    {
-                        if (value is string strVal && strVal.Length > maxLen.Length)
-                        {
-                            return maxLen.ErrorMessage.Nvl($"{displayName} 长度不能超过 {maxLen.Length} 位");
-                        }
-                    }
+            return Validate(value, validatingObjects);
+        }
 
-                    // 正则
-                    if (attr is RegularExpressionAttribute regex)
-                    {
-                        if (value is string strVal && !string.IsNullOrEmpty(strVal))
-                        {
-                            if (!System.Text.RegularExpressions.Regex.IsMatch(strVal, regex.Pattern))
-                            {
-                                return regex.ErrorMessage.Nvl($"{displayName} 格式不正确");
-                            }
-                        }
-                    }
+        /// <summary>
+        /// 校验属性上的所有 ValidationAttribute。
+        /// </summary>
+        private static string ValidateProperty(object obj, PropertyInfo property, object value, string displayName)
+        {
+            var attributes = property.GetCustomAttributes(typeof(ValidationAttribute), true).OfType<ValidationAttribute>().ToArray();
+            if (attributes.Length == 0)
+            {
+                return string.Empty;
+            }
 
-                    // 邮箱
-                    if (attr is EmailAddressAttribute email)
-                    {
-                        if (value is string strVal && !string.IsNullOrEmpty(strVal))
-                        {
-                            if (!email.IsValid(strVal))
-                            {
-                                return email.ErrorMessage.Nvl($"{displayName} 格式不正确");
-                            }
-                        }
-                    }
+            var context = new ValidationContext(obj)
+            {
+                MemberName = property.Name,
+                DisplayName = displayName
+            };
 
-                    // 手机
-                    if (attr is PhoneAttribute phone)
-                    {
-                        if (value is string strVal && !string.IsNullOrEmpty(strVal))
-                        {
-                            if (!phone.IsValid(strVal))
-                            {
-                                return phone.ErrorMessage.Nvl($"{displayName} 格式不正确");
-                            }
-                        }
-                    }
+            foreach (var attribute in attributes)
+            {
+                ValidationResult? result;
 
-                    // URL
-                    if (attr is UrlAttribute url)
-                    {
-                        if (value is string strVal && !string.IsNullOrEmpty(strVal))
-                        {
-                            if (!url.IsValid(strVal))
-                            {
-                                return url.ErrorMessage.Nvl($"{displayName} 格式不正确");
-                            }
-                        }
-                    }
+                try
+                {
+                    result = attribute.GetValidationResult(value, context);
+                }
+                catch (Exception ex)
+                {
+                    return $"{displayName} 校验失败：{ex.Message}";
+                }
 
-                    // 比较
-                    if (attr is CompareAttribute compare)
-                    {
-                        var otherProp = obj.GetType().GetProperty(compare.OtherProperty);
-                        if (otherProp != null)
-                        {
-                            string otherName = GetDisplayName(otherProp);
-                            var otherValue = otherProp.GetValue(obj)?.ToString() ?? "";
-                            var curValue = value?.ToString() ?? "";
-
-                            if (curValue != otherValue)
-                            {
-                                return compare.ErrorMessage.Nvl($"{displayName} 与 {otherName} 不一致");
-                            }
-                        }
-                    }
+                if (result != ValidationResult.Success)
+                {
+                    return GetValidationErrorMessage(result, attribute, displayName);
                 }
             }
 
@@ -176,23 +191,182 @@ namespace Viv.Elysia.Request
         }
 
         /// <summary>
-        /// 获取属性的友好显示名称（从 [Display(Name)] 读取）
+        /// 校验类型上的 ValidationAttribute。
         /// </summary>
-        private static string GetDisplayName(PropertyInfo prop)
+        private static string ValidateTypeAttributes(object obj)
         {
-            var display = prop.GetCustomAttribute<DisplayNameAttribute>();
-            return string.IsNullOrEmpty(display?.DisplayName) ? prop.Name : display.DisplayName;
+            var objectType = obj.GetType();
+            var attributes = objectType.GetCustomAttributes(typeof(ValidationAttribute), true).OfType<ValidationAttribute>().ToArray();
+
+            if (attributes.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            var context = new ValidationContext(obj)
+            {
+                DisplayName = objectType.Name
+            };
+
+            foreach (var attribute in attributes)
+            {
+                var result = attribute.GetValidationResult(obj, context);
+
+                if (result != ValidationResult.Success)
+                {
+                    return GetValidationErrorMessage(result, attribute, objectType.Name);
+                }
+            }
+
+            return string.Empty;
         }
 
+        /// <summary>
+        /// 校验 IValidatableObject。
+        /// </summary>
+        private static string ValidateObjectSelf(object obj)
+        {
+            if (obj is not IValidatableObject validatableObject)
+            {
+                return string.Empty;
+            }
+
+            var context = new ValidationContext(obj);
+            var results = validatableObject.Validate(context)?.ToList();
+
+            if (results == null || results.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var firstResult = results.FirstOrDefault(x => x != ValidationResult.Success);
+            return firstResult?.ErrorMessage ?? $"{obj.GetType().Name} 校验失败";
+        }
+
+        /// <summary>
+        /// 获取最终错误信息。
+        /// </summary>
+        private static string GetValidationErrorMessage(ValidationResult result, ValidationAttribute attribute, string displayName)
+        {
+            if (!string.IsNullOrWhiteSpace(result?.ErrorMessage))
+            {
+                return result.ErrorMessage;
+            }
+
+            if (!string.IsNullOrWhiteSpace(attribute.ErrorMessage))
+            {
+                return attribute.ErrorMessage;
+            }
+
+            return $"{displayName} 校验失败";
+        }
+
+        /// <summary>
+        /// 获取属性友好名称。
+        ///
+        /// 优先级：
+        /// 1. DisplayNameAttribute；
+        /// 2. DisplayAttribute；
+        /// 3. 属性名。
+        /// </summary>
+        private static string GetDisplayName(PropertyInfo property)
+        {
+            var displayNameAttribute = property.GetCustomAttribute<DisplayNameAttribute>();
+            if (!string.IsNullOrWhiteSpace(displayNameAttribute?.DisplayName))
+            {
+                return displayNameAttribute.DisplayName;
+            }
+
+            var displayAttribute = property.GetCustomAttribute<DisplayAttribute>();
+            var displayName = displayAttribute?.GetName();
+
+            if (!string.IsNullOrWhiteSpace(displayName))
+            {
+                return displayName;
+            }
+
+            return property.Name;
+        }
+
+        /// <summary>
+        /// 判断是否为简单类型。
+        /// 简单类型不进行递归校验。
+        /// </summary>
+        private static bool IsSimpleType(Type type)
+        {
+            if (type == null)
+            {
+                return true;
+            }
+
+            var nullableType = Nullable.GetUnderlyingType(type);
+
+            if (nullableType != null)
+            {
+                type = nullableType;
+            }
+
+            return type.IsPrimitive
+                || type.IsEnum
+                || type.IsValueType
+                || type == typeof(string)
+                || type == typeof(decimal)
+                || type == typeof(Guid)
+                || type == typeof(DateTime)
+                || type == typeof(DateTimeOffset)
+                || type == typeof(TimeSpan)
+                || type == typeof(byte[]);
+        }
+
+        /// <summary>
+        /// 判断是否为自定义模型类型。
+        /// </summary>
         private static bool IsCustomModelType(Type type)
         {
-            if (type == null) return false;
-            if (type.IsPrimitive) return false;
-            if (type == typeof(string)) return false;
-            if (type.IsValueType) return false;
-            if (type.IsArray) return false;
-            if (typeof(System.Collections.IEnumerable).IsAssignableFrom(type)) return false;
+            if (type == null)
+            {
+                return false;
+            }
+
+            if (IsSimpleType(type))
+            {
+                return false;
+            }
+
+            if (type.IsArray)
+            {
+                return false;
+            }
+
+            if (typeof(IEnumerable).IsAssignableFrom(type))
+            {
+                return false;
+            }
+
             return true;
+        }
+
+        /// <summary>
+        /// 使用对象引用判断相等，避免对象重写 Equals 后影响循环引用判断。
+        /// </summary>
+        private sealed class ReferenceEqualityComparer : IEqualityComparer<object>
+        {
+            public static readonly ReferenceEqualityComparer Instance = new ReferenceEqualityComparer();
+
+            private ReferenceEqualityComparer()
+            {
+
+            }
+
+            public new bool Equals(object x, object y)
+            {
+                return ReferenceEquals(x, y);
+            }
+
+            public int GetHashCode(object obj)
+            {
+                return RuntimeHelpers.GetHashCode(obj);
+            }
         }
     }
 }

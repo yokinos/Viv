@@ -24,10 +24,8 @@ namespace Viv.Apex.Core.Interface
 
         /// <summary>
         /// 退出登录
-        /// </summary>
-        /// <param name="appId"></param>
-        /// <param name="userId"></param>
+        /// <param name="request"></param>
         /// <returns></returns>
-        Task<bool> LogoutAsync(long appId, long userId);
+        Task<bool> LogoutAsync(ApexLoginoutRequest request);
     }
 }

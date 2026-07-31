@@ -89,10 +89,9 @@ namespace Viv.Apex.Core.Impl.Login
             return FuncResult<ApexLoginOutput>.Success("success", output);
         }
 
-        public async Task<bool> LogoutAsync(long appId, long userId)
+        public async Task<bool> LogoutAsync(ApexLoginoutRequest request)
         {
-            string redisSessionKey = GetSessionKey(appId, userId);
-            return await _redisService.RemoveAsync(redisSessionKey);
+            return false;
         }
 
         /// <summary>
