@@ -31,5 +31,10 @@ namespace Viv.Apex.Core.Entity.Dto.Account.Request
         [Required]
         [Display(Name = "用户类型")]
         public EmUserType? UserType { get; set; }
+
+        /// <summary>
+        /// 一些登录情况下需要设置对应的登陆码
+        /// </summary>
+        public string? SubjectCode { get; set; }
     }
 }

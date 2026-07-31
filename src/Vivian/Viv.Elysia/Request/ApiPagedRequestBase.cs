@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
 using Viv.Elysia.Interface;
@@ -11,14 +12,14 @@ namespace Viv.Elysia.Request
         /// <summary>
         /// 当前页码
         /// </summary>
-        [Display(Name = "当前页码")]
+        [DisplayName("当前页码")]
         [Range(1, double.MaxValue)]
         public int PageIndex { get; set; }
 
         /// <summary>
         /// 每页条数
         /// </summary>
-        [Display(Name = "每页条数")]
+        [DisplayName("每页条数")]
         [Range(1, 10000)]
         public int PageSize { get; set; }
 

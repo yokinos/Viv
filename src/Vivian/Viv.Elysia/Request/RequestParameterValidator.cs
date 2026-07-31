@@ -4,6 +4,7 @@ using System.Reflection;
 using Viv.Delusion;
 using Viv.Elysia.Interface;
 using Viv.Delusion.Extension;
+using System.ComponentModel;
 
 namespace Viv.Elysia.Request
 {
@@ -179,8 +180,8 @@ namespace Viv.Elysia.Request
         /// </summary>
         private static string GetDisplayName(PropertyInfo prop)
         {
-            var display = prop.GetCustomAttribute<DisplayAttribute>();
-            return string.IsNullOrEmpty(display?.Name) ? prop.Name : display.Name;
+            var display = prop.GetCustomAttribute<DisplayNameAttribute>();
+            return string.IsNullOrEmpty(display?.DisplayName) ? prop.Name : display.DisplayName;
         }
 
         private static bool IsCustomModelType(Type type)
