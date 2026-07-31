@@ -22,8 +22,6 @@ namespace Viv.Elysia.Request
                 return "校验对象不能为 null";
             }
 
-            validatingObjects ??= new HashSet<object>(ReferenceEqualityComparer.Instance);
-
             var objectType = obj.GetType();
 
             if (IsSimpleType(objectType))
