@@ -31,7 +31,7 @@ namespace Viv.Echo.Grpc
         private void AddVivHeaders(Metadata headers)
         {
             AddIfNotExist(headers, "Viv-AppId", _vivContext.AppId.ToString());
-            AddIfNotExist(headers, "Viv-TenantId", _vivContext.TenantId.ToString());
+            AddIfNotExist(headers, "Viv-SubjectId", _vivContext.SubjectId.ToString());
             AddIfNotExist(headers, "Viv-UserId", _vivContext.UserId.ToString());
         }
 

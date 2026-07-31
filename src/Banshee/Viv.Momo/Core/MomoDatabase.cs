@@ -37,7 +37,7 @@ namespace Viv.Momo.Core
         {
             ArgumentNullException.ThrowIfNull(vivContext);
             _vivContext = vivContext;
-            TenantId = _vivContext.TenantId;
+            TenantId = _vivContext.SubjectId;
             _logger = logger;
 
             SetOptions();

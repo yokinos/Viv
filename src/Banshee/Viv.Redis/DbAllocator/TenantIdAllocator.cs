@@ -15,7 +15,7 @@ namespace Viv.Redis.DbAllocator
         public TenantIdAllocator()
         {
             var context = VivLocator.GetService<IVivContext>();
-            _tenantId = context.TenantId;
+            _tenantId = context.SubjectId;
         }
 
         public int AllocateDbIndex(string redisKey, int? maxDbIndex)

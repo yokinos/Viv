@@ -1,53 +1,50 @@
+using Viv.Contracts.Models;
+
 namespace Viv.Contracts.Interface
 {
     /// <summary>
     /// Viv 请求上下文 — 贯穿整个请求生命周期的核心标识。
     ///
     /// 数据来源：
-    /// <see cref="VivContextMiddleware"/> 从 HTTP Header 中读取 Viv_AppId / Viv_TenantId / Viv_UserId，
-    /// 注入到 <see cref="IVivContext"/>（Scoped，底层由 <see cref="System.Threading.AsyncLocal{T}"/> 保证异步安全）。
+    /// VivContextMiddleware 解析Token之后组装 <see cref="VivContextModel"/>，
+    /// 通过 <see cref="IVivContextAccessor"/> 存入当前请求异步上下文。
     ///
     /// 使用场景：
-    /// - 数据库操作：自动按 TenantId 行级隔离
-    /// - 消息发布：NanaEventPublisher 将 AppId/TenantId 写入 NanaEnvelope 信封
-    /// - 日志追踪：跨服务传递请求来源
-    /// - 业务判断：按 AppId / TenantId / UserId 路由逻辑
+    /// - 数据库操作：自动按主体ID实现数据隔离
+    /// - 消息发布：事件信封携带身份信息
+    /// - 业务判断：区分 AppId / SubjectId / UserId
     /// </summary>
     public interface IVivContext
     {
         /// <summary>
-        /// 客户端应用 ID — 标识请求来源（App / 定时任务站点 / 第三方系统）
+        /// 客户端应用Id
         /// </summary>
         long AppId { get; }
 
         /// <summary>
-        /// 租户 ID — 多租户数据隔离核心标识
+        /// 主体Id（TenantId / CompanyId / OrgId）
         /// </summary>
-        long TenantId { get; }
+        long SubjectId { get; }
 
         /// <summary>
-        /// 当前登录用户 ID
+        /// 当前登录用户Id
         /// </summary>
         long UserId { get; }
 
         /// <summary>
-        /// 设置客户端应用 ID
+        /// 设置上下文快照
         /// </summary>
-        void SetAppId(long appId);
+        void SetSnapshot(VivContextModel model);
 
         /// <summary>
-        /// 设置租户 ID
-        /// </summary>
-        void SetTenantId(long tenantId);
-
-        /// <summary>
-        /// 设置登录用户 ID
-        /// </summary>
-        void SetUserId(long userId);
-
-        /// <summary>
-        /// 清除上下文 — 请求结束时由中间件调用，禁止业务代码手动调用
+        /// 清空上下文
+        /// 请求结束中间件调用，业务代码禁止调用
         /// </summary>
         void Clear();
+
+        /// <summary>
+        /// 获取原始快照（谨慎使用，优先使用封装属性）
+        /// </summary>
+        VivContextModel? GetRawSnapshot();
     }
 }

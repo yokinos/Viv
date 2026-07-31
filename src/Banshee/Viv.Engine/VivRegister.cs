@@ -34,6 +34,7 @@ namespace Viv.Engine
         public static void Register(IServiceCollection services, VivOptions options)
         {
             // 注册Viv上下文
+            services.AddSingleton<IVivContextAccessor, VivContextAccessor>();
             services.AddScoped<IVivContext, VivContext>();
 
             // 注册日志

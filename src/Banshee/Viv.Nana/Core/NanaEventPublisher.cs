@@ -30,7 +30,7 @@ namespace Viv.Nana.Core
             var message = new NanaEnvelope<T>
             {
                 AppId = _context.AppId,
-                TenantId = _context.TenantId,
+                TenantId = _context.SubjectId,
                 Content = content
             };
 
@@ -54,7 +54,7 @@ namespace Viv.Nana.Core
             var message = new NanaEnvelope<T>
             {
                 AppId = _context.AppId,
-                TenantId = _context.TenantId,
+                TenantId = _context.SubjectId,
                 Content = content
             };
 
