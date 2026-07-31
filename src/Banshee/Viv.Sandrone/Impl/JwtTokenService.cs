@@ -34,7 +34,7 @@ namespace Viv.Sandrone.Impl
 
         public string GenerateToken(TokenPayload payload)
         {
-            if (payload == null) throw new ArgumentNullException(nameof(payload));
+            ArgumentNullException.ThrowIfNull(payload);
 
             // 构建Claims（JWT载荷）
             var claims = new List<Claim>
@@ -132,6 +132,11 @@ namespace Viv.Sandrone.Impl
             {
                 throw new InvalidTokenException("解析JWT令牌失败！", ex);
             }
+        }
+
+        public TokenOptions GetOptions()
+        {
+            return _options;
         }
     }
 }

@@ -29,7 +29,7 @@ namespace Viv.Engine
             return ApiRsult(ApiResultCode.Success, "successful", data);
         }
 
-        public static VivApiResult<T> Error(string message, T? data = default)
+        public static VivApiResult<T> Failed(string message, T? data = default)
         {
             return ApiRsult(ApiResultCode.Error, message, data);
         }

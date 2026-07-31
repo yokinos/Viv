@@ -25,11 +25,6 @@ namespace Viv.Entity.Database.Apex
         public long? TenantId { get; set; }
 
         /// <summary>
-        /// ChatId
-        /// </summary>
-        public long? ConnectionId { get; set; }
-
-        /// <summary>
         /// 用户名称
         /// </summary>
         public string? Name { get; set; }
@@ -42,7 +37,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 头像
         /// </summary>
-        public string? Avatar { get; set; }
+        public string? AvatarUrl { get; set; }
 
         /// <summary>
         /// 电话
@@ -65,6 +60,21 @@ namespace Viv.Entity.Database.Apex
         public EmGender? Gender { get; set; }
 
         /// <summary>
+        /// 生日
+        /// </summary>
+        public DateTime? BirthDate { get; set; }
+
+        /// <summary>
+        /// 是否允许删除
+        /// </summary>
+        public byte IsAlIsAllowDelete { get; set; }
+
+        /// <summary>
+        /// 状态
+        /// </summary>
+        public EmStatus Status { get; set; }
+
+        /// <summary>
         /// 是否删除
         /// </summary>
         public bool IsDeleted { get; set; }
@@ -73,5 +83,25 @@ namespace Viv.Entity.Database.Apex
         /// 删除时间
         /// </summary>
         public DateTime? DeletedAt { get; set; }
+
+        /// <summary>
+        /// 创建时间
+        /// </summary>
+        public DateTime CreatedAt { get; set; }
+
+        /// <summary>
+        /// 创建人ID
+        /// </summary>
+        public long? CreatedBy { get; set; }
+
+        /// <summary>
+        /// 更新时间
+        /// </summary>
+        public DateTime UpdatedAt { get; set; }
+
+        /// <summary>
+        /// 更新人ID
+        /// </summary>
+        public long? UpdatedBy { get; set; }
     }
 }

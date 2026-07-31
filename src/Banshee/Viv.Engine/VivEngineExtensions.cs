@@ -69,17 +69,46 @@ namespace Viv.Engine
             if (typeList.IsNullOrEmpty())
                 return;
 
-            foreach (var type in typeList)
+            foreach (var implementationType in typeList)
             {
-                var attr = type.GetCustomAttribute<VivDependencyAttribute>(false);
-                var lifetime = attr?.Lifetime ?? DependencyLifetime.Scoped;
-                var asSelf = attr?.AsSelf ?? false;
+                var dependencyAttribute = implementationType.GetCustomAttributes(typeof(VivDependencyAttribute), true).OfType<VivDependencyAttribute>().SingleOrDefault();
 
-                var registration = asSelf ? builder.RegisterType(type).AsSelf() : builder.RegisterType(type).AsImplementedInterfaces();
+                var lifetime = dependencyAttribute?.Lifetime ?? DependencyLifetime.Scoped;
+                var asSelf = dependencyAttribute?.AsSelf ?? false;
+                var registration = builder.RegisterType(implementationType);
+                var tag = dependencyAttribute?.Tag;
+
+                if (asSelf)
+                {
+                    registration = registration.AsSelf();
+                }
+                else
+                {
+                    var interfaces = implementationType.GetInterfaces().Where(x => x != typeof(IDependency)).ToArray();
+                    if (interfaces.IsNullOrEmpty())
+                    {
+                        registration = registration.AsSelf();
+                        continue;
+                    }
+
+                    if (tag.HasValue && tag > -1)
+                    {
+                        foreach (var contract in interfaces)
+                        {
+                            registration = registration.Keyed(tag.Value, contract);
+                        }
+                    }
+                    else
+                    {
+                        registration = registration.AsImplementedInterfaces();
+                    }
+                }
+
                 registration = lifetime switch
                 {
                     DependencyLifetime.Singleton => registration.SingleInstance(),
                     DependencyLifetime.Transient => registration.InstancePerDependency(),
+                    DependencyLifetime.Scoped => registration.InstancePerLifetimeScope(),
                     _ => registration.InstancePerLifetimeScope()
                 };
 

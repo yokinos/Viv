@@ -71,7 +71,7 @@ namespace Viv.Delusion.Extension
         /// 示例2：new DateTime(2026,2,11).ExtToString(DateFormat.Date, "/") → "2026/02/11"
         /// </example>
         [return: NotNull]
-        public static string FormatToString(this DateTime self, DateFormat formt = DateFormat.LongDate, string symbol = "-")
+        public static string ExtToString(this DateTime self, DateFormat formt = DateFormat.LongDate, string symbol = "-")
         {
             if (self == DateTime.MinValue || self == DateTime.MaxValue)
                 return string.Empty;

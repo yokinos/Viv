@@ -231,8 +231,8 @@ namespace Viv.Momo
         private static string FormatDateTime(DateTime dt)
         {
             if (dt.TimeOfDay == TimeSpan.Zero)
-                return dt.FormatToString(DateFormat.Date);
-            return dt.FormatToString();
+                return dt.ExtToString(DateFormat.Date);
+            return dt.ExtToString();
         }
     }
 }

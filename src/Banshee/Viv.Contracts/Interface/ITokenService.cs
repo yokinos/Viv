@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Viv.Contracts.Models;
+using Viv.Contracts.Options;
 
 namespace Viv.Contracts.Interface
 {
@@ -10,6 +11,8 @@ namespace Viv.Contracts.Interface
     /// </summary>
     public interface ITokenService
     {
+        TokenOptions GetOptions();
+
         /// <summary>
         /// 生成令牌
         /// </summary>

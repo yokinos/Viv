@@ -73,7 +73,7 @@ namespace Viv.Engine
             return ApiRsult(ApiResultCode.Success, "successful", data);
         }
 
-        public static VivApiResult Error(string message, object? data = null)
+        public static VivApiResult Failed(string message, object? data = null)
         {
             return ApiRsult(ApiResultCode.Error, message, data);
         }

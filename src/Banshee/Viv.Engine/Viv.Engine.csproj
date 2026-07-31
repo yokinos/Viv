@@ -19,4 +19,8 @@
 		<ProjectReference Include="..\Viv.Sandrone\Viv.Sandrone.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Attributes\" />
+	</ItemGroup>
+
 </Project>

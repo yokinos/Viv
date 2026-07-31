@@ -25,7 +25,7 @@ namespace Viv.Herta.Core.Service
             var messaage = HertaMagic.GetChatMessage(request.MessageType, request.Message);
             if (messaage == null)
             {
-                return VivApiResult.Error("消息错误");
+                return VivApiResult.Failed("消息错误");
             }
 
             var sendMessageEvent = new SendMessageEvent(request.FromUserId, request.TargetId, messaage, request.ReceiverType, request.MessageType);

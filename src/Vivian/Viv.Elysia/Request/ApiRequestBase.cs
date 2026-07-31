@@ -9,7 +9,7 @@ using Viv.Elysia.Interface;
 namespace Viv.Elysia.Request
 {
     /// <summary>
-    /// API 请求基类（统一公共参数 + 自动验签 + 自动校验）
+    /// API 请求基类
     /// </summary>
     [Serializable]
     public class ApiRequestBase : IApiRequest

@@ -173,6 +173,10 @@ namespace Viv.Engine
                 services.AddScoped<ITokenService, JwtTokenService>();
                 VivConfigRegistry.Add(options.TokenOption);
             }
+            else
+            {
+                services.AddScoped<ITokenService, NoneTokenService>();
+            }
         }
 
         #endregion
