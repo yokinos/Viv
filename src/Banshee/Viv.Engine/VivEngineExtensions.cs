@@ -1,12 +1,6 @@
 ﻿using Autofac;
-using Autofac.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Reflection;
 using System.Text;
 using Viv.Aoi;
 using Viv.Contracts.Attributes;
@@ -14,8 +8,6 @@ using Viv.Contracts.Enums;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
-using Viv.Engine.Filter;
-using Viv.Engine.Middleware;
 using Viv.Engine.Options;
 
 namespace Viv.Engine

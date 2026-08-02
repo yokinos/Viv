@@ -1,8 +1,4 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace Viv.Contracts.Interface
+﻿namespace Viv.Contracts.Interface
 {
     /// <summary>
     /// 内存缓存接口
@@ -27,8 +23,7 @@ namespace Viv.Contracts.Interface
         /// <summary>
         /// 获取或添加（异步工厂）：factory 支持异步操作（如数据库查询）
         /// </summary>
-        ValueTask<T?> GetOrAddAsync<T>(string key, Func<CancellationToken, ValueTask<T>> factory,
-            TimeSpan? expire = null, CancellationToken token = default);
+        ValueTask<T?> GetOrAddAsync<T>(string key, Func<CancellationToken, ValueTask<T>> factory, TimeSpan? expire = null, CancellationToken token = default);
 
         /// <summary>
         /// 设置缓存
