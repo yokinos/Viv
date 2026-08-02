@@ -39,16 +39,21 @@ namespace Viv.Engine
             if (diOptions == null) return;
 
             var serviceImplTypes = TypeScanMagic.Scan(diOptions.ServiceImplementation);
+            if (!serviceImplTypes.IsNullOrEmpty())
+            {
 
-            builder.RegisterTypes(serviceImplTypes.ToArray())
-                   .AsImplementedInterfaces()
-                   .InstancePerLifetimeScope();
+                builder.RegisterTypes(serviceImplTypes.ToArray())
+                       .AsImplementedInterfaces()
+                       .InstancePerLifetimeScope();
+            }
 
             var repoImplTypes = TypeScanMagic.Scan(diOptions.RepositoryImplementation);
-
-            builder.RegisterTypes(repoImplTypes.ToArray())
+            if (!repoImplTypes.IsNullOrEmpty())
+            {
+                builder.RegisterTypes(repoImplTypes.ToArray())
                    .AsImplementedInterfaces()
                    .InstancePerLifetimeScope();
+            }
         }
 
         /// <summary>
