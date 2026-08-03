@@ -1,5 +1,9 @@
 {
-  "Env": 0,
+  "EnvOption": {
+    "Env": 0,
+    "ServiceName": "viv.deepred.api",
+    "MachineId": 101
+  },
   "DIOption": {
     "ServiceImplementation": {
       "AssemblyName": "Viv.DeepRed.Core",

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -6,63 +7,58 @@ using System.Text;
 using System.Threading.Tasks;
 using Viv.Contracts.Enums;
 using Viv.Delusion.Extension;
+using Viv.Engine.Options;
 
 namespace Viv.Engine.Middleware
 {
     public class ApiStartedMiddleware
     {
         private readonly RequestDelegate _next;
+        private readonly IWebHostEnvironment _hostEnvironment;
 
-        public ApiStartedMiddleware(RequestDelegate next)
+        public ApiStartedMiddleware(RequestDelegate next, IWebHostEnvironment hostEnvironment)
         {
             _next = next;
+            _hostEnvironment = hostEnvironment;
         }
 
         public async Task Invoke(HttpContext context)
         {
+            if (context.Request.Path.HasValue && context.Request.Path.Value == "/")
+            {
+                await LoadAppStartedPageAsync(context);
+                return;
+            }
+
             await _next(context);
-            if (context.Response.StatusCode == (int)HttpStatusCode.NotFound)
-            {
-                if (context.Request.IsAjax("/api"))
-                {
-                    await HandleApiNotFoundAsync(context);
-                }
-                else
-                {
-                    await HandlePageNotFoundAsync(context);
-                }
-            }
         }
 
-        /// <summary>
-        /// 处理接口/Ajax请求的404：返回JSON格式
-        /// </summary>
-        private static async Task HandleApiNotFoundAsync(HttpContext context)
+        private static async Task LoadAppStartedPageAsync(HttpContext context)
         {
-            var result = VivApiResult.ApiRsult(ApiResultCode.NotFound, "404 Not Found");
+            context.Response.ContentType = "text/html; charset=utf-8";
 
-            context.Response.Clear();
-            context.Response.StatusCode = 200;
-            context.Response.ContentType = "application/json;charset=UTF-8";
-            await context.Response.WriteAsync(result.ToJson(), Encoding.UTF8);
-        }
+            // 使用 AppContext.BaseDirectory 获取运行目录
+            var baseDir = AppContext.BaseDirectory;
+            var path = Path.Combine(baseDir, "app_started.html");
 
-        /// <summary>
-        /// 处理页面请求的404：重定向到404页面
-        /// </summary>
-        private static async Task HandlePageNotFoundAsync(HttpContext context)
-        {
-            context.Response.ContentType = "text/html;charset=utf-8";
-            var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "404.html");
-            if (File.Exists(path))
+            if (!File.Exists(path))
             {
-                var html = await File.ReadAllTextAsync(path);
-                await context.Response.WriteAsync(html);
+                await context.Response.WriteAsync($"404 - 页面不存在 (查找路径: {path})");
+                return;
             }
-            else
-            {
-                await context.Response.WriteAsync("404 - 页面不存在");
-            }
+
+            var option = VivEngine.VivOptions.EnvOption;
+            var startTime = VivEngine.VivAppStartTime.GetValueOrDefault();
+
+
+            var htmlTemplate = await File.ReadAllTextAsync(path);
+            var html = htmlTemplate
+                .Replace("{MachineId}", option.MachineId.ToString())
+                .Replace("{Env}", option.Env.ToString())
+                .Replace("{StartTimeMs}", startTime.ToUnixTime(true).ToString())
+                .Replace("{ServiceName}", option.ServiceName ?? "Service");
+
+            await context.Response.WriteAsync(html);
         }
     }
 }

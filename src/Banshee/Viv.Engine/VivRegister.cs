@@ -28,6 +28,7 @@ namespace Viv.Engine
     /// </summary>
     internal static class VivRegister
     {
+
         /// <summary>
         /// 注册所有Viv内部组件
         /// </summary>

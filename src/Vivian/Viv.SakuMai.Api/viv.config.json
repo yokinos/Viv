@@ -1,5 +1,9 @@
 {
-  "Env": 0,
+  "EnvOption": {
+    "Env": 0,
+    "ServiceName": "viv.sakumai.api",
+    "MachineId": 101
+  },
   "DIOption": null,
   "CacheOption": {
     "CacheProviderType": 1,

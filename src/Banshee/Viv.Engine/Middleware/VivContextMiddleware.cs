@@ -43,12 +43,13 @@ namespace Viv.Engine.Middleware
                 }
                 else
                 {
-                    var tokenContext = await GetContextFromTokenAsync(context);
-                    if (tokenContext == null)
-                    {
-                        return;
-                    }
-                    vivContext.SetSnapshot(tokenContext);
+                    // 交由网关处理
+                    //var tokenContext = await GetContextFromTokenAsync(context);
+                    //if (tokenContext == null)
+                    //{
+                    //    return;
+                    //}
+                    //vivContext.SetSnapshot(tokenContext);
                 }
 
                 await _next(context).ConfigureAwait(false);
@@ -96,7 +97,6 @@ namespace Viv.Engine.Middleware
             if (token.IsNullOrEmpty())
             {
                 await context.SetApiResponse(ApiResultCode.TokenEmpty).ConfigureAwait(false);
-
                 return null;
             }
 

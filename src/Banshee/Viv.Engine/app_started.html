@@ -1,226 +1,859 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Viv | Started</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Viv · 服务启动</title>
 
-  <style>
-    :root {
-      --yellow: #d9ff00;
-      --page-bg: #f2f2f2;
-    }
+    <style>
+        /* ===== 全局重置 & 变量 ===== */
+        :root {
+            --yellow: #d9ff00;
+            --yellow-glow: rgba(217, 255, 0, 0.25);
+            --bg-dark: #0b0b12;
+            --bg-card: rgba(255, 255, 255, 0.04);
+            --border-card: rgba(255, 255, 255, 0.07);
+            --text-white: #f0f0f0;
+            --text-muted: rgba(255, 255, 255, 0.5);
+            --radius-card: 28px;
+            --shadow-card: 0 30px 80px rgba(0, 0, 0, 0.6);
+        }
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      font-family: Helvetica, "Microsoft YaHei", Arial, sans-serif;
-    }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, 'Microsoft YaHei', Arial, sans-serif;
+        }
 
-    html,
-    body {
-      min-width: 320px;
-      overflow-x: hidden;
-    }
+        html, body {
+            min-width: 320px;
+            overflow-x: hidden;
+            background: var(--bg-dark);
+            color: var(--text-white);
+        }
 
-    body {
-      color: #111;
-      background: var(--page-bg);
-    }
+        button {
+            font: inherit;
+            border: none;
+            cursor: pointer;
+        }
 
-    button {
-      font: inherit;
-    }
+        /* ===== 顶部导航 ===== */
+        .top-header {
+            position: relative;
+            z-index: 20;
+            width: 100%;
+            height: 72px;
+            padding: 0 130px;
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            background: rgba(11, 11, 18, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
 
-    /* 顶部导航 */
-    .top-header {
-      position: relative;
-      z-index: 10;
+        .logo-group {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-shrink: 0;
+        }
 
-      width: 100%;
-      height: 68px;
-      padding: 0 130px;
+        .logo-box {
+            width: 60px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--yellow);
+            color: #000;
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: -0.5px;
+            border-radius: 10px;
+            transition: transform 0.3s ease;
+        }
 
-      display: flex;
-      align-items: center;
-      gap: 50px;
+            .logo-box:hover {
+                transform: scale(1.04);
+            }
 
-      background: #000;
-    }
+        .logo-text {
+            color: #fff;
+            font-size: 19px;
+            font-weight: 500;
+            letter-spacing: 1.5px;
+            white-space: nowrap;
+            opacity: 0.7;
+        }
 
-    .logo-group {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-shrink: 0;
-    }
+            .logo-text span {
+                font-weight: 300;
+                opacity: 0.5;
+            }
 
-    .logo-box {
-      width: 60px;
-      height: 38px;
+        .nav-single {
+            flex: 0 0 auto;
+            margin-right: auto;
+        }
 
-      display: flex;
-      align-items: center;
-      justify-content: center;
+        .nav-item {
+            position: relative;
+            display: inline-block;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
 
-      color: #000;
-      background: #fff;
+            .nav-item:hover {
+                color: #fff;
+            }
 
-      font-size: 24px;
-      font-weight: 900;
-      line-height: 1;
-    }
+            .nav-item::after {
+                content: '';
+                position: absolute;
+                left: 0;
+                bottom: -10px;
+                width: 100%;
+                height: 2.5px;
+                background: var(--yellow);
+                border-radius: 4px;
+                opacity: 0.6;
+            }
 
-    .logo-text {
-      color: #fff;
-      font-size: 20px;
-      font-weight: 600;
-      letter-spacing: 1px;
-      white-space: nowrap;
-    }
+        /* ===== 主区域 ===== */
+        .main-wrap {
+            position: relative;
+            min-height: calc(100vh - 72px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 24px;
+            overflow: hidden;
+            background: radial-gradient(ellipse 80% 60% at 50% 30%, rgba(217, 255, 0, 0.06) 0%, transparent 70%), radial-gradient(ellipse 60% 50% at 20% 80%, rgba(217, 255, 0, 0.04) 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 80% 20%, rgba(217, 255, 0, 0.03) 0%, transparent 50%), var(--bg-dark);
+        }
 
-    .nav-single {
-      flex: 1;
-    }
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            pointer-events: none;
+            opacity: 0.5;
+            animation: orbFloat 12s ease-in-out infinite alternate;
+        }
 
-    .nav-item {
-      position: relative;
+        .orb--1 {
+            width: 400px;
+            height: 400px;
+            top: -100px;
+            right: -100px;
+            background: rgba(217, 255, 0, 0.10);
+            animation-delay: 0s;
+        }
 
-      display: inline-block;
+        .orb--2 {
+            width: 300px;
+            height: 300px;
+            bottom: -60px;
+            left: -60px;
+            background: rgba(100, 120, 255, 0.08);
+            animation-delay: -4s;
+        }
 
-      color: #fff;
-      font-size: 15px;
-      line-height: 1;
-      text-decoration: none;
-    }
+        .orb--3 {
+            width: 200px;
+            height: 200px;
+            top: 40%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(217, 255, 0, 0.05);
+            animation-delay: -8s;
+            filter: blur(100px);
+        }
 
-    .nav-item::after {
-      content: "";
+        @keyframes orbFloat {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
 
-      position: absolute;
-      left: 0;
-      bottom: -10px;
+            33% {
+                transform: translate(30px, -30px) scale(1.1);
+            }
 
-      width: 100%;
-      height: 3px;
+            66% {
+                transform: translate(-20px, 20px) scale(0.9);
+            }
 
-      background: #fff;
-    }
+            100% {
+                transform: translate(10px, -10px) scale(1.05);
+            }
+        }
 
-    .header-btn {
-      flex-shrink: 0;
+        .particles {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
 
-      padding: 9px 24px;
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--yellow);
+            border-radius: 50%;
+            opacity: 0.15;
+            animation: particleDrift 18s linear infinite;
+        }
 
-      color: #000;
-      background: var(--yellow);
-      border: none;
-      border-radius: 999px;
+            .particle:nth-child(1) {
+                left: 10%;
+                top: 20%;
+                animation-duration: 22s;
+                animation-delay: 0s;
+                width: 6px;
+                height: 6px;
+            }
 
-      font-size: 15px;
-      font-weight: 600;
+            .particle:nth-child(2) {
+                left: 85%;
+                top: 15%;
+                animation-duration: 26s;
+                animation-delay: -3s;
+                width: 3px;
+                height: 3px;
+            }
 
-      cursor: pointer;
-      transition: .25s ease;
-    }
+            .particle:nth-child(3) {
+                left: 20%;
+                top: 80%;
+                animation-duration: 20s;
+                animation-delay: -6s;
+                width: 5px;
+                height: 5px;
+            }
 
-    .header-btn:hover {
-      color: #fff;
-      background: #333;
-      transform: translateY(-2px);
-    }
+            .particle:nth-child(4) {
+                left: 70%;
+                top: 70%;
+                animation-duration: 24s;
+                animation-delay: -9s;
+                width: 4px;
+                height: 4px;
+            }
 
-    /* 页面主体 */
-    .main-wrap {
-      min-height: calc(100vh - 68px);
+            .particle:nth-child(5) {
+                left: 50%;
+                top: 10%;
+                animation-duration: 28s;
+                animation-delay: -12s;
+                width: 3px;
+                height: 3px;
+            }
 
-      background:
-        linear-gradient(
-          120deg,
-          #ededed 0%,
-          #f8f8f8 50%,
-          #ededed 100%
-        );
-    }
+            .particle:nth-child(6) {
+                left: 40%;
+                top: 90%;
+                animation-duration: 20s;
+                animation-delay: -5s;
+                width: 5px;
+                height: 5px;
+            }
 
-    /* 移动端适配 */
-    @media (max-width: 768px) {
-      .top-header {
-        height: 60px;
-        padding: 0 20px;
-        gap: 15px;
-      }
+        @keyframes particleDrift {
+            0% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.08;
+            }
 
-      .logo-box {
-        width: 60px;
-        height: 32px;
-        font-size: 20px;
-      }
+            25% {
+                transform: translate(60px, -80px) scale(1.4);
+                opacity: 0.25;
+            }
 
-      .logo-text {
-        font-size: 16px;
-      }
+            50% {
+                transform: translate(-40px, 60px) scale(0.8);
+                opacity: 0.10;
+            }
 
-      .nav-single {
-        display: none;
-      }
+            75% {
+                transform: translate(80px, 40px) scale(1.2);
+                opacity: 0.20;
+            }
 
-      .header-btn {
-        margin-left: auto;
-        padding: 8px 14px;
-        font-size: 12px;
-      }
+            100% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0.08;
+            }
+        }
 
-      .main-wrap {
-        min-height: calc(100vh - 60px);
-      }
-    }
+        .welcome-card {
+            position: relative;
+            z-index: 10;
+            max-width: 640px;
+            width: 100%;
+            padding: 56px 52px 48px;
+            background: var(--bg-card);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--border-card);
+            border-radius: var(--radius-card);
+            box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            text-align: center;
+            animation: cardEntry 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+            transform: translateY(30px) scale(0.97);
+        }
 
-    @media (max-width: 400px) {
-      .logo-text {
-        display: none;
-      }
+        @keyframes cardEntry {
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
 
-      .header-btn {
-        padding: 8px 11px;
-      }
-    }
-  </style>
+        .card-badge {
+            display: inline-block;
+            padding: 4px 18px;
+            border-radius: 999px;
+            background: rgba(217, 255, 0, 0.10);
+            border: 1px solid rgba(217, 255, 0, 0.12);
+            color: var(--yellow);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            margin-bottom: 24px;
+        }
+
+        .card-icon {
+            font-size: 56px;
+            line-height: 1;
+            margin-bottom: 16px;
+            display: block;
+            filter: drop-shadow(0 8px 24px rgba(217, 255, 0, 0.15));
+        }
+
+        .card-title {
+            font-size: 40px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff 40%, rgba(255, 255, 255, 0.5));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+            margin-bottom: 8px;
+        }
+
+        .card-sub {
+            font-size: 17px;
+            font-weight: 400;
+            color: var(--text-muted);
+            margin-bottom: 28px;
+            letter-spacing: 0.2px;
+        }
+
+            .card-sub strong {
+                color: var(--yellow);
+                font-weight: 500;
+                -webkit-text-fill-color: var(--yellow);
+            }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 32px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4ade80;
+            box-shadow: 0 0 16px rgba(74, 222, 128, 0.35);
+            animation: pulseDot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulseDot {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.5;
+                transform: scale(0.8);
+            }
+        }
+
+        .status-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 0.3px;
+        }
+
+            .status-label span {
+                color: #4ade80;
+                font-weight: 600;
+            }
+
+        .card-meta {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+            .meta-item .label {
+                font-size: 11px;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.6px;
+                color: rgba(255, 255, 255, 0.25);
+            }
+
+            .meta-item .value {
+                font-size: 15px;
+                font-weight: 500;
+                color: rgba(255, 255, 255, 0.8);
+            }
+
+                .meta-item .value .highlight {
+                    color: var(--yellow);
+                }
+
+        .card-actions {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            padding: 14px 44px;
+            border-radius: 999px;
+            background: var(--yellow);
+            color: #000;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-shadow: 0 0 0 0 var(--yellow-glow);
+        }
+
+            .btn-primary:hover {
+                transform: translateY(-3px) scale(1.02);
+                box-shadow: 0 16px 48px -12px var(--yellow-glow);
+                background: #e6ff2a;
+            }
+
+            .btn-primary:active {
+                transform: scale(0.95);
+            }
+
+        .btn-ghost {
+            padding: 14px 32px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 15px;
+            font-weight: 500;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.3s ease;
+        }
+
+            .btn-ghost:hover {
+                background: rgba(255, 255, 255, 0.08);
+                color: #fff;
+                border-color: rgba(255, 255, 255, 0.12);
+                transform: translateY(-2px);
+            }
+
+        /* ===== 响应式 ===== */
+        @media (max-width: 900px) {
+            .top-header {
+                padding: 0 40px;
+                gap: 20px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .top-header {
+                height: 64px;
+                padding: 0 20px;
+                gap: 12px;
+                background: rgba(11, 11, 18, 0.92);
+            }
+
+            .logo-box {
+                width: 50px;
+                height: 32px;
+                font-size: 18px;
+                border-radius: 8px;
+            }
+
+            .logo-text {
+                font-size: 15px;
+                letter-spacing: 0.8px;
+            }
+
+                .logo-text span {
+                    display: none;
+                }
+
+            .nav-single {
+                display: none;
+            }
+
+            .main-wrap {
+                min-height: calc(100vh - 64px);
+                padding: 30px 16px;
+            }
+
+            .welcome-card {
+                padding: 36px 24px 32px;
+                border-radius: 20px;
+            }
+
+            .card-title {
+                font-size: 30px;
+            }
+
+            .card-sub {
+                font-size: 15px;
+            }
+
+            .card-icon {
+                font-size: 44px;
+            }
+
+            .card-meta {
+                gap: 24px;
+            }
+
+            .btn-primary {
+                padding: 12px 32px;
+                font-size: 14px;
+            }
+
+            .btn-ghost {
+                padding: 12px 24px;
+                font-size: 14px;
+            }
+
+            .orb--1 {
+                width: 250px;
+                height: 250px;
+                top: -60px;
+                right: -60px;
+            }
+
+            .orb--2 {
+                width: 200px;
+                height: 200px;
+                bottom: -40px;
+                left: -40px;
+            }
+        }
+
+        @media (max-width: 430px) {
+            .top-header {
+                height: 58px;
+                padding: 0 14px;
+                gap: 8px;
+            }
+
+            .logo-box {
+                width: 42px;
+                height: 28px;
+                font-size: 15px;
+            }
+
+            .logo-text {
+                font-size: 13px;
+                letter-spacing: 0.4px;
+            }
+
+            .welcome-card {
+                padding: 28px 18px 26px;
+                border-radius: 16px;
+            }
+
+            .card-title {
+                font-size: 24px;
+            }
+
+            .card-sub {
+                font-size: 13px;
+                margin-bottom: 20px;
+            }
+
+            .card-icon {
+                font-size: 36px;
+                margin-bottom: 10px;
+            }
+
+            .card-badge {
+                font-size: 10px;
+                padding: 3px 14px;
+                margin-bottom: 16px;
+            }
+
+            .status-row {
+                padding: 6px 16px;
+                gap: 8px;
+                margin-bottom: 24px;
+            }
+
+            .status-dot {
+                width: 8px;
+                height: 8px;
+            }
+
+            .status-label {
+                font-size: 12px;
+            }
+
+            .card-meta {
+                gap: 16px;
+                margin-bottom: 24px;
+            }
+
+            .meta-item .value {
+                font-size: 13px;
+            }
+
+            .btn-primary {
+                padding: 10px 26px;
+                font-size: 13px;
+                width: 100%;
+            }
+
+            .btn-ghost {
+                padding: 10px 20px;
+                font-size: 13px;
+                width: 100%;
+            }
+
+            .card-actions {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .orb--1 {
+                width: 180px;
+                height: 180px;
+            }
+
+            .orb--2 {
+                width: 140px;
+                height: 140px;
+            }
+        }
+    </style>
 </head>
 
 <body>
 
-  <!-- 顶部导航 -->
-  <header class="top-header">
-    <div class="logo-group">
-      <div class="logo-box">Viv</div>
-      <div class="logo-text">Api · Service</div>
-    </div>
+    <header class="top-header">
+        <div class="logo-group">
+            <div class="logo-box">Viv</div>
+            <div class="logo-text">Api · <span>Service</span></div>
+        </div>
+        <div class="nav-single">
+            <a href="#" class="nav-item">Welcome</a>
+        </div>
+    </header>
 
-    <div class="nav-single">
-      <a href="#" class="nav-item">Welcome</a>
-    </div>
+    <main class="main-wrap">
+        <div class="orb orb--1"></div>
+        <div class="orb orb--2"></div>
+        <div class="orb orb--3"></div>
+        <div class="particles">
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+        </div>
 
-    <button
-      type="button"
-      class="header-btn"
-      id="openDocBtn"
-    >
-      打开API文档
-    </button>
-  </header>
+        <section class="welcome-card">
+            <div class="card-badge">● 服务就绪</div>
+            <span class="card-icon">⚡</span>
+            <h1 class="card-title">Viv API</h1>
+            <p class="card-sub">
+                轻量 · 高效 · 即刻响应<br />
+                <strong>{ServiceName}</strong> 已稳定运行
+            </p>
 
-  <!-- 空白主体区域 -->
-  <main class="main-wrap"></main>
+            <div class="status-row">
+                <span class="status-dot" id="statusDot"></span>
+                <span class="status-label">
+                    服务状态 · <span id="statusText">运行中</span>
+                </span>
+            </div>
 
-  <script>
-    const openDocBtn = document.getElementById("openDocBtn");
+            <div class="card-meta">
+                <div class="meta-item">
+                    <span class="label">运行时长</span>
+                    <span class="value" id="uptimeDisplay">--</span>
+                </div>
+                <div class="meta-item">
+                    <span class="label">环境</span>
+                    <span class="value"><span class="highlight">{Env}</span></span>
+                </div>
+                <div class="meta-item">
+                    <span class="label">机器Id</span>
+                    <span class="value">{MachineId}</span>
+                </div>
+            </div>
 
-    openDocBtn.addEventListener("click", function () {
-      window.location.href = "/scale";
-    });
-  </script>
+            <div class="card-actions">
+                <button type="button" class="btn-primary" id="openDocBtn">查看 API 文档 →</button>
+                <button type="button" class="btn-ghost" id="healthBtn">● 健康检查</button>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // 1. 打开 API 文档
+        document.getElementById('openDocBtn').addEventListener('click', function (e) {
+            e.preventDefault();
+            window.location.href = '/Scalar';
+        });
+
+        // 2. 健康检查 —— 支持纯文本 "Healthy" 和 JSON
+        const healthBtn = document.getElementById('healthBtn');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+
+        async function checkHealth() {
+            const originalText = healthBtn.textContent;
+            healthBtn.textContent = '✓ 检查中 …';
+            healthBtn.style.opacity = '0.6';
+            healthBtn.style.pointerEvents = 'none';
+
+            try {
+                const response = await fetch('/health', {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json, text/plain' },
+                    signal: AbortSignal.timeout(5000)
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const contentType = response.headers.get('content-type') || '';
+                let isHealthy = false;
+
+                if (contentType.includes('application/json')) {
+                    const data = await response.json();
+                    isHealthy = data.status && data.status.toLowerCase() === 'healthy';
+                } else {
+                    const text = await response.text();
+                    isHealthy = text.trim().toLowerCase() === 'healthy';
+                }
+
+                if (isHealthy) {
+                    statusDot.style.background = '#4ade80';
+                    statusDot.style.boxShadow = '0 0 16px rgba(74, 222, 128, 0.35)';
+                    statusText.textContent = '运行中';
+                    statusText.style.color = '#4ade80';
+                    healthBtn.textContent = '✓ 全部正常';
+                    healthBtn.style.color = '#4ade80';
+                    healthBtn.style.borderColor = 'rgba(74, 222, 128, 0.25)';
+                    healthBtn.style.background = 'rgba(74, 222, 128, 0.06)';
+                } else {
+                    throw new Error('服务不健康');
+                }
+            } catch (error) {
+                statusDot.style.background = '#f87171';
+                statusDot.style.boxShadow = '0 0 16px rgba(248, 113, 113, 0.35)';
+                statusText.textContent = '异常';
+                statusText.style.color = '#f87171';
+                healthBtn.textContent = '✗ 连接失败';
+                healthBtn.style.color = '#f87171';
+                healthBtn.style.borderColor = 'rgba(248, 113, 113, 0.25)';
+                healthBtn.style.background = 'rgba(248, 113, 113, 0.06)';
+                console.warn('健康检查失败:', error);
+            } finally {
+                healthBtn.style.opacity = '1';
+                healthBtn.style.pointerEvents = 'auto';
+                setTimeout(() => {
+                    healthBtn.textContent = originalText;
+                    healthBtn.style.color = '';
+                    healthBtn.style.borderColor = '';
+                    healthBtn.style.background = '';
+                }, 3000);
+            }
+        }
+
+        healthBtn.addEventListener('click', checkHealth);
+
+        // 3. 运行时长（注意占位符改为 {StartTimeMs}）
+        const startTimeMs = {StartTimeMs};
+
+        function formatUptime(ms) {
+            if (ms < 0) return '0s';
+            const totalSec = Math.floor(ms / 1000);
+            const days = Math.floor(totalSec / 86400);
+            const hours = Math.floor((totalSec % 86400) / 3600);
+            const minutes = Math.floor((totalSec % 3600) / 60);
+            const seconds = totalSec % 60;
+            const parts = [];
+            if (days > 0) parts.push(`${days}d`);
+            if (hours > 0) parts.push(`${hours}h`);
+            if (minutes > 0) parts.push(`${minutes}m`);
+            if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+            return parts.join(' ');
+        }
+
+        const uptimeEl = document.getElementById('uptimeDisplay');
+        function updateUptime() {
+            uptimeEl.textContent = formatUptime(Date.now() - startTimeMs);
+        }
+        updateUptime();
+        setInterval(updateUptime, 1000);
+
+        // 4. 快捷键 D → 文档
+        document.addEventListener('keydown', function (e) {
+            if ((e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                const target = e.target;
+                if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && target.tagName !== 'SELECT') {
+                    e.preventDefault();
+                    window.location.href = '/scale';
+                }
+            }
+        });
+
+        console.log('%c⚡ Viv API · 服务已启动', 'font-size:20px; font-weight:700; color:#d9ff00;');
+        console.log('%c📖 按 D 键快速打开 API 文档', 'font-size:13px; color:#888;');
+    </script>
 
 </body>
 </html>

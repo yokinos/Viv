@@ -27,10 +27,7 @@ namespace Viv.Engine
         /// 需要先调用 builder.AddServiceDefaults()。
         /// </summary>
         /// <param name="configureMvc">注册额外 MVC 过滤器（默认已添加 VivExceptionFilterAttribute）</param>
-        public static WebApplicationBuilder AddVivApi(
-            this WebApplicationBuilder builder,
-            string apiTitle,
-            Action<MvcOptions>? configureMvc = null)
+        public static WebApplicationBuilder AddVivApi(this WebApplicationBuilder builder, string apiTitle, Action<MvcOptions>? configureMvc = null)
         {
             var vivOptions = VivEngine.LoadVivConfig();
             ArgumentNullException.ThrowIfNull(vivOptions);
@@ -52,15 +49,7 @@ namespace Viv.Engine
 
             // 基础服务
             builder.Services.AddViv(vivOptions);
-
-            // gRPC 客户端（Viv.Forge 编译时生成，按需取消注释）
-            if (vivOptions.EchoOption?.EnableGrpc == true)
-            {
-                //builder.Services.AddVivSdkGrpcClients();
-            }
-
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-
             builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
             {
                 options.SuppressModelStateInvalidFilter = true;
@@ -120,8 +109,8 @@ namespace Viv.Engine
             }
 
             app.UseMiddleware<ApiStartedMiddleware>();
+            // 通过校验后将登录信息注入到VivContext中
             app.UseMiddleware<VivContextMiddleware>();
-
             app.UseStaticFiles();
             app.UseRouting();
 

@@ -1,5 +1,9 @@
 {
-  "Env": 0,
+  "EnvOption": {
+    "Env": 0,
+    "ServiceName": "viv.herta.api",
+    "MachineId": 101
+  },
   "DIOption": {
     "ServiceImplementation": {
       "AssemblyName": "Viv.Herta.Core",

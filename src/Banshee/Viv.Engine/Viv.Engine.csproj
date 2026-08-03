@@ -20,7 +20,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Attributes\" />
+	  <None Update="app_started.html">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
 	</ItemGroup>
 
 </Project>

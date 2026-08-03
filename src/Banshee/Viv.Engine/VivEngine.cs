@@ -19,10 +19,13 @@ namespace Viv.Engine
     public sealed class VivEngine
     {
         private static volatile VivOptions _vivOptions;
-
-        public static VivOptions VivOptions { get => _vivOptions; }
+        private static DateTime? _vivAppStartTime;
 
         private VivEngine() { }
+
+        public static VivOptions VivOptions { get => _vivOptions; }
+        
+        public static DateTime? VivAppStartTime => _vivAppStartTime;
 
         /// <summary>
         /// 上下文访问器（容器实时解析，不缓存实例）
@@ -41,8 +44,9 @@ namespace Viv.Engine
         /// </summary>
         public static VivOptions LoadVivConfig(string configFile = "viv.config.json")
         {
+            _vivAppStartTime = DateTime.Now;
             var options = LoadFromJsonFile(configFile);
-            _vivOptions = options;
+            _vivOptions = options.DeepCopy();
             return options;
         }
 

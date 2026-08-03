@@ -18,8 +18,6 @@ namespace Viv.Test.Commands
         {
             var options = new VivOptions
             {
-                Env = VivEnv.Development,
-
                 DIOption = new DIOptions
                 {
                     ServiceImplementation = new Delusion.Magic.FilterTypeOptions

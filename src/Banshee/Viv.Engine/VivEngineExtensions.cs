@@ -14,6 +14,9 @@ namespace Viv.Engine
 {
     public static class VivEngineExtensions
     {
+        private const string AjaxHeaderName = "X-Requested-With";
+        private const string AjaxHeaderValue = "XMLHttpRequest";
+
         /// <summary>
         /// 注册Viv相关服务
         /// </summary>
@@ -116,18 +119,102 @@ namespace Viv.Engine
         /// <summary>
         /// 判断是否为Ajax请求
         /// </summary>
-        public static bool IsAjax(this HttpRequest request, string rule = "")
+        /// <summary>
+        /// 判断当前请求是否为 Ajax 或接口请求。
+        ///
+        /// 判断条件：
+        /// 1. X-Requested-With 为 XMLHttpRequest；
+        /// 2. Accept 包含 application/json；
+        /// 3. 请求路径匹配指定规则；
+        /// 4. 可选：将 POST 请求视为 Ajax。
+        /// </summary>
+        /// <param name="request">当前请求</param>
+        /// <param name="rule">路径匹配规则，例如：/api/</param>
+        /// <param name="includePost">
+        /// 是否将 POST 请求也视为 Ajax。
+        /// 默认 false，因为普通表单提交也可能是 POST。
+        /// </param>
+        public static bool IsAjax(this HttpRequest request, string rule = "", bool includePost = false)
         {
-            // 判断是否为Post请求
-            bool isPost = request.Method.Equals("Post", StringComparison.OrdinalIgnoreCase);
+            if (request == null)
+            {
+                return false;
+            }
 
-            // Ajax请求判断
-            bool isAjax = request.Headers["X-Requested-With"] == "XMLHttpRequest";
+            if (IsAjaxHeader(request))
+            {
+                return true;
+            }
 
-            // 接口路径判断
-            bool isApiPath = !string.IsNullOrEmpty(rule) && request.Path.Value.Contains(rule, StringComparison.OrdinalIgnoreCase);
+            if (AcceptsJson(request))
+            {
+                return true;
+            }
 
-            return isPost || isAjax || isApiPath;
+            if (IsMatchedPath(request, rule))
+            {
+                return true;
+            }
+
+            if (includePost && HttpMethods.IsPost(request.Method))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 判断是否包含 Ajax 请求头。
+        /// </summary>
+        private static bool IsAjaxHeader(HttpRequest request)
+        {
+            if (!request.Headers.TryGetValue(AjaxHeaderName, out var headerValue))
+            {
+                return false;
+            }
+
+            return headerValue.Any(value => string.Equals(value?.Trim(), AjaxHeaderValue, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// 判断客户端是否期望 JSON 响应。
+        /// </summary>
+        private static bool AcceptsJson(HttpRequest request)
+        {
+            if (!request.Headers.TryGetValue("Accept", out var acceptValues))
+            {
+                return false;
+            }
+
+            return acceptValues
+                .SelectMany(value => value.Split(','))
+                .Select(value => value.Split(';')[0].Trim())
+                .Any(value =>
+                    string.Equals(value, "application/json", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(value, "text/json", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(value, "application/problem+json", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// 判断请求路径是否匹配规则。
+        /// </summary>
+        private static bool IsMatchedPath(HttpRequest request, string rule)
+        {
+            if (string.IsNullOrWhiteSpace(rule))
+            {
+                return false;
+            }
+
+            var path = request.Path.Value;
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            rule = rule.Trim();
+            return path.Contains(rule, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -140,11 +227,17 @@ namespace Viv.Engine
             return context.Request.Headers.Authorization.ToString().Replace("Bearer ", "");
         }
 
-        public static async Task SetApiResponse(this HttpContext context, ApiResultCode code)
+        /// <summary>
+        /// [扩展方法] 设置响应信息
+        /// </summary>
+        /// <param name="context"></param>
+        /// <param name="code"></param>
+        /// <returns></returns>
+        public static async Task SetApiResponse(this HttpContext context, ApiResultCode code, int httpStatusCode = 200)
         {
             var result = VivApiResult.ApiRsult(code);
             context.Response.Clear();
-            context.Response.StatusCode = 200;
+            context.Response.StatusCode = httpStatusCode;
             context.Response.ContentType = "application/json;charset=UTF-8";
             await context.Response.WriteAsync(result.ToJson(), Encoding.UTF8);
         }

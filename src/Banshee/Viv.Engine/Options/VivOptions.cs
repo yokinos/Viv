@@ -21,7 +21,7 @@ namespace Viv.Engine.Options
         /// <summary>
         /// 环境
         /// </summary>
-        public VivEnv Env { get; set; }
+        public EnvOptions EnvOption { get; set; }
 
         /// <summary>
         /// 当前程序的DI设置
