@@ -17,6 +17,7 @@ namespace Viv.Engine
     public class DefaultVivContextProvider : IVivContextProvider
     {
         private readonly RequestTokenAnalysisMagic _requestMagic;
+        private static readonly PathString ApiPathPrefix = new PathString("/api");
 
         public DefaultVivContextProvider(RequestTokenAnalysisMagic requestMagic)
         {
@@ -37,27 +38,26 @@ namespace Viv.Engine
         public virtual bool ShouldSkip(HttpContext context)
         {
             var endpoint = context.GetEndpoint();
+
             if (endpoint == null)
                 return true;
 
-            var allowAnonymous = endpoint.Metadata?.GetMetadata<AllowAnonymousAttribute>() != null;
-            if (allowAnonymous)
-            {
-                return allowAnonymous;
-            }
+            if (endpoint.Metadata?.GetMetadata<AllowAnonymousAttribute>() != null)
+                return true;
 
             var httpMethodMetadata = endpoint.Metadata?.GetMetadata<IHttpMethodMetadata>();
-            if (httpMethodMetadata != null)
-            {
-                var requestMethod = context.Request.Method;
-                if (!httpMethodMetadata.HttpMethods.Contains(requestMethod, StringComparer.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
+            if (httpMethodMetadata == null)
+                return true;
+            
+            return !IsApiRequest(context.Request.Path);
+        }
 
-            var isApiRequest = context.Request.Path.HasValue && context.Request.Path.Value.StartsWith("/api");
-            return !isApiRequest;
+        /// <summary>
+        /// 判断是否为 API 请求
+        /// </summary>
+        private static bool IsApiRequest(PathString path)
+        {
+            return path.StartsWithSegments(ApiPathPrefix, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

@@ -3,6 +3,7 @@ using System;
 using System.Text;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
+using Viv.Delusion.Magic;
 using Viv.Redis;
 
 namespace Viv.Engine.Middleware
@@ -30,19 +31,32 @@ namespace Viv.Engine.Middleware
             {
                 LockHolderContext.ResetHolderId();
 
-                if (!_contextProvider.ShouldSkip(context))
+                var requestId = context.Request.Headers["X-Request-Id"].FirstOrDefault();
+                if (string.IsNullOrEmpty(requestId))
                 {
-                    var model = await _contextProvider.GetContextAsync(context).ConfigureAwait(false);
-                    if (model == null)
-                    {
-                        await context.SetApiResponseAsync(ApiResultCode.TokenEmpty);
-                        return;
-                    }
-
-                    vivContext.SetSnapshot(model);
+                    requestId = IdMagic.NextId(1).ToString();
                 }
 
-                await _next(context).ConfigureAwait(false);
+                context.TraceIdentifier = requestId;
+                context.Items["RequestId"] = requestId;
+                context.Response.Headers["X-Request-Id"] = requestId;
+
+                using (Serilog.Context.LogContext.PushProperty("RequestId", requestId))
+                {
+                    if (!_contextProvider.ShouldSkip(context))
+                    {
+                        var model = await _contextProvider.GetContextAsync(context).ConfigureAwait(false);
+                        if (model == null)
+                        {
+                            await context.SetApiResponseAsync(ApiResultCode.TokenEmpty);
+                            return;
+                        }
+
+                        vivContext.SetSnapshot(model);
+                    }
+
+                    await _next(context).ConfigureAwait(false);
+                }
             }
             finally
             {
