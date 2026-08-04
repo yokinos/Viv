@@ -37,7 +37,14 @@ namespace Viv.Engine
         {
             // 默认跳过策略：检查是否标记了 AllowAnonymous
             var endpoint = context.GetEndpoint();
-            return endpoint?.Metadata?.GetMetadata<AllowAnonymousAttribute>() != null;
+            var allowAnonymous = endpoint?.Metadata?.GetMetadata<AllowAnonymousAttribute>() != null;
+            if (allowAnonymous)
+            {
+                return allowAnonymous;
+            }
+
+            var isApiRequest = context.Request.Path.HasValue && context.Request.Path.Value.StartsWith("/api");
+            return !isApiRequest;
         }
     }
 }

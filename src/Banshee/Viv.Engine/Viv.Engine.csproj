@@ -20,10 +20,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <None Update="Htmls\app_404.html">
+	  <None Update="Web\notfound.html">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
-	  <None Update="Htmls\app_started.html">
+	  <None Update="Web\welcome.html">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	</ItemGroup>

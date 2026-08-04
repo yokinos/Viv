@@ -44,7 +44,7 @@ namespace Viv.Engine.Middleware
             context.Response.ContentType = "text/html; charset=utf-8";
 
             var baseDir = AppContext.BaseDirectory;
-            var path = Path.Combine(baseDir, "app_started.html");
+            var path = Path.Combine(baseDir, "web", "welcome.html");
 
             if (!File.Exists(path))
             {
@@ -70,7 +70,7 @@ namespace Viv.Engine.Middleware
             context.Response.ContentType = "text/html; charset=utf-8";
 
             var baseDir = AppContext.BaseDirectory;
-            var path = Path.Combine(baseDir, "app_404.html");
+            var path = Path.Combine(baseDir, "web", "notfound.html");
             if (!File.Exists(path))
             {
                 await context.Response.WriteAsync($"404 - 页面不存在 (查找路径: {path})");
