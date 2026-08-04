@@ -1,7 +1,6 @@
 ﻿using MassTransit.EntityFrameworkCoreIntegration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using StackExchange.Redis;
 using Viv.Clockwork;
 using Viv.Clockwork.Enums;
 using Viv.Contracts.Enums;
@@ -9,7 +8,6 @@ using Viv.Contracts.Interface;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
-using Viv.Delusion.Snowflake;
 using Viv.Echo;
 using Viv.Engine.Options;
 using Viv.Log;
@@ -36,6 +34,7 @@ namespace Viv.Engine
         public static void Register(IServiceCollection services, VivOptions options)
         {
             // 注册Viv上下文
+            services.AddSingleton<IVivContextProvider, DefaultVivContextProvider>();
             services.AddSingleton<IVivContextAccessor, VivContextAccessor>();
             services.AddScoped<IVivContext, VivContext>();
 

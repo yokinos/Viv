@@ -48,11 +48,9 @@ namespace Viv.Engine
                 builder.Host.UseSerilog();
             }
 
-            builder.Services.AddSingleton<IVivContextProvider, DefaultVivContextProvider>();
-            serviceCollectionConfigure?.Invoke(builder.Services);
-
             // 基础服务
             builder.Services.AddViv(vivOptions);
+            serviceCollectionConfigure?.Invoke(builder.Services);
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
             {

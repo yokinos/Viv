@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -35,12 +36,24 @@ namespace Viv.Engine
 
         public virtual bool ShouldSkip(HttpContext context)
         {
-            // 默认跳过策略：检查是否标记了 AllowAnonymous
             var endpoint = context.GetEndpoint();
-            var allowAnonymous = endpoint?.Metadata?.GetMetadata<AllowAnonymousAttribute>() != null;
+            if (endpoint == null)
+                return true;
+
+            var allowAnonymous = endpoint.Metadata?.GetMetadata<AllowAnonymousAttribute>() != null;
             if (allowAnonymous)
             {
                 return allowAnonymous;
+            }
+
+            var httpMethodMetadata = endpoint.Metadata?.GetMetadata<IHttpMethodMetadata>();
+            if (httpMethodMetadata != null)
+            {
+                var requestMethod = context.Request.Method;
+                if (!httpMethodMetadata.HttpMethods.Contains(requestMethod, StringComparer.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
             }
 
             var isApiRequest = context.Request.Path.HasValue && context.Request.Path.Value.StartsWith("/api");
