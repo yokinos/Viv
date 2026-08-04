@@ -1,5 +1,4 @@
-﻿
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
@@ -24,18 +23,6 @@ namespace Viv.Engine.Power
         public RequestTokenAnalysisMagic(ITokenService tokenService)
         {
             _tokenService = tokenService;
-        }
-
-        public bool IsIgnoreRequestTokenValid(HttpContext context)
-        {
-            var endpoint = context.GetEndpoint();
-            var hasAllowAnonymous = endpoint?.Metadata?.GetMetadata<AllowAnonymousAttribute>() != null;
-            if (hasAllowAnonymous)
-            {
-                return true;
-            }
-
-            return false;
         }
 
         /// <summary>
@@ -85,7 +72,7 @@ namespace Viv.Engine.Power
             {
                 var tokenInfo = _tokenService.ParseToken(token);
 
-                if (tokenInfo == null || tokenInfo.AppId <= 0  || tokenInfo.UserId <= 0)
+                if (tokenInfo == null || tokenInfo.AppId <= 0 || tokenInfo.UserId <= 0)
                 {
                     return null;
                 }
