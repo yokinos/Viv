@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Viv.Delusion.Snowflake;
 
@@ -12,7 +13,7 @@ namespace Viv.Delusion.Magic
         /// <summary>
         /// 返回基于 options.MachineId 的雪花 ID。相同 MachineId 对应同一个生成器实例（第一次传入的 options 用于初始化该实例）。
         /// </summary>
-        public static long NextId(SnowflakeOptions options)
+        public static long NextId([AllowNull] SnowflakeOptions options)
         {
             var opt = options ?? new SnowflakeOptions();
             var machineId = opt.MachineId;

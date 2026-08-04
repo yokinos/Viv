@@ -1,25 +1,19 @@
-﻿using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
-using System.Threading.Tasks;
-using Viv.Contracts.Enums;
 using Viv.Delusion.Extension;
-using Viv.Engine.Options;
 
 namespace Viv.Engine.Middleware
 {
     public class ApiStartedMiddleware
     {
         private readonly RequestDelegate _next;
-        private readonly IWebHostEnvironment _hostEnvironment;
 
-        public ApiStartedMiddleware(RequestDelegate next, IWebHostEnvironment hostEnvironment)
+        public ApiStartedMiddleware(RequestDelegate next)
         {
             _next = next;
-            _hostEnvironment = hostEnvironment;
         }
 
         public async Task Invoke(HttpContext context)
@@ -31,25 +25,35 @@ namespace Viv.Engine.Middleware
             }
 
             await _next(context);
+
+            if (context.Response.StatusCode == (int)HttpStatusCode.NotFound)
+            {
+                if (context.Request.IsAjax("/api"))
+                {
+                    await context.SetApiResponseAsync(ApiResultCode.NotFound);
+                }
+                else
+                {
+                    await LoadAppNotFoundPageAsync(context);
+                }
+            }
         }
 
         private static async Task LoadAppStartedPageAsync(HttpContext context)
         {
             context.Response.ContentType = "text/html; charset=utf-8";
 
-            // 使用 AppContext.BaseDirectory 获取运行目录
             var baseDir = AppContext.BaseDirectory;
             var path = Path.Combine(baseDir, "app_started.html");
 
             if (!File.Exists(path))
             {
-                await context.Response.WriteAsync($"404 - 页面不存在 (查找路径: {path})");
+                await LoadAppNotFoundPageAsync(context);
                 return;
             }
 
             var option = VivEngine.VivOptions.EnvOption;
             var startTime = VivEngine.VivAppStartTime.GetValueOrDefault();
-
 
             var htmlTemplate = await File.ReadAllTextAsync(path);
             var html = htmlTemplate
@@ -59,6 +63,21 @@ namespace Viv.Engine.Middleware
                 .Replace("{ServiceName}", option.ServiceName ?? "Service");
 
             await context.Response.WriteAsync(html);
+        }
+
+        private static async Task LoadAppNotFoundPageAsync(HttpContext context)
+        {
+            context.Response.ContentType = "text/html; charset=utf-8";
+
+            var baseDir = AppContext.BaseDirectory;
+            var path = Path.Combine(baseDir, "app_404.html");
+            if (!File.Exists(path))
+            {
+                await context.Response.WriteAsync($"404 - 页面不存在 (查找路径: {path})");
+                return;
+            }
+
+            await context.Response.WriteAsync(await File.ReadAllTextAsync(path));
         }
     }
 }

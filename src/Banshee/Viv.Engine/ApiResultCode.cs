@@ -89,15 +89,15 @@ namespace Viv.Engine
         #region -4xx 身份鉴权 Token 登录相关区间
 
         /// <summary>
-        /// 账号异地登录
+        /// 请求头未携带Token身份凭证
         /// </summary>
-        [Description("账号异地登录")]
+        [Description("Token为空，请登录后操作")]
         TokenEmpty = -400,
 
         /// <summary>
-        /// 请求头未携带Token身份凭证
+        /// Token异常
         /// </summary>
-        [Description("身份凭证为空，请登录后操作")]
+        [Description("Token异常")]
         TokenInvalid = -401,
 
         /// <summary>

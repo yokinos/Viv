@@ -52,7 +52,7 @@ namespace Viv.Engine
                 {
                     PreferredSecuritySchemes = ["Bearer"]
                 };
-            });
+            }).AllowAnonymous();
         }
     }
 }

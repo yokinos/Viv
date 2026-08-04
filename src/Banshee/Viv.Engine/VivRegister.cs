@@ -9,6 +9,7 @@ using Viv.Contracts.Interface;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
+using Viv.Delusion.Snowflake;
 using Viv.Echo;
 using Viv.Engine.Options;
 using Viv.Log;

@@ -2,7 +2,6 @@ using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -13,7 +12,6 @@ using Viv.Contracts.Interface;
 using Viv.Engine.Filter;
 using Viv.Engine.Middleware;
 using Viv.Sandrone.Conveter;
-using Viv.Sandrone.Impl;
 using Viv.Sandrone.OpenApi;
 
 namespace Viv.Engine
@@ -27,7 +25,10 @@ namespace Viv.Engine
         /// 需要先调用 builder.AddServiceDefaults()。
         /// </summary>
         /// <param name="configureMvc">注册额外 MVC 过滤器（默认已添加 VivExceptionFilterAttribute）</param>
-        public static WebApplicationBuilder AddVivApi(this WebApplicationBuilder builder, string apiTitle, Action<MvcOptions>? configureMvc = null)
+        public static WebApplicationBuilder AddVivApi(this WebApplicationBuilder builder,
+            string apiTitle,
+            Action<MvcOptions>? configureMvc = null,
+            Action<IServiceCollection>? serviceCollectionConfigure = null)
         {
             var vivOptions = VivEngine.LoadVivConfig();
             ArgumentNullException.ThrowIfNull(vivOptions);
@@ -46,6 +47,9 @@ namespace Viv.Engine
             {
                 builder.Host.UseSerilog();
             }
+
+            builder.Services.AddSingleton<IVivContextProvider, DefaultVivContextProvider>();
+            serviceCollectionConfigure?.Invoke(builder.Services);
 
             // 基础服务
             builder.Services.AddViv(vivOptions);
@@ -104,15 +108,16 @@ namespace Viv.Engine
 
             if (app.Environment.IsDevelopment())
             {
-                app.MapOpenApi();
+                app.MapOpenApi().AllowAnonymous();
                 app.VivUseScalar(apiTitle);
             }
 
             app.UseMiddleware<ApiStartedMiddleware>();
-            // 通过校验后将登录信息注入到VivContext中
-            app.UseMiddleware<VivContextMiddleware>();
+
             app.UseStaticFiles();
             app.UseRouting();
+
+            app.UseMiddleware<VivContextMiddleware>();
 
             app.UseCors(corsPolicyName);
             app.UseHttpsRedirection();

@@ -233,7 +233,7 @@ namespace Viv.Engine
         /// <param name="context"></param>
         /// <param name="code"></param>
         /// <returns></returns>
-        public static async Task SetApiResponse(this HttpContext context, ApiResultCode code, int httpStatusCode = 200)
+        public static async Task SetApiResponseAsync(this HttpContext context, ApiResultCode code, int httpStatusCode = 200)
         {
             var result = VivApiResult.ApiRsult(code);
             context.Response.Clear();
