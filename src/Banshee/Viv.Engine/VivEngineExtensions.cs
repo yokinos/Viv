@@ -239,7 +239,7 @@ namespace Viv.Engine
             context.Response.Clear();
             context.Response.StatusCode = httpStatusCode;
             context.Response.ContentType = "application/json;charset=UTF-8";
-            await context.Response.WriteAsync(result.ToJson(), Encoding.UTF8);
+            await context.Response.WriteAsync(result.ToJson(JsonNetSetting.ApiResponseSettings), Encoding.UTF8);
         }
     }
 }

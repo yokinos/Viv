@@ -61,6 +61,7 @@ namespace Viv.Delusion.Extension
         /// [扩展方法] 将对象序列化为JSON字符串，处理空值和字符串源对象场景
         /// </summary>
         /// <param name="self">待序列化的对象</param>
+        /// <param name="settings">JSON序列化设置，可选，默认使用默认配置</param>
         /// <returns>
         /// 1. 源对象为null → 空字符串
         /// 2. 源对象为字符串类型 → 直接返回原字符串（不额外序列化）
@@ -68,13 +69,13 @@ namespace Viv.Delusion.Extension
         /// </returns>
         /// <remarks>序列化使用Newtonsoft.Json默认配置，如需自定义序列化规则需单独处理</remarks>
         [return: NotNull]
-        public static string ToJson([AllowNull] this object self)
+        public static string ToJson([AllowNull] this object self, JsonSerializerSettings? settings = null)
         {
             return self switch
             {
                 null => string.Empty,
                 string str => str,
-                _ => JsonConvert.SerializeObject(self)
+                _ => JsonConvert.SerializeObject(self, settings)
             };
         }
 

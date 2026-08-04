@@ -41,13 +41,6 @@ namespace Viv.Engine
         /// </summary>
         public object? Data { get; set; }
 
-
-        protected static readonly JsonSerializerSettings _jsonSettings = new()
-        {
-            DateFormatString = "yyyy-MM-dd HH:mm:ss",
-            ContractResolver = new VivContractResolver { NamingStrategy = new CamelCaseNamingStrategy() }
-        };
-
         public async Task ExecuteResultAsync(ActionContext context)
         {
             var response = context.HttpContext.Response;
@@ -59,7 +52,7 @@ namespace Viv.Engine
 
             response.StatusCode = (int)HttpStatusCode.OK;
 
-            var jsonString = JsonConvert.SerializeObject(this, Formatting.None, _jsonSettings);
+            var jsonString = JsonConvert.SerializeObject(this, Formatting.None, JsonNetSetting.ApiResponseSettings);
             await response.WriteAsync(jsonString);
         }
 
