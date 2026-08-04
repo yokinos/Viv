@@ -13,16 +13,16 @@ namespace Viv.Apex.Core.Service
 {
     public class UserService : IUserService
     {
-        private readonly IIndex<EmUserType, ILoginContract> _loginImpls;
+        private readonly IIndex<int, ILoginContract> _loginImpls;
 
-        public UserService(IIndex<EmUserType, ILoginContract> loginImpls)
+        public UserService(IIndex<int, ILoginContract> loginImpls)
         {
             _loginImpls = loginImpls;
         }
 
         public async Task<VivApiResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
         {
-            var isExist = _loginImpls.TryGetValue(request.UserType.Value, out var loginImpl);
+            var isExist = _loginImpls.TryGetValue((int)request.UserType.Value, out var loginImpl);
             if (!isExist || loginImpl == null)
             {
                 return VivApiResult<ApexLoginOutput>.Failed("未知的用户类型");
