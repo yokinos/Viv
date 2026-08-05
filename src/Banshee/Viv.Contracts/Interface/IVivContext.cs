@@ -6,7 +6,7 @@ namespace Viv.Contracts.Interface
     /// Viv 请求上下文 — 贯穿整个请求生命周期的核心标识。
     ///
     /// 数据来源：
-    /// VivContextMiddleware 解析Token之后组装 <see cref="VivContextModel"/>，
+    /// VivContextMiddleware 解析Token之后组装 <see cref="VivContextContent"/>，
     /// 通过 <see cref="IVivContextAccessor"/> 存入当前请求异步上下文。
     ///
     /// 使用场景：
@@ -39,7 +39,7 @@ namespace Viv.Contracts.Interface
         /// <summary>
         /// 设置上下文快照
         /// </summary>
-        void SetSnapshot(VivContextModel model);
+        void SetSnapshot(VivContextContent model);
 
         /// <summary>
         /// 清空上下文
@@ -50,6 +50,6 @@ namespace Viv.Contracts.Interface
         /// <summary>
         /// 获取原始快照（谨慎使用，优先使用封装属性）
         /// </summary>
-        VivContextModel? GetRawSnapshot();
+        VivContextContent? GetRawSnapshot();
     }
 }

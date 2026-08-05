@@ -7,7 +7,7 @@ namespace Viv.Contracts.Models
     /// <summary>
     /// 上下文原始数据模型，纯粹承载字段，无运行时存储逻辑
     /// </summary>
-    public class VivContextModel
+    public class VivContextContent
     {
         /// <summary>
         /// 登录的客户端AppId
@@ -32,13 +32,14 @@ namespace Viv.Contracts.Models
         /// <summary>
         /// 克隆一份上下文，用于后台任务传递
         /// </summary>
-        public VivContextModel Clone()
+        public VivContextContent Clone()
         {
-            return new VivContextModel
+            return new VivContextContent
             {
                 AppId = AppId,
                 SubjectId = SubjectId,
-                UserId = UserId
+                UserId = UserId,
+                RequestId = RequestId
             };
         }
 
@@ -51,6 +52,5 @@ namespace Viv.Contracts.Models
         {
             return $"AppId:{AppId},SubjectId:{SubjectId},UserId:{UserId},RequestId:{RequestId}";
         }
-
     }
 }

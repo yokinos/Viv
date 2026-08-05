@@ -23,7 +23,7 @@ namespace Viv.Nana
         /// <summary>
         /// Viv的上下文信息
         /// </summary>
-        public VivContextModel? Context { get; set; }
+        public VivContextContent? Context { get; set; }
 
         /// <summary>
         /// 消息内容

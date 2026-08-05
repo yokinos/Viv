@@ -39,7 +39,7 @@ namespace Viv.Engine
         /// 【语法糖，控制器/过滤器临时使用】
         /// 领域Service、仓储优先注入 IVivContext，禁止大量使用该静态入口
         /// </summary>
-        public static VivContextModel CurrentSnapshot => Accessor.Current;
+        public static VivContextContent CurrentSnapshot => Accessor.Current;
 
         /// <summary>
         /// 从指定 JSON 文件加载

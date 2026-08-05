@@ -12,7 +12,7 @@ namespace Viv.Sandrone.Impl
             _accessor = accessor;
         }
 
-        private VivContextModel? Snapshot => _accessor.Current;
+        private VivContextContent? Snapshot => _accessor.Current;
 
         public long AppId => Snapshot?.AppId ?? 0;
 
@@ -22,12 +22,12 @@ namespace Viv.Sandrone.Impl
 
         public string RequestId => Snapshot?.RequestId ?? string.Empty;
 
-        public VivContextModel? GetRawSnapshot()
+        public VivContextContent? GetRawSnapshot()
         {
             return Snapshot;
         }
 
-        public void SetSnapshot(VivContextModel model)
+        public void SetSnapshot(VivContextContent model)
         {
             _accessor.Current = model;
         }

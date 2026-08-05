@@ -17,7 +17,7 @@ namespace Viv.Contracts.Interface
         /// <param name="context">当前 HttpContext</param>
         /// <param name="cancellationToken">取消令牌</param>
         /// <returns>提取到的上下文，如果返回 null 表示提取失败或无身份</returns>
-        Task<VivContextModel?> GetContextAsync(HttpContext context, CancellationToken cancellationToken = default);
+        Task<VivContextContent?> GetContextAsync(HttpContext context, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 判断当前请求是否应该跳过身份提取（比如匿名端点、健康检查等）

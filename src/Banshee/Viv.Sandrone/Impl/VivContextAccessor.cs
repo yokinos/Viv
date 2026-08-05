@@ -12,9 +12,9 @@ namespace Viv.Sandrone.Impl
     /// </summary>
     public class VivContextAccessor : IVivContextAccessor
     {
-        private static readonly AsyncLocal<VivContextModel?> _storage = new();
+        private static readonly AsyncLocal<VivContextContent?> _storage = new();
 
-        public VivContextModel? Current
+        public VivContextContent? Current
         {
             get => _storage.Value;
             set => _storage.Value = value;

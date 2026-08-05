@@ -15,6 +15,6 @@ namespace Viv.Contracts.Interface
         /// <summary>
         /// 获取/设置当前请求上下文快照
         /// </summary>
-        VivContextModel? Current { get; set; }
+        VivContextContent? Current { get; set; }
     }
 }

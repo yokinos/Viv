@@ -24,7 +24,7 @@ namespace Viv.Engine
             _requestMagic = requestMagic;
         }
 
-        public virtual async Task<VivContextModel?> GetContextAsync(HttpContext context, CancellationToken cancellationToken = default)
+        public virtual async Task<VivContextContent?> GetContextAsync(HttpContext context, CancellationToken cancellationToken = default)
         {
             // 优先从 Header 提取
             var headerContext = _requestMagic.GetContextFromHeaders(context);

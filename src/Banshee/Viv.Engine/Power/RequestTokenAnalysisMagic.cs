@@ -28,7 +28,7 @@ namespace Viv.Engine.Power
         /// <summary>
         /// 从可信内部请求 Header 中获取上下文
         /// </summary>
-        public VivContextModel? GetContextFromHeaders(HttpContext context)
+        public VivContextContent? GetContextFromHeaders(HttpContext context)
         {
             if (!TryGetPositiveLong(context, AppIdHeader, out var appId))
             {
@@ -42,7 +42,7 @@ namespace Viv.Engine.Power
 
             TryGetPositiveLong(context, SubjectIdHeader, out var subjectId);
 
-            return new VivContextModel
+            return new VivContextContent
             {
                 AppId = appId,
                 SubjectId = subjectId,
@@ -53,7 +53,7 @@ namespace Viv.Engine.Power
         /// <summary>
         /// 从 JWT Token 中获取上下文。
         /// </summary>
-        public async Task<VivContextModel?> GetContextFromTokenAsync(HttpContext context)
+        public async Task<VivContextContent?> GetContextFromTokenAsync(HttpContext context)
         {
             var token = context.GetJwtToken();
 
@@ -77,7 +77,7 @@ namespace Viv.Engine.Power
                     return null;
                 }
 
-                return new VivContextModel
+                return new VivContextContent
                 {
                     AppId = tokenInfo.AppId,
                     SubjectId = tokenInfo.TenantId,
