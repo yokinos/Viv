@@ -76,7 +76,7 @@ namespace Viv.Delusion.Extension
             if (self == DateTime.MinValue || self == DateTime.MaxValue)
                 return string.Empty;
 
-            return formt switch
+            var formatText = formt switch
             {
                 DateFormat.ShortDate => "yyyyMMdd",
                 DateFormat.Date => $"yyyy{symbol}MM{symbol}dd",
@@ -86,6 +86,8 @@ namespace Viv.Delusion.Extension
                 DateFormat.StandardTime => "HH:mm:ss",
                 _ => string.Empty
             };
+
+            return self.ToString(formatText);
         }
 
         /// <summary>

@@ -29,9 +29,8 @@ namespace Viv.Nana.Core
 
             var message = new NanaEnvelope<T>
             {
-                AppId = _context.AppId,
-                TenantId = _context.SubjectId,
-                Content = content
+                Content = content,
+                Context = _context.GetRawSnapshot()?.Clone()
             };
 
             try
@@ -53,9 +52,8 @@ namespace Viv.Nana.Core
 
             var message = new NanaEnvelope<T>
             {
-                AppId = _context.AppId,
-                TenantId = _context.SubjectId,
-                Content = content
+                Content = content,
+                Context = _context.GetRawSnapshot()?.Clone()
             };
 
             try

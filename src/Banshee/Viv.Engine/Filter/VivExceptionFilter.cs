@@ -1,7 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.Extensions.Hosting;
 using System;
 using Viv.Contracts.Exceptions;
+using Viv.Contracts.Interface;
+using Viv.Delusion.Extension;
 using Viv.Log;
 using Viv.Nana;
 
@@ -15,34 +18,78 @@ namespace Viv.Engine.Filter
     public class VivExceptionFilterAttribute : Attribute, IAsyncExceptionFilter
     {
         private readonly ILoggerContract _logger;
+        private readonly IHostEnvironment _environment;
 
-        /// <summary>
-        /// 构造函数：依赖注入（消息生产者 + 日志组件）
-        /// </summary>
-        public VivExceptionFilterAttribute(ILoggerContract logger)
+        public VivExceptionFilterAttribute(ILoggerContract logger, IHostEnvironment environment)
         {
             _logger = logger;
+            _environment = environment;
         }
 
-        /// <summary>
-        /// 异步异常处理核心方法
-        /// </summary>
         public async Task OnExceptionAsync(ExceptionContext context)
         {
-            // 如果异常已经被处理，直接跳过
             if (context.ExceptionHandled)
                 return;
 
-            // 获取当前异常对象
             var ex = context.Exception;
-            var path = context.HttpContext.Request.Path;
-
             var realEx = ex.InnerException ?? ex;
-            _logger.Error($"[全局未捕获异常]请求地址：{path}，消息：{ex.Message}", realEx);
-            context.Result = VivApiResult.ApiRsult(ApiResultCode.ServerError);
+            var httpContext = context.HttpContext;
+            var requestId = httpContext.TraceIdentifier;
+            var path = httpContext.Request.Path;
+            var method = httpContext.Request.Method;
+
+            _logger.Error("[全局异常] {Method} {Path} | RequestId: {RequestId} | Message: {Message}", realEx, method, path, requestId, realEx.Message);
+
+            var output = new ExceptionOutput
+            {
+                Path = path,
+                Method = method,
+                Timestamp = DateTime.Now.ExtToString(),
+                RequestId = requestId,
+                StackTrace = _environment.IsDevelopment() ? realEx.StackTrace : null,
+                ErrorCode = (realEx as IVivBusinessException)?.Code
+            };
+
+            context.Result = VivApiResult.ApiRsult(ApiResultCode.ServerError, null, output);
             context.ExceptionHandled = true;
 
             await Task.CompletedTask;
         }
+    }
+
+    /// <summary>
+    /// 异常响应输出模型
+    /// </summary>
+    public class ExceptionOutput
+    {
+        /// <summary>
+        /// 请求路径
+        /// </summary>
+        public string Path { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 请求方法
+        /// </summary>
+        public string Method { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 发生时间（UTC）
+        /// </summary>
+        public string Timestamp { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 请求追踪ID（用于日志关联）
+        /// </summary>
+        public string RequestId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 错误码（业务异常时返回）
+        /// </summary>
+        public int? ErrorCode { get; set; }
+
+        /// <summary>
+        /// 堆栈信息（仅开发环境返回）
+        /// </summary>
+        public string? StackTrace { get; set; }
     }
 }

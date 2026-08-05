@@ -32,6 +32,11 @@ namespace Viv.Contracts.Interface
         long UserId { get; }
 
         /// <summary>
+        /// 请求Id（唯一标识当前请求）
+        /// </summary>
+        string RequestId { get; }
+
+        /// <summary>
         /// 设置上下文快照
         /// </summary>
         void SetSnapshot(VivContextModel model);

@@ -27,6 +27,11 @@ namespace Viv.Engine
         }
 
         /// <summary>
+        /// 请求Id
+        /// </summary>
+        public string RequestId { get; set; }
+
+        /// <summary>
         /// 状态码
         /// </summary>
         public int Code { get; set; }
@@ -50,6 +55,7 @@ namespace Viv.Engine
                 response.ContentType = "application/json; charset=UTF-8";
             }
 
+            RequestId = context.HttpContext.TraceIdentifier;
             response.StatusCode = (int)HttpStatusCode.OK;
 
             var jsonString = JsonConvert.SerializeObject(this, Formatting.None, JsonNetSetting.ApiResponseSettings);

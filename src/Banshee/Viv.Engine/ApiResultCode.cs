@@ -151,7 +151,7 @@ namespace Viv.Engine
         /// <summary>
         /// 未捕获全局未知服务异常，兜底错误码
         /// </summary>
-        [Description("服务器内部未知异常")]
+        [Description("服务器内部错误，请稍后重试")]
         ServerError = -500,
 
         /// <summary>

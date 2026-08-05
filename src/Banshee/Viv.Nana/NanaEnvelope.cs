@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Contracts.Models;
 using Viv.Delusion.Magic;
 using Viv.Nana.Core;
 
@@ -20,14 +21,9 @@ namespace Viv.Nana
         public long MessageId { get; set; } = IdMagic.NextId();
 
         /// <summary>
-        /// 由哪个客户端的请求产生的消息,在这套设计下即使是定时任务站点也被视为客户端
+        /// Viv的上下文信息
         /// </summary>
-        public long AppId { get; set; }
-
-        /// <summary>
-        /// SaaS类型的Id
-        /// </summary>
-        public long TenantId { get; set; }
+        public VivContextModel? Context { get; set; }
 
         /// <summary>
         /// 消息内容

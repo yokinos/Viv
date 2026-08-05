@@ -236,6 +236,7 @@ namespace Viv.Engine
         public static async Task SetApiResponseAsync(this HttpContext context, ApiResultCode code, int httpStatusCode = 200)
         {
             var result = VivApiResult.ApiRsult(code);
+            result.RequestId = context.TraceIdentifier;
             context.Response.Clear();
             context.Response.StatusCode = httpStatusCode;
             context.Response.ContentType = "application/json;charset=UTF-8";

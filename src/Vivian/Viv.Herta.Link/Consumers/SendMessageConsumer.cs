@@ -32,21 +32,22 @@ namespace Viv.Herta.Link.Consumers
             var chatMessage = new HertaChatMessage
             {
                 Id = message.MessageId,
-                AppId = message.AppId,
+                AppId = message.Context?.AppId ?? 0,
                 FromUserId = evt.FromUserId,
                 ToUserId = evt.TargetId,
                 Body = body,
                 SentAt = DateTimeOffset.UtcNow
             };
 
+            var tenantId = message.Context?.SubjectId ?? 0;
             if (evt.ReceiverType == EmChatReceiverType.Group)
             {
-                var groupName = HertaLinkGroups.GetGroupName(message.TenantId, evt.TargetId);
+                var groupName = HertaLinkGroups.GetGroupName(tenantId, evt.TargetId);
                 await _hubContext.Clients.Group(groupName).SendAsync(HertaLinkClientMethods.ReceiveMessage, chatMessage, cancellationToken);
             }
             else
             {
-                var connectionIds = _connectionPool.GetConnectionIds(message.TenantId, evt.TargetId);
+                var connectionIds = _connectionPool.GetConnectionIds(tenantId, evt.TargetId);
                 if (connectionIds.Count > 0)
                 {
                     await _hubContext.Clients.Clients(connectionIds).SendAsync(HertaLinkClientMethods.ReceiveMessage, chatMessage, cancellationToken);

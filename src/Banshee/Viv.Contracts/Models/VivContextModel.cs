@@ -25,6 +25,11 @@ namespace Viv.Contracts.Models
         public long UserId { get; set; }
 
         /// <summary>
+        /// 请求Id，用于日志记录和跟踪
+        /// </summary>
+        public string? RequestId { get; set; }
+
+        /// <summary>
         /// 克隆一份上下文，用于后台任务传递
         /// </summary>
         public VivContextModel Clone()
@@ -39,11 +44,12 @@ namespace Viv.Contracts.Models
 
         public bool IsEmpty()
         {
-            return AppId == 0 && SubjectId == 0 && UserId == 0;
+            return AppId == 0 && UserId == 0;
         }
+
         public override string ToString()
         {
-            return $"AppId:{AppId},SubjectId:{SubjectId},UserId:{UserId}";
+            return $"AppId:{AppId},SubjectId:{SubjectId},UserId:{UserId},RequestId:{RequestId}";
         }
 
     }
