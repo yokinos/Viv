@@ -35,6 +35,7 @@ namespace Viv.Engine
 
             // 暂存标题供 RunVivApi 使用
             builder.Configuration[ApiTitleKey] = apiTitle;
+            builder.Services.AddHttpContextAccessor();
 
             // Autofac 容器
             builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
