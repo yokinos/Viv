@@ -16,7 +16,7 @@ using Viv.Redis;
 
 namespace Viv.Apex.Core.Impl.Login
 {
-    [VivDependency(Tag = (int)EmUserType.Master)]
+    [VivDependency(Tag = EmUserType.Master)]
     public class MasterUserLoginImpl : ILoginContract, IDependency
     {
         private readonly IUserRepository _userRepository;

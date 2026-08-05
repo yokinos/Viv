@@ -23,6 +23,6 @@ namespace Viv.Contracts.Attributes
         /// <summary>
         /// 标记 大于 -1的标记生效
         /// </summary>
-        public int Tag { get; set; } = -1;
+        public object? Tag { get; set; }
     }
 }

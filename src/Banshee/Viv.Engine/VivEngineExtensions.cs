@@ -91,11 +91,11 @@ namespace Viv.Engine
                         continue;
                     }
 
-                    if (tag.HasValue && tag > -1)
+                    if (tag != null)
                     {
                         foreach (var contract in interfaces)
                         {
-                            registration = registration.Keyed(tag.Value, contract);
+                            registration = registration.Keyed(tag, contract);
                         }
                     }
                     else

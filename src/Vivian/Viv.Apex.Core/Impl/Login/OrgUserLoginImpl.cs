@@ -11,7 +11,7 @@ using Viv.Entity.Enums;
 
 namespace Viv.Apex.Core.Impl.Login
 {
-    [VivDependency(Tag = (int)EmUserType.OrgUser)]
+    [VivDependency(Tag = EmUserType.OrgUser)]
     public class OrgUserLoginImpl : ILoginContract, IDependency
     {
         public Task<FuncResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
