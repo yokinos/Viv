@@ -62,6 +62,7 @@ namespace Viv.Engine
             builder.Services.AddMvc(options =>
             {
                 options.Filters.Add<VivExceptionFilterAttribute>();
+                options.Filters.Add<VivApiResultFilterAttribute>();
                 configureMvc?.Invoke(options);
             })
             .AddNewtonsoftJson(json =>

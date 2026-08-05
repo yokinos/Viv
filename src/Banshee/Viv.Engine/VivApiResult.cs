@@ -15,7 +15,7 @@ namespace Viv.Engine
     /// Viv API 通用响应封装
     /// </summary>
     [Serializable]
-    public class VivApiResult : IActionResult
+    public class VivApiResult : IVivApiResult
     {
         public VivApiResult() { }
         public VivApiResult(int code, string message) : this(code, message, default) { }
