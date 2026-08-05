@@ -17,7 +17,7 @@ namespace Viv.Engine.Filter
         public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
         {
             var result = context.Result;
-            if (result is IVivApiResult vivApiResult)
+            if (result is VivApiResult vivApiResult)
             {
                 if (vivApiResult.RequestId.IsNullOrEmpty())
                 {
