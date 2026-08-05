@@ -16,14 +16,6 @@ namespace Viv.Engine.Filter
     {
         public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
         {
-            var result = context.Result;
-            if (result is VivApiResult vivApiResult)
-            {
-                if (vivApiResult.RequestId.IsNullOrEmpty())
-                {
-                    vivApiResult.RequestId = context.HttpContext.TraceIdentifier;
-                }
-            }
             await next();
         }
     }
