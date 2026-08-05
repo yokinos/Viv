@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Text;
+﻿using System.ComponentModel.DataAnnotations;
+using Viv.Delusion.Extension;
 using Viv.Elysia.Request;
 using Viv.Entity.Enums;
 
@@ -36,5 +34,15 @@ namespace Viv.Apex.Core.Entity.Dto.Account.Request
         /// 一些登录情况下需要设置对应的登陆码
         /// </summary>
         public string? SubjectCode { get; set; }
+
+        public override string Validate()
+        {
+            if (UserType.HasValue && UserType != EmUserType.Master && SubjectCode.IsNullOrEmpty())
+            {
+                return "请携带对应的登录Code";
+            }
+
+            return base.Validate();
+        }
     }
 }

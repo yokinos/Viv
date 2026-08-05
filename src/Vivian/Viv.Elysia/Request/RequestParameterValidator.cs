@@ -118,7 +118,7 @@ namespace Viv.Elysia.Request
 
             if (value is IApiRequest request)
             {
-                return request.Validate(true) ?? string.Empty;
+                return request.Validate() ?? string.Empty;
             }
 
             if (value is IEnumerable enumerable &&

@@ -27,7 +27,7 @@ namespace Viv.Elysia.Request
         /// <summary>
         /// 自动校验
         /// </summary>
-        public virtual string Validate(bool isSkipSignValidate = true)
+        public virtual string Validate()
         {
             var validatingObjects = new HashSet<object>(ReferenceEqualityComparer.Instance); ;
             var validateError = RequestParameterValidator.Validate(this, validatingObjects);
