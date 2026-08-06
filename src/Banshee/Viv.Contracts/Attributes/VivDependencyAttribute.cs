@@ -21,7 +21,7 @@ namespace Viv.Contracts.Attributes
         public bool AsSelf { get; set; } = false;
 
         /// <summary>
-        /// 标记 大于 -1的标记生效
+        /// 标记
         /// </summary>
         public object? Tag { get; set; }
     }
