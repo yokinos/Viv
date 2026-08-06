@@ -7,10 +7,12 @@ namespace Viv.Engine.Options
 {
     public class EnvOptions
     {
-        public VivEnv Env { get; set; } 
+        public VivEnv Env { get; set; }
 
         public string? ServiceName { get; set; }
 
         public int MachineId { get; set; }
+
+        public VivServiceType ServiceType { get; set; }
     }
 }
