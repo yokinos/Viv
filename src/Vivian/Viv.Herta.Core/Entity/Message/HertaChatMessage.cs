@@ -11,10 +11,9 @@ namespace Viv.Herta.Core.Entity.Message
     public class HertaChatMessage
     {
         /// <summary>
-        /// 客户端AppId,标识由哪个客户端发的消息
-        /// 如果时是系统模拟发出的消息 则为0
+        /// 客户端AppId,标识由哪个客户端发的消息,如果时是系统模拟发出的消息,则没有
         /// </summary>
-        public long AppId { get; set; }
+        public long? AppId { get; set; }
 
         /// <summary>
         /// 消息Id

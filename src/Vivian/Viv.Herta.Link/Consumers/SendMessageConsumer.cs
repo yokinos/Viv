@@ -32,7 +32,7 @@ namespace Viv.Herta.Link.Consumers
             var chatMessage = new HertaChatMessage
             {
                 Id = message.MessageId,
-                AppId = message.Context?.AppId ?? 0,
+                AppId = message.Context?.AppId,
                 FromUserId = evt.FromUserId,
                 ToUserId = evt.TargetId,
                 Body = body,

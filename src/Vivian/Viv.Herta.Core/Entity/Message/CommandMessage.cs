@@ -17,6 +17,11 @@ namespace Viv.Herta.Core.Entity.Message
         public int Command { get; set; }
 
         /// <summary>
+        /// 子指令代号
+        /// </summary>
+        public int? SubjectCommand { get; set; }
+
+        /// <summary>
         /// 扩展消息
         /// </summary>
         public Dictionary<string, object> Extend { get; set; } = [];
