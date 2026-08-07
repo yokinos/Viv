@@ -1,0 +1,28 @@
+{
+  "EnvOption": {
+    "Env": 0,
+    "ServiceName": "viv.apex.api",
+    "MachineId": 101,
+    "ServiceType": 2
+  },
+  "DIOption": null,
+  "CacheOption": null,
+  "LogOption": {
+    "LogType": 1,
+    "IsUseSeq": true,
+    "SeqUrl": "https://seq.katoumegumi.net",
+    "SeqApiKey": "ohCWc0ZDqKIey7iC8g8R"
+  },
+  "DatabaseOption": null,
+  "NanaOption": null,
+  "TokenOption": {
+    "TokenType": 0,
+    "SecretKey": "VivsK2pR5xQ8dGjN3mL6tHfBvYwApex",
+    "ExpireMinutes": 120,
+    "Issuer": "viv.system.net",
+    "Audience": "viv.system.net"
+  },
+  "TickOption": null,
+  "EchoOption": null,
+  "S3Option": null
+}
