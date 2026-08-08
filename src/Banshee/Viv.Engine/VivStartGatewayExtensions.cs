@@ -184,7 +184,6 @@ namespace Viv.Engine
                 {
                     // .NET 10 JwtBearer 只映射 sub → NameIdentifier（name 保持短格式），两种都兼容。
                     var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? "";
-
                     context.Request.Headers[Power.RequestTokenAnalysisMagic.UserIdHeader] = userId;
                     context.Request.Headers[Power.RequestTokenAnalysisMagic.AppIdHeader] = context.User.FindFirstValue(VivClaimTypes.AppId) ?? "";
                     context.Request.Headers[Power.RequestTokenAnalysisMagic.SubjectIdHeader] = context.User.FindFirstValue(VivClaimTypes.TenantId) ?? "";
