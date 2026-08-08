@@ -34,12 +34,12 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums |
 | `Viv.Delusion` | Utility library — `TypeScanMagic` (assembly type scanning), `ObjectMapper` (Emit + Expression-based), encryption, common extensions |
 | `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios |
-| `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig("viv.config.json")` deserializes all config into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` and `VivWorkerExtensions` for one-liner startup |
+| `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig("viv.config.json")` deserializes all config into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup |
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
 | `Viv.Momo` | Database — `IVivDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server |
 | `Viv.Nana` | Messaging — `IVivPublisher` / `NanaEventPublisher` (publish + delayed publish); `VivConsumer<T>` base class; built on **MassTransit + RabbitMQ**; Saga support with EF Core state persistence |
 | `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`) |
-| `Viv.Authentication` | JWT — `ITokenService` / `JwtTokenService`; token type configurable per `TokenOption` |
+| `Viv.Sandrone` | Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service` |
 | `Viv.Echo` | Service-to-service communication — HTTP + gRPC clients |
 | `Viv.Tick` | Background scheduling — `TickerQ` integration for cron/interval job execution with dashboard |
 | `Viv.Cli` | **CLI framework** — `VivCliHost` (REPL loop + Spectre.Console.Cli `CommandApp`); `[VivCommand]` auto-discovery; built-in `Cmd_Clear`; `Out` (formatted output) and `InputMagic` (interactive input) utilities |
@@ -72,7 +72,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | Project | Role |
 |---|---|
 | `Viv.Aspire.AppHost` | .NET Aspire orchestrator — launches all services with dependency ordering |
-| `Viv.Aspire.Gateway` | **YARP** reverse proxy — rate limiting, output cache, JWT token forwarding to downstream services |
+| `Viv.Aspire.Gateway` | **YARP** reverse proxy — 由框架层 `VivStartGatewayExtensions` 启动；限流、输出缓存、JWT 验证（`TokenOption` 对称密钥）、认证后向透传 `X-User-Id`/`X-User-Name` 头 |
 | `Viv.Aspire.ServiceDefaults` | OpenTelemetry tracing/metrics, `/health` + `/alive` endpoints, service discovery, HTTP resilience |
 
 ### Test (`src/Test/`)
@@ -85,7 +85,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 
 ## Key Patterns
 
-### Startup: one-liner API & Worker
+### Startup: one-liner API & Worker & Gateway
 
 Do **not** copy `Program.cs` boilerplate. Use the framework extension methods:
 
@@ -102,11 +102,20 @@ builder.AddServiceDefaults();
 builder.AddVivWorker();
 builder.Services.AddHostedService<Worker>();
 builder.RunVivWorker();
+
+// ── Gateway（YARP 反向代理）─────────────────────────
+var builder = WebApplication.CreateBuilder(args);
+builder.AddServiceDefaults();
+builder.AddVivGateway();                      // 读 viv.config.json + viv.yarp.json + viv.ratelimit.json
+builder.RunVivGateway(app => app.MapDefaultEndpoints());
 ```
 
 - `AddVivApi` / `AddVivWorker` handle config load, Autofac setup, `AddViv()`, MVC/filters, CORS, Swagger, and encoding registration.
 - `RunVivApi` handles Build → VivLocator → Swagger UI (dev) → middleware pipeline → Run. Accepts an `Action<WebApplication>? configure` for custom endpoints (`UseTickerQ()`, `MapHub()`, etc.).
 - `RunVivWorker` handles Build → VivLocator → Run.
+- `AddVivGateway` handles config load、Autofac、`AddViv()`、JWT 验证（读 `TokenOption` 对称密钥）、CORS、OutputCache、RateLimiter、`AddReverseProxy()`；`RunVivGateway` 管道：Build → VivLocator → WebSocket → CORS → OutputCache → RateLimiter → Authentication → Authorization → **用户头透传**（认证后把 `sub`/`name` claims 写入 `X-User-Id`/`X-User-Name` 请求头）→ `MapReverseProxy` → Run。
+- **YARP 鉴权路由**：`viv.yarp.json` 的受保护路由用 `"AuthorizationPolicy": "default"`（而非 `"Metadata": { "Authorize": true }` —— YARP 2.3.0 会静默丢弃该元数据，端点不产生 `IAuthorizeData`，鉴权中间件不生效）。
+- **JWT SecretKey ≥ 32 字节**：IdentityModel 8.x 的 HS256 强制要求 ≥256 bit（`IDX10720`），且 `TokenOption` 必须在**所有会签发/验证 token 的服务间保持一致**（含网关）。
 - `AddServiceDefaults()` and `MapDefaultEndpoints()` are **caller-side** Aspire concerns; the framework does not reference Aspire.
 
 ### Configuration: `viv.config.json`

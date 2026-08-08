@@ -1,11 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Viv · Gateway</title>
+    <title>Viv · 网关启动</title>
 
     <style>
+        /* ===== 全局重置 & 变量 ===== */
         :root {
             --yellow: #d9ff00;
             --yellow-glow: rgba(217, 255, 0, 0.25);
@@ -25,8 +26,7 @@
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, 'Microsoft YaHei', Arial, sans-serif;
         }
 
-        html,
-        body {
+        html, body {
             min-width: 320px;
             overflow-x: hidden;
             background: var(--bg-dark);
@@ -293,11 +293,10 @@
             }
         }
 
-        /* ---- 欢迎卡片 ---- */
         .welcome-card {
             position: relative;
             z-index: 10;
-            max-width: 720px;
+            max-width: 640px;
             width: 100%;
             padding: 56px 52px 48px;
             background: var(--bg-card);
@@ -367,7 +366,6 @@
                 -webkit-text-fill-color: var(--yellow);
             }
 
-        /* ---- 状态指示器 ---- */
         .status-row {
             display: flex;
             align-items: center;
@@ -416,12 +414,11 @@
                 font-weight: 600;
             }
 
-        /* ---- 网关元信息 ---- */
         .card-meta {
             display: flex;
             justify-content: center;
             gap: 40px;
-            margin-bottom: 28px;
+            margin-bottom: 32px;
             flex-wrap: wrap;
         }
 
@@ -450,7 +447,7 @@
                     color: var(--yellow);
                 }
 
-        /* ---- 服务列表（可点击） ---- */
+        /* ---- 服务列表（Aspire 已注册服务，可点击） ---- */
         .service-list {
             display: flex;
             justify-content: center;
@@ -496,14 +493,6 @@
                 flex-shrink: 0;
             }
 
-                .service-tag .status.degraded {
-                    background: #fbbf24;
-                }
-
-                .service-tag .status.down {
-                    background: #f87171;
-                }
-
             .service-tag .arrow {
                 font-size: 11px;
                 opacity: 0.4;
@@ -514,7 +503,6 @@
                 opacity: 1;
             }
 
-        /* ---- 操作按钮 ---- */
         .card-actions {
             display: flex;
             gap: 14px;
@@ -532,8 +520,6 @@
             letter-spacing: 0.3px;
             transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             box-shadow: 0 0 0 0 var(--yellow-glow);
-            text-decoration: none;
-            display: inline-block;
         }
 
             .btn-primary:hover {
@@ -555,8 +541,6 @@
             font-weight: 500;
             border: 1px solid rgba(255, 255, 255, 0.06);
             transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
         }
 
             .btn-ghost:hover {
@@ -730,16 +714,6 @@
                 font-size: 13px;
             }
 
-            .service-list {
-                gap: 6px;
-                padding: 10px 12px;
-            }
-
-            .service-tag {
-                font-size: 11px;
-                padding: 3px 12px;
-            }
-
             .btn-primary {
                 padding: 10px 26px;
                 font-size: 13px;
@@ -750,6 +724,16 @@
                 padding: 10px 20px;
                 font-size: 13px;
                 width: 100%;
+            }
+
+            .service-list {
+                gap: 6px;
+                padding: 10px 12px;
+            }
+
+            .service-tag {
+                font-size: 11px;
+                padding: 3px 12px;
             }
 
             .card-actions {
@@ -772,23 +756,20 @@
 
 <body>
 
-    <!-- ===== 顶部导航 ===== -->
     <header class="top-header">
         <div class="logo-group">
             <div class="logo-box">Viv</div>
-            <div class="logo-text">Gateway · <span>YARP</span></div>
+            <div class="logo-text">Gateway · <span>Service</span></div>
         </div>
         <div class="nav-single">
-            <a href="#" class="nav-item">Welcome</a>
+            <a href="#" class="nav-item">Gateway</a>
         </div>
     </header>
 
-    <!-- ===== 主区域 ===== -->
     <main class="main-wrap">
         <div class="orb orb--1"></div>
         <div class="orb orb--2"></div>
         <div class="orb orb--3"></div>
-
         <div class="particles">
             <div class="particle"></div>
             <div class="particle"></div>
@@ -803,11 +784,10 @@
             <span class="card-icon">🌐</span>
             <h1 class="card-title">Viv Gateway</h1>
             <p class="card-sub">
-                统一入口 · 智能路由 · 流量治理<br />
-                <strong>YARP 1.2.0</strong> 已稳定运行
+                统一入口 · 智能路由 · 安全转发<br />
+                <strong>{ServiceName}</strong> 已稳定运行
             </p>
 
-            <!-- 状态 -->
             <div class="status-row">
                 <span class="status-dot" id="statusDot"></span>
                 <span class="status-label">
@@ -815,40 +795,33 @@
                 </span>
             </div>
 
-            <!-- 元信息 -->
             <div class="card-meta">
                 <div class="meta-item">
                     <span class="label">运行时长</span>
-                    <span class="value" id="uptimeDisplay">{StartTimeMs}</span>
+                    <span class="value" id="uptimeDisplay">--</span>
                 </div>
                 <div class="meta-item">
                     <span class="label">环境</span>
                     <span class="value"><span class="highlight">{Env}</span></span>
                 </div>
                 <div class="meta-item">
-                    <span class="label">节点</span>
-                    <span class="value">{Node}</span>
+                    <span class="label">机器Id</span>
+                    <span class="value">{MachineId}</span>
                 </div>
             </div>
 
-            <!-- 服务列表（可点击跳转文档） -->
-            <div class="service-list" id="serviceList">
-                <!-- 由后端动态生成 -->
-                {ServiceTags}
-            </div>
+            <!-- Aspire 已注册服务（点击直达对应服务），由 ApiStartedMiddleware 注入 -->
+            {ServiceList}
 
-            <!-- 操作 -->
             <div class="card-actions">
-                <a href="/docs" class="btn-primary">查看所有服务文档 →</a>
-                <button type="button" class="btn-ghost" id="healthBtn">● 健康检查</button>
+                <button type="button" class="btn-primary" id="healthBtn">● 健康检查</button>
+                <button type="button" class="btn-ghost" id="homeBtn">返回首页</button>
             </div>
         </section>
     </main>
 
     <script>
-        // ============================================================
-        // 1. 健康检查（真实请求网关 /health）
-        // ============================================================
+        // 1. 健康检查 —— 支持纯文本 "Healthy" 和 JSON
         const healthBtn = document.getElementById('healthBtn');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
@@ -884,7 +857,6 @@
                     statusDot.style.boxShadow = '0 0 16px rgba(74, 222, 128, 0.35)';
                     statusText.textContent = '运行中';
                     statusText.style.color = '#4ade80';
-
                     healthBtn.textContent = '✓ 全部正常';
                     healthBtn.style.color = '#4ade80';
                     healthBtn.style.borderColor = 'rgba(74, 222, 128, 0.25)';
@@ -897,7 +869,6 @@
                 statusDot.style.boxShadow = '0 0 16px rgba(248, 113, 113, 0.35)';
                 statusText.textContent = '异常';
                 statusText.style.color = '#f87171';
-
                 healthBtn.textContent = '✗ 连接失败';
                 healthBtn.style.color = '#f87171';
                 healthBtn.style.borderColor = 'rgba(248, 113, 113, 0.25)';
@@ -917,9 +888,12 @@
 
         healthBtn.addEventListener('click', checkHealth);
 
-        // ============================================================
-        // 2. 运行时长动态更新
-        // ============================================================
+        // 2. 返回首页
+        document.getElementById('homeBtn').addEventListener('click', function () {
+            window.location.href = '/';
+        });
+
+        // 3. 运行时长（占位符 {StartTimeMs} 由 ApiStartedMiddleware 注入 Unix 毫秒时间戳）
         const startTimeMs = {StartTimeMs};
 
         function formatUptime(ms) {
@@ -929,7 +903,6 @@
             const hours = Math.floor((totalSec % 86400) / 3600);
             const minutes = Math.floor((totalSec % 3600) / 60);
             const seconds = totalSec % 60;
-
             const parts = [];
             if (days > 0) parts.push(`${days}d`);
             if (hours > 0) parts.push(`${hours}h`);
@@ -939,31 +912,14 @@
         }
 
         const uptimeEl = document.getElementById('uptimeDisplay');
-
         function updateUptime() {
-            const elapsed = Date.now() - startTimeMs;
-            uptimeEl.textContent = formatUptime(elapsed);
+            uptimeEl.textContent = formatUptime(Date.now() - startTimeMs);
         }
-
         updateUptime();
         setInterval(updateUptime, 1000);
 
-        // ============================================================
-        // 3. 键盘快捷键：按 D 键跳转文档
-        // ============================================================
-        document.addEventListener('keydown', function (e) {
-            if ((e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey && !e.altKey) {
-                const target = e.target;
-                if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && target.tagName !== 'SELECT') {
-                    e.preventDefault();
-                    window.location.href = '/docs';
-                }
-            }
-        });
-
-        console.log('%c🌐 Viv Gateway · 已启动', 'font-size:20px; font-weight:700; color:#d9ff00;');
-        console.log('%c📖 按 D 键快速查看服务文档', 'font-size:13px; color:#888;');
-        console.log('%c🔍 点击“健康检查”验证网关状态', 'font-size:13px; color:#888;');
+        console.log('%c🌐 Viv Gateway · 网关已启动', 'font-size:20px; font-weight:700; color:#d9ff00;');
+        console.log('%c🔍 点击"健康检查"验证网关状态', 'font-size:13px; color:#888;');
     </script>
 
 </body>

@@ -8,6 +8,11 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<!-- 完整引用 ASP.NET Core 共享框架（JwtBearer/RateLimiter/OutputCache/WebSockets 均来自 Microsoft.AspNetCore.App） -->
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\Viv.Aoi\Viv.Aoi.csproj" />
 		<ProjectReference Include="..\Viv.Clockwork\Viv.Clockwork.csproj" />
 		<ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
@@ -20,10 +25,23 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
+		<!-- .NET 10 已从共享框架移除 JwtBearer，需显式引用 -->
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+		<!-- 与服务端 JwtTokenService（Viv.Contracts 引 System.IdentityModel.Tokens.Jwt 8.22.0）对齐 IdentityModel 版本：
+		     若只缓存 8.0.1 的 Protocols.OpenIdConnect，JwtBearer 的传递依赖会被钉到 8.0.1，
+		     而 8.0.1 的 JsonWebTokenHandler 拒绝无 kid 的令牌（IDX10517），8.x 后续版本已修复。 -->
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <None Update="Web\notfound.html">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	  <None Update="Web\welcome.html">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Web\gateway.html">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>
 	</ItemGroup>

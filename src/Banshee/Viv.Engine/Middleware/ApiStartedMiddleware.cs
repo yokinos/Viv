@@ -1,8 +1,11 @@
 ﻿using Microsoft.AspNetCore.Http;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Text;
+using Viv.Contracts.Enums;
 using Viv.Delusion.Extension;
 
 namespace Viv.Engine.Middleware
@@ -43,8 +46,12 @@ namespace Viv.Engine.Middleware
         {
             context.Response.ContentType = "text/html; charset=utf-8";
 
+            var option = VivEngine.VivOptions.EnvOption;
             var baseDir = AppContext.BaseDirectory;
-            var path = Path.Combine(baseDir, "web", "welcome.html");
+
+            // 网关服务显示专属欢迎页 gateway.html，其余服务显示通用 welcome.html
+            var isGateway = option != null && option.ServiceType == VivServiceType.Gateway;
+            var path = Path.Combine(baseDir, "web", isGateway ? "gateway.html" : "welcome.html");
 
             if (!File.Exists(path))
             {
@@ -52,7 +59,6 @@ namespace Viv.Engine.Middleware
                 return;
             }
 
-            var option = VivEngine.VivOptions.EnvOption;
             var startTime = VivEngine.VivAppStartTime.GetValueOrDefault();
 
             var htmlTemplate = await File.ReadAllTextAsync(path);
@@ -61,6 +67,12 @@ namespace Viv.Engine.Middleware
                 .Replace("{Env}", option.Env.ToString())
                 .Replace("{StartTimeMs}", startTime.ToUnixTime(true).ToString())
                 .Replace("{ServiceName}", option.ServiceName ?? "Service");
+
+            // 网关页展示 Aspire 已注册的服务（WithReference 注入的 services__* 环境变量），点击直达对应服务
+            if (isGateway)
+            {
+                html = html.Replace("{ServiceList}", BuildGatewayServiceListHtml(LoadGatewayServices()));
+            }
 
             await context.Response.WriteAsync(html);
         }
@@ -79,5 +91,105 @@ namespace Viv.Engine.Middleware
 
             await context.Response.WriteAsync(await File.ReadAllTextAsync(path));
         }
+
+        private const string ServicesEnvPrefix = "services__";
+
+        /// <summary>
+        /// 枚举 Aspire 注入的 services__* 环境变量，得到被引用服务的可点击地址列表。
+        /// 仅当网关由 AppHost 启动（WithReference）时才有数据；独立启动时为空。
+        /// </summary>
+        private static List<GatewayServiceInfo> LoadGatewayServices()
+        {
+            var found = new Dictionary<string, Uri>(StringComparer.OrdinalIgnoreCase);
+            foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
+            {
+                var key = entry.Key?.ToString();
+                var value = entry.Value?.ToString();
+                if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(value) ||
+                    !key.StartsWith(ServicesEnvPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var name = SplitServiceName(key.Substring(ServicesEnvPrefix.Length));
+                if (string.IsNullOrEmpty(name) || !Uri.TryCreate(value, UriKind.Absolute, out var uri))
+                {
+                    continue;
+                }
+
+                // 同一服务有多个端点（http/https）时优先 http，便于浏览器直接访问
+                if (!found.TryGetValue(name, out var existing) ||
+                    (uri.Scheme == Uri.UriSchemeHttp && existing.Scheme != Uri.UriSchemeHttp))
+                {
+                    found[name] = uri;
+                }
+            }
+
+            return found
+                .Select(kv => new GatewayServiceInfo(kv.Key, kv.Value))
+                .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        /// <summary>
+        /// 去掉 services__ 之后末尾的端点描述段，还原服务名：
+        ///   viv-apex-api__http__0         -> viv-apex-api
+        ///   viv-apex-api__0               -> viv-apex-api
+        ///   viv-apex-api__default__0      -> viv-apex-api
+        ///   viv-apex-api__0__endpoints__0 -> viv-apex-api
+        /// </summary>
+        private static string? SplitServiceName(string remainder)
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                var idx = remainder.LastIndexOf("__", StringComparison.Ordinal);
+                if (idx <= 0)
+                {
+                    break;
+                }
+
+                var segment = remainder.Substring(idx + 2);
+                if (segment.Equals("http", StringComparison.OrdinalIgnoreCase) ||
+                    segment.Equals("https", StringComparison.OrdinalIgnoreCase) ||
+                    segment.Equals("default", StringComparison.OrdinalIgnoreCase) ||
+                    segment.Equals("endpoints", StringComparison.OrdinalIgnoreCase) ||
+                    segment.All(char.IsDigit))
+                {
+                    remainder = remainder.Substring(0, idx);
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return remainder;
+        }
+
+        /// <summary>
+        /// 把服务列表渲染为 gateway.html 的 {ServiceList} 片段；无服务时返回空串（隐藏整个区块）。
+        /// </summary>
+        private static string BuildGatewayServiceListHtml(List<GatewayServiceInfo> services)
+        {
+            if (services.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var sb = new StringBuilder();
+            sb.Append("<div class=\"service-list\">");
+            foreach (var s in services)
+            {
+                sb.Append("<a class=\"service-tag\" href=\"")
+                  .Append(WebUtility.HtmlEncode(s.Uri.ToString()))
+                  .Append("\" target=\"_blank\" rel=\"noopener\"><span class=\"status\"></span>")
+                  .Append(WebUtility.HtmlEncode(s.Name))
+                  .Append("<span class=\"arrow\">→</span></a>");
+            }
+            sb.Append("</div>");
+            return sb.ToString();
+        }
+
+        private sealed record GatewayServiceInfo(string Name, Uri Uri);
     }
 }

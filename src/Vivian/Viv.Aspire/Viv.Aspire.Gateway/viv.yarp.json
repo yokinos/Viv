@@ -3,108 +3,160 @@
     "Clusters": {
       "apex": {
         "Destinations": {
-          "d1": { "Address": "https://localhost:7093" }
+          "d1": {
+            "Address": "https://localhost:7093"
+          }
         }
       },
       "herta": {
         "Destinations": {
-          "d1": { "Address": "http://viv-herta-api" }
-        } 
+          "d1": {
+            "Address": "http://viv-herta-api"
+          }
+        }
       },
       "hertalink": {
         "Destinations": {
-          "d1": { "Address": "http://viv-herta-link" }
+          "d1": {
+            "Address": "http://viv-herta-link"
+          }
         }
       },
       "robin": {
         "Destinations": {
-          "d1": { "Address": "http://viv-robin-api" }
+          "d1": {
+            "Address": "http://viv-robin-api"
+          }
         }
       }
     },
     "Routes": {
       "apex-open-route": {
         "ClusterId": "apex",
-        "Match": { "Path": "/apex/open/{**catch-all}" },
+        "Match": {
+          "Path": "/apex/open/{**catch-all}"
+        },
         "Transforms": [
-          { "PathRemovePrefix": "/apex/open" },
-          { "PathPrefix": "/api" }
+          {
+            "PathRemovePrefix": "/apex/open"
+          },
+          {
+            "PathPrefix": "/api"
+          }
         ]
       },
       "apex-route": {
         "ClusterId": "apex",
-        "Match": { "Path": "/apex/{**catch-all}" },
-        "Metadata": {
-          "Authorize": true
+        "Match": {
+          "Path": "/apex/{**catch-all}"
         },
+        "AuthorizationPolicy": "default",
         "Transforms": [
-          { "PathRemovePrefix": "/apex" },
-          { "PathPrefix": "/api" }
+          {
+            "PathRemovePrefix": "/apex"
+          },
+          {
+            "PathPrefix": "/api"
+          }
         ]
       },
       "herta-open-route": {
         "ClusterId": "herta",
-        "Match": { "Path": "/herta/open/{**catch-all}" },
+        "Match": {
+          "Path": "/herta/open/{**catch-all}"
+        },
         "Transforms": [
-          { "PathRemovePrefix": "/herta/open" },
-          { "PathPrefix": "/api" }
+          {
+            "PathRemovePrefix": "/herta/open"
+          },
+          {
+            "PathPrefix": "/api"
+          }
         ]
       },
       "herta-route": {
         "ClusterId": "herta",
-        "Match": { "Path": "/herta/{**catch-all}" },
-        "Metadata": {
-          "Authorize": true
+        "Match": {
+          "Path": "/herta/{**catch-all}"
         },
         "Transforms": [
-          { "PathRemovePrefix": "/herta" },
-          { "PathPrefix": "/api" }
-        ]
+          {
+            "PathRemovePrefix": "/herta"
+          },
+          {
+            "PathPrefix": "/api"
+          }
+        ],
+        "AuthorizationPolicy": "default"
       },
       "hertalink-open-route": {
         "ClusterId": "hertalink",
-        "Match": { "Path": "/hertalink/open/{**catch-all}" },
+        "Match": {
+          "Path": "/hertalink/open/{**catch-all}"
+        },
         "Transforms": [
-          { "PathRemovePrefix": "/hertalink/open" },
-          { "PathPrefix": "/api" }
+          {
+            "PathRemovePrefix": "/hertalink/open"
+          },
+          {
+            "PathPrefix": "/api"
+          }
         ]
       },
       "hertalink-route": {
         "ClusterId": "hertalink",
-        "Match": { "Path": "/hertalink/{**catch-all}" },
-        "Metadata": {
-          "Authorize": true
+        "Match": {
+          "Path": "/hertalink/{**catch-all}"
         },
         "Transforms": [
-          { "PathRemovePrefix": "/hertalink" },
-          { "PathPrefix": "/api" }
-        ]
+          {
+            "PathRemovePrefix": "/hertalink"
+          },
+          {
+            "PathPrefix": "/api"
+          }
+        ],
+        "AuthorizationPolicy": "default"
       },
       "hertalink-chat-route": {
         "ClusterId": "hertalink",
-        "Match": { "Path": "/hertalink/chat/{**catch-all}" },
+        "Match": {
+          "Path": "/hertalink/chat/{**catch-all}"
+        },
         "Transforms": [
-          { "PathRemovePrefix": "/hertalink" }
+          {
+            "PathRemovePrefix": "/hertalink"
+          }
         ]
       },
       "robin-open-route": {
         "ClusterId": "robin",
-        "Match": { "Path": "/robin/open/{**catch-all}" },
+        "Match": {
+          "Path": "/robin/open/{**catch-all}"
+        },
         "Transforms": [
-          { "PathRemovePrefix": "/robin/open" },
-          { "PathPrefix": "/api" }
+          {
+            "PathRemovePrefix": "/robin/open"
+          },
+          {
+            "PathPrefix": "/api"
+          }
         ]
       },
       "robin-route": {
         "ClusterId": "robin",
-        "Match": { "Path": "/robin/{**catch-all}" },
-        "Metadata": {
-          "Authorize": true
+        "Match": {
+          "Path": "/robin/{**catch-all}"
         },
         "Transforms": [
-          { "PathRemovePrefix": "/robin" },
-          { "PathPrefix": "/api" }
-        ]
+          {
+            "PathRemovePrefix": "/robin"
+          },
+          {
+            "PathPrefix": "/api"
+          }
+        ],
+        "AuthorizationPolicy": "default"
       }
     }
   }

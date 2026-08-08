@@ -1,9 +1,11 @@
-﻿namespace Viv.Aspire.Gateway.Options
+namespace Viv.Engine.Options
 {
     public class VivRateLimitOptions
     {
-        public const string CustomRateLimit = "VivRateLimit";
-
+        /// <summary>
+        /// viv.ratelimit.json 中限流配置的节名
+        /// </summary>
+        public const string CustomRateLimit = "CustomRateLimit";
 
         public int PermitLimit { get; set; } = 100;
         public int Window { get; set; } = 10;

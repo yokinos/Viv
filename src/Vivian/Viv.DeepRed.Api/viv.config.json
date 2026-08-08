@@ -74,7 +74,7 @@
   },
   "TokenOption": {
     "TokenType": 0,
-    "SecretKey": "VivsK2pR5xQ8dGjN3mL6tHfBvYwApex",
+    "SecretKey": "JKU16wxWNDO7zu2Ut72fKZBV6G4yyLK8FN5V9Hse",
     "ExpireMinutes": 120,
     "Issuer": "viv.system.net",
     "Audience": "viv.system.net"
