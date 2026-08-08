@@ -1,5 +1,6 @@
 ﻿using Microsoft.IdentityModel.Tokens;
 using System;
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -46,6 +47,17 @@ namespace Viv.Sandrone.Impl
                 new Claim(JwtRegisteredClaimNames.Exp, DateTimeOffset.UtcNow.AddMinutes(_options.ExpireMinutes).ToUnixTimeSeconds().ToString()),
                 new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
             };
+
+            // Viv 上下文 Claims：网关验签后透传给下游的 x-viv-appId / x-viv-subjectId 头
+            if (payload.AppId > 0)
+            {
+                claims.Add(new Claim(VivClaimTypes.AppId, payload.AppId.ToString(CultureInfo.InvariantCulture)));
+            }
+
+            if (payload.TenantId > 0)
+            {
+                claims.Add(new Claim(VivClaimTypes.TenantId, payload.TenantId.ToString(CultureInfo.InvariantCulture)));
+            }
 
             // 添加角色Claims
             foreach (var role in payload.Roles)
@@ -119,8 +131,12 @@ namespace Viv.Sandrone.Impl
                     Roles = jwtToken.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList()
                 };
 
+                // 解析 Viv 上下文 Claims（AppId / TenantId），缺失时默认 0
+                payload.AppId = jwtToken.Claims.FirstOrDefault(c => c.Type == VivClaimTypes.AppId)?.Value.As<long>() ?? 0;
+                payload.TenantId = jwtToken.Claims.FirstOrDefault(c => c.Type == VivClaimTypes.TenantId)?.Value.As<long>() ?? 0;
+
                 // 解析自定义扩展字段（排除内置Claim）
-                var builtInClaims = new[] { JwtRegisteredClaimNames.Sub, JwtRegisteredClaimNames.Name, ClaimTypes.Role, JwtRegisteredClaimNames.Iss, JwtRegisteredClaimNames.Aud, JwtRegisteredClaimNames.Exp, JwtRegisteredClaimNames.Iat };
+                var builtInClaims = new[] { JwtRegisteredClaimNames.Sub, JwtRegisteredClaimNames.Name, ClaimTypes.Role, JwtRegisteredClaimNames.Iss, JwtRegisteredClaimNames.Aud, JwtRegisteredClaimNames.Exp, JwtRegisteredClaimNames.Iat, VivClaimTypes.AppId, VivClaimTypes.TenantId };
                 foreach (var claim in jwtToken.Claims.Where(c => !builtInClaims.Contains(c.Type)))
                 {
                     payload.Extensions.Add(claim.Type, claim.Value);

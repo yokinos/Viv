@@ -14,6 +14,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using Viv.Aoi;
+using Viv.Contracts.Models;
 using Viv.Engine.Options;
 using Yarp.ReverseProxy;
 using Yarp.ReverseProxy.Configuration;
@@ -162,17 +163,32 @@ namespace Viv.Engine
             app.UseAuthentication();
             app.UseAuthorization();
 
-            // 认证后把用户信息透传给下游（claims 仅在认证后可用）
+            // 认证后把用户信息透传给下游（claims 仅在认证后可用）。
+            // Header 契约与 RequestTokenAnalysisMagic 对齐：
+            //   x-viv-appId / x-viv-subjectId(=TenantId) / x-viv-userId / x-viv-serviceName
+            // 先剥离客户端可能伪造的 x-viv-* 上下文头，只回填来自验签 token 的值。
             app.Use(async (context, next) =>
             {
+                foreach (var header in new[]
+                {
+                    Power.RequestTokenAnalysisMagic.AppIdHeader,
+                    Power.RequestTokenAnalysisMagic.SubjectIdHeader,
+                    Power.RequestTokenAnalysisMagic.UserIdHeader,
+                    Power.RequestTokenAnalysisMagic.ServiceNameHeader
+                })
+                {
+                    context.Request.Headers.Remove(header);
+                }
+
                 if (context.User.Identity?.IsAuthenticated == true)
                 {
-                    // .NET 10 JwtBearer 只映射 sub → NameIdentifier 等核心 claims，
-                    // name 保持短格式（JwtRegisteredClaimNames.Name），需同时兼容两种类型。
-                    context.Request.Headers["X-User-Id"] =
-                        context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? "";
-                    context.Request.Headers["X-User-Name"] =
-                        context.User.FindFirstValue(ClaimTypes.Name) ?? context.User.FindFirstValue(JwtRegisteredClaimNames.Name) ?? "";
+                    // .NET 10 JwtBearer 只映射 sub → NameIdentifier（name 保持短格式），两种都兼容。
+                    var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? "";
+
+                    context.Request.Headers[Power.RequestTokenAnalysisMagic.UserIdHeader] = userId;
+                    context.Request.Headers[Power.RequestTokenAnalysisMagic.AppIdHeader] = context.User.FindFirstValue(VivClaimTypes.AppId) ?? "";
+                    context.Request.Headers[Power.RequestTokenAnalysisMagic.SubjectIdHeader] = context.User.FindFirstValue(VivClaimTypes.TenantId) ?? "";
+                    context.Request.Headers[Power.RequestTokenAnalysisMagic.ServiceNameHeader] = VivEngine.VivOptions?.EnvOption?.ServiceName ?? "";
                 }
 
                 await next();
