@@ -28,6 +28,20 @@
             "Address": "http://viv-robin-api"
           }
         }
+      },
+      "deepred": {
+        "Destinations": {
+          "d1": {
+            "Address": "http://viv-deepred-api"
+          }
+        }
+      },
+      "sakumai": {
+        "Destinations": {
+          "d1": {
+            "Address": "http://viv-sakumai-api"
+          }
+        }
       }
     },
     "Routes": {
@@ -157,6 +171,62 @@
           }
         ],
         "AuthorizationPolicy": "default"
+      },
+
+      "docs-apex-route": {
+        "ClusterId": "apex",
+        "Match": {
+          "Path": "/docs/viv-apex-api/{**catch-all}"
+        },
+        "Transforms": [
+          {
+            "PathRemovePrefix": "/docs/viv-apex-api"
+          }
+        ]
+      },
+      "docs-herta-route": {
+        "ClusterId": "herta",
+        "Match": {
+          "Path": "/docs/viv-herta-api/{**catch-all}"
+        },
+        "Transforms": [
+          {
+            "PathRemovePrefix": "/docs/viv-herta-api"
+          }
+        ]
+      },
+      "docs-hertalink-route": {
+        "ClusterId": "hertalink",
+        "Match": {
+          "Path": "/docs/viv-herta-link/{**catch-all}"
+        },
+        "Transforms": [
+          {
+            "PathRemovePrefix": "/docs/viv-herta-link"
+          }
+        ]
+      },
+      "docs-deepred-route": {
+        "ClusterId": "deepred",
+        "Match": {
+          "Path": "/docs/viv-deepred-api/{**catch-all}"
+        },
+        "Transforms": [
+          {
+            "PathRemovePrefix": "/docs/viv-deepred-api"
+          }
+        ]
+      },
+      "docs-sakumai-route": {
+        "ClusterId": "sakumai",
+        "Match": {
+          "Path": "/docs/viv-sakumai-api/{**catch-all}"
+        },
+        "Transforms": [
+          {
+            "PathRemovePrefix": "/docs/viv-sakumai-api"
+          }
+        ]
       }
     }
   }

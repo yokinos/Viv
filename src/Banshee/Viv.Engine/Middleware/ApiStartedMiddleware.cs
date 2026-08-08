@@ -68,7 +68,7 @@ namespace Viv.Engine.Middleware
                 .Replace("{StartTimeMs}", startTime.ToUnixTime(true).ToString())
                 .Replace("{ServiceName}", option.ServiceName ?? "Service");
 
-            // 网关页展示 Aspire 已注册的服务（WithReference 注入的 services__* 环境变量），点击直达对应服务
+            // 网关页展示 Aspire 已注册的服务（WithReference 注入的 services__* 环境变量），点击经网关打开各服务 Scalar 文档
             if (isGateway)
             {
                 html = html.Replace("{ServiceList}", BuildGatewayServiceListHtml(LoadGatewayServices()));
@@ -180,9 +180,12 @@ namespace Viv.Engine.Middleware
             sb.Append("<div class=\"service-list\">");
             foreach (var s in services)
             {
+                // 文档经网关访问（viv.yarp.json 的 /docs/{服务名} 路由），不跳转服务自身地址。
+                // 尾斜杠避免下游 302 /scalar -> /scalar/ 后浏览器请求落到网关根路径。
                 sb.Append("<a class=\"service-tag\" href=\"")
-                  .Append(WebUtility.HtmlEncode(s.Uri.ToString()))
-                  .Append("\" target=\"_blank\" rel=\"noopener\"><span class=\"status\"></span>")
+                  .Append("/docs/")
+                  .Append(WebUtility.HtmlEncode(s.Name))
+                  .Append("/scalar/\" target=\"_blank\" rel=\"noopener\"><span class=\"status\"></span>")
                   .Append(WebUtility.HtmlEncode(s.Name))
                   .Append("<span class=\"arrow\">→</span></a>");
             }

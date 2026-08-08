@@ -115,6 +115,7 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 - `RunVivWorker` handles Build → VivLocator → Run.
 - `AddVivGateway` handles config load、Autofac、`AddViv()`、JWT 验证（读 `TokenOption` 对称密钥）、CORS、OutputCache、RateLimiter、`AddReverseProxy()`；`RunVivGateway` 管道：Build → VivLocator → WebSocket → CORS → OutputCache → RateLimiter → Authentication → Authorization → **上下文头透传**（先剥离客户端伪造的 `x-viv-*` 头，认证后从 token claims 回填 `x-viv-appId`/`x-viv-subjectId`(=TenantId)/`x-viv-userId`/`x-viv-serviceName`）→ `MapReverseProxy` → Run。
 - **YARP 鉴权路由**：`viv.yarp.json` 的受保护路由用 `"AuthorizationPolicy": "default"`（而非 `"Metadata": { "Authorize": true }` —— YARP 2.3.0 会静默丢弃该元数据，端点不产生 `IAuthorizeData`，鉴权中间件不生效）。
+- **网关代理文档**：`/docs/{服务名}/{**catch-all}` 路由（如 `/docs/viv-apex-api/scalar/`）把各服务 **Scalar** 文档经网关透出，欢迎页服务标签即指向此（不跳服务自身地址）。前提：Scalar.AspNetCore ≥2.16 生成的 HTML 用相对路径（`openapi/v1.json`、`./scalar.aspnetcore.js`）且自带子目录 basePath 计算，YARP `PathRemovePrefix` 去掉 `/docs/{服务名}` 即可；链接需带尾斜杠 `/scalar/`，否则下游 302 后浏览器会请求网关根路径 `/scalar/`。路由用 Aspire 服务名当前缀，欢迎页零映射。
 - **JWT SecretKey ≥ 32 字节**：IdentityModel 8.x 的 HS256 强制要求 ≥256 bit（`IDX10720`），且 `TokenOption` 必须在**所有会签发/验证 token 的服务间保持一致**（含网关）。
 - `AddServiceDefaults()` and `MapDefaultEndpoints()` are **caller-side** Aspire concerns; the framework does not reference Aspire.
 
