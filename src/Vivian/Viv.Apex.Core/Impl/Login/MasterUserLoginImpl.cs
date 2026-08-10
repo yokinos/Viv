@@ -39,12 +39,12 @@ namespace Viv.Apex.Core.Impl.Login
 
         public async Task<FuncResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
         {
-            if (!request.UserType.HasValue || request.UserType != EmUserType.Master)
+            if (request.UserType != EmUserType.Master)
             {
                 return FuncResult<ApexLoginOutput>.Failed("登录类型非法");
             }
 
-            var user = await _userRepository.GetByPhoneAsync(request.UserName, request.UserType.Value);
+            var user = await _userRepository.GetByPhoneAsync(request.UserName, request.UserType);
             if (user is null)
             {
                 return FuncResult<ApexLoginOutput>.Failed("账号或者密码错误");
