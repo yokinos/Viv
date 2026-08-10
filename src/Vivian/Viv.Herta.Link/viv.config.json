@@ -46,7 +46,7 @@
     "SeqApiKey": "kv6DX9gIGILxp9cu8c5e"
   },
   "DatabaseOption": {
-    "DatabaseSouce": 0,
+    "DatabaseSource": 0,
     "IsReadWriteSplit": false,
     "MasterConnectionString": "server=43.228.79.205;user id=sa;password=viv_sqlserver_77;database=viv_herta_master;min pool size=4;max pool size=512;TrustServerCertificate=true;",
     "SlaveConnectionStrings": [],
