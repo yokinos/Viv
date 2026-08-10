@@ -22,7 +22,7 @@ namespace Viv.Apex.Core.Service
 
         public async Task<VivApiResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
         {
-            var isExist = _loginImpls.TryGetValue(request.UserType.Value, out var loginImpl);
+            var isExist = _loginImpls.TryGetValue(request.UserType, out var loginImpl);
             if (!isExist || loginImpl == null)
             {
                 return VivApiResult<ApexLoginOutput>.Failed("未知的用户类型");

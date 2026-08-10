@@ -28,7 +28,7 @@ namespace Viv.Apex.Core.Entity.Dto.Account.Request
         /// </summary>
         [Required]
         [Display(Name = "用户类型")]
-        public EmUserType? UserType { get; set; }
+        public EmUserType UserType { get; set; }
 
         /// <summary>
         /// 一些登录情况下需要设置对应的登陆码
@@ -37,7 +37,7 @@ namespace Viv.Apex.Core.Entity.Dto.Account.Request
 
         public override string Validate()
         {
-            if (UserType.HasValue && UserType != EmUserType.Master && SubjectCode.IsNullOrEmpty())
+            if (UserType != EmUserType.Master && SubjectCode.IsNullOrEmpty())
             {
                 return "请携带对应的登录Code";
             }
