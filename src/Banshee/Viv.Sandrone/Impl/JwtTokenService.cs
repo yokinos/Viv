@@ -18,8 +18,12 @@ namespace Viv.Sandrone.Impl
     /// </summary>
     public class JwtTokenService : ITokenService
     {
+        // JwtSecurityTokenHandler 线程安全（ValidateToken/ReadJwtToken），缓存避免每请求 new 分配
+        private static readonly JwtSecurityTokenHandler Handler = new();
+
         private readonly TokenOptions _options;
         private readonly SymmetricSecurityKey _securityKey;
+        private readonly TokenValidationParameters _validationParameters;
 
         public JwtTokenService()
         {
@@ -31,6 +35,18 @@ namespace Viv.Sandrone.Impl
 
             // 初始化对称加密密钥
             _securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SecretKey));
+
+            // 验证参数一次性构建并复用（ValidateToken/ParseToken 共用，避免每请求 new TokenValidationParameters）
+            _validationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = _options.Issuer,
+                ValidateAudience = true,
+                ValidAudience = _options.Audience,
+                ValidateLifetime = true,
+                IssuerSigningKey = _securityKey,
+                ClockSkew = TimeSpan.Zero // 关闭时钟偏移容错，严格校验过期时间
+            };
         }
 
         public string GenerateToken(TokenPayload payload)
@@ -89,20 +105,8 @@ namespace Viv.Sandrone.Impl
 
             try
             {
-                var tokenHandler = new JwtSecurityTokenHandler();
-                var validationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidIssuer = _options.Issuer,
-                    ValidateAudience = true,
-                    ValidAudience = _options.Audience,
-                    ValidateLifetime = true,
-                    IssuerSigningKey = _securityKey,
-                    ClockSkew = TimeSpan.Zero // 关闭时钟偏移容错，严格校验过期时间
-                };
-
                 // 验证Token（验证失败会抛出异常）
-                tokenHandler.ValidateToken(token, validationParameters, out _);
+                Handler.ValidateToken(token, _validationParameters, out _);
                 return true;
             }
             catch
@@ -113,15 +117,15 @@ namespace Viv.Sandrone.Impl
 
         public TokenPayload ParseToken(string token)
         {
-            if (!ValidateToken(token))
-            {
-                throw new InvalidTokenException("JWT令牌无效或已过期！");
-            }
-
             try
             {
-                var tokenHandler = new JwtSecurityTokenHandler();
-                var jwtToken = tokenHandler.ReadJwtToken(token);
+                // 单次验证：ValidateToken 内部完成验签+过期校验，成功即取回已验证的 JwtSecurityToken，
+                // 不再二次 ValidateToken + ReadJwtToken（旧实现每次 Parse 都做 2 次验证、分配 2 个 handler）。
+                _ = Handler.ValidateToken(token, _validationParameters, out var validatedToken);
+                if (validatedToken is not JwtSecurityToken jwtToken)
+                {
+                    throw new InvalidTokenException("JWT令牌格式不正确！");
+                }
 
                 // 解析核心字段
                 var payload = new TokenPayload
@@ -144,9 +148,14 @@ namespace Viv.Sandrone.Impl
 
                 return payload;
             }
+            catch (InvalidTokenException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                throw new InvalidTokenException("解析JWT令牌失败！", ex);
+                // 验签/过期/格式等任一失败都在这里兜成 InvalidTokenException（对外契约不变）
+                throw new InvalidTokenException("JWT令牌无效或已过期！", ex);
             }
         }
 

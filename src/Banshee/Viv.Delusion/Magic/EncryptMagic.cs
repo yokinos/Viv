@@ -156,7 +156,7 @@ namespace Viv.Delusion.Magic
         private static string? SymmetricTransform(EncrypType type, string key, string text, EncrypOptions? options, bool encrypt)
         {
             if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(text)) return default;
-            options ??= new EncrypOptions(type);
+            options ??= new EncrypOptions();
 
             try
             {
@@ -164,25 +164,53 @@ namespace Viv.Delusion.Magic
                 alg.Mode = options.Mode;
                 alg.Padding = options.PaddingMode;
 
-                int keyBytesRequired = alg.KeySize / 8;
                 int ivBytesRequired = alg.BlockSize / 8;
-
-                byte[] keyBytes = DeriveKeyBytes(key, keyBytesRequired);
-                byte[] ivBytes = DeriveIVBytes(options.IV ?? string.Empty, ivBytesRequired);
-
-                alg.Key = keyBytes;
-                alg.IV = ivBytes;
+                byte[] keyBytes = DeriveKeyBytes(key, alg.KeySize / 8);
 
                 if (encrypt)
                 {
+                    // 随机 IV + 前置 + HMAC 认证（encrypt-then-MAC）：
+                    // 输出布局 = Base64( IV || Cipher || HMAC-SHA256(key, IV || Cipher) )
+                    // 随机 IV 保证同一明文多次加密密文不同；HMAC 保证密文被篡改时解密失败（拒绝）。
+                    // 修复旧实现固定 IV（同明文同密文、可比特翻转）的问题。格式与旧版不兼容，旧密文需重新加密。
+                    byte[] iv = RandomNumberGenerator.GetBytes(ivBytesRequired);
+                    alg.Key = keyBytes;
+                    alg.IV = iv;
+
                     byte[] plain = Utf8.GetBytes(text);
                     using var encryptor = alg.CreateEncryptor();
                     byte[] cipher = encryptor.TransformFinalBlock(plain, 0, plain.Length);
-                    return Convert.ToBase64String(cipher);
+
+                    byte[] payload = new byte[iv.Length + cipher.Length];
+                    Buffer.BlockCopy(iv, 0, payload, 0, iv.Length);
+                    Buffer.BlockCopy(cipher, 0, payload, iv.Length, cipher.Length);
+
+                    byte[] hmac = ComputeHmac(keyBytes, payload, payload.Length);
+                    var blob = new byte[payload.Length + hmac.Length];
+                    Buffer.BlockCopy(payload, 0, blob, 0, payload.Length);
+                    Buffer.BlockCopy(hmac, 0, blob, payload.Length, hmac.Length);
+                    return Convert.ToBase64String(blob);
                 }
                 else
                 {
-                    byte[] cipher = Convert.FromBase64String(text);
+                    byte[] blob = Convert.FromBase64String(text);
+                    const int hmacLength = 32; // SHA-256
+                    int payloadLength = blob.Length - hmacLength;
+                    if (payloadLength <= ivBytesRequired) return default;
+
+                    // 先验 HMAC 再解密：不匹配说明密文被篡改或密钥错误，拒绝返回明文
+                    byte[] providedHmac = blob.AsSpan(payloadLength).ToArray();
+                    byte[] expectedHmac = ComputeHmac(keyBytes, blob, payloadLength);
+                    if (!CryptographicOperations.FixedTimeEquals(providedHmac, expectedHmac))
+                    {
+                        return default;
+                    }
+
+                    byte[] iv = blob.AsSpan(0, ivBytesRequired).ToArray();
+                    byte[] cipher = blob.AsSpan(ivBytesRequired, payloadLength - ivBytesRequired).ToArray();
+
+                    alg.Key = keyBytes;
+                    alg.IV = iv;
                     using var decryptor = alg.CreateDecryptor();
                     byte[] plain = decryptor.TransformFinalBlock(cipher, 0, cipher.Length);
                     return Utf8.GetString(plain);
@@ -192,6 +220,15 @@ namespace Viv.Delusion.Magic
             {
                 return default;
             }
+        }
+
+        /// <summary>
+        /// HMAC-SHA256 认证密文（防篡改），对 payload 前 payloadLength 字节计算签名。
+        /// </summary>
+        private static byte[] ComputeHmac(byte[] keyBytes, byte[] payload, int payloadLength)
+        {
+            using var hmac = new HMACSHA256(keyBytes);
+            return hmac.ComputeHash(payload, 0, payloadLength);
         }
 
         /// <summary>
@@ -236,35 +273,6 @@ namespace Viv.Delusion.Magic
                 }
             }
             return result;
-        }
-
-        /// <summary>
-        /// 派生符合算法要求的IV（初始化向量）字节数组（内部方法）
-        /// </summary>
-        /// <param name="ivCandidate">原始IV字符串</param>
-        /// <param name="requiredBytes">算法要求的IV字节长度</param>
-        /// <returns>适配长度的IV字节数组</returns>
-        /// <remarks>
-        /// 1. IV为空时使用SHA256空字符串哈希值填充；
-        /// 2. IV长度不足时补0，过长时截断；
-        /// 3. IV用于增加加密随机性，相同密钥+不同IV加密同一明文结果不同
-        /// </remarks>
-        private static byte[] DeriveIVBytes(string ivCandidate, int requiredBytes)
-        {
-            if (!string.IsNullOrEmpty(ivCandidate))
-            {
-                var ivBytes = Utf8.GetBytes(ivCandidate);
-                if (ivBytes.Length == requiredBytes) return ivBytes;
-                var iv = new byte[requiredBytes];
-                int copy = Math.Min(ivBytes.Length, requiredBytes);
-                Buffer.BlockCopy(ivBytes, 0, iv, 0, copy);
-                return iv;
-            }
-
-            byte[] fallback = SHA256.HashData(Array.Empty<byte>());
-            var res = new byte[requiredBytes];
-            Buffer.BlockCopy(fallback, 0, res, 0, Math.Min(requiredBytes, fallback.Length));
-            return res;
         }
     }
 }

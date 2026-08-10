@@ -97,10 +97,11 @@ namespace Viv.Echo.Http
                 using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
                 ApplyHeaders(request, headers);
 
-                var response = await client.SendAsync(request, cancellationToken);
+                // using：及时释放 response，把连接归还连接池，避免高并发下连接堆积
+                using var response = await client.SendAsync(request, cancellationToken);
                 return await BuildResultAsync<T>(response, stopwatch, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 stopwatch.Stop();
                 return new HttpResult<T>
@@ -111,6 +112,7 @@ namespace Viv.Echo.Http
                     ElapsedTime = stopwatch.ElapsedMilliseconds
                 };
             }
+            // 调用方取消（cancellationToken / 超时）向上传播，不吞成 500
         }
 
         private async Task<HttpResult<T>> SendAsync<T>(HttpMethod method, string url, object? body, Dictionary<string, string>? headers, CancellationToken cancellationToken)
@@ -130,10 +132,11 @@ namespace Viv.Echo.Http
                     request.Content = new StringContent(json, Encoding.UTF8, "application/json");
                 }
 
-                var response = await client.SendAsync(request, cancellationToken);
+                // using：及时释放 response，把连接归还连接池，避免高并发下连接堆积
+                using var response = await client.SendAsync(request, cancellationToken);
                 return await BuildResultAsync<T>(response, stopwatch, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 stopwatch.Stop();
                 return new HttpResult<T>
@@ -144,6 +147,7 @@ namespace Viv.Echo.Http
                     ElapsedTime = stopwatch.ElapsedMilliseconds
                 };
             }
+            // 调用方取消（cancellationToken / 超时）向上传播，不吞成 500
         }
 
         private static void ApplyHeaders(HttpRequestMessage request, Dictionary<string, string>? headers)

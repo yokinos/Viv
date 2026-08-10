@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -159,7 +160,27 @@ namespace Viv.Delusion.Mapper
                     continue;
                 }
 
-                // 对于无法处理的类型，忽略该属性（可考虑抛出异常，但为了健壮性，跳过）
+                // 数字类型强转兜底：int→long、decimal→double 等（Convert.ChangeType）
+                if (IsNumeric(srcPropType) && IsNumeric(tgtPropType))
+                {
+                    MethodInfo convertMethod = typeof(EmitMapper)
+                        .GetMethod(nameof(ConvertNumber), BindingFlags.NonPublic | BindingFlags.Static)
+                        ?.MakeGenericMethod(srcPropType, tgtPropType);
+
+                    if (convertMethod != null)
+                    {
+                        // target.Prop = ConvertNumber(source.Prop);
+                        il.Emit(OpCodes.Ldloc, targetLocal);
+                        il.Emit(OpCodes.Ldloc, sourceLocal);
+                        il.EmitCall(OpCodes.Callvirt, srcProp.GetMethod, null);
+                        il.EmitCall(OpCodes.Call, convertMethod, null);
+                        il.EmitCall(OpCodes.Callvirt, tgtProp.SetMethod, null);
+                        continue;
+                    }
+                }
+
+                // 无法处理的属性：记日志警告，避免静默丢数据（目标保持默认值，但至少可见可查）
+                LogMappingSkip(srcProp, tgtProp);
             }
 
             // 返回目标对象（如果目标类型是值类型，需要装箱）
@@ -201,6 +222,29 @@ namespace Viv.Delusion.Mapper
 
         private static bool IsComplex(Type type) =>
             !type.IsPrimitive && type != typeof(string) && !type.IsEnum && !type.IsValueType && !IsEnumerable(type);
+
+        /// <summary>是否数值类型（含 decimal），用于数字强转兜底</summary>
+        private static bool IsNumeric(Type type) =>
+            type == typeof(byte) || type == typeof(sbyte) ||
+            type == typeof(short) || type == typeof(ushort) ||
+            type == typeof(int) || type == typeof(uint) ||
+            type == typeof(long) || type == typeof(ulong) ||
+            type == typeof(float) || type == typeof(double) ||
+            type == typeof(decimal);
+
+        /// <summary>数字类型强转（供 Emit 调用）</summary>
+        private static TTarget ConvertNumber<TSource, TTarget>(TSource source)
+        {
+            return (TTarget)Convert.ChangeType(source, typeof(TTarget), CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>映射无法处理的属性时记日志，避免静默丢数据</summary>
+        private static void LogMappingSkip(PropertyInfo srcProp, PropertyInfo tgtProp)
+        {
+            Console.WriteLine(
+                $"【映射跳过】无法将 {srcProp.DeclaringType?.Name}.{srcProp.Name} ({srcProp.PropertyType.Name}) " +
+                $"映射到 {tgtProp.DeclaringType?.Name}.{tgtProp.Name} ({tgtProp.PropertyType.Name})，目标保持默认值");
+        }
 
         /// <summary>snake_case → PascalCase</summary>
         private static string SnakeToPascal(string snake)

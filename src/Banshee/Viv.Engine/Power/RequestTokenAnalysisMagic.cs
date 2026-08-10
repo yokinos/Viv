@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Viv.Contracts.Interface;
@@ -21,12 +23,6 @@ namespace Viv.Engine.Power
         public const string ServiceNameHeader = "x-viv-serviceName"; // 这个指的是服务的名称，比如 viv.apex.api
         public const string InnerRequestTokenHeader = "x-request-token"; // 这个指的是内部请求的 Token，于验证内部请求的合法性，设置到appsettings.json 中设置。
 
-        private readonly ITokenService _tokenService;
-
-        public RequestTokenAnalysisMagic(ITokenService tokenService)
-        {
-            _tokenService = tokenService;
-        }
 
         /// <summary>
         /// 从可信内部请求 Header 中获取上下文。
@@ -112,43 +108,38 @@ namespace Viv.Engine.Power
         }
 
         /// <summary>
-        /// 从 JWT Token 中获取上下文。
+        /// 从已验证的 JWT principal 中获取上下文（直连下游、绕过网关的场景）。
+        /// token 由管道中更早的 UseAuthentication(JwtBearer) 完成验签并填充 context.User，
+        /// 此处不再二次验签——只提取 claims，与网关认证后回填的 x-viv-* 头契约一致。
         /// </summary>
-        public async Task<VivContextContent?> GetContextFromTokenAsync(HttpContext context)
+        public Task<VivContextContent?> GetContextFromTokenAsync(HttpContext context)
         {
-            var token = context.GetJwtToken();
-
-            if (token.IsNullOrEmpty())
+            var user = context.User;
+            if (user.Identity?.IsAuthenticated != true)
             {
-                return null;
+                return Task.FromResult<VivContextContent?>(null);
             }
 
-            bool tokenIsValid = _tokenService.ValidateToken(token);
-            if (!tokenIsValid)
+            // .NET 10 JwtBearer 只映射 sub → NameIdentifier（与网关读取模式保持一致，两种都兼容）
+            var userIdText = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
+            var appIdText = user.FindFirstValue(VivClaimTypes.AppId);
+
+            // 与旧实现语义一致：AppId、UserId 必须有效且大于 0，否则视为无有效上下文
+            if (!long.TryParse(userIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var userId) || userId <= 0
+                || !long.TryParse(appIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var appId) || appId <= 0)
             {
-                return null;
+                return Task.FromResult<VivContextContent?>(null);
             }
 
-            try
-            {
-                var tokenInfo = _tokenService.ParseToken(token);
+            var tenantIdText = user.FindFirstValue(VivClaimTypes.TenantId);
+            long.TryParse(tenantIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tenantId);
 
-                if (tokenInfo == null || tokenInfo.AppId <= 0 || tokenInfo.UserId <= 0)
-                {
-                    return null;
-                }
-
-                return new VivContextContent
-                {
-                    AppId = tokenInfo.AppId,
-                    SubjectId = tokenInfo.TenantId,
-                    UserId = tokenInfo.UserId
-                };
-            }
-            catch
+            return Task.FromResult<VivContextContent?>(new VivContextContent
             {
-                return null;
-            }
+                AppId = appId,
+                SubjectId = tenantId,
+                UserId = userId
+            });
         }
 
         /// <summary>

@@ -131,11 +131,16 @@ namespace Viv.Engine
             app.UseStaticFiles();
             app.UseRouting();
 
+            // CORS 先于鉴权，避免预检(OPTIONS)被上下文中间件短路
+            app.UseCors(corsPolicyName);
+
+            // JWT 只验证一次：UseAuthentication(JwtBearer) 先跑并填充 HttpContext.User，
+            // VivContextMiddleware 直接从已验证的 principal 读取上下文，不再二次验签。
+            app.UseAuthentication();
+
             app.UseMiddleware<VivContextMiddleware>();
 
-            app.UseCors(corsPolicyName);
             app.UseHttpsRedirection();
-            app.UseAuthentication();
             app.UseAuthorization();
             app.MapControllers();
 

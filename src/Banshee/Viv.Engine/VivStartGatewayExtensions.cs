@@ -39,13 +39,13 @@ namespace Viv.Engine
         /// </summary>
         /// <param name="serviceCollectionConfigure">追加网关服务</param>
         /// <param name="configureJwt">微调 JwtBearerOptions（events、挑战头等）</param>
-        /// <param name="ignoreSslErrors">开发环境信任所有证书（YARP 下游有 https://localhost 自签名地址时启用）</param>
+        /// <param name="ignoreSslErrors">信任所有证书（仅开发环境应开启；默认 false，生产禁用避免 MITM）</param>
         /// <param name="rateLimitConfigFile">自定义限流策略配置，热重载</param>
         public static WebApplicationBuilder AddVivGateway(
             this WebApplicationBuilder builder,
             Action<IServiceCollection>? serviceCollectionConfigure = null,
             Action<JwtBearerOptions>? configureJwt = null,
-            bool ignoreSslErrors = true,
+            bool ignoreSslErrors = false,
             string rateLimitConfigFile = "viv.ratelimit.json")
         {
             var vivOptions = VivEngine.LoadVivConfig();

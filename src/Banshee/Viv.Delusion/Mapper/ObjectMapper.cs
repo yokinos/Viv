@@ -65,7 +65,7 @@ namespace Viv.Delusion.Mapper
                 [typeof(float)] = (s, c, d) => float.TryParse(s, NumberStyles.Any, c, out var f) ? f : d,
                 [typeof(double)] = (s, c, d) => double.TryParse(s, NumberStyles.Any, c, out var dd) ? dd : d,
                 [typeof(decimal)] = (s, c, d) => decimal.TryParse(s, NumberStyles.Any, c, out var dec) ? dec : d,
-                [typeof(bool)] = (s, c, d) => { return bool.TryParse(s, out var b) ? b : (_trueKeywords.Contains(s)); },
+                [typeof(bool)] = (s, c, d) => bool.TryParse(s, out var b) ? b : (_trueKeywords.Contains(s) ? true : d),
                 [typeof(DateTime)] = (s, c, d) => ParseDateTimeInternal(s, c) ?? d,
                 [typeof(DateTimeOffset)] = (s, c, d) => ParseDateTimeOffsetInternal(s, c) ?? d,
                 [typeof(Guid)] = (s, c, d) => Guid.TryParse(s, out var g) ? g : d,
