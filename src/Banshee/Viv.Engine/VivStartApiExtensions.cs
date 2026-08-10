@@ -1,6 +1,7 @@
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -51,6 +52,12 @@ namespace Viv.Engine
 
             // 基础服务
             builder.Services.AddViv(vivOptions);
+
+            // 下游自鉴权：注册 JwtBearer（读 viv.config.json 的 TokenOption）。
+            // 网关不强制鉴权，只解析透传 x-viv-* 上下文头；API 服务自己用 [Authorize] 控制。
+            // TokenOption 为 null（如 hertalink）时跳过，保持匿名。
+            VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, throwIfMissing: false);
+
             serviceCollectionConfigure?.Invoke(builder.Services);
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
@@ -105,6 +112,13 @@ namespace Viv.Engine
 
             var app = builder.Build();
             VivLocator.Initialize(app.Services);
+
+            // 网关代理场景：信任 YARP 默认透传的 X-Forwarded-Proto/Host/For，
+            // 否则下游 UseHttpsRedirection 会把 http 请求 302 到自己的 https 地址，浏览器绕开网关直连下游。
+            app.UseForwardedHeaders(new ForwardedHeadersOptions
+            {
+                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
+            });
 
             if (app.Environment.IsDevelopment())
             {

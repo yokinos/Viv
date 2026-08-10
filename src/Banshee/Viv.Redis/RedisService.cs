@@ -54,6 +54,19 @@ namespace Viv.Redis
         {
         }
 
+        /// <summary>
+        /// 反序列化 RedisValue → T。
+        /// 写侧统一 value.ToJson()（string 存原文、其他类型存 JSON 文本），
+        /// 读侧必须先取文本（value.ToString()）再 As&lt;T&gt;()：直接 value.As&lt;T&gt;() 会让
+        /// ObjectMapper.TryConvert 对 RedisValue 结构体调用 JsonConvert.SerializeObject，得到垃圾数据。
+        /// string 目标由 TryConvert 的 source is T 直接命中，复杂类型落到 DeserializeObject(string.ToJson())，都正确。
+        /// </summary>
+        [return: MaybeNull]
+        private static T ReadRedis<T>(RedisValue value)
+        {
+            return value.ToString().As<T>();
+        }
+
         #region 基础字符串操作
 
         public bool Add(string key, object value, TimeSpan expire)
@@ -90,7 +103,7 @@ namespace Viv.Redis
             {
                 var value = x.StringGet(key);
                 if (value.IsNull) return default;
-                return value.As<T>();
+                return ReadRedis<T>(value);
             });
         }
 
@@ -105,7 +118,7 @@ namespace Viv.Redis
             {
                 var value = await x.StringGetAsync(key).ConfigureAwait(false);
                 if (value.IsNull) return default;
-                return value.As<T>();
+                return ReadRedis<T>(value);
             }).ConfigureAwait(false);
         }
 
@@ -199,7 +212,7 @@ namespace Viv.Redis
             {
                 var hashValue = x.HashGet(key, field);
                 if (hashValue.IsNull) return default;
-                return hashValue.As<T>();
+                return ReadRedis<T>(hashValue);
             });
         }
 
@@ -209,13 +222,13 @@ namespace Viv.Redis
             {
                 var hashValue = await x.HashGetAsync(key, field).ConfigureAwait(false);
                 if (hashValue.IsNull) return default;
-                return hashValue.As<T>();
+                return ReadRedis<T>(hashValue);
             }).ConfigureAwait(false);
         }
 
         public Dictionary<string, T> HashGetAll<T>(string key)
         {
-            return ExecuteRedis(key, x => x.HashGetAll(key).ToDictionary(x => x.Name.ToString(), x => x.Value.As<T>()));
+            return ExecuteRedis(key, x => x.HashGetAll(key).ToDictionary(x => x.Name.ToString(), x => ReadRedis<T>(x.Value)));
         }
 
         public async Task<Dictionary<string, T>> HashGetAllAsync<T>(string key)
@@ -223,7 +236,7 @@ namespace Viv.Redis
             return await ExecuteRedisAsync(key, async x =>
             {
                 var entries = await x.HashGetAllAsync(key).ConfigureAwait(false);
-                return entries.ToDictionary(e => e.Name.ToString(), e => e.Value.As<T>());
+                return entries.ToDictionary(e => e.Name.ToString(), e => ReadRedis<T>(e.Value));
             }).ConfigureAwait(false);
         }
 
@@ -301,7 +314,7 @@ namespace Viv.Redis
                 {
                     if (!value.IsNull)
                     {
-                        result.Add(value.As<T>());
+                        result.Add(ReadRedis<T>(value));
                     }
                 }
                 return result;
@@ -318,7 +331,7 @@ namespace Viv.Redis
                 {
                     if (!value.IsNull)
                     {
-                        result.Add(value.As<T>());
+                        result.Add(ReadRedis<T>(value));
                     }
                 }
                 return result;
@@ -367,7 +380,7 @@ namespace Viv.Redis
                 {
                     if (!msg.IsNull)
                     {
-                        var data = msg.As<T>();
+                        var data = ReadRedis<T>(msg);
                         action.Invoke(data);
                     }
                 });
@@ -385,7 +398,7 @@ namespace Viv.Redis
                 {
                     if (!msg.IsNull)
                     {
-                        var data = msg.As<T>();
+                        var data = ReadRedis<T>(msg);
                         action.Invoke(data);
                     }
                 }).ConfigureAwait(false);

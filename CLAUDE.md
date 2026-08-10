@@ -37,7 +37,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig("viv.config.json")` deserializes all config into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup |
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
 | `Viv.Momo` | Database — `IVivDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server |
-| `Viv.Nana` | Messaging — `IVivPublisher` / `NanaEventPublisher` (publish + delayed publish); `VivConsumer<T>` base class; built on **MassTransit + RabbitMQ**; Saga support with EF Core state persistence |
+| `Viv.Nana` | Messaging — `IVivEventPublisher` / `NanaEventPublisher` (publish + delayed publish); `VivConsumer<T>` base class; built on **Wolverine + RabbitMQ**; Saga support with EF Core state persistence |
 | `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`) |
 | `Viv.Sandrone` | Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service` |
 | `Viv.Echo` | Service-to-service communication — HTTP + gRPC clients |
@@ -72,7 +72,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | Project | Role |
 |---|---|
 | `Viv.Aspire.AppHost` | .NET Aspire orchestrator — launches all services with dependency ordering |
-| `Viv.Aspire.Gateway` | **YARP** reverse proxy — 由框架层 `VivStartGatewayExtensions` 启动；限流、输出缓存、JWT 验证（`TokenOption` 对称密钥）、认证后向透传 `x-viv-*` 上下文头（appId/subjectId(=TenantId)/userId/serviceName） |
+| `Viv.Aspire.Gateway` | **YARP** reverse proxy — 由框架层 `VivStartGatewayExtensions` 启动；限流、输出缓存、JWT 解析（`TokenOption` 对称密钥，**只解析不强制**）、认证后向透传 `x-viv-*` 上下文头（appId/subjectId(=TenantId)/userId/serviceName）；路由从 Aspire 服务发现自动生成，下游服务自行鉴权 |
 | `Viv.Aspire.ServiceDefaults` | OpenTelemetry tracing/metrics, `/health` + `/alive` endpoints, service discovery, HTTP resilience |
 
 ### Test (`src/Test/`)
@@ -106,16 +106,21 @@ builder.RunVivWorker();
 // ── Gateway（YARP 反向代理）─────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
-builder.AddVivGateway();                      // 读 viv.config.json + viv.yarp.json + viv.ratelimit.json
+builder.AddVivGateway();                      // 读 viv.config.json + viv.ratelimit.json；路由从 Aspire 服务发现自动生成
 builder.RunVivGateway(app => app.MapDefaultEndpoints());
 ```
 
 - `AddVivApi` / `AddVivWorker` handle config load, Autofac setup, `AddViv()`, MVC/filters, CORS, Swagger, and encoding registration.
-- `RunVivApi` handles Build → VivLocator → Swagger UI (dev) → middleware pipeline → Run. Accepts an `Action<WebApplication>? configure` for custom endpoints (`UseTickerQ()`, `MapHub()`, etc.).
+- `RunVivApi` handles Build → VivLocator → **`UseForwardedHeaders`**（信任网关透传的 `X-Forwarded-Proto/Host/For`，避免 `UseHttpsRedirection` 把浏览器 302 甩出网关直连下游）→ Swagger UI (dev) → middleware pipeline → Run. Accepts an `Action<WebApplication>? configure` for custom endpoints (`UseTickerQ()`, `MapHub()`, etc.).
 - `RunVivWorker` handles Build → VivLocator → Run.
-- `AddVivGateway` handles config load、Autofac、`AddViv()`、JWT 验证（读 `TokenOption` 对称密钥）、CORS、OutputCache、RateLimiter、`AddReverseProxy()`；`RunVivGateway` 管道：Build → VivLocator → WebSocket → CORS → OutputCache → RateLimiter → Authentication → Authorization → **上下文头透传**（先剥离客户端伪造的 `x-viv-*` 头，认证后从 token claims 回填 `x-viv-appId`/`x-viv-subjectId`(=TenantId)/`x-viv-userId`/`x-viv-serviceName`）→ `MapReverseProxy` → Run。
-- **YARP 鉴权路由**：`viv.yarp.json` 的受保护路由用 `"AuthorizationPolicy": "default"`（而非 `"Metadata": { "Authorize": true }` —— YARP 2.3.0 会静默丢弃该元数据，端点不产生 `IAuthorizeData`，鉴权中间件不生效）。
-- **网关代理文档**：`/docs/{服务名}/{**catch-all}` 路由（如 `/docs/viv-apex-api/scalar/`）把各服务 **Scalar** 文档经网关透出，欢迎页服务标签即指向此（不跳服务自身地址）。前提：Scalar.AspNetCore ≥2.16 生成的 HTML 用相对路径（`openapi/v1.json`、`./scalar.aspnetcore.js`）且自带子目录 basePath 计算，YARP `PathRemovePrefix` 去掉 `/docs/{服务名}` 即可；链接需带尾斜杠 `/scalar/`，否则下游 302 后浏览器会请求网关根路径 `/scalar/`。路由用 Aspire 服务名当前缀，欢迎页零映射。
+- `AddVivGateway` handles config load、Autofac、`AddViv()`、JWT 解析（读 `TokenOption` 对称密钥，**只解析不强制**）、CORS、OutputCache、RateLimiter、`AddReverseProxy().LoadFromMemory(...)`（路由/集群从 Aspire 服务发现自动生成）；`RunVivGateway` 管道：Build → VivLocator → WebSocket → CORS → OutputCache → RateLimiter → Authentication → Authorization → **上下文头透传**（先剥离客户端伪造的 `x-viv-*` 头，认证后从 token claims 回填 `x-viv-appId`/`x-viv-subjectId`(=TenantId)/`x-viv-userId`/`x-viv-serviceName`）→ `MapReverseProxy` → Run。**路由不带 AuthorizationPolicy** —— 网关不鉴权，下游服务自己用 `[Authorize]` 控制。
+- **路由自动生成**：`VivGatewayRouteBuilder.Build()` 从 Aspire 注入的 `services__*` 环境变量（`WithReference`）为每个服务生成 3 条路由 + 1 个集群，**零手写 JSON**（无 `viv.yarp.json`）。新增 API 只需在 AppHost 加 `WithReference`：
+  - `/api/{短名}/{**catch-all}` → `/api/{**catch-all}`（标准 API，`PathPattern` 匹配替换吃掉中间段）
+  - `/docs/{短名}/{**catch-all}` → `/{**catch-all}`（Scalar 文档）
+  - `/ws/{短名}/{**catch-all}` → `/{**catch-all}`（SignalR / WebSocket 透传）
+  - **短名 = 服务名 `split('-')[1]`**（`viv-apex-api` → `apex`）；第二段冲突时（`viv-herta-api` 与 `viv-herta-link` 都是 `herta`），`-api` 保留基础短名，其余服务拼接剩余段（`herta`+`link` → `hertalink`），保证集群 ID 唯一。
+- **下游自鉴权**：`AddVivApi` 自动注册 JwtBearer（读 `viv.config.json` 的 `TokenOption`），控制器用 `[Authorize]` 逐个控制；`TokenOption` 为 `null`（如 hertalink）则跳过注册保持匿名。网关只解析透传，不拦截未登录请求。
+- **网关代理文档**：`/docs/{短名}/{**catch-all}` 路由（如 `/docs/apex/scalar/`）把各服务 **Scalar** 文档经网关透出，欢迎页服务标签即指向此（不跳服务自身地址）。前提：Scalar.AspNetCore ≥2.16 生成的 HTML 用相对路径（`openapi/v1.json`、`./scalar.aspnetcore.js`）且自带子目录 basePath 计算，`PathPattern: "/{**catch-all}"` 去掉 `/docs/{短名}` 即可；链接需带尾斜杠 `/scalar/`，否则下游 302 后浏览器会请求网关根路径 `/scalar/`。路由自动生成，欢迎页零映射。
 - **JWT SecretKey ≥ 32 字节**：IdentityModel 8.x 的 HS256 强制要求 ≥256 bit（`IDX10720`），且 `TokenOption` 必须在**所有会签发/验证 token 的服务间保持一致**（含网关）。
 - `AddServiceDefaults()` and `MapDefaultEndpoints()` are **caller-side** Aspire concerns; the framework does not reference Aspire.
 
@@ -147,9 +152,18 @@ Business-layer services and repositories are registered via **type scanning** dr
 
 ### Messaging (Nana)
 
-- **Producer:** `IVivPublisher.PublishAsync<T>()` / `PublishDelayAsync<T>(TimeSpan)` — messages must extend `NanaEvent` (not `VivMessage`).
-- **Consumer:** Extend `VivConsumer<T>`, override `ReceiveMessageAsync()` — return `SubscribeResult` to indicate success or requeue.
-- **Configuration:** `NanaOption.ConsumerTypes` lists classes to register as MassTransit consumers via `TypeScanMagic`. The Worker's `AddViv()` call automatically wires MassTransit + RabbitMQ with the configured host and retry policy.
+基于 **Wolverine 6.25.3（MIT）** + RabbitMQ（`WolverineFx` / `WolverineFx.RabbitMQ` / `WolverineFx.EntityFrameworkCore` / `WolverineFx.RuntimeCompilation`）。对外抽象不变（`IVivEventPublisher` / `VivConsumer<T>` / `NanaEvent` / `SubscribeResult` / `NanaEnvelope<T>`），应用层无需感知传输实现。
+
+- **Producer:** `IVivEventPublisher.PublishAsync<T>()` / `PublishDelayAsync<T>(TimeSpan, T)` — messages must extend `NanaEvent`（not `VivMessage`）。`NanaEventPublisher` 内部包成 `NanaEnvelope<T>`（含 `IVivContext` 快照 `Context`，租户上下文随消息透传），调 `IMessageBus.PublishAsync(envelope)` / `ScheduleAsync(envelope, delay)`。
+- **Consumer:** Extend `VivConsumer<T>`, override `ReceiveMessageAsync()` — return `SubscribeResult` 指示成功或重投。基类 `HandleAsync(NanaEnvelope<T>, CancellationToken)`（Wolverine handler 约定，`Discovery.IncludeType` 显式注册）将结果映射：`Success` → 确认；`Requeue` → 抛 `VivRequeueException`（走全局重试策略）；失败 → 记日志丢弃。
+- **配置（`AddVivWolverine`，`AddViv()` 内调用）：**
+  - `UseRabbitMq(amqp://user:pass@host:port/vhost).AutoProvision()` — 队列/交换机自动声明（**先清理旧 MassTransit 拓扑遗留的队列**，否则 `406 PRECONDITION_FAILED`）。
+  - 消费方：`NanaOption.ConsumerTypes`（`TypeScanMagic` 扫描）逐个 `Discovery.IncludeType` + `ListenToRabbitQueue({EventName}Queue)`。
+  - 发布路由：扫描全部 `NanaEvent` 类型 → `PublishMessage<NanaEnvelope<T>>().ToRabbitQueue({EventName}Queue)`（`NanaRegister.GetQueueName` 约定，跨服务队列名一致）。
+  - 全局失败策略：`OnException<Exception>().RetryWithCooldown(RetryCount × 1s).Then.MoveToErrorQueue()`（死信 → `wolverine-dead-letter-queue`）。
+  - **EF Saga 持久化**：`NanaOption.SagaConnectionString` 已配且扫到 `VivSagaState` 子类（`TypeScanMagic.ScanTypes<VivSagaState>()`，需 `ForceLoadReferencedAssemblies()` 强制加载业务 Core 程序集）时启用：`opts.UseEntityFrameworkCoreTransactions(TransactionMiddlewareMode.Lightweight)`（**内联在 options 里**，规避 JasperFx/wolverine#1140 DI 修改 bug；**Lightweight = 无 durable outbox**，默认 Eager 要求数据库消息持久化会抛 "not using Database backed message persistence"）+ `VivSagaDbContext` 映射 `Saga_{SagaTypeName}` 表。
+  - **Saga 实体主键**：`VivSagaDbContext.OnModelCreating` 用 `[SagaIdentity]` 标记的属性（如 `OrderSaga.OrderId`）显式 `HasKey`——EF 无法从 Saga 类型推断主键（`Id`/`Version` 都不是约定名），不配置会抛 "requires a primary key"，Wolverine 进而判定无 EF 持久化提供者（"No known Saga persistence provider"）。saga 表（`Saga_OrderSaga`）需预先建好（`EnsureCreated`/迁移）。
+  - `TypeLoadMode.Dynamic`（开发默认）需引用 `WolverineFx.RuntimeCompilation`。
 
 ### Database (Momo)
 
@@ -157,7 +171,13 @@ Business-layer services and repositories are registered via **type scanning** dr
 
 ### Multi-tenancy
 
-`VivContextMiddleware` reads `Viv_AppId`, `Viv_TenantId`, `Viv_UserId` from HTTP headers and hydrates `IVivContext` (scoped, backed by `AsyncLocal<long>`). Database operations use `TenantId` for logical row isolation.
+`VivContextMiddleware` reads `Viv_AppId`, `Viv_TenantId`, `Viv_UserId` from HTTP headers and hydrates `IVivContext` (scoped, backed by `AsyncLocal<long>`). **数据层租户隔离**（框架自动，业务代码无需手写租户条件）：
+
+- **EF 全局查询过滤**：`EFAppContext.OnModelCreating` 对所有 `ITenant` 实体加 `HasQueryFilter`——`e => 无请求上下文 || e.TenantId == 当前租户`。覆盖全部 EF 谓词查询（`Exist`/`Count`/`SingleOrDefault`/`FirstOrDefault`/`FindList` 及 Async）和 `ExecuteDeleteAsync`。表达式捕获 `IVivContextAccessor` 常量（单例，静态 AsyncLocal），每次查询重求值，跨请求正确。
+- **无上下文不过滤**：`tenantAccessor.Current == null`（后台消费者等无请求场景）时不过滤，避免静默破坏后台任务；HTTP 请求路径由 `VivContextMiddleware` 保证必有上下文，因此请求侧跨租户读取被拦截。
+- **Dapper 单实体/删除**：`Find<T>/FindAsync<T>`（按 Id）、`Delete<T>/SoftDelete<T>`（谓词/Id/批量）在 `T : ITenant` 且当前有租户时追加 `AND [TenantId] = @TenantId`（`SqlMagic.AppendTenantFilter`，删改同样按租户隔离）。
+- **逃生口（框架不自动加租户）**：接受原生 SQL 字符串的重载（`FirstOrDefault<T>(sql,…)`/`FindList<T>(sql,…)`/`FindScalar`/`Page`）由调用方自持 SQL，框架无法安全改写，跨租户风险由调用方负责。
+- **Redis 租户库**：`TenantIdAllocator.AllocateDbIndex` 在**调用时**解析当前租户（`VivLocator.GetService<IVivContextAccessor>().Current?.SubjectId`），非构造时缓存，避免单例 allocator 被首个请求固化。
 
 ### Unified API response
 

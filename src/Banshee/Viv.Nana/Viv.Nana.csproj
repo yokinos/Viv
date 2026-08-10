@@ -7,20 +7,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MassTransit" Version="9.2.0" />
-    <PackageReference Include="MassTransit.EntityFrameworkCore" Version="9.2.0" />
-    <PackageReference Include="MassTransit.RabbitMQ" Version="9.2.0" />
+    <PackageReference Include="WolverineFx" Version="6.25.3" />
+    <PackageReference Include="WolverineFx.RabbitMQ" Version="6.25.3" />
+    <PackageReference Include="WolverineFx.EntityFrameworkCore" Version="6.25.3" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.25.3" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
     <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
     <ProjectReference Include="..\Viv.Momo\Viv.Momo.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Remove="Legacy\**" />
-    <None Remove="Legacy\**" />
   </ItemGroup>
 
 </Project>

@@ -1,25 +1,22 @@
-using MassTransit;
 using Viv.Contracts.Interface;
 using Viv.Log;
+using Wolverine;
 
 namespace Viv.Nana.Core
 {
     public class NanaEventPublisher : IVivEventPublisher
     {
         private readonly IVivContext _context;
-        private readonly IPublishEndpoint _publishEndpoint;
-        private readonly IMessageScheduler _scheduler;
+        private readonly IMessageBus _bus;
         private readonly ILoggerContract _logger;
 
         public NanaEventPublisher(
             IVivContext context,
-            IPublishEndpoint publishEndpoint,
-            IMessageScheduler scheduler,
+            IMessageBus bus,
             ILoggerContract logger)
         {
             _context = context;
-            _publishEndpoint = publishEndpoint;
-            _scheduler = scheduler;
+            _bus = bus;
             _logger = logger;
         }
 
@@ -35,7 +32,7 @@ namespace Viv.Nana.Core
 
             try
             {
-                await _publishEndpoint.Publish(message, cancellationToken);
+                await _bus.PublishAsync(message);
                 return true;
             }
             catch (Exception ex)
@@ -58,7 +55,7 @@ namespace Viv.Nana.Core
 
             try
             {
-                await _scheduler.SchedulePublish(delayTTL, message, cancellationToken);
+                await _bus.ScheduleAsync(message, delayTTL);
                 return true;
             }
             catch (Exception ex)

@@ -5,6 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+using Viv.Contracts.Interface;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Momo.Converter;
@@ -65,8 +66,10 @@ namespace Viv.Momo
         public static string GetInsertSqlTemplate(string tableName, Type type, DatabaseSourceType databaseSource)
         {
             var propertyNameList = VivTypeReflectionCache.GetPropertyNameList(type);
-            var nameListLower = propertyNameList.Select(x => QuoteIdentifier(x, databaseSource)).ToList();
-            var sql = $"INSERT INTO {tableName}({string.Join(",", nameListLower)}) VALUES({string.Join(",", nameListLower.Select(x => $"@{x}"))})";
+            var quotedColumns = propertyNameList.Select(x => QuoteIdentifier(x, databaseSource)).ToList();
+            // 参数占位符必须用原始属性名：SQL Server 下 QuoteIdentifier 会把列名变成 [Name]，
+            // 若沿用引号后的名字会生成 @[Name]，Dapper/SqlClient 绑不上参数导致批量插入抛异常。
+            var sql = $"INSERT INTO {tableName}({string.Join(",", quotedColumns)}) VALUES({string.Join(",", propertyNameList.Select(x => $"@{x}"))})";
             return sql;
         }
 
@@ -77,9 +80,14 @@ namespace Viv.Momo
         /// <param name="tableName">数据库表名称</param>
         /// <param name="databaseSource">数据库类型（PostgreSQL/SQL Server等）</param>
         /// <returns>带参数占位符@Id的SELECT SQL语句</returns>
-        public static string GetFindSqlTemplate(string tableName, DatabaseSourceType databaseSource)
+        public static string GetFindSqlTemplate(string tableName, DatabaseSourceType databaseSource, bool includeTenantFilter = false)
         {
-            return $"SELECT * FROM {tableName} WHERE {QuoteIdentifier("Id", databaseSource)} = @Id";
+            var sql = $"SELECT * FROM {tableName} WHERE {QuoteIdentifier("Id", databaseSource)} = @Id";
+            if (includeTenantFilter)
+            {
+                sql += $" AND {QuoteIdentifier("TenantId", databaseSource)} = @TenantId";
+            }
+            return sql;
         }
 
         /// <summary>
@@ -140,12 +148,14 @@ namespace Viv.Momo
         public static (string sql, Dictionary<string, object> parameter) GetDeleteSql<T>(
           string tableName,
           Expression<Func<T, bool>> expression,
-          DatabaseSourceType databaseSource)
+          DatabaseSourceType databaseSource,
+          long tenantId = 0)
         {
             if (expression == null)
                 return (string.Empty, []);
 
             var (where, parameters) = ExpressionToSqlConverter.Convert(expression, databaseSource);
+            AppendTenantFilter(ref where, parameters, databaseSource, typeof(T), tenantId);
             var sql = $"DELETE FROM {tableName} WHERE {where}";
             return (sql, parameters);
         }
@@ -161,7 +171,8 @@ namespace Viv.Momo
         public static (string sql, Dictionary<string, object> parameter) GetSoftDeleteSql<T>(
             string tableName,
             Expression<Func<T, bool>> expression,
-            DatabaseSourceType databaseSource) where T : IEntity, ISoftDelete
+            DatabaseSourceType databaseSource,
+            long tenantId = 0) where T : IEntity, ISoftDelete
         {
             if (expression == null)
                 return (string.Empty, []);
@@ -185,8 +196,23 @@ namespace Viv.Momo
             }
 
             var (whereSql, parameters) = ExpressionToSqlConverter.Convert(expression, databaseSource);
+            AppendTenantFilter(ref whereSql, parameters, databaseSource, typeof(T), tenantId);
             var sql = $"UPDATE {tableName} SET {isDeletedCol} = {boolValue}, {deletedAtCol} = {dateValue} WHERE {whereSql}";
             return (sql, parameters);
+        }
+
+        /// <summary>
+        /// 多租户防御纵深：T : ITenant 且当前有租户（tenantId &gt; 0）时，在 where 后追加 AND [TenantId] = @TenantId。
+        /// tenantId 为 0（无请求上下文，如后台消费者）时不追加，与 EF 查询过滤保持同一「无上下文不过滤」语义，
+        /// 避免静默破坏后台任务对非租户隔离数据的操作。
+        /// </summary>
+        private static void AppendTenantFilter(ref string where, Dictionary<string, object> parameters, DatabaseSourceType databaseSource, Type entityType, long tenantId)
+        {
+            if (tenantId > 0 && typeof(ITenant).IsAssignableFrom(entityType))
+            {
+                where += $" AND {QuoteIdentifier("TenantId", databaseSource)} = @TenantId";
+                parameters["TenantId"] = tenantId;
+            }
         }
 
         /// <summary>

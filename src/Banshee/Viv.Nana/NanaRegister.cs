@@ -1,10 +1,8 @@
-using MassTransit;
 using Viv.Delusion;
-using Viv.Nana.Core;
-using Viv.Nana.Options;
-using Viv.Nana.Saga;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
+using Viv.Nana.Core;
+using Viv.Nana.Options;
 
 namespace Viv.Nana
 {
@@ -17,35 +15,13 @@ namespace Viv.Nana
         }
 
         /// <summary>
-        /// 扫描并注册消费者，返回注册的类型列表
+        /// 扫描并返回消费者类型清单（供 Wolverine 显式 IncludeType + ListenToRabbitQueue 注册）
         /// </summary>
-        public static List<Type> AddVivConsumers(
-            IBusRegistrationConfigurator configurator,
-            List<FilterTypeOptions> consumerTypes)
+        public static List<Type> ScanConsumerTypes(List<FilterTypeOptions> consumerTypes)
         {
-            var result = new List<Type>();
+            if (consumerTypes.IsNullOrEmpty()) return [];
 
-            if (consumerTypes.IsNullOrEmpty()) return result;
-
-            var types = TypeScanMagic.ScanRange(consumerTypes);
-            if (types.IsNullOrEmpty()) return result;
-
-            var registerMethod = typeof(NanaRegister)
-                .GetMethod(nameof(RegisterConsumer), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
-
-            foreach (var type in types)
-            {
-                registerMethod?.MakeGenericMethod(type).Invoke(null, [configurator]);
-                result.Add(type);
-            }
-
-            return result;
-        }
-
-        private static void RegisterConsumer<TConsumer>(IBusRegistrationConfigurator configurator)
-            where TConsumer : class, IConsumer
-        {
-            configurator.AddConsumer<TConsumer>();
+            return TypeScanMagic.ScanRange(consumerTypes);
         }
 
         /// <summary>
@@ -76,29 +52,6 @@ namespace Viv.Nana
                 baseType = baseType.BaseType;
             }
             return null;
-        }
-
-        /// <summary>
-        /// 注册 Saga 状态机（类型由 IVivSagaStateMachine 接口扫描得到）
-        /// </summary>
-        public static List<Type> AddVivSagas(
-            IBusRegistrationConfigurator configurator,
-            List<Type> stateMachineTypes)
-        {
-            var result = new List<Type>();
-
-            if (stateMachineTypes.IsNullOrEmpty()) return result;
-
-            foreach (var smType in stateMachineTypes)
-            {
-                var stateType = VivSagaRegistrationHelper.ExtractStateType(smType);
-                if (stateType == null) continue;
-
-                VivSagaRegistrationHelper.RegisterSaga(configurator, smType, stateType);
-                result.Add(smType);
-            }
-
-            return result;
         }
     }
 }

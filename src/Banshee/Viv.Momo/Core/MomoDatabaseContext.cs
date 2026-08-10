@@ -57,8 +57,12 @@ namespace Viv.Momo.Core
 
             try
             {
-                AutoSetValue(entities.ToArray());
+                // 只物化一次，避免对迭代器/查询源二次枚举（第二遍拿到的是未设 Id/TenantId 的新实例）
                 var entityList = entities.ToList();
+                if (!entityList.IsNullOrEmpty())
+                {
+                    AutoSetValue(entityList.ToArray());
+                }
                 var context = GetAppContext();
                 int affected;
 
@@ -108,8 +112,12 @@ namespace Viv.Momo.Core
 
             try
             {
-                AutoSetValue(entities.ToArray());
+                // 只物化一次，避免对迭代器/查询源二次枚举（第二遍拿到的是未设 Id/TenantId 的新实例）
                 var entityList = entities.ToList();
+                if (!entityList.IsNullOrEmpty())
+                {
+                    AutoSetValue(entityList.ToArray());
+                }
                 var context = GetAppContext();
                 int affected;
 
@@ -479,8 +487,13 @@ namespace Viv.Momo.Core
                 else
                 {
                     var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
-                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _options.DatabaseSource)} IN @Ids";
-                    int affected = await context.DbConnection.ExecuteAsync(deleteSql, new { Ids = ids }, _transaction, _timeOut);
+                    var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T)) && TenantId > 0;
+                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _options.DatabaseSource)} IN @Ids"
+                        + (isTenantEntity ? $" AND {SqlMagic.QuoteIdentifier("TenantId", _options.DatabaseSource)} = @TenantId" : "");
+                    int affected = await context.DbConnection.ExecuteAsync(
+                        deleteSql,
+                        isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids },
+                        _transaction, _timeOut);
                     return affected > 0;
                 }
             }
@@ -498,7 +511,7 @@ namespace Viv.Momo.Core
             try
             {
                 var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetDeleteSql(tableName, predicate, _options.DatabaseSource);
+                var (sql, parameters) = SqlMagic.GetDeleteSql(tableName, predicate, _options.DatabaseSource, TenantId);
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
@@ -519,7 +532,7 @@ namespace Viv.Momo.Core
             try
             {
                 var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetDeleteSql(tableName, predicate, _options.DatabaseSource);
+                var (sql, parameters) = SqlMagic.GetDeleteSql(tableName, predicate, _options.DatabaseSource, TenantId);
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
@@ -544,7 +557,7 @@ namespace Viv.Momo.Core
             try
             {
                 var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSource);
+                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSource, TenantId);
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext(DbReadWriteType.Write);
@@ -565,7 +578,7 @@ namespace Viv.Momo.Core
             try
             {
                 var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSource);
+                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSource, TenantId);
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
@@ -587,7 +600,7 @@ namespace Viv.Momo.Core
             {
                 Expression<Func<T, bool>> predicate = x => x.Id == id;
                 var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSource);
+                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSource, TenantId);
                 var context = GetAppContext(DbReadWriteType.Write);
                 var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
                 return count > 0;
@@ -607,7 +620,7 @@ namespace Viv.Momo.Core
             {
                 Expression<Func<T, bool>> predicate = x => x.Id == id;
                 var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSource);
+                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSource, TenantId);
                 var context = GetAppContext(DbReadWriteType.Write);
                 var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut);
                 return count > 0;
@@ -781,10 +794,13 @@ namespace Viv.Momo.Core
 
             try
             {
+                var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T));
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
-                var sql = SqlMagic.GetFindSqlTemplate(tableName, _options.DatabaseSource);
-                return connection.QuerySingleOrDefault<T>(sql, new { Id = id }, null, _timeOut);
+                var sql = SqlMagic.GetFindSqlTemplate(tableName, _options.DatabaseSource, isTenantEntity);
+                // ITenant 实体按租户过滤，防止跨租户按 Id 读取
+                object parameters = isTenantEntity ? new { Id = id, TenantId } : new { Id = id };
+                return connection.QuerySingleOrDefault<T>(sql, parameters, null, _timeOut);
             }
             catch (Exception ex)
             {
@@ -800,10 +816,12 @@ namespace Viv.Momo.Core
 
             try
             {
+                var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T));
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
-                var sql = SqlMagic.GetFindSqlTemplate(tableName, _options.DatabaseSource);
-                return await connection.QueryFirstOrDefaultAsync<T>(sql, new { Id = id }, null, _timeOut).ConfigureAwait(false);
+                var sql = SqlMagic.GetFindSqlTemplate(tableName, _options.DatabaseSource, isTenantEntity);
+                object parameters = isTenantEntity ? new { Id = id, TenantId } : new { Id = id };
+                return await connection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using Viv.Elysia.Filter;
 using Viv.Engine;
+using Viv.Herta.Link.Extensions;
 using Viv.Herta.Link.Hubs;
 using Viv.Herta.Link.Options;
 
@@ -13,7 +14,8 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
         builder.AddVivApi("Viv Herta Link", mvc => mvc.Filters.Add<RequestFilterAttribute>());
-        builder.Services.AddSignalR();
+        // AddHertaLink：注册 ConnectionPool/GroupService + SignalR + Redis 背板（AddStackExchangeRedis）
+        builder.Services.AddHertaLink(builder.Configuration);
         builder.RunVivApi(app =>
         {
             app.MapDefaultEndpoints();

@@ -1,6 +1,6 @@
-﻿using MassTransit.EntityFrameworkCoreIntegration;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
 using Viv.Clockwork;
 using Viv.Clockwork.Enums;
 using Viv.Contracts.Enums;
@@ -109,21 +109,56 @@ namespace Viv.Engine
 
             NanaRegister.Initialize(options.NanaOption);
 
-            // 扫描 IVivSagaStateMachine — 有实现且配了 SagaConnectionString 才启用
-            var sagaTypes = TypeScanMagic.ScanTypes<IVivSagaStateMachine>();
+            // 业务 Core 程序集（含 Saga 类型）可能是懒加载，先强制加载传递引用再扫描，
+            // 否则 ScanTypes<VivSagaState>() 只看到已加载程序集，Saga 会被静默跳过。
+            ForceLoadReferencedAssemblies();
+
+            // 扫描 VivSagaState 子类 — 配了 SagaConnectionString 才启用 EF Saga 持久化
+            var sagaTypes = TypeScanMagic.ScanTypes<VivSagaState>();
             var enableSaga = options.NanaOption.SagaConnectionString is not null && !sagaTypes.IsNullOrEmpty();
 
             if (enableSaga)
             {
-                RegisterSagaDbContext(services, options, sagaTypes);
+                RegisterSagaDbContext(services, options);
             }
 
-            // 注册 MassTransit + RabbitMQ（Saga 类型传进去）
-            services.AddVivMassTransit(options.NanaOption, enableSaga ? sagaTypes : null);
+            // 注册 Wolverine + RabbitMQ（Saga 类型传进去；VivWolverineConfigurationExtensions 内部含队列路由/失败策略）
+            services.AddVivWolverine(options.NanaOption, enableSaga ? sagaTypes : null);
             services.AddScoped<IVivEventPublisher, NanaEventPublisher>();
         }
 
-        private static void RegisterSagaDbContext(IServiceCollection services, VivOptions options, List<Type> sagaStateMachineTypes)
+        /// <summary>
+        /// 强制加载当前已加载程序集的传递引用。
+        /// 业务 Core 程序集（如 Viv.Apex.Core，含 Saga/Service 类型）在宿主启动早期往往尚未加载，
+        /// 而 TypeScanMagic 只扫描已加载程序集，导致 ScanTypes 静默漏扫。
+        /// 仅启动时执行一次，加载失败的程序集跳过。
+        /// </summary>
+        private static void ForceLoadReferencedAssemblies()
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var queue = new Queue<Assembly>(AppDomain.CurrentDomain.GetAssemblies().Where(a => !a.IsDynamic));
+
+            while (queue.Count > 0)
+            {
+                var asm = queue.Dequeue();
+                if (asm.GetName().Name is null) continue;
+
+                foreach (var refName in asm.GetReferencedAssemblies())
+                {
+                    if (!seen.Add(refName.FullName)) continue;
+                    try
+                    {
+                        queue.Enqueue(Assembly.Load(refName));
+                    }
+                    catch
+                    {
+                        // 跳过无法加载的程序集（系统程序集/缺失引用等）
+                    }
+                }
+            }
+        }
+
+        private static void RegisterSagaDbContext(IServiceCollection services, VivOptions options)
         {
             var nanaOpt = options.NanaOption;
             var connectionString = nanaOpt.SagaConnectionString!;
@@ -142,13 +177,6 @@ namespace Viv.Engine
                         throw new NotSupportedException($"Saga 不支持该数据库类型：{nanaOpt.SagaDatabaseSource}");
                 }
             }, contextLifetime: ServiceLifetime.Scoped);
-
-            // 扫描所有 VivSagaClassMap 实现，注入到 VivSagaDbContext
-            var classMapTypes = TypeScanMagic.ScanTypes<ISagaClassMap>();
-            foreach (var t in classMapTypes)
-            {
-                services.AddScoped(typeof(ISagaClassMap), t);
-            }
         }
 
         #endregion

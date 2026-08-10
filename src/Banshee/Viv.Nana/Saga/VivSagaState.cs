@@ -1,19 +1,15 @@
-using MassTransit;
+using Wolverine;
 
 namespace Viv.Nana.Saga
 {
-    public abstract class VivSagaState : SagaStateMachineInstance
+    /// <summary>
+    /// Viv Saga 状态基类 — Wolverine 模型下 saga 类即状态（class extends Saga）。
+    /// 子类用 <see cref="Wolverine.Persistence.Sagas.SagaIdentityAttribute"/> 标记关联字段，
+    /// 例如订单 Saga 用 [SagaIdentity] public Guid OrderId，对应消息里的 OrderId 属性。
+    /// Wolverine 自带乐观并发控制（Saga.Version，映射为 RowVersion）。
+    /// </summary>
+    public abstract class VivSagaState : Wolverine.Saga
     {
-        /// <summary>
-        /// 分布式事务的标识
-        /// </summary>
-        public Guid CorrelationId { get; set; }
-
-        /// <summary>
-        /// 分布式事务当前状态
-        /// </summary>
-        public int CurrentState { get; set; }
-
         /// <summary>
         /// 发起分布式事务的客户端 AppId
         /// </summary>
@@ -23,11 +19,5 @@ namespace Viv.Nana.Saga
         /// 多租户隔离标识
         /// </summary>
         public long TenantId { get; set; }
-
-        /// <summary>
-        /// 乐观并发控制（用作 SQL RowVersion）
-        /// </summary>
-        public uint RowVersion { get; set; }
     }
 }
-

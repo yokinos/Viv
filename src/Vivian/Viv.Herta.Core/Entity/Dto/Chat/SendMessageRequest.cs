@@ -42,6 +42,6 @@ namespace Viv.Herta.Core.Entity.Dto.Chat
         /// </summary>
         [Required]
         [DisplayName("消息内容")]
-        public string Message { get; private set; }
+        public string? Message { get; set; }
     }
 }

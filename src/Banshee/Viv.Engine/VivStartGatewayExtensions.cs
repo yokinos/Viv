@@ -7,7 +7,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http;
-using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -32,31 +31,27 @@ namespace Viv.Engine
         private const string CustomCachePolicyName = "CustomCache";
         private const string DefaultRateLimiterPolicyName = "DefaultRateLimiter";
         private const string CustomRateLimiterPolicyName = "CustomRateLimiter";
-        private const string ReverseProxySectionName = "ReverseProxy";
         private const int DefaultCacheSeconds = 20;
 
         /// <summary>
-        /// 配置 Viv 网关基础服务：加载配置、YARP/限流配置热重载、Autofac、AddViv、JWT 验证、YARP、CORS、OutputCache、RateLimiter、编码注册。
+        /// 配置 Viv 网关基础服务：加载配置、限流配置热重载、Autofac、AddViv、JWT 解析、YARP（路由/集群从 Aspire 服务发现自动生成）、CORS、OutputCache、RateLimiter、编码注册。
         /// 需要先调用 builder.AddServiceDefaults()。
         /// </summary>
         /// <param name="serviceCollectionConfigure">追加网关服务</param>
         /// <param name="configureJwt">微调 JwtBearerOptions（events、挑战头等）</param>
         /// <param name="ignoreSslErrors">开发环境信任所有证书（YARP 下游有 https://localhost 自签名地址时启用）</param>
-        /// <param name="yarpConfigFile">YARP 路由/集群配置，热重载</param>
         /// <param name="rateLimitConfigFile">自定义限流策略配置，热重载</param>
         public static WebApplicationBuilder AddVivGateway(
             this WebApplicationBuilder builder,
             Action<IServiceCollection>? serviceCollectionConfigure = null,
             Action<JwtBearerOptions>? configureJwt = null,
             bool ignoreSslErrors = true,
-            string yarpConfigFile = "viv.yarp.json",
             string rateLimitConfigFile = "viv.ratelimit.json")
         {
             var vivOptions = VivEngine.LoadVivConfig();
             ArgumentNullException.ThrowIfNull(vivOptions);
 
-            // YARP / 限流配置热重载
-            builder.Configuration.AddJsonFile(yarpConfigFile, optional: false, reloadOnChange: true);
+            // 限流配置热重载（路由/集群改为从 Aspire 服务发现自动生成，不再读 viv.yarp.json）
             builder.Configuration.AddJsonFile(rateLimitConfigFile, optional: false, reloadOnChange: true);
 
             // Autofac 容器
@@ -83,12 +78,12 @@ namespace Viv.Engine
                 builder.Services.AddSingleton<IHttpMessageHandlerBuilderFilter, IgnoreSslErrorsFilter>();
             }
 
-            // JWT 对称密钥验证（读 viv.config.json 的 TokenOption）
-            ConfigureJwtBearer(builder, vivOptions, configureJwt);
+            // JWT 对称密钥解析（读 viv.config.json 的 TokenOption）——只解析，不强制，用于认证后透传 x-viv-* 上下文头
+            VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, configureJwt, throwIfMissing: true);
 
-            // YARP 反向代理
-            builder.Services.AddReverseProxy()
-                .LoadFromConfig(builder.Configuration.GetSection(ReverseProxySectionName));
+            // YARP 反向代理：路由/集群从 Aspire 服务发现（services__* 环境变量）自动生成，零手写 JSON
+            var (gatewayRoutes, gatewayClusters) = VivGatewayRouteBuilder.Build();
+            builder.Services.AddReverseProxy().LoadFromMemory(gatewayRoutes, gatewayClusters);
 
             // CORS
             builder.Services.AddCors(options =>
@@ -134,7 +129,8 @@ namespace Viv.Engine
         }
 
         /// <summary>
-        /// Build → VivLocator → WebSocket → CORS → OutputCache → RateLimiter → 认证授权 → 用户信息注入头 → YARP → configure → Run。
+        /// Build → VivLocator → WebSocket → CORS → OutputCache → RateLimiter → 认证（只解析不强制）→ 上下文头注入 → YARP → configure → Run。
+        /// 网关不强制鉴权（路由无 AuthorizationPolicy）：token 有就解析透传 x-viv-* 上下文头，没有就不管，由下游服务自行鉴权。
         /// </summary>
         /// <param name="configure">末端回调，调用方在此调用 app.MapDefaultEndpoints()</param>
         /// <param name="configureReverseProxy">覆盖 YARP 默认管道（SessionAffinity/LoadBalancing/PassiveHealthChecks）</param>
@@ -166,7 +162,8 @@ namespace Viv.Engine
             // 认证后把用户信息透传给下游（claims 仅在认证后可用）。
             // Header 契约与 RequestTokenAnalysisMagic 对齐：
             //   x-viv-appId / x-viv-subjectId(=TenantId) / x-viv-userId / x-viv-serviceName
-            // 先剥离客户端可能伪造的 x-viv-* 上下文头，只回填来自验签 token 的值。
+            // 先剥离客户端可能伪造的 x-viv-* 上下文头与 x-request-token，只回填来自验签 token 的值。
+            // 回填后对头组做 HMAC-SHA256 签名写入 x-request-token，下游验签通过才信任——防止绕过网关直连下游伪造头。
             app.Use(async (context, next) =>
             {
                 foreach (var header in new[]
@@ -174,7 +171,8 @@ namespace Viv.Engine
                     Power.RequestTokenAnalysisMagic.AppIdHeader,
                     Power.RequestTokenAnalysisMagic.SubjectIdHeader,
                     Power.RequestTokenAnalysisMagic.UserIdHeader,
-                    Power.RequestTokenAnalysisMagic.ServiceNameHeader
+                    Power.RequestTokenAnalysisMagic.ServiceNameHeader,
+                    Power.RequestTokenAnalysisMagic.InnerRequestTokenHeader
                 })
                 {
                     context.Request.Headers.Remove(header);
@@ -188,6 +186,8 @@ namespace Viv.Engine
                     context.Request.Headers[Power.RequestTokenAnalysisMagic.AppIdHeader] = context.User.FindFirstValue(VivClaimTypes.AppId) ?? "";
                     context.Request.Headers[Power.RequestTokenAnalysisMagic.SubjectIdHeader] = context.User.FindFirstValue(VivClaimTypes.TenantId) ?? "";
                     context.Request.Headers[Power.RequestTokenAnalysisMagic.ServiceNameHeader] = VivEngine.VivOptions?.EnvOption?.ServiceName ?? "";
+                    context.Request.Headers[Power.RequestTokenAnalysisMagic.InnerRequestTokenHeader] =
+                        Power.RequestTokenAnalysisMagic.SignContextHeaders(context.Request.Headers);
                 }
 
                 await next();
@@ -210,38 +210,6 @@ namespace Viv.Engine
             configure?.Invoke(app);
 
             app.Run();
-        }
-
-        /// <summary>
-        /// 配置 JwtBearer 对称密钥验证，密钥/发行方/受众来自 viv.config.json 的 TokenOption。
-        /// </summary>
-        private static void ConfigureJwtBearer(WebApplicationBuilder builder, VivOptions vivOptions, Action<JwtBearerOptions>? configureJwt)
-        {
-            var tokenOptions = vivOptions.TokenOption;
-            if (tokenOptions == null || string.IsNullOrWhiteSpace(tokenOptions.SecretKey))
-            {
-                throw new InvalidOperationException("Viv 网关需要配置 viv.config.json 的 TokenOption 节点（SecretKey/Issuer/Audience），用于 JwtBearer 对称密钥验证。");
-            }
-
-            var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(tokenOptions.SecretKey));
-            builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
-                {
-                    options.RequireHttpsMetadata = false;
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidIssuer = tokenOptions.Issuer,
-                        ValidateAudience = true,
-                        ValidAudience = tokenOptions.Audience,
-                        ValidateLifetime = true,
-                        IssuerSigningKey = signingKey,
-                        ClockSkew = TimeSpan.Zero // 关闭时钟偏移容错，严格校验过期时间
-                    };
-                    configureJwt?.Invoke(options);
-                });
-
-            builder.Services.AddAuthorization();
         }
 
         /// <summary>
