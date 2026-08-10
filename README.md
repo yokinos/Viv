@@ -182,45 +182,98 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 
 ```jsonc
 {
-  "Env": 0,                              // 0=Dev 1=Test 2=PreRelease 3=Production
-  "DIOption": {                          // Service / Repository 自动扫描注册
+  "EnvOption": {                          // 运行环境
+    "Env": 0,                             // 0=Development 1=Test 2=PreRelease 3=Production
+    "ServiceName": "viv.apex.api",        // 服务名（Nana 队列名 / 网关路由短名依赖它）
+    "MachineId": 101                      // 机器 ID（分布式 ID 生成）
+  },
+  "DIOption": {                           // Service / Repository 自动扫描注册
     "ServiceImplementation": {
       "AssemblyName": "Viv.Apex.Core",
-      "NameSpace": "Viv.Apex.Core.Service",
-      "ClassNameEndWith": "Service"
+      "Namespace": "Viv.Apex.Core.Service",
+      "BaseType": null,
+      "ClassNameEndsWith": "Service",
+      "ClassNameStartsWith": ""
     },
     "RepositoryImplementation": {
       "AssemblyName": "Viv.Apex.Core",
-      "NameSpace": "Viv.Apex.Core.Repository",
-      "ClassNameEndWith": "Repository"
+      "Namespace": "Viv.Apex.Core.Repository",
+      "BaseType": null,
+      "ClassNameEndsWith": "Repository",
+      "ClassNameStartsWith": ""
     }
   },
-  "DatabaseOption": {                    // Momo 数据库
-    "DatabaseSource": 0,                 // 0=SqlServer 1=PostgreSQL
+  "CacheOption": {                        // 缓存
+    "CacheProviderType": 1,               // 0=None 1=Redis
+    "IsEnableMemoryCache": true,          // 是否启用进程内内存缓存
+    "RedisOptions": {
+      "RedisMode": 0,                     // 0=Standalone 1=Cluster 2=Sentinel
+      "ConnectionString": "localhost:6379,password=***",
+      "SentinelEndPoints": [],            // 哨兵节点列表（哨兵模式用）
+      "SentinelMasterName": "MasterRedisNode",
+      "Password": "***",
+      "DefaultDatabase": 0,
+      "MaxDbIndex": 12,                   // 可用 DB 范围 0~12（多租户按租户分库）
+      "SelectorType": 0,                  // 0=None 固定默认库 1=KeyHash 按 key 哈希分库
+      "AllowAdmin": true,
+      "AbortOnConnectFail": false,
+      "ConnectTimeout": 5000,
+      "SyncTimeout": 5000,
+      "KeepAlive": 60
+    }
+  },
+  "LogOption": {                          // 日志
+    "LogType": 1,                         // 0=None 1=Serilog
+    "IsUseSeq": true,
+    "SeqUrl": "https://seq.example.com",
+    "SeqApiKey": "***"
+  },
+  "DatabaseOption": {                     // Momo 数据库
+    "DatabaseSource": 0,                  // 0=SqlServer 1=PostgreSQL
     "IsReadWriteSplit": false,
     "MasterConnectionString": "Server=...;Database=viv;...",
     "SlaveConnectionStrings": [],
-    "EntityTypeOptions": [{              // 实体自动扫描
+    "Timeout": 30,
+    "EntityTypeOptions": [{               // 实体自动扫描
       "AssemblyName": "Viv.Entity",
-      "NameSpace": "Viv.Entity.Database.Apex",
-      "BaseType": "Viv.Momo.Interface.IEntity"
+      "Namespace": "Viv.Entity.Database.Apex",
+      "BaseType": "Viv.Momo.Interface.IEntity, Viv.Momo, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
     }]
   },
-  "NanaOption": {                        // Nana 消息（Wolverine + RabbitMQ）
-    "Host": "localhost", "Port": 5672,
-    "UserName": "viv", "Password": "***",
-    "VirtualHost": "/Viv", "RetryCount": 3,
-    "ConsumerTypes": []                  // 消费者类型扫描规则（ClassNameEndWith: "Consumer"）
+  "NanaOption": {                         // Nana 消息（Wolverine + RabbitMQ）
+    "Host": "localhost",
+    "Port": 5672,
+    "UserName": "viv",
+    "Password": "***",
+    "VirtualHost": "VivNet",
+    "RetryCount": 3,
+    "ConsumerTypes": [],                  // 消费者类型扫描规则（ClassNameEndsWith: "Consumer"）
+    "SagaDatabaseSource": 0,              // Saga 持久化库类型（0=SqlServer 1=PostgreSQL）
+    "SagaConnectionString": null          // 不配则不启用 Saga 持久化
   },
-  "CacheOption": {                       // Redis 缓存
-    "CacheProviderType": 1,              // 0=None 1=Redis
-    "IsEnableMemoryCache": true,
-    "RedisOptions": { "ConnectionString": "localhost:6379" }
+  "TokenOption": {                        // JWT
+    "TokenType": 0,                       // 0=Jwt
+    "SecretKey": "***",                   // ≥32 字节，所有签发/验证 token 的服务（含网关）必须一致
+    "ExpireMinutes": 120,
+    "Issuer": "viv.system.net",
+    "Audience": "viv.system.net"
   },
-  "LogOption": { "LogType": 1 },         // 0=None 1=Serilog
-  "TokenOption": { "TokenType": 0, "SecretKey": "***", "ExpireMinutes": 120 },
-  "EchoOption": { "EnableHttp": true, "EnableGrpc": true },
-  "TickOption": { ... }                  // Clockwork 调度（TickerQ）
+  "TickOption": null,                     // Clockwork 调度（TickerQ），不使用则为 null
+  "EchoOption": {                         // 跨服务通信
+    "EnableHttp": true,
+    "EnableGrpc": true
+  },
+  "S3Option": {                           // 对象存储（S3 兼容，RustFS 等）
+    "Endpoint": "https://s3.example.com",
+    "UseHttps": true,
+    "Port": 443,
+    "AccessKey": "***",
+    "SecretKey": "***",
+    "Region": "us-east-1",
+    "UploadBucket": "vivbucket",
+    "UploadPresignExpireSeconds": 900,
+    "DownloadPresignExpireSeconds": 900
+  }
 }
 ```
 
