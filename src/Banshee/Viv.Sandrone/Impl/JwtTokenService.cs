@@ -56,12 +56,12 @@ namespace Viv.Sandrone.Impl
             // 构建Claims（JWT载荷）
             var claims = new List<Claim>
             {
-                new Claim(JwtRegisteredClaimNames.Sub, payload.UserId.ToString()),
-                new Claim(JwtRegisteredClaimNames.Name, payload.UserName),
-                new Claim(JwtRegisteredClaimNames.Iss, _options.Issuer),
-                new Claim(JwtRegisteredClaimNames.Aud, _options.Audience),
-                new Claim(JwtRegisteredClaimNames.Exp, DateTimeOffset.UtcNow.AddMinutes(_options.ExpireMinutes).ToUnixTimeSeconds().ToString()),
-                new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
+                new(JwtRegisteredClaimNames.Sub, payload.UserId.ToString()),
+                new(JwtRegisteredClaimNames.Name, payload.UserName),
+                new(JwtRegisteredClaimNames.Iss, _options.Issuer),
+                new(JwtRegisteredClaimNames.Aud, _options.Audience),
+                new(JwtRegisteredClaimNames.Exp, DateTimeOffset.UtcNow.AddMinutes(_options.ExpireMinutes).ToUnixTimeSeconds().ToString()),
+                new(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
             };
 
             // Viv 上下文 Claims：网关验签后透传给下游的 x-viv-appId / x-viv-subjectId 头
@@ -115,7 +115,7 @@ namespace Viv.Sandrone.Impl
             }
         }
 
-        public TokenPayload ParseToken(string token)
+        public TokenPayload? ParseToken(string token)
         {
             try
             {

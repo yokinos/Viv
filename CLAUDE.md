@@ -113,13 +113,16 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 - `AddVivApi` / `AddVivWorker` handle config load, Autofac setup, `AddViv()`, MVC/filters, CORS, Swagger, and encoding registration.
 - `RunVivApi` handles Build → VivLocator → **`UseForwardedHeaders`**（信任网关透传的 `X-Forwarded-Proto/Host/For`，避免 `UseHttpsRedirection` 把浏览器 302 甩出网关直连下游）→ Swagger UI (dev) → middleware pipeline → Run. Accepts an `Action<WebApplication>? configure` for custom endpoints (`UseTickerQ()`, `MapHub()`, etc.).
 - `RunVivWorker` handles Build → VivLocator → Run.
-- `AddVivGateway` handles config load、Autofac、`AddViv()`、JWT 解析（读 `TokenOption` 对称密钥，**只解析不强制**）、CORS、OutputCache、RateLimiter、`AddReverseProxy().LoadFromMemory(...)`（路由/集群从 Aspire 服务发现自动生成）；`RunVivGateway` 管道：Build → VivLocator → WebSocket → CORS → OutputCache → RateLimiter → Authentication → Authorization → **上下文头透传**（先剥离客户端伪造的 `x-viv-*` 头，认证后从 token claims 回填 `x-viv-appId`/`x-viv-subjectId`(=TenantId)/`x-viv-userId`/`x-viv-serviceName`）→ `MapReverseProxy` → Run。**路由不带 AuthorizationPolicy** —— 网关不鉴权，下游服务自己用 `[Authorize]` 控制。
+- `AddVivGateway` handles config load、Autofac、`AddViv()`、JWT 解析（读 `TokenOption` 对称密钥，**只解析不强制**）、CORS、OutputCache、RateLimiter、`AddReverseProxy().LoadFromMemory(...)`（路由/集群从 Aspire 服务发现自动生成）；`RunVivGateway` 管道：Build → VivLocator → WebSocket → CORS → OutputCache → RateLimiter → Authentication → Authorization → **上下文头透传**（先剥离客户端伪造的 `x-viv-*` 头与 `x-request-token`，再剥离 query 里客户端直传的身份参数 `tenantId/userId/appId`，认证后从 token claims 回填 `x-viv-appId`/`x-viv-subjectId`(=TenantId)/`x-viv-userId`/`x-viv-serviceName` 并 HMAC 签名写 `x-request-token`）→ `MapReverseProxy` → Run。**路由不带 AuthorizationPolicy** —— 网关不鉴权，下游服务自己用 `[Authorize]` 控制。
+- **SignalR/WS 认证**：网关 JwtBearer 支持 `access_token` 查询参数认证（`JwtBearerEvents.OnMessageReceived`，SignalR 升级请求无法带 `Authorization` 头）；客户端经 `/ws/{短名}/...` 需带有效 JWT 才能获得身份（经 `x-viv-*` 头下传），下游 hub（如 `ChatHub`）读 `RequestTokenAnalysisMagic.GetContextFromHeaders` 取已验身份，**无身份即 `Context.Abort()`**——不再信任客户端 query 直传的 tenantId/userId/appId。
+- **`x-request-token` 防重放**：签名载荷含 unix 时间戳（token 格式 `{unixSeconds}:{base64Sig}`），下游验签时校验 ≤300s，超时/旧格式（无冒号）一律拒绝——截获签名头组也不能无限期重放冒充。
+- **内部签名密钥 `EnvOption.InternalToken`**：`RequestTokenAnalysisMagic.GetInternalSecret()` 优先取 `VivEngine.VivOptions?.EnvOption?.InternalToken`（`viv.config.json` 的 `EnvOption` 节点，网关与**所有服务必须配同一个值**，32 位随机 hex），缺省回落到 `TokenOption.SecretKey`（向后兼容，旧部署无需改配置即可互通）。匿名服务（两者皆 null）不验签，按原行为信任头——只用于无租户数据场景。
 - **路由自动生成**：`VivGatewayRouteBuilder.Build()` 从 Aspire 注入的 `services__*` 环境变量（`WithReference`）为每个服务生成 3 条路由 + 1 个集群，**零手写 JSON**（无 `viv.yarp.json`）。新增 API 只需在 AppHost 加 `WithReference`：
   - `/api/{短名}/{**catch-all}` → `/api/{**catch-all}`（标准 API，`PathPattern` 匹配替换吃掉中间段）
   - `/docs/{短名}/{**catch-all}` → `/{**catch-all}`（Scalar 文档）
   - `/ws/{短名}/{**catch-all}` → `/{**catch-all}`（SignalR / WebSocket 透传）
   - **短名 = 服务名 `split('-')[1]`**（`viv-apex-api` → `apex`）；第二段冲突时（`viv-herta-api` 与 `viv-herta-link` 都是 `herta`），`-api` 保留基础短名，其余服务拼接剩余段（`herta`+`link` → `hertalink`），保证集群 ID 唯一。
-- **下游自鉴权**：`AddVivApi` 自动注册 JwtBearer（读 `viv.config.json` 的 `TokenOption`），控制器用 `[Authorize]` 逐个控制；`TokenOption` 为 `null`（如 hertalink）则跳过注册保持匿名。网关只解析透传，不拦截未登录请求。
+- **下游自鉴权**：`AddVivApi` 自动注册 JwtBearer（读 `viv.config.json` 的 `TokenOption`），控制器用 `[Authorize]` 逐个控制；`TokenOption` 为 `null`（如 hertalink）则跳过注册保持匿名——此时 `RunVivApi` **不调用** `UseAuthentication/UseAuthorization`（否则匿名服务首请求抛 `IAuthenticationSchemeProvider` 无法解析）。网关只解析透传，不拦截未登录请求。
 - **网关代理文档**：`/docs/{短名}/{**catch-all}` 路由（如 `/docs/apex/scalar/`）把各服务 **Scalar** 文档经网关透出，欢迎页服务标签即指向此（不跳服务自身地址）。前提：Scalar.AspNetCore ≥2.16 生成的 HTML 用相对路径（`openapi/v1.json`、`./scalar.aspnetcore.js`）且自带子目录 basePath 计算，`PathPattern: "/{**catch-all}"` 去掉 `/docs/{短名}` 即可；链接需带尾斜杠 `/scalar/`，否则下游 302 后浏览器会请求网关根路径 `/scalar/`。路由自动生成，欢迎页零映射。
 - **JWT SecretKey ≥ 32 字节**：IdentityModel 8.x 的 HS256 强制要求 ≥256 bit（`IDX10720`），且 `TokenOption` 必须在**所有会签发/验证 token 的服务间保持一致**（含网关）。
 - `AddServiceDefaults()` and `MapDefaultEndpoints()` are **caller-side** Aspire concerns; the framework does not reference Aspire.
@@ -130,6 +133,7 @@ Every API and Worker project requires a `viv.config.json` at its root. `VivEngin
 
 | Section | Drives |
 |---|---|
+| `EnvOption` | Environment (`Env`/`ServiceName`/`MachineId`/`ServiceType`) + `InternalToken`（x-request-token 内部签名共享密钥，网关与所有服务同值） |
 | `DIOption` | Type-scanning rules for Service/Repository auto-registration |
 | `LogOption` | Logging backend (Serilog → Seq) |
 | `CacheOption` | Redis connection + memory cache toggle |

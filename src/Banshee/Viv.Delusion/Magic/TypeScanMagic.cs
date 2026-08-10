@@ -148,14 +148,14 @@ namespace Viv.Delusion.Magic
         /// 扫描所有已加载程序集中实现了指定接口的非抽象类
         /// </summary>
         public static List<Type> ScanByInterface<TInterface>() where TInterface : class
-            => ScanTypes(typeof(TInterface));
+            => ScanTypes<TInterface>();
 
         /// <summary>
         /// 扫描指定程序集名称中实现了指定接口的非抽象类
         /// </summary>
         public static List<Type> ScanByInterface<TInterface>(IEnumerable<string> assemblyNames, Func<Type, bool>? matchPredicate = null)
             where TInterface : class
-            => ScanTypes(typeof(TInterface), assemblyNames, matchPredicate);
+            => ScanTypes<TInterface>(assemblyNames, matchPredicate);
 
         /// <summary>
         /// 扫描所有已加载程序集中实现了指定接口的非抽象类
@@ -411,7 +411,7 @@ namespace Viv.Delusion.Magic
             if (!typeof(Attribute).IsAssignableFrom(attributeType))
                 throw new ArgumentException($"{attributeType.FullName} 不是 Attribute 类型", nameof(attributeType));
 
-            return type.GetCustomAttributes(attributeType, inherit: false).Any();
+            return type.GetCustomAttributes(attributeType, inherit: false).Length != 0;
         }
 
         #endregion

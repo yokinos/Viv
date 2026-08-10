@@ -30,7 +30,7 @@ namespace Viv.Engine
             return services;
         }
 
-        public static void VivAutofacRegister(this ContainerBuilder builder, DIOptions diOptions, Action<ContainerBuilder> customSet = null)
+        public static void VivAutofacRegister(this ContainerBuilder builder, DIOptions diOptions, Action<ContainerBuilder>? customSet = default)
         {
             // 自动依赖注入
             AutoDependencyRegister(builder);
@@ -188,7 +188,7 @@ namespace Viv.Engine
             }
 
             return acceptValues
-                .SelectMany(value => value.Split(','))
+                .SelectMany(value => value?.Split(',') ?? [])
                 .Select(value => value.Split(';')[0].Trim())
                 .Any(value =>
                     string.Equals(value, "application/json", StringComparison.OrdinalIgnoreCase) ||

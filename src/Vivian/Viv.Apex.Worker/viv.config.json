@@ -1,5 +1,6 @@
 {
   "EnvOption": {
+    "InternalToken": "8378ff07fbcd6def4fbe6bdf89edf005",
     "Env": 0,
     "ServiceName": "viv.apex.worker",
     "MachineId": 101

@@ -38,12 +38,14 @@ namespace Viv.Redis
         /// </summary>
         private const string RenewScript = @"
             local current = redis.call('GET', KEYS[1])
-            if current and string.sub(current, 1, -2) == ARGV[1] then
-                redis.call('EXPIRE', KEYS[1], ARGV[2])
-                return 1
-            else
-                return 0
-            end";
+            if current then
+                local holder = string.match(current, '^(.*)_%d+$') or current
+                if holder == ARGV[1] then
+                    redis.call('EXPIRE', KEYS[1], ARGV[2])
+                    return 1
+                end
+            end
+            return 0";
 
         /// <summary>
         /// 重入锁释放时的临时续期时间（秒），防止释放过程中锁过期
@@ -476,11 +478,13 @@ namespace Viv.Redis
                     if currentVal == false then
                         redis.call('SET', KEYS[1], ARGV[1] .. '_1', 'EX', ARGV[2])
                         return 1
-                    elseif string.sub(currentVal, 1, -2) == ARGV[1] then
-                        local count = tonumber(string.sub(currentVal, -1)) + 1
-                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. count, 'EX', ARGV[2])
-                        return 1
                     else
+                        local holder = string.match(currentVal, '^(.*)_%d+$') or currentVal
+                        if holder == ARGV[1] then
+                            local count = tonumber(string.match(currentVal, '_(%d+)$')) or 1
+                            redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count + 1), 'EX', ARGV[2])
+                            return 1
+                        end
                         return 0
                     end";
 
@@ -512,11 +516,13 @@ namespace Viv.Redis
                     if currentVal == false then
                         redis.call('SET', KEYS[1], ARGV[1] .. '_1', 'EX', ARGV[2])
                         return 1
-                    elseif string.sub(currentVal, 1, -2) == ARGV[1] then
-                        local count = tonumber(string.sub(currentVal, -1)) + 1
-                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. count, 'EX', ARGV[2])
-                        return 1
                     else
+                        local holder = string.match(currentVal, '^(.*)_%d+$') or currentVal
+                        if holder == ARGV[1] then
+                            local count = tonumber(string.match(currentVal, '_(%d+)$')) or 1
+                            redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count + 1), 'EX', ARGV[2])
+                            return 1
+                        end
                         return 0
                     end";
 
@@ -568,13 +574,13 @@ namespace Viv.Redis
                     if currentVal == false then
                         return 0
                     end
-                    local clientPart = string.sub(currentVal, 1, -2)
-                    if clientPart ~= ARGV[1] then
+                    local holder = string.match(currentVal, '^(.*)_%d+$') or currentVal
+                    if holder ~= ARGV[1] then
                         return 0
                     end
-                    local count = tonumber(string.sub(currentVal, -1))
+                    local count = tonumber(string.match(currentVal, '_(%d+)$')) or 1
                     if count > 1 then
-                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count-1), 'EX', ARGV[2])
+                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count - 1), 'EX', ARGV[2])
                         return 1
                     else
                         redis.call('DEL', KEYS[1])
@@ -621,13 +627,13 @@ namespace Viv.Redis
                     if currentVal == false then
                         return 0
                     end
-                    local clientPart = string.sub(currentVal, 1, -2)
-                    if clientPart ~= ARGV[1] then
+                    local holder = string.match(currentVal, '^(.*)_%d+$') or currentVal
+                    if holder ~= ARGV[1] then
                         return 0
                     end
-                    local count = tonumber(string.sub(currentVal, -1))
+                    local count = tonumber(string.match(currentVal, '_(%d+)$')) or 1
                     if count > 1 then
-                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count-1), 'EX', ARGV[2])
+                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count - 1), 'EX', ARGV[2])
                         return 1
                     else
                         redis.call('DEL', KEYS[1])

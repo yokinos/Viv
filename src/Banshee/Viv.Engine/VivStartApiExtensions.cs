@@ -20,6 +20,7 @@ namespace Viv.Engine
     public static class VivStartApiExtensions
     {
         private const string ApiTitleKey = "__VivApiTitle";
+        private const string VivAuthRegisteredKey = "__VivAuthRegistered";
 
         /// <summary>
         /// 配置 Viv API 基础服务：加载配置、Autofac 容器、AddViv、MVC、CORS、OpenAPI、编码注册。
@@ -55,8 +56,9 @@ namespace Viv.Engine
 
             // 下游自鉴权：注册 JwtBearer（读 viv.config.json 的 TokenOption）。
             // 网关不强制鉴权，只解析透传 x-viv-* 上下文头；API 服务自己用 [Authorize] 控制。
-            // TokenOption 为 null（如 hertalink）时跳过，保持匿名。
-            VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, throwIfMissing: false);
+            // TokenOption 为 null（如 hertalink）时跳过，保持匿名——此时 RunVivApi 不注册 UseAuthentication/UseAuthorization。
+            var hasAuth = VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, throwIfMissing: false);
+            builder.Configuration[VivAuthRegisteredKey] = hasAuth ? "true" : "false";
 
             serviceCollectionConfigure?.Invoke(builder.Services);
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -110,6 +112,10 @@ namespace Viv.Engine
             var corsPolicyName = Assembly.GetEntryAssembly()?.GetName().Name ?? "VivApi";
             var apiTitle = builder.Configuration[ApiTitleKey] ?? "Viv API";
 
+            // TokenOption=null（匿名服务）时 ConfigureJwtBearer 未注册鉴权，此时不能调用 UseAuthentication/UseAuthorization，
+            // 否则会抛 "Unable to resolve service for type 'IAuthenticationSchemeProvider'"。
+            var hasAuth = builder.Configuration[VivAuthRegisteredKey] == "true";
+
             var app = builder.Build();
             VivLocator.Initialize(app.Services);
 
@@ -136,12 +142,19 @@ namespace Viv.Engine
 
             // JWT 只验证一次：UseAuthentication(JwtBearer) 先跑并填充 HttpContext.User，
             // VivContextMiddleware 直接从已验证的 principal 读取上下文，不再二次验签。
-            app.UseAuthentication();
+            // 匿名服务（TokenOption=null）未注册鉴权，跳过 UseAuthentication/UseAuthorization 以免启动崩溃。
+            if (hasAuth)
+            {
+                app.UseAuthentication();
+            }
 
             app.UseMiddleware<VivContextMiddleware>();
 
             app.UseHttpsRedirection();
-            app.UseAuthorization();
+            if (hasAuth)
+            {
+                app.UseAuthorization();
+            }
             app.MapControllers();
 
             configure?.Invoke(app);

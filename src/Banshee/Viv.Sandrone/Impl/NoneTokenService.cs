@@ -19,7 +19,7 @@ namespace Viv.Sandrone.Impl
             throw new NotSupportedException("当前环境未启用Token模块，禁止调用鉴权服务");
         }
 
-        public TokenPayload ParseToken(string token)
+        public TokenPayload? ParseToken(string token)
         {
             // 无害降级：无 Token 模块的服务收到带 token 请求时返回 null，而不是抛 500
             return null;

@@ -21,7 +21,8 @@ namespace Viv.Engine
         /// throwIfMissing 为 true 则抛异常（网关必需），为 false 则跳过注册（下游无 TokenOption 时保持匿名）</param>
         /// <param name="configureJwt">微调 JwtBearerOptions（events、挑战头等）</param>
         /// <param name="throwIfMissing">TokenOption 缺失时是否抛异常</param>
-        public static void ConfigureJwtBearer(
+        /// <returns>是否成功注册了 JwtBearer 鉴权（TokenOption 缺失且未要求抛异常时返回 false）</returns>
+        public static bool ConfigureJwtBearer(
             IServiceCollection services,
             TokenOptions? tokenOptions,
             Action<JwtBearerOptions>? configureJwt = null,
@@ -33,7 +34,7 @@ namespace Viv.Engine
                 {
                     throw new InvalidOperationException("需要配置 viv.config.json 的 TokenOption 节点（SecretKey/Issuer/Audience），用于 JwtBearer 对称密钥验证。");
                 }
-                return;
+                return false;
             }
 
             var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(tokenOptions.SecretKey));
@@ -55,6 +56,7 @@ namespace Viv.Engine
                 });
 
             services.AddAuthorization();
+            return true;
         }
     }
 }

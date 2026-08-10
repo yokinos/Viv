@@ -10,13 +10,13 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
+using Viv.Delusion.Extension;
 using Viv.Delusion.Generic;
 using Viv.Log;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
 using Viv.Momo.Sync;
-using Viv.Delusion.Extension;
 
 namespace Viv.Momo.Core
 {
@@ -252,7 +252,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        private int EFBatchUpdate<T>(List<T> entities, EFAppContext context) where T : class, IEntity
+        private static int EFBatchUpdate<T>(List<T> entities, EFAppContext context) where T : class, IEntity
         {
             var entityIds = entities.Select(e => e.Id).ToList();
             var existingEntities = context.Set<T>().Where(e => entityIds.Contains(e.Id)).ToList();
@@ -273,7 +273,7 @@ namespace Viv.Momo.Core
             return context.SaveChanges();
         }
 
-        private async Task<int> EFBatchUpdateAsync<T>(List<T> entities, EFAppContext context) where T : class, IEntity
+        private static async Task<int> EFBatchUpdateAsync<T>(List<T> entities, EFAppContext context) where T : class, IEntity
         {
             var entityIds = entities.Select(e => e.Id).Distinct().ToList();
             // 异步方法里用 ToListAsync，避免同步阻塞线程池线程等待 DB I/O
@@ -418,16 +418,16 @@ namespace Viv.Momo.Core
                 var context = GetAppContext();
                 if (ids.Count < EFMaxCount)
                 {
-                    int affected = context.Set<T>()
-                        .Where(x => ids.Contains(x.Id))
-                        .ExecuteDelete();
+                    int affected = context.Set<T>().Where(x => ids.Contains(x.Id)).ExecuteDelete();
                     return affected > 0;
                 }
                 else
                 {
                     var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
-                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _options.DatabaseSource)} IN @Ids";
-                    int affected = context.DbConnection.Execute(deleteSql, new { Ids = ids }, _transaction, _timeOut);
+                    var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T)) && TenantId > 0;
+                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _options.DatabaseSource)} IN @Ids"
+                        + (isTenantEntity ? $" AND {SqlMagic.QuoteIdentifier("TenantId", _options.DatabaseSource)} = @TenantId" : "");
+                    int affected = context.DbConnection.Execute(deleteSql, isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids }, _transaction, _timeOut);
                     return affected > 0;
                 }
             }

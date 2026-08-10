@@ -62,16 +62,63 @@
   └───────────┘  └───────────┘  └───────────┘
 ```
 
-### 请求管线（API）
+### 请求链路（完整）
+
+一次请求经 **网关 → 下游服务 → 数据层** 三级，身份与多租户上下文沿链路逐级验真：
 
 ```
-Request
-  → ApiStartedMiddleware     欢迎页 / 404 兜底
-  → VivContextMiddleware    解析 x-viv-* 头 / JWT → IVivContext（多租户）
-  → RequestFilterAttribute  请求参数校验（Elysia）
-  → VivExceptionFilter      全局异常捕获 → VivApiResult
-  → Controller Action       业务处理
-  → VivApiResult            统一响应 { Code, Message, Data }
+客户端
+ │ ① 携带 JWT（Authorization: Bearer <token>；WS 升级改走 ?access_token=<token>）
+ ▼
+Viv.Aspire.Gateway  ── 只解析不强制：无 token 也放行 ──
+ │ ② CORS / OutputCache / RateLimiter
+ │ ③ JwtBearer 解析 token
+ │ ④ 剥离客户端伪造的身份来源：x-viv-* 头 + x-request-token + query 里的 tenantId/userId/appId 全部丢弃
+ │ ⑤ token 有效 → 从 claims 回填 x-viv-* 头 + HMAC-SHA256 签名写 x-request-token（{unixSeconds}:{base64Sig}）
+ ▼
+下游服务（Apex.Api / Herta.Link …）
+ │ ⑥ UseForwardedHeaders 信任 X-Forwarded-Proto/Host/For（避免 302 甩出网关直连下游）
+ │ ⑦ UseAuthentication(JwtBearer) 验签 JWT → context.User（匿名服务 TokenOption=null 跳过）
+ │ ⑧ VivContextMiddleware：验 x-request-token 签名通过才信任 x-viv-* 头 → IVivContext（AsyncLocal）
+ │ ⑨ RequestFilterAttribute 参数校验 → Controller Action → VivExceptionFilter → VivApiResult
+ ▼
+数据层 Momo
+ │ EF 全局租户过滤 / Dapper 自动追加 AND TenantId = @TenantId
+ ▼
+返回：{ Code, Message, Data }（HTTP 恒 200）
+```
+
+| 步骤 | 环节 | 职责 |
+|:--|:--|:--|
+| ① | 客户端 | 携带 `Authorization: Bearer <JWT>`；SignalR 升级请求无法带 Authorization 头，改用 `?access_token=<JWT>` |
+| ② | 网关 | 限流、输出缓存、CORS |
+| ③ | 网关 | JwtBearer 解析（`OnMessageReceived` 支持 `access_token` 查询参数，供 WS/SignalR 场景） |
+| ④ | 网关 | 认证**前**剥离客户端可伪造的 `x-viv-appId/subjectId/userId/serviceName`、`x-request-token` 头，以及 query 里的 `tenantId/userId/appId` —— 身份只允许来自验签后的 token claims |
+| ⑤ | 网关 | 认证通过后从 claims 回填 `x-viv-*` 头，HMAC-SHA256 签名写 `x-request-token`（载荷含 unix 时间戳，5 分钟过期）—— 防止绕过网关直连下游伪造头 |
+| ⑥ | 下游 | 信任网关透传的 `X-Forwarded-Proto/Host/For`，避免 `UseHttpsRedirection` 把浏览器 302 甩出网关 |
+| ⑦ | 下游 | JwtBearer 验签 JWT（`TokenOption=null` 的匿名服务不注册鉴权） |
+| ⑧ | 下游 | `RequestTokenAnalysisMagic.GetContextFromHeaders` 用 `EnvOption.InternalToken`（缺省回落 `TokenOption.SecretKey`）验 `x-request-token` 签名 + 时效；失败 → 视为无身份 |
+| ⑨ | 下游 | 参数校验 → 业务 → 统一响应 |
+| ⑩ | 数据层 | 多租户自动隔离（EF 查询过滤 / Dapper 追加租户条件），业务代码无需手写 |
+
+**身份/租户上下文契约**（由网关验签后回填，下游验签才信任）：
+
+| Header | 说明 |
+|:--|:--|
+| `x-viv-appId` | 客户端应用 ID（claims: `appId`） |
+| `x-viv-subjectId` | 租户 ID = TenantId（claims: `tenantId`） |
+| `x-viv-userId` | 用户 ID（claims: `sub`） |
+| `x-viv-serviceName` | 服务名（网关填自己的 `EnvOption.ServiceName`） |
+| `x-request-token` | `{unixSeconds}:{base64Sig}` — 对上面 4 个头 + 时间戳的 HMAC-SHA256（密钥 `EnvOption.InternalToken`，网关与所有服务同值；缺省回落 `TokenOption.SecretKey`）。下游验签 + ≤300s 时效通过才信任头组 |
+
+**SignalR / WebSocket 链路**：
+
+```
+客户端 → /ws/{短名}/chat?access_token=<JWT>
+  → 网关 OnMessageReceived 读 access_token → JwtBearer 验签 → 回填 x-viv-* + 签名 x-request-token
+  → 下游 ChatHub.OnConnectedAsync：GetContextFromHeaders 验签取身份
+  → AppId/SubjectId/UserId 任一无效 → Context.Abort()（不再信任客户端 query 直传的 tenantId/userId/appId）
+  → 通过 → 加入连接池 + 用户组
 ```
 
 ---
@@ -185,7 +232,8 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
   "EnvOption": {                          // 运行环境
     "Env": 0,                             // 0=Development 1=Test 2=PreRelease 3=Production
     "ServiceName": "viv.apex.api",        // 服务名（Nana 队列名 / 网关路由短名依赖它）
-    "MachineId": 101                      // 机器 ID（分布式 ID 生成）
+    "MachineId": 101,                     // 机器 ID（分布式 ID 生成）
+    "InternalToken": "<32位随机hex>"       // x-request-token 签名密钥（网关与所有服务必须同一个值；缺省回落 TokenOption.SecretKey）
   },
   "DIOption": {                           // Service / Repository 自动扫描注册
     "ServiceImplementation": {
@@ -363,16 +411,17 @@ public class UserCreatedConsumer : VivConsumer<UserCreated> { ... }
 
 ### 多租户与网关
 
-**上下文头**（由网关验签后回填，下游信任）：
+**上下文头**（由网关验签后回填，下游验签才信任）：
 
 | Header | 说明 |
 |:--|:--|
 | `x-viv-appId` | 客户端应用 ID |
 | `x-viv-subjectId` | 租户 ID（TenantId） |
 | `x-viv-userId` | 用户 ID |
-| `x-viv-serviceName` | 下游服务名 |
+| `x-viv-serviceName` | 服务名 |
+| `x-request-token` | HMAC-SHA256 签名（`{unixSeconds}:{base64Sig}`，5 分钟过期） |
 
-`VivContextMiddleware` 解析头部（或 JWT claims）填充 `IVivContext`，数据层据此自动做租户过滤。
+`VivContextMiddleware` 解析头部（或 JWT claims）填充 `IVivContext`，数据层据此自动做租户过滤。完整链路见上节**请求链路**。
 
 **网关路由自动生成**（零手写 JSON）：从 Aspire 服务发现为每个服务生成 3 条路由 + 1 个集群：
 
@@ -382,7 +431,7 @@ public class UserCreatedConsumer : VivConsumer<UserCreated> { ... }
 | `/docs/{短名}/{**catch-all}` | `/{**catch-all}` | Scalar 文档（经网关透出） |
 | `/ws/{短名}/{**catch-all}` | `/{**catch-all}` | WebSocket / SignalR |
 
-网关只**解析不透传强制**鉴权：JWT 有就验签回填 `x-viv-*` 头（先剥离客户端伪造头，再 HMAC 签名 `x-request-token` 防绕过直连），无则放行；鉴权由下游服务 `[Authorize]` 自己控制。限流策略在 `viv.ratelimit.json` 热重载。
+网关只**解析不透传强制**鉴权：JWT 有就验签回填 `x-viv-*` 头（先剥离客户端伪造头与 query 身份参数，再 HMAC 签名 `x-request-token` 防绕过直连），无则放行；鉴权由下游服务 `[Authorize]` 自己控制。签名密钥取 `EnvOption.InternalToken`（缺省回落 `TokenOption.SecretKey`）。限流策略在 `viv.ratelimit.json` 热重载。
 
 ### CLI 命令
 

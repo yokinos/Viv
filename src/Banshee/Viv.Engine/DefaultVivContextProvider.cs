@@ -17,7 +17,7 @@ namespace Viv.Engine
     public class DefaultVivContextProvider : IVivContextProvider
     {
         private readonly RequestTokenAnalysisMagic _requestMagic;
-        private static readonly PathString ApiPathPrefix = new PathString("/api");
+        private static readonly PathString ApiPathPrefix = new("/api");
 
         public DefaultVivContextProvider(RequestTokenAnalysisMagic requestMagic)
         {
@@ -48,7 +48,7 @@ namespace Viv.Engine
             var httpMethodMetadata = endpoint.Metadata?.GetMetadata<IHttpMethodMetadata>();
             if (httpMethodMetadata == null)
                 return true;
-            
+
             return !IsApiRequest(context.Request.Path);
         }
 

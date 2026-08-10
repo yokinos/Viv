@@ -21,14 +21,14 @@ namespace Viv.Engine.Power
         public const string SubjectIdHeader = "x-viv-subjectId";
         public const string UserIdHeader = "x-viv-userId";
         public const string ServiceNameHeader = "x-viv-serviceName"; // 这个指的是服务的名称，比如 viv.apex.api
-        public const string InnerRequestTokenHeader = "x-request-token"; // 这个指的是内部请求的 Token，于验证内部请求的合法性，设置到appsettings.json 中设置。
+        public const string InnerRequestTokenHeader = "x-request-token"; // 这个指的是内部请求的 Token，于验证内部请求的合法性。
 
 
         /// <summary>
         /// 从可信内部请求 Header 中获取上下文。
         /// 安全约束：x-viv-* 上下文头只有网关（或持有共享密钥的对等服务）签名后才可信，
         /// 否则直连下游的客户端可伪造头冒充任意租户/用户。
-        /// 未配置 TokenOption（匿名服务，如 hertalink）无法验签，按原行为信任头（该场景无租户数据）。
+        /// 密钥取 EnvOption.InternalToken（缺省回落 TokenOption.SecretKey）；两者皆 null 时无法验签，按原行为信任头（该场景无租户数据）。
         /// </summary>
         public VivContextContent? GetContextFromHeaders(HttpContext context)
         {
@@ -59,24 +59,40 @@ namespace Viv.Engine.Power
         }
 
         /// <summary>
-        /// 内部请求共享密钥（TokenOption.SecretKey）。
-        /// 网关与持有 TokenOption 的服务必须一致才能互通签名；匿名服务（TokenOption 为 null）返回 null。
+        /// 内部请求共享密钥。优先取 EnvOption.InternalToken（viv.config.json 显式配置，网关与所有服务配同一个值）；
+        /// 未配置时回落到 TokenOption.SecretKey（向后兼容，匿名服务两者皆 null 则返回 null）。
         /// </summary>
         private static string? GetInternalSecret()
-            => VivConfigRegistry.Get<TokenOptions>()?.SecretKey;
+            => !string.IsNullOrWhiteSpace(VivEngine.VivOptions?.EnvOption?.InternalToken)
+                ? VivEngine.VivOptions.EnvOption.InternalToken
+                : VivConfigRegistry.Get<TokenOptions>()?.SecretKey;
+
+        /// <summary>
+        /// 签名有效期（秒）。网关签完后下游在秒级内收到，5 分钟足够抵消时钟偏差；
+        /// 超过该窗口的请求视为重放攻击，下游拒绝。
+        /// </summary>
+        private const long MaxReplayAgeSeconds = 300;
 
         /// <summary>
         /// 对当前 x-viv-* 上下文头组计算 HMAC-SHA256 签名，网关认证后写入 x-request-token。
+        /// 签名载荷包含 unix 时间戳（格式 {unixSeconds}:{base64Sig}），下游验签时校验时效，防止无限期重放。
         /// 无共享密钥时返回 null（不签名）。
         /// </summary>
         public static string? SignContextHeaders(IHeaderDictionary headers)
         {
             var secret = GetInternalSecret();
-            return string.IsNullOrWhiteSpace(secret) ? null : ComputeSignature(headers, secret);
+            if (string.IsNullOrWhiteSpace(secret))
+            {
+                return null;
+            }
+
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            return timestamp.ToString(CultureInfo.InvariantCulture) + ":" + ComputeSignature(headers, secret, timestamp);
         }
 
         /// <summary>
-        /// 校验 x-request-token 是否为持有共享密钥的一方对当前头组生成的签名。
+        /// 校验 x-request-token 是否为持有共享密钥的一方对当前头组生成的签名，且时间戳未超时（<see cref="MaxReplayAgeSeconds"/>）。
+        /// 旧格式（无时间戳前缀）或已超时的令牌一律拒绝。
         /// </summary>
         public static bool VerifySignature(IHeaderDictionary headers, string secret)
         {
@@ -86,22 +102,40 @@ namespace Viv.Engine.Power
                 return false;
             }
 
-            var expected = ComputeSignature(headers, secret);
+            // 格式 {unixSeconds}:{base64Sig}（base64 字符集不含 ':'，首个冒号安全切分）
+            var sep = provided.IndexOf(':');
+            if (sep <= 0 || sep >= provided.Length - 1)
+            {
+                return false;
+            }
+
+            if (!long.TryParse(provided.AsSpan(0, sep), NumberStyles.Integer, CultureInfo.InvariantCulture, out var timestamp))
+            {
+                return false;
+            }
+
+            if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timestamp > MaxReplayAgeSeconds)
+            {
+                return false;
+            }
+
+            var expected = ComputeSignature(headers, secret, timestamp);
             return expected != null && CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(provided),
+                Encoding.UTF8.GetBytes(provided.Substring(sep + 1)),
                 Encoding.UTF8.GetBytes(expected));
         }
 
         /// <summary>
-        /// 固定顺序拼接 4 个 x-viv-* 头值（缺失补空串），保证签名对头值顺序不敏感、对缺失值稳定。
+        /// 固定顺序拼接 4 个 x-viv-* 头值（缺失补空串）+ 签名时间戳，保证签名对头值顺序不敏感、对缺失值稳定。
         /// </summary>
-        private static string? ComputeSignature(IHeaderDictionary headers, string secret)
+        private static string? ComputeSignature(IHeaderDictionary headers, string secret, long timestamp)
         {
             var payload = string.Join('\n',
                 headers[AppIdHeader].ToString(),
                 headers[SubjectIdHeader].ToString(),
                 headers[UserIdHeader].ToString(),
-                headers[ServiceNameHeader].ToString());
+                headers[ServiceNameHeader].ToString(),
+                timestamp.ToString(CultureInfo.InvariantCulture));
 
             using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
             return Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload)));

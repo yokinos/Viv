@@ -2,6 +2,7 @@ using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +33,7 @@ namespace Viv.Engine
         internal const string DefaultRateLimiterPolicyName = "DefaultRateLimiter";
         internal const string CustomRateLimiterPolicyName = "CustomRateLimiter";
         private const int DefaultCacheSeconds = 20;
+        private static readonly string[] _vivClaimTypes = ["tenantId", "userId", "appId"];
 
         /// <summary>
         /// 配置 Viv 网关基础服务：加载配置、限流配置热重载、Autofac、AddViv、JWT 解析、YARP（路由/集群从 Aspire 服务发现自动生成）、CORS、OutputCache、RateLimiter、编码注册。
@@ -79,7 +81,9 @@ namespace Viv.Engine
             }
 
             // JWT 对称密钥解析（读 viv.config.json 的 TokenOption）——只解析，不强制，用于认证后透传 x-viv-* 上下文头
-            VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, configureJwt, throwIfMissing: true);
+            // SignalR/WebSocket 升级请求无法带 Authorization 头，补充 access_token 查询参数认证（SignalR 标准约定）。
+            var jwtConfigure = configureJwt == null ? (Action<JwtBearerOptions>)AddAccessTokenFromQuery : options => { AddAccessTokenFromQuery(options); configureJwt(options); };
+            VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, jwtConfigure, throwIfMissing: true);
 
             // YARP 反向代理：路由/集群从 Aspire 服务发现（services__* 环境变量）自动生成，零手写 JSON
             var (gatewayRoutes, gatewayClusters) = VivGatewayRouteBuilder.Build();
@@ -178,6 +182,20 @@ namespace Viv.Engine
                     context.Request.Headers.Remove(header);
                 }
 
+                // 剥离客户端可伪造的身份 query 参数（tenantId/userId/appId）：
+                // 身份只允许来自认证后回填的 x-viv-* 头，客户端经 query 直传的身份一律丢弃，防止冒充任意用户/租户。
+                var spoofableIdentityKeys = _vivClaimTypes;
+                if (context.Request.Query.Count > 0)
+                {
+                    var strippedQuery = context.Request.Query
+                        .Where(kv => !spoofableIdentityKeys.Contains(kv.Key, StringComparer.OrdinalIgnoreCase))
+                        .ToArray();
+                    if (strippedQuery.Length != context.Request.Query.Count)
+                    {
+                        context.Request.QueryString = QueryString.Create(strippedQuery);
+                    }
+                }
+
                 if (context.User.Identity?.IsAuthenticated == true)
                 {
                     // .NET 10 JwtBearer 只映射 sub → NameIdentifier（name 保持短格式），两种都兼容。
@@ -186,8 +204,7 @@ namespace Viv.Engine
                     context.Request.Headers[Power.RequestTokenAnalysisMagic.AppIdHeader] = context.User.FindFirstValue(VivClaimTypes.AppId) ?? "";
                     context.Request.Headers[Power.RequestTokenAnalysisMagic.SubjectIdHeader] = context.User.FindFirstValue(VivClaimTypes.TenantId) ?? "";
                     context.Request.Headers[Power.RequestTokenAnalysisMagic.ServiceNameHeader] = VivEngine.VivOptions?.EnvOption?.ServiceName ?? "";
-                    context.Request.Headers[Power.RequestTokenAnalysisMagic.InnerRequestTokenHeader] =
-                        Power.RequestTokenAnalysisMagic.SignContextHeaders(context.Request.Headers);
+                    context.Request.Headers[Power.RequestTokenAnalysisMagic.InnerRequestTokenHeader] = Power.RequestTokenAnalysisMagic.SignContextHeaders(context.Request.Headers);
                 }
 
                 await next();
@@ -210,6 +227,27 @@ namespace Viv.Engine
             configure?.Invoke(app);
 
             app.Run();
+        }
+
+        /// <summary>
+        /// SignalR/WebSocket：浏览器无法在升级请求里设置 Authorization 头，SignalR 客户端把 token 放 access_token 查询参数。
+        /// 网关在这里把它读出来交给 JwtBearer 认证；认证通过后再回填 x-viv-* 头给下游。
+        /// </summary>
+        private static void AddAccessTokenFromQuery(JwtBearerOptions options)
+        {
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    if (string.IsNullOrEmpty(context.Token)
+                        && context.HttpContext.Request.Query.TryGetValue("access_token", out var token))
+                    {
+                        context.Token = token.ToString();
+                    }
+
+                    return Task.CompletedTask;
+                }
+            };
         }
 
         /// <summary>

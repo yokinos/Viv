@@ -1,13 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
+using Viv.Delusion.Magic;
+using Viv.Nana.Options;
 using Wolverine;
 using Wolverine.EntityFrameworkCore;
 using Wolverine.ErrorHandling;
 using Wolverine.Persistence;
 using Wolverine.RabbitMQ;
 using Wolverine.RabbitMQ.Internal;
-using Viv.Delusion.Magic;
-using Viv.Nana.Options;
 
 namespace Viv.Nana.Core
 {
@@ -22,13 +22,9 @@ namespace Viv.Nana.Core
         /// 消费服务名（入口程序集名）。发布订阅队列 {EventName}Queue.{ServiceName} 的唯一后缀，
         /// 保证不同服务各建一条队列、各自收一份；同一服务多实例共享队列（轮询）。
         /// </summary>
-        private static readonly string ServiceName =
-            Assembly.GetEntryAssembly()?.GetName().Name ?? AppDomain.CurrentDomain.FriendlyName ?? "app";
+        private static readonly string ServiceName = Assembly.GetEntryAssembly()?.GetName().Name ?? AppDomain.CurrentDomain.FriendlyName ?? "app";
 
-        public static IServiceCollection AddVivWolverine(
-            this IServiceCollection services,
-            NanaOptions nanaOptions,
-            List<Type>? sagaTypes)
+        public static IServiceCollection AddVivWolverine(this IServiceCollection services, NanaOptions nanaOptions, List<Type>? sagaTypes)
         {
             services.AddWolverine(opts =>
             {
