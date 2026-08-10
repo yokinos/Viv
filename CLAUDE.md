@@ -41,7 +41,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`) |
 | `Viv.Sandrone` | Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service` |
 | `Viv.Echo` | Service-to-service communication — HTTP + gRPC clients |
-| `Viv.Tick` | Background scheduling — `TickerQ` integration for cron/interval job execution with dashboard |
+| `Viv.Clockwork` | Background scheduling — `TickerQ` integration for cron/interval job execution with dashboard |
 | `Viv.Cli` | **CLI framework** — `VivCliHost` (REPL loop + Spectre.Console.Cli `CommandApp`); `[VivCommand]` auto-discovery; built-in `Cmd_Clear`; `Out` (formatted output) and `InputMagic` (interactive input) utilities |
 | `Viv.Forge` | Code generation — compile-time gRPC client generation via `Viv.Forge` |
 
