@@ -5,6 +5,7 @@ using Wolverine.EntityFrameworkCore;
 using Wolverine.ErrorHandling;
 using Wolverine.Persistence;
 using Wolverine.RabbitMQ;
+using Wolverine.RabbitMQ.Internal;
 using Viv.Delusion.Magic;
 using Viv.Nana.Options;
 
@@ -52,8 +53,21 @@ namespace Viv.Nana.Core
                     var exchangeName = NanaRegister.GetExchangeName(messageType);
                     var queueName = NanaRegister.GetConsumerQueueName(messageType, ServiceName);
 
-                    opts.ListenToRabbitQueue(queueName);
+                    var listener = opts.ListenToRabbitQueue(queueName);
                     transport.BindExchange(exchangeName, ExchangeType.Fanout).ToQueue(queueName);
+
+                    // 消费并发/预取调优：直接写 RabbitMqQueue 属性。
+                    // 注意：该 fork 的 fluent PreFetchCount/ListenerCount/QueueType 是空壳（编译通过但不落盘），必须直写。
+                    // 默认 prefetch=20（比 Wolverine 原生 100 更低的重投放大）、队列 Quorum（多副本防丢消息）；
+                    // ConsumerCount/MaximumParallelMessages 由 [NanaConsumer] 特性显式指定。
+                    var attr = consumerType.GetCustomAttribute<NanaConsumerAttribute>();
+                    if (listener.Endpoint is RabbitMqQueue queue)
+                    {
+                        queue.PreFetchCount = attr?.PrefetchCount > 0 ? attr.PrefetchCount : NanaConsumerAttribute.DefaultPrefetchCount;
+                        queue.QueueType = QueueType.quorum;
+                        if (attr?.ConsumerCount > 0) queue.ListenerCount = attr.ConsumerCount;
+                        if (attr?.MaximumParallelMessages > 0) queue.MaxDegreeOfParallelism = attr.MaximumParallelMessages;
+                    }
                 }
 
                 // 3) 发布路由：所有 NanaEnvelope<T> → {EventName}Exchange（fanout 交换机）

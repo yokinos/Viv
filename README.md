@@ -334,6 +334,15 @@ public class UserCreatedConsumer : VivConsumer<UserCreated>
 
 消费失败自动按 `RetryCount × 1s` 重试，耗尽后进死信队列；租户上下文（`NanaEnvelope<T>.Context`）随消息透传到下游，消费侧多租户隔离不受影响。Saga 状态机可基于 EF 持久化（配 `SagaConnectionString` 自动启用）。
 
+**消费并发/预取调优**：框架默认每通道预取 **20** 条（低于 Wolverine 原生 100，降低崩溃重投放大）、队列用 **Quorum** 类型（多副本防丢消息）。需要吞吐时给消费者标特性覆盖：
+
+```csharp
+[NanaConsumer(ConsumerCount = 4, PrefetchCount = 200, MaximumParallelMessages = 32)]
+public class UserCreatedConsumer : VivConsumer<UserCreated> { ... }
+```
+
+`ConsumerCount` = 队列消费通道数（**>1 会丢失同队列内的严格顺序**，多实例时总数 = 通道数 × 实例数）；`PrefetchCount` = 每通道未确认上限；`MaximumParallelMessages` = 端点最大并行。
+
 ### 统一响应
 
 所有 API 返回 `VivApiResult` 信封，**HTTP 状态码恒为 200**，业务结果由 `Code` 表达：
