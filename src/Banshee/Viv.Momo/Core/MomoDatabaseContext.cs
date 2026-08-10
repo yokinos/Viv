@@ -793,7 +793,8 @@ namespace Viv.Momo.Core
                 var sql = SqlMagic.GetFindSqlTemplate(tableName, _options.DatabaseSource, isTenantEntity);
                 // ITenant 实体按租户过滤，防止跨租户按 Id 读取
                 object parameters = isTenantEntity ? new { Id = id, TenantId } : new { Id = id };
-                return connection.QuerySingleOrDefault<T>(sql, parameters, null, _timeOut);
+                // 与 FindAsync 的 QueryFirstOrDefaultAsync 保持一致：重复行取首行，不抛（宽松语义）
+                return connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
             }
             catch (Exception ex)
             {

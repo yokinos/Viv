@@ -177,6 +177,7 @@ Business-layer services and repositories are registered via **type scanning** dr
 - **Dapper 单实体/删除**：`Find<T>/FindAsync<T>`（按 Id）、`Delete<T>/SoftDelete<T>`（谓词/Id/批量）在 `T : ITenant` 且当前有租户时追加 `AND [TenantId] = @TenantId`（`SqlMagic.AppendTenantFilter`，删改同样按租户隔离）。
 - **逃生口（框架不自动加租户）**：接受原生 SQL 字符串的重载（`FirstOrDefault<T>(sql,…)`/`FindList<T>(sql,…)`/`FindScalar`/`Page`）由调用方自持 SQL，框架无法安全改写，跨租户风险由调用方负责。
 - **Redis 租户库**：`TenantIdAllocator.AllocateDbIndex` 在**调用时**解析当前租户（`VivLocator.GetService<IVivContextAccessor>().Current?.SubjectId`），非构造时缓存，避免单例 allocator 被首个请求固化。
+- **AsyncLocal 流进后台线程（约束）**：`VivContextAccessor` 的租户上下文存在静态 `AsyncLocal`，会随 ExecutionContext 流入 `Task.Run`/`new Thread`。请求中 fire-and-forget 的后台任务会**继承发起请求的租户**，请求结束后仍带着旧租户跑 → 后台跨租户（框架"无上下文不过滤"兜底此时不生效，因为继承的是非空租户）。业务代码如用 `Task.Run`/`new Thread` 做租户敏感操作，需自行 `ExecutionContext.SuppressFlow()` 或在任务内显式清除/重设租户上下文。
 
 ### Unified API response
 

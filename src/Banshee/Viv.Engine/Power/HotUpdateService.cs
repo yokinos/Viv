@@ -15,7 +15,14 @@ namespace Viv.Engine.Power
     {
         private readonly Lock _gate = new();
 
+        /// <summary>
+        /// 文件变更防抖窗口：FileSystemWatcher 一次保存会连发 LastWrite/Size/CreationTime 等多个事件，
+        /// 窗口期内的事件合并为一次真正重载，避免并发加载多次、ValueChanged 重复触发。
+        /// </summary>
+        private static readonly TimeSpan FileChangeDebounce = TimeSpan.FromMilliseconds(300);
+
         private FileSystemWatcher? _watcher;
+        private Timer? _debounceTimer;
         private CancellationTokenSource? _loopCts;
         private Func<CancellationToken, Task<T?>>? _loader;
         private T? _currentValue;
@@ -105,6 +112,9 @@ namespace Viv.Engine.Power
                 _watcher?.Dispose();
                 _watcher = null;
 
+                _debounceTimer?.Dispose();
+                _debounceTimer = null;
+
                 _loopCts?.Cancel();
                 _loopCts?.Dispose();
                 _loopCts = null;
@@ -130,6 +140,9 @@ namespace Viv.Engine.Power
                 _watcher.Created += OnFileChanged;
                 _watcher.Renamed += OnFileChanged;
                 _watcher.EnableRaisingEvents = true;
+
+                // 防抖 Timer：初始不触发，事件到来时重置窗口
+                _debounceTimer = new Timer(_ => OnFileChangedDebounced(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             }
         }
 
@@ -163,6 +176,15 @@ namespace Viv.Engine.Power
         }
 
         private void OnFileChanged(object sender, FileSystemEventArgs e)
+        {
+            lock (_gate)
+            {
+                // 重置防抖窗口：一次保存连发的事件都被合并，仅窗口结束后触发一次真正重载
+                _debounceTimer?.Change(FileChangeDebounce, Timeout.InfiniteTimeSpan);
+            }
+        }
+
+        private void OnFileChangedDebounced()
         {
             _ = Task.Run(async () =>
             {

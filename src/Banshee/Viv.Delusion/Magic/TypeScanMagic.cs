@@ -133,7 +133,8 @@ namespace Viv.Delusion.Magic
                 if (type == targetType)
                     return false;
 
-                if (!targetType.IsAssignableFrom(type))
+                // 与 MatchBaseType 共用统一判定：闭合基类走 IsAssignableFrom，开放泛型走基类链/接口的 GetGenericTypeDefinition 匹配
+                if (!IsMatchType(type, targetType))
                     return false;
 
                 if (matchPredicate != null && !matchPredicate(type))
@@ -361,15 +362,36 @@ namespace Viv.Delusion.Magic
         }
 
         /// <summary>
-        /// 基类型匹配
+        /// 基类型匹配（统一闭合/开放泛型判定）
         /// </summary>
         private static bool MatchBaseType(Type type, Type baseType)
+        {
+            return IsMatchType(type, baseType);
+        }
+
+        /// <summary>
+        /// 判断 type 是否匹配 baseType（Scan 与 ScanTypes 两套入口共用，避免语义分叉）：
+        /// - 闭合 baseType：baseType.IsAssignableFrom(type)（涵盖基类链与接口继承）；
+        /// - 开放泛型 baseType（如 typeof(VivConsumer&lt;&gt;)/typeof(IRepository&lt;&gt;)）：type 的基类链或接口中，
+        ///   存在以 baseType 为开放泛型定义的闭合泛型即匹配。基类链也要查——VivConsumer&lt;T&gt; 是基类而非接口。
+        /// </summary>
+        private static bool IsMatchType(Type type, Type baseType)
         {
             if (baseType == null)
                 return false;
 
             if (baseType.IsGenericTypeDefinition)
             {
+                for (var current = type; current != null; current = current.BaseType)
+                {
+                    if (current.IsGenericType
+                        && !current.IsGenericTypeDefinition
+                        && current.GetGenericTypeDefinition() == baseType)
+                    {
+                        return true;
+                    }
+                }
+
                 return type.GetInterfaces()
                     .Any(i => i.IsGenericType &&
                               i.GetGenericTypeDefinition() == baseType);

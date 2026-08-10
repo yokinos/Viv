@@ -382,20 +382,11 @@ namespace Viv.Redis
             if (_disposed) return;
             if (disposing)
             {
-                if (_lazyAsyncConnection.IsValueCreated)
-                {
-                    var connectionTask = _lazyAsyncConnection.Value;
-                    if (connectionTask.IsCompletedSuccessfully)
-                    {
-                        var connection = connectionTask.Result;
-                        connection.Close();
-                        connection.Dispose();
-                    }
-                }
-
-                _isConfigInitialized = false;
-                //_redisOptions = null;
-                VivConfigRegistry.Remove<RedisOptions>();
+                // Redis 连接是进程级共享单例（static Lazy<IConnectionMultiplexer>，设计上存活整个进程）。
+                // 由任一实例 Dispose 关闭它/重置 static 状态（_isConfigInitialized/VivConfigRegistry）会永久砖掉
+                // 整个进程的缓存通道：Lazy 已创建无法重建，static 状态被污染，后续所有 Redis 操作全部失败。
+                // 连接生命周期跟随进程，应用退出时由进程回收即可，这里不做任何关闭。
+                WriteLog("RedisFactory.Dispose：Redis 连接为进程级共享，跳过关闭");
             }
 
             _disposed = true;

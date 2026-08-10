@@ -249,7 +249,8 @@ namespace Viv.Delusion.Magic
         /// <param name="removeValue">要移除的字符串</param>
         public static string RemoveEnd(string input, string removeValue)
         {
-            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+            // 仅 null/空串返回空；纯空白输入应原样返回（移除操作不该吞掉内容）
+            if (string.IsNullOrEmpty(input)) return string.Empty;
             if (string.IsNullOrWhiteSpace(removeValue)) return input;
 
             return input.EndsWith(removeValue, StringComparison.OrdinalIgnoreCase)
@@ -264,7 +265,8 @@ namespace Viv.Delusion.Magic
         /// <param name="removeValue">要移除的字符串</param>
         public static string RemoveStart(string input, string removeValue)
         {
-            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+            // 仅 null/空串返回空；纯空白输入应原样返回（移除操作不该吞掉内容）
+            if (string.IsNullOrEmpty(input)) return string.Empty;
             if (string.IsNullOrWhiteSpace(removeValue)) return input;
 
             return input.StartsWith(removeValue, StringComparison.OrdinalIgnoreCase)
@@ -308,7 +310,6 @@ namespace Viv.Delusion.Magic
         }
 
 
-
         /// <summary>
         /// 生成安全的随机字符串
         /// </summary>
@@ -324,14 +325,22 @@ namespace Viv.Delusion.Magic
             // 使用加密级别的随机数生成器
             using var rng = RandomNumberGenerator.Create();
 
+            // 拒绝采样：2^32 不能整除池长时，直接取模会让高位区间多出几个值，产生模偏差。
+            // 剔除 [limit, uint.MaxValue] 这段"余数偏大"的区间后取模，分布均匀。
+            uint poolLength = (uint)charPool.Length;
+            uint limit = uint.MaxValue - (uint.MaxValue % poolLength);
+
             byte[] randomBytes = new byte[4];
             for (int i = 0; i < length; i++)
             {
-                rng.GetBytes(randomBytes);
-                // 将随机字节映射到字符池范围内，保证均匀分布
-                uint randomUint = BitConverter.ToUInt32(randomBytes, 0);
-                int index = (int)(randomUint % (uint)charPool.Length);
-                result.Append(charPool[index]);
+                uint randomUint;
+                do
+                {
+                    rng.GetBytes(randomBytes);
+                    randomUint = BitConverter.ToUInt32(randomBytes, 0);
+                } while (randomUint >= limit);
+
+                result.Append(charPool[(int)(randomUint % poolLength)]);
             }
 
             return result.ToString();

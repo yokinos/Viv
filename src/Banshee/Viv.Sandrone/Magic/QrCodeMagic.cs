@@ -32,6 +32,9 @@ namespace Viv.Sandrone.Magic
             if (string.IsNullOrWhiteSpace(content))
                 throw new ArgumentException("content 不能为空", nameof(content));
 
+            // 防无界 bitmap：size 直接决定像素内存（size²×4B），且 QR 尺寸越大越难扫描。512px 已足够，超 2048 一律收口。
+            size = Math.Clamp(size, 8, 2048);
+
             darkColor ??= SKColors.Black;
             lightColor ??= SKColors.White;
 

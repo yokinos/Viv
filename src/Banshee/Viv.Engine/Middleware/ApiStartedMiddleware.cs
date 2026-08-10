@@ -45,14 +45,15 @@ namespace Viv.Engine.Middleware
         {
             context.Response.ContentType = "text/html; charset=utf-8";
 
-            var option = VivEngine.VivOptions.EnvOption;
+            // EnvOption 缺失（viv.config.json 未配该段）时兜底，避免下方 .Replace 链对 option 无条件解引用 NRE
+            var option = VivEngine.VivOptions?.EnvOption;
             var baseDir = AppContext.BaseDirectory;
 
             // 网关服务显示专属欢迎页 gateway.html，其余服务显示通用 welcome.html
             var isGateway = option != null && option.ServiceType == VivServiceType.Gateway;
             var path = Path.Combine(baseDir, "web", isGateway ? "gateway.html" : "welcome.html");
 
-            if (!File.Exists(path))
+            if (option == null || !File.Exists(path))
             {
                 await LoadAppNotFoundPageAsync(context);
                 return;

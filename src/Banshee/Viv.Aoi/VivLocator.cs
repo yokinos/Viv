@@ -54,6 +54,8 @@ namespace Viv.Aoi
         /// <summary>
         /// 获取请求作用域服务（Web专用）
         /// </summary>
+        /// <exception cref="NotSupportedException">无 HTTP 请求上下文时抛出——此时新建的 scope 在方法返回即释放，
+        /// 返回其中的 scoped 实例是已释放的僵尸对象。调用方应改用 <see cref="CreateScope"/> 自持并释放。</exception>
         public static T GetScopedService<T>() where T : notnull
         {
             CheckInitialized();
@@ -63,8 +65,8 @@ namespace Viv.Aoi
                 return _httpContextAccessor.HttpContext.RequestServices.GetRequiredService<T>();
             }
 
-            using var scope = _serviceProvider.CreateScope();
-            return scope.ServiceProvider.GetRequiredService<T>();
+            throw new NotSupportedException(
+                "VivLocator.GetScopedService<T>() 在无 HTTP 请求上下文时无法安全返回作用域服务。请改用 VivLocator.CreateScope() 自行创建并释放作用域。");
         }
 
         /// <summary>

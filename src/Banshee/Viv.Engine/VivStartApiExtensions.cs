@@ -106,7 +106,7 @@ namespace Viv.Engine
         /// </summary>
         public static void RunVivApi(this WebApplicationBuilder builder, Action<WebApplication>? configure = null)
         {
-            var vivOptions = VivEngine.LoadVivConfig();
+            // 配置已在 AddVivApi 加载过一次并写入 VivEngine.VivOptions，这里不重复读（原二次读取是死变量）
             var corsPolicyName = Assembly.GetEntryAssembly()?.GetName().Name ?? "VivApi";
             var apiTitle = builder.Configuration[ApiTitleKey] ?? "Viv API";
 
