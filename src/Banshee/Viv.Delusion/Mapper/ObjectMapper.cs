@@ -237,12 +237,42 @@ namespace Viv.Delusion.Mapper
         /// <returns>解析后的DateTime，失败返回null</returns>
         private static DateTime? ParseDateTimeInternal(string sourceText, CultureInfo culture)
         {
+            // 8 位纯数字且能按 yyyyMMdd 解析（如 20260211）→ 按日期处理。
+            // 否则 20260211 会被当成 Unix 秒 ≈ 1970-08，明显误判。8 位数字的 Unix 秒（≤1973 年）现实中几乎不可能是真时间戳。
+            if (sourceText.Length == 8 && TryParseYyyyMmDd(sourceText, out var ymd))
+            {
+                return ymd;
+            }
+
             if (long.TryParse(sourceText, out var unixTime))
             {
                 return unixTime > MillisecondsThreshold ? _unixEpochDateTimeUtc.AddMilliseconds(unixTime).ToLocalTime() : _unixEpochDateTimeUtc.AddSeconds(unixTime).ToLocalTime();
             }
 
             return DateTime.TryParse(sourceText, culture, DateTimeStyles.None, out var dt) ? dt : null;
+        }
+
+        /// <summary>
+        /// 判断 8 位纯数字是否构成合法 yyyyMMdd 日期（年份限定 1900-2099，避免误吞其他 8 位数字）
+        /// </summary>
+        private static bool TryParseYyyyMmDd(string text, out DateTime date)
+        {
+            date = default;
+            if (text.Length != 8) return false;
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (!char.IsAsciiDigit(text[i])) return false;
+            }
+
+            var year = int.Parse(text.AsSpan(0, 4), NumberStyles.None, CultureInfo.InvariantCulture);
+            var month = int.Parse(text.AsSpan(4, 2), NumberStyles.None, CultureInfo.InvariantCulture);
+            var day = int.Parse(text.AsSpan(6, 2), NumberStyles.None, CultureInfo.InvariantCulture);
+
+            if (year is < 1900 or > 2099) return false;
+            if (month is < 1 or > 12) return false;
+            if (day is < 1 or > 31) return false;
+
+            return DateTime.TryParseExact(text, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
         }
 
         /// <summary>
@@ -253,6 +283,12 @@ namespace Viv.Delusion.Mapper
         /// <returns>解析后的DateTimeOffset，失败返回null</returns>
         private static DateTimeOffset? ParseDateTimeOffsetInternal(string sourceText, CultureInfo culture)
         {
+            // 同 ParseDateTimeInternal：8 位 yyyyMMdd 先按日期处理，避免被误判为 Unix 秒
+            if (sourceText.Length == 8 && TryParseYyyyMmDd(sourceText, out var ymd))
+            {
+                return new DateTimeOffset(DateTime.SpecifyKind(ymd, DateTimeKind.Unspecified), TimeSpan.Zero);
+            }
+
             if (long.TryParse(sourceText, out var unixTime))
             {
                 return unixTime > MillisecondsThreshold ? _unixEpoch.AddMilliseconds(unixTime).ToLocalTime() : _unixEpoch.AddSeconds(unixTime).ToLocalTime();

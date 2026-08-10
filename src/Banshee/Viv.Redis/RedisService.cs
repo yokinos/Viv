@@ -646,6 +646,9 @@ namespace Viv.Redis
         /// </summary>
         public bool ForceReleaseLock(string lockKey)
         {
+            // 强制释放同样要停掉后台续期任务，否则它会一直空转续查
+            StopRenewal(lockKey);
+
             var script = "return redis.call('del', KEYS[1])";
             return ExecuteRedis(lockKey, db =>
             {
@@ -659,6 +662,9 @@ namespace Viv.Redis
         /// </summary>
         public async Task<bool> ForceReleaseLockAsync(string lockKey)
         {
+            // 强制释放同样要停掉后台续期任务，否则它会一直空转续查
+            StopRenewal(lockKey);
+
             var script = "return redis.call('del', KEYS[1])";
             return await ExecuteRedisAsync(lockKey, async db =>
             {
@@ -692,11 +698,17 @@ namespace Viv.Redis
                         if (token.IsCancellationRequested) break;
 
                         // 执行续期脚本
-                        await ExecuteRedisAsync(lockKey, async db =>
+                        var renewed = await ExecuteRedisAsync(lockKey, async db =>
                         {
                             var result = await db.ScriptEvaluateAsync(RenewScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]).ConfigureAwait(false);
                             return (long)result == 1;
                         }).ConfigureAwait(false);
+
+                        // 续期失败 = 锁已丢失（被强制释放 / 被他人覆盖 / 已过期），停止续期，避免无限空转
+                        if (!renewed)
+                        {
+                            break;
+                        }
                     }
                     catch (TaskCanceledException)
                     {

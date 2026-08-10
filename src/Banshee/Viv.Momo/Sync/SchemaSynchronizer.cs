@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Data;
 using System.Reflection;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Viv.Contracts.Enums;
 using Viv.Delusion.Magic;
@@ -310,7 +311,7 @@ namespace Viv.Momo.Sync
             var isNullable = _nonPkNullable ? !isPk : IsClrNullable(prop);
 
             var maxLength = GetMaxLength(prop, clrType);
-            var sqlType = MapToSqlType(clrType, maxLength);
+            var sqlType = MapToSqlType(prop, clrType, maxLength);
             var isAutoGen = Attribute.IsDefined(prop, typeof(DatabaseGeneratedAttribute));
 
             return new ColumnInfo
@@ -393,7 +394,7 @@ namespace Viv.Momo.Sync
         /// 无长度限制 → text / nvarchar(max)。
         /// enum 按 int 处理。
         /// </summary>
-        private string MapToSqlType(Type clrType, int? maxLength)
+        private string MapToSqlType(PropertyInfo prop, Type clrType, int? maxLength)
         {
             if (clrType.IsEnum) clrType = typeof(int);
 
@@ -406,6 +407,23 @@ namespace Viv.Momo.Sync
 
             if (clrType == typeof(byte[]))
                 return _dbType == DatabaseSourceType.PostgreSQL ? "bytea" : "varbinary(max)";
+
+            // decimal 精度：优先读实体上的 [Precision(p,s)] / [Column(TypeName="decimal(p,s)")]，
+            // 避免写死 (18,2) 把金额类等更高精度的列截断
+            if (clrType == typeof(decimal))
+            {
+                var precisionAttr = prop.GetCustomAttribute<PrecisionAttribute>();
+                if (precisionAttr != null)
+                {
+                    return _dbType == DatabaseSourceType.PostgreSQL
+                        ? $"numeric({precisionAttr.Precision},{precisionAttr.Scale})"
+                        : $"decimal({precisionAttr.Precision},{precisionAttr.Scale})";
+                }
+
+                var typeName = prop.GetCustomAttribute<ColumnAttribute>()?.TypeName;
+                if (!string.IsNullOrWhiteSpace(typeName))
+                    return typeName;
+            }
 
             return _dbType switch
             {

@@ -53,16 +53,13 @@ namespace Viv.Momo.Core
 
         public bool Insert<T>(IEnumerable<T> entities) where T : IEntity
         {
-            if (entities.IsNullOrEmpty()) return false;
+            // 先物化再判空：IsNullOrEmpty 对惰性源（LINQ 查询/IQueryable）会先枚举一遍，ToList 又枚举一遍 → 二次枚举
+            var entityList = entities?.ToList() ?? [];
+            if (entityList.Count == 0) return false;
 
             try
             {
-                // 只物化一次，避免对迭代器/查询源二次枚举（第二遍拿到的是未设 Id/TenantId 的新实例）
-                var entityList = entities.ToList();
-                if (!entityList.IsNullOrEmpty())
-                {
-                    AutoSetValue(entityList.ToArray());
-                }
+                AutoSetValue(entityList.ToArray());
                 var context = GetAppContext();
                 int affected;
 
@@ -108,16 +105,13 @@ namespace Viv.Momo.Core
 
         public async Task<bool> InsertAsync<T>(IEnumerable<T> entities) where T : IEntity
         {
-            if (entities.IsNullOrEmpty()) return false;
+            // 先物化再判空：IsNullOrEmpty 对惰性源（LINQ 查询/IQueryable）会先枚举一遍，ToList 又枚举一遍 → 二次枚举
+            var entityList = entities?.ToList() ?? [];
+            if (entityList.Count == 0) return false;
 
             try
             {
-                // 只物化一次，避免对迭代器/查询源二次枚举（第二遍拿到的是未设 Id/TenantId 的新实例）
-                var entityList = entities.ToList();
-                if (!entityList.IsNullOrEmpty())
-                {
-                    AutoSetValue(entityList.ToArray());
-                }
+                AutoSetValue(entityList.ToArray());
                 var context = GetAppContext();
                 int affected;
 
@@ -175,10 +169,9 @@ namespace Viv.Momo.Core
 
         public bool Update<T>(IEnumerable<T> entities) where T : class, IEntity
         {
-            if (entities.IsNullOrEmpty()) return false;
-
-            var entityList = entities.Where(x => x.Id > 0).ToList();
-            if (entityList.IsNullOrEmpty()) return false;
+            // 先物化再判空：避免惰性源二次枚举
+            var entityList = entities?.Where(x => x.Id > 0).ToList() ?? [];
+            if (entityList.Count == 0) return false;
 
             try
             {
@@ -232,10 +225,9 @@ namespace Viv.Momo.Core
 
         public async Task<bool> UpdateAsync<T>(IEnumerable<T> entities) where T : class, IEntity
         {
-            if (entities.IsNullOrEmpty()) return false;
-
-            var entityList = entities.Where(x => x.Id > 0).ToList();
-            if (entityList.IsNullOrEmpty()) return false;
+            // 先物化再判空：避免惰性源二次枚举
+            var entityList = entities?.Where(x => x.Id > 0).ToList() ?? [];
+            if (entityList.Count == 0) return false;
 
             try
             {
@@ -284,7 +276,8 @@ namespace Viv.Momo.Core
         private async Task<int> EFBatchUpdateAsync<T>(List<T> entities, EFAppContext context) where T : class, IEntity
         {
             var entityIds = entities.Select(e => e.Id).Distinct().ToList();
-            var existingEntities = context.Set<T>().Where(e => entityIds.Contains(e.Id)).ToList();
+            // 异步方法里用 ToListAsync，避免同步阻塞线程池线程等待 DB I/O
+            var existingEntities = await context.Set<T>().Where(e => entityIds.Contains(e.Id)).ToListAsync();
 
             foreach (var entity in entities)
             {

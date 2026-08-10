@@ -36,11 +36,13 @@ namespace Viv.Engine
                 });
 
                 // 标准 API：/api/apex/account/apexLogin -> /api/account/apexLogin
+                // 挂 CustomRateLimiter 策略（读 viv.ratelimit.json），否则 AddRateLimiter 注册的策略形同虚设
                 routes.Add(new RouteConfig
                 {
                     RouteId = $"{shortName}-api",
                     ClusterId = clusterId,
                     Match = new RouteMatch { Path = $"/api/{shortName}/{{**catch-all}}" },
+                    RateLimiterPolicy = VivStartGatewayExtensions.CustomRateLimiterPolicyName,
                     Transforms = new[]
                     {
                         new Dictionary<string, string> { ["PathPattern"] = $"/api/{{**catch-all}}" }

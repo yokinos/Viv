@@ -29,8 +29,8 @@ namespace Viv.Engine
         private const string NoCachePolicyName = "NoCache";
         private const string DefaultCachePolicyName = "DefaultCache";
         private const string CustomCachePolicyName = "CustomCache";
-        private const string DefaultRateLimiterPolicyName = "DefaultRateLimiter";
-        private const string CustomRateLimiterPolicyName = "CustomRateLimiter";
+        internal const string DefaultRateLimiterPolicyName = "DefaultRateLimiter";
+        internal const string CustomRateLimiterPolicyName = "CustomRateLimiter";
         private const int DefaultCacheSeconds = 20;
 
         /// <summary>

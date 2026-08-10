@@ -1,5 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-using RabbitMQ.Client;
+using System.Reflection;
 using Wolverine;
 using Wolverine.EntityFrameworkCore;
 using Wolverine.ErrorHandling;
@@ -17,6 +17,13 @@ namespace Viv.Nana.Core
     /// </summary>
     public static class VivWolverineConfigurationExtensions
     {
+        /// <summary>
+        /// 消费服务名（入口程序集名）。发布订阅队列 {EventName}Queue.{ServiceName} 的唯一后缀，
+        /// 保证不同服务各建一条队列、各自收一份；同一服务多实例共享队列（轮询）。
+        /// </summary>
+        private static readonly string ServiceName =
+            Assembly.GetEntryAssembly()?.GetName().Name ?? AppDomain.CurrentDomain.FriendlyName ?? "app";
+
         public static IServiceCollection AddVivWolverine(
             this IServiceCollection services,
             NanaOptions nanaOptions,
@@ -30,26 +37,34 @@ namespace Viv.Nana.Core
                 var rabbitUri = new Uri(
                     $"amqp://{Uri.EscapeDataString(nanaOptions.UserName)}:{Uri.EscapeDataString(nanaOptions.Password)}" +
                     $"@{nanaOptions.Host}:{nanaOptions.Port}/{vhostPath}");
-                opts.UseRabbitMq(rabbitUri)
+                var transport = opts.UseRabbitMq(rabbitUri)
                     .AutoProvision();
 
-                // 2) 消费方：显式注册消费者类型 + 监听 {EventName}Queue
+                // 2) 消费方：发布订阅拓扑——每服务一条独立队列绑到 {EventName}Exchange（fanout 广播）
+                //    每个订阅服务各收一份；"只执行一次"由业务层拿分布式锁保证（拿到执行，拿不到丢弃）
                 foreach (var consumerType in NanaRegister.ScanConsumerTypes(nanaOptions.ConsumerTypes))
                 {
                     opts.Discovery.IncludeType(consumerType);
 
                     var messageType = NanaRegister.ExtractMessageType(consumerType);
-                    if (messageType != null)
-                        opts.ListenToRabbitQueue(NanaRegister.GetQueueName(messageType));
+                    if (messageType == null) continue;
+
+                    var exchangeName = NanaRegister.GetExchangeName(messageType);
+                    var queueName = NanaRegister.GetConsumerQueueName(messageType, ServiceName);
+
+                    opts.ListenToRabbitQueue(queueName);
+                    transport.BindExchange(exchangeName, ExchangeType.Fanout).ToQueue(queueName);
                 }
 
-                // 3) 发布路由：所有 NanaEnvelope<T> → {EventName}Queue
-                //    跨服务队列名一致（NanaRegister.GetQueueName 约定），AutoProvision 自动建队列
+                // 3) 发布路由：所有 NanaEnvelope<T> → {EventName}Exchange（fanout 交换机）
+                //    发布侧同样显式声明 fanout 类型，与消费侧 BindExchange 一致（避免 406 PRECONDITION_FAILED）
                 foreach (var eventType in TypeScanMagic.ScanTypes<NanaEvent>())
                 {
+                    var exchangeName = NanaRegister.GetExchangeName(eventType);
                     var envelopeType = typeof(NanaEnvelope<>).MakeGenericType(eventType);
-                    opts.PublishMessage(envelopeType)
-                        .ToRabbitQueue(NanaRegister.GetQueueName(eventType));
+
+                    transport.DeclareExchange(exchangeName, ex => ex.ExchangeType = ExchangeType.Fanout);
+                    opts.PublishMessage(envelopeType).ToRabbitExchange(exchangeName);
                 }
 
                 // 4) 全局失败策略：重试 RetryCount 次（间隔 1s）→ 死信队列

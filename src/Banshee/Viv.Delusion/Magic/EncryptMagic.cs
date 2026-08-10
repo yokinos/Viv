@@ -119,6 +119,50 @@ namespace Viv.Delusion.Magic
         public static string Decrypt3DES(string key, string text, EncrypOptions? options = default) => SymmetricTransform(EncrypType.TripleDES, key, text, options, false);
 
         /// <summary>
+        /// 解密第三方/指定参数格式的密文（互通场景）。
+        /// 与 <see cref="DecryptAES(string, string, EncrypOptions)"/> 的区别：
+        /// key/iv 直接按字节使用（不做 SHA256 派生）、不校验 HMAC、IV 由调用方显式传入。
+        /// 仅用于第三方约定格式的数据；Viv 自己的数据请继续走 DecryptAES（安全路径）。
+        /// </summary>
+        /// <param name="type">算法类型（AES/DES/3DES）</param>
+        /// <param name="key">原始密钥字节，长度必须符合算法要求（AES=16/24/32，DES=8，3DES=16/24）</param>
+        /// <param name="iv">第三方约定的 IV 字节（ECB 模式可传 null）；CBC 等需要 IV 的模式必须传</param>
+        /// <param name="text">待解密的 Base64 密文</param>
+        /// <param name="mode">加密模式（第三方规格，默认 CBC）</param>
+        /// <param name="padding">填充方式（第三方规格，默认 PKCS7）</param>
+        /// <returns>解密后的明文字符串（按 UTF-8 解码）；参数错误或解密失败时返回 null</returns>
+        /// <remarks>
+        /// key/iv 的编码按第三方文档转换：hex → Convert.FromHexString()、base64 → Convert.FromBase64String()、
+        /// 纯文本 → Encoding.UTF8.GetBytes()。明文按 UTF-8 解码，非 UTF-8 编码的明文需自行处理。
+        /// </remarks>
+        [return: MaybeNull]
+        public static string DecryptRaw(EncrypType type, byte[] key, byte[]? iv, string text, CipherMode mode = CipherMode.CBC, PaddingMode padding = PaddingMode.PKCS7)
+        {
+            if (key is not { Length: > 0 } || string.IsNullOrEmpty(text)) return default;
+
+            try
+            {
+                using SymmetricAlgorithm alg = CreateAlgorithm(type);
+                alg.Mode = mode;
+                alg.Padding = padding;
+                alg.Key = key;
+                if (iv is not null)
+                {
+                    alg.IV = iv;
+                }
+
+                byte[] cipher = Convert.FromBase64String(text);
+                using var decryptor = alg.CreateDecryptor();
+                byte[] plain = decryptor.TransformFinalBlock(cipher, 0, cipher.Length);
+                return Utf8.GetString(plain);
+            }
+            catch
+            {
+                return default;
+            }
+        }
+
+        /// <summary>
         /// AES对称加密（Base64输出）
         /// </summary>
         /// <param name="key">加密密钥（不能为空）</param>

@@ -191,9 +191,18 @@ namespace Viv.Delusion.Magic
             try
             {
                 var token = JToken.Parse(input);
-                return token.ToString(Newtonsoft.Json.Formatting.Indented)
-                            .Replace("\r\n", Environment.NewLine)
-                            .Replace("  ", new string(' ', indent));
+
+                using var stringWriter = new StringWriter();
+                using (var jsonWriter = new JsonTextWriter(stringWriter)
+                {
+                    Formatting = Formatting.Indented,
+                    Indentation = Math.Max(0, indent),
+                    IndentChar = ' '
+                })
+                {
+                    token.WriteTo(jsonWriter);
+                }
+                return stringWriter.ToString().Replace("\r\n", Environment.NewLine);
             }
             catch
             {

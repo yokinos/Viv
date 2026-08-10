@@ -37,6 +37,28 @@ namespace Viv.Nana
         }
 
         /// <summary>
+        /// 生成交换机名称：{EventName}Exchange（fanout 广播，发布订阅语义）
+        /// TestApexEvent → TestApexExchange
+        /// </summary>
+        public static string GetExchangeName(Type messageType)
+        {
+            var name = messageType.Name;
+            if (name.EndsWith("Event", StringComparison.OrdinalIgnoreCase))
+                name = name[..^5];
+            return $"{name}Exchange";
+        }
+
+        /// <summary>
+        /// 生成消费方队列名称：{EventName}Queue.{ServiceName}
+        /// 发布订阅拓扑：每个消费服务建一条独立队列绑到 {EventName}Exchange，各自收一份；
+        /// 同一服务多实例共享同一队列（RabbitMQ 轮询分派），"只执行一次"由业务层分布式锁保证。
+        /// </summary>
+        public static string GetConsumerQueueName(Type messageType, string serviceName)
+        {
+            return $"{GetQueueName(messageType)}.{serviceName}";
+        }
+
+        /// <summary>
         /// 从 VivConsumer&lt;T&gt; 提取消息类型 T
         /// </summary>
         public static Type? ExtractMessageType(Type consumerType)

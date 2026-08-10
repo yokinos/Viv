@@ -31,6 +31,8 @@ namespace Viv.Momo.Core
         protected static readonly HashSet<string> _primaryKeys = ["Id"];
 
         private readonly Lock _lock = new();
+        // 串行化异步 BeginTransactionAsync 的 check+begin+set（Monitor 无法跨 await 持有，用信号量替代）
+        private readonly SemaphoreSlim _transactionSemaphore = new(1, 1);
         private bool _disposed = false;
 
         public MomoDatabase(IVivContext vivContext, ILoggerContract logger)
@@ -217,13 +219,15 @@ namespace Viv.Momo.Core
         /// </summary>
         public virtual async Task<bool> BeginTransactionAsync()
         {
-            lock (_lock)
-            {
-                if (_transaction != null) return true;
-            }
-
+            // check + begin + set 全程串行：避免两个并发调用都通过 null 检查、各自开启事务的竞态
+            await _transactionSemaphore.WaitAsync();
             try
             {
+                lock (_lock)
+                {
+                    if (_transaction != null) return true;
+                }
+
                 var context = GetAppContext(DbReadWriteType.Write);
                 var transaction = await context.Database.BeginTransactionAsync();
                 lock (_lock)
@@ -236,6 +240,10 @@ namespace Viv.Momo.Core
             {
                 WriteLog($"BeginTransactionAsync,{ex.Message}", ex);
                 return false;
+            }
+            finally
+            {
+                _transactionSemaphore.Release();
             }
         }
 
@@ -346,6 +354,7 @@ namespace Viv.Momo.Core
                     _writeDbContext = null;
                     _readDbContext = null;
                 }
+                _transactionSemaphore.Dispose();
             }
 
             _disposed = true;
