@@ -1,0 +1,114 @@
+<Project>
+
+  <!--
+    Central Package Management（中央包管理）
+    - 所有包版本在此统一声明，csproj 里的 <PackageReference> 不再写 Version。
+    - 升级/审计只需改这一个文件。
+    - 钉传递依赖版本（如 Microsoft.OpenApi）同样在此声明即可全仓库生效。
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <!-- NU1608：EF Design 10.0.10 传递的 Microsoft.CodeAnalysis.Workspaces 5.0.0 精确要求 Common =5.0.0，
+         与中央钉的 5.6.0 冲突。该警告是 CPM 传递钉版本的预期行为，解析结果与未启用 CPM 时一致
+         （NuGet 本就取最高版本 5.6.0），静默之。 -->
+    <NoWarn>$(NoWarn);NU1608</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ── ASP.NET Core 框架 ─────────────────────────────── -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Core" Version="2.3.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.3" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.8.3" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.8.0" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.8.0" />
+
+    <!-- ── EF Core / 数据库 ───────────────────────────────── -->
+    <PackageVersion Include="Dapper" Version="2.1.79" />
+    <PackageVersion Include="Dapper.SqlBuilder" Version="2.1.66" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="180.78.1" />
+    <PackageVersion Include="Npgsql" Version="10.0.3" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="System.Data.SqlClient" Version="4.9.1" />
+
+    <!-- ── Redis ──────────────────────────────────────────── -->
+    <PackageVersion Include="Aspire.StackExchange.Redis" Version="13.4.6" />
+    <PackageVersion Include="StackExchange.Redis" Version="3.1.13" />
+
+    <!-- ── 消息队列（Wolverine）───────────────────────────── -->
+    <PackageVersion Include="WolverineFx" Version="6.25.3" />
+    <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.25.3" />
+    <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.25.3" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.25.3" />
+
+    <!-- ── 认证 / 云 / 通信 ───────────────────────────────── -->
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.102" />
+    <PackageVersion Include="Google.Protobuf" Version="3.35.1" />
+    <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.83.0" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+
+    <!-- ── OpenTelemetry ──────────────────────────────────── -->
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.17.0" />
+
+    <!-- ── Serilog ────────────────────────────────────────── -->
+    <PackageVersion Include="Serilog" Version="4.4.0" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Seq" Version="9.1.0" />
+
+    <!-- ── API 文档 / 网关 ────────────────────────────────── -->
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.18" />
+    <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
+
+    <!-- ── 定时调度（TickerQ）─────────────────────────────── -->
+    <PackageVersion Include="TickerQ" Version="10.4.0" />
+    <PackageVersion Include="TickerQ.Dashboard" Version="10.4.0" />
+    <PackageVersion Include="TickerQ.EntityFrameworkCore" Version="10.4.0" />
+    <PackageVersion Include="TickerQ.Utilities" Version="10.4.0" />
+
+    <!-- ── Aspire 编排 ────────────────────────────────────── -->
+    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.4.6" />
+
+    <!-- ── 工具库 ─────────────────────────────────────────── -->
+    <PackageVersion Include="Autofac" Version="9.3.2" />
+    <PackageVersion Include="Autofac.Extensions.DependencyInjection" Version="11.0.2" />
+    <PackageVersion Include="Autofac.Extras.DynamicProxy" Version="8.0.1" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.6.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="5.6.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
+    <PackageVersion Include="MiniExcel" Version="1.45.0" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageVersion Include="SkiaSharp" Version="4.151.1" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.151.1" />
+    <PackageVersion Include="SkiaSharp.QrCode" Version="1.1.1" />
+    <PackageVersion Include="Spectre.Console" Version="0.57.2" />
+    <PackageVersion Include="Spectre.Console.Cli" Version="0.55.0" />
+
+    <!-- ── 测试 ───────────────────────────────────────────── -->
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+
+    <!-- ── 安全钉版（传递依赖，无项目直接引用）───────────────
+         Microsoft.OpenApi 2.0.0 有高危 DoS 漏洞（GHSA-v5pm-xwqc-g5wc / CVE-2026-49451，
+         循环 schema 引用 → 栈溢出崩溃）。由 Microsoft.AspNetCore.OpenApi 10.0.x 传递引入，
+         全仓库钉到修复版 2.7.5，消除 NU1903。 -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
+  </ItemGroup>
+
+</Project>

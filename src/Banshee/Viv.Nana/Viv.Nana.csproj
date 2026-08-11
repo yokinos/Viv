@@ -7,10 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="WolverineFx" Version="6.25.3" />
-    <PackageReference Include="WolverineFx.RabbitMQ" Version="6.25.3" />
-    <PackageReference Include="WolverineFx.EntityFrameworkCore" Version="6.25.3" />
-    <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.25.3" />
+    <PackageReference Include="WolverineFx" />
+    <PackageReference Include="WolverineFx.RabbitMQ" />
+    <PackageReference Include="WolverineFx.EntityFrameworkCore" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
   </ItemGroup>
 
   <ItemGroup>

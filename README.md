@@ -193,6 +193,23 @@ dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.Gateway
 dotnet run --project src/Test/Viv.Test
 ```
 
+### 中央包管理（Central Package Management）
+
+所有 NuGet 包版本集中在仓库根 [Directory.Packages.props](Directory.Packages.props) 声明，各项目的 `<PackageReference>` 一律不写 `Version`：
+
+```xml
+<!-- Directory.Packages.props -->
+<PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+
+<!-- 任一 csproj -->
+<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+```
+
+- **升级 / 加包 / 钉传递依赖版本，只改 `Directory.Packages.props` 一处**，全仓库同步生效。
+- 已开启 `CentralPackageTransitivePinningEnabled`：中央文件里即使无项目直接引用的包（如 `Microsoft.OpenApi`）也会按中央版本解析。
+- **安全钉版**：`Microsoft.OpenApi 2.7.5` —— 修复 [GHSA-v5pm-xwqc-g5wc](https://github.com/advisories/GHSA-v5pm-xwqc-g5wc) / CVE-2026-49451（OpenAPI 循环 schema 引用导致栈溢出 DoS，CVSS 7.5），由 `Microsoft.AspNetCore.OpenApi 10.0.x` 传递引入，原先触发 NuGet 审计 NU1903。
+- `NU1608` 已静默：EF Design 10.0.10 传递的 `Microsoft.CodeAnalysis.Workspaces 5.0.0` 精确要求 `Common =5.0.0`，与中央钉的 5.6.0 冲突；解析结果与未启用 CPM 时一致（NuGet 本就取最高版本），故为预期噪音。
+
 ---
 
 ## 框架用法

@@ -25,13 +25,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
+		<PackageReference Include="Yarp.ReverseProxy" />
 		<!-- .NET 10 已从共享框架移除 JwtBearer，需显式引用 -->
-		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
 		<!-- 与服务端 JwtTokenService（Viv.Contracts 引 System.IdentityModel.Tokens.Jwt 8.22.0）对齐 IdentityModel 版本：
 		     若只缓存 8.0.1 的 Protocols.OpenIdConnect，JwtBearer 的传递依赖会被钉到 8.0.1，
 		     而 8.0.1 的 JsonWebTokenHandler 拒绝无 kid 的令牌（IDX10517），8.x 后续版本已修复。 -->
-		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" />
 	</ItemGroup>
 
 	<ItemGroup>
