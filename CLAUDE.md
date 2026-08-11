@@ -40,7 +40,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Echo` | Service-to-service communication — HTTP + gRPC clients |
 | `Viv.Clockwork` | Background scheduling — `TickerQ` integration for cron/interval job execution with dashboard |
 | `Viv.Cli` | **CLI framework** — `VivCliHost` (REPL loop + Spectre.Console.Cli `CommandApp`); `[VivCommand]` auto-discovery; built-in `Cmd_Clear`; `Out` (formatted output) and `InputMagic` (interactive input) utilities |
-| `Viv.Forge` | Code generation — compile-time gRPC client generation via `Viv.Forge` |
+| `Viv.Forge` | **Source generator base library** — `VivSourceGenerator<TInfo>`（增量管线基类：候选筛选→语义提取→Collect→产出，异常兜底诊断）、`VivAttributeGenerator<TAttribute,TInfo>`（特性驱动基类，按全名匹配特性）、`SourceBuilder`（缩进/using 去重/auto-generated 头）、`SourceGenHelpers`（特性参数读取/标识符清理/字符串转义）。具体生成器标注 `[Generator]` 并继承基类，挂载到目标项目 `<ProjectReference OutputItemType="Analyzer">` |
 
 ---
 

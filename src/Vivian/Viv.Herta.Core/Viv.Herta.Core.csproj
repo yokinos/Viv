@@ -11,7 +11,6 @@
     <ProjectReference Include="..\..\Banshee\Viv.Nana\Viv.Nana.csproj" />
     <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
     <ProjectReference Include="..\Viv.EventContracts\Viv.EventContracts.csproj" />
-    <ProjectReference Include="..\Viv.Sdk\Viv.Sdk.csproj" />
   </ItemGroup>
 
 </Project>
