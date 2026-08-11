@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
-using System.Linq;
 using System.Net;
 using Viv.Elysia.Interface;
 using Viv.Engine;
@@ -13,27 +12,24 @@ namespace Viv.Elysia.Filter
     {
         public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
-            // 找出声明为 IApiRequest 的参数（接口必有请求体）；无则无对象可校验，直接放行
-            var requestParams = context.ActionDescriptor.Parameters
-                .Where(p => typeof(IApiRequest).IsAssignableFrom(p.ParameterType))
-                .ToList();
-
-            if (requestParams.Count == 0)
+            // 无参 action（健康检查等）→ 无对象可校验，直接放行
+            if (context.ActionArguments.IsNullOrEmpty())
             {
                 await next().ConfigureAwait(false);
                 return;
             }
 
-            foreach (var param in requestParams)
+            foreach (var (key, value) in context.ActionArguments)
             {
-                // 声明了请求体参数但请求未提供（body 缺失 → 参数为 null）→ 判空拦截，避免 action 收到 null 请求体
-                if (!context.ActionArguments.TryGetValue(param.Name, out var value) || value is null)
+                // 参数值为空（请求未提供该参数）→ 判空拦截
+                if (value is null)
                 {
-                    context.Result = VivApiResult.ApiRsult(ApiResultCode.ParamMissing, $"{param.Name} 不能为空");
+                    context.Result = VivApiResult.ApiRsult(ApiResultCode.ParamMissing, $"{key} 不能为空");
                     context.HttpContext.Response.StatusCode = (int)HttpStatusCode.OK;
                     return;
                 }
 
+                // 继承 IApiRequest 的参数 → 自动 Validate
                 if (value is IApiRequest request)
                 {
                     var errMsg = request.Validate();
