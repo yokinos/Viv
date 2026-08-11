@@ -56,7 +56,12 @@ namespace Viv.Engine
             }
 
             RequestId = context.HttpContext.TraceIdentifier;
-            response.StatusCode = (int)HttpStatusCode.OK;
+
+            // 业务在返回前先设置、且在 VivRunDefine 白名单内的状态码（301/302/304/404 等）原样保留；
+            // 其余场景统一 200（业务信封语义）。
+            response.StatusCode = VivRunDefine.AllowedHttpStatusCodes.Contains(response.StatusCode)
+                ? response.StatusCode
+                : (int)HttpStatusCode.OK;
 
             var jsonString = JsonConvert.SerializeObject(this, Formatting.None, JsonNetSetting.ApiResponseSettings);
             await response.WriteAsync(jsonString);

@@ -188,6 +188,8 @@ Business-layer services and repositories are registered via **type scanning** dr
 
 Controllers return `VivApiResult` (implements `IActionResult`) — a `{ Code, Message, Data }` envelope. `Newtonsoft.Json` is used for serialization with `VivContractResolver` and `yyyy-MM-dd HH:mm:ss` date format. Model validation is suppressed via `SuppressModelStateInvalidFilter = true`; validation is handled by the `RequestFilterAttribute` pipeline instead.
 
+**HTTP 状态码原样返回（白名单）**：`VivApiResult.ExecuteResultAsync` 默认强制 HTTP 200；如需原样返回非 200（301/302 重定向、304、404 等），业务在返回前先 `Response.StatusCode = xxx`（重定向再写 `Response.Headers["Location"]`）再返回 `VivApiResult`，`ExecuteResultAsync` 会按 `VivRunDefine.AllowedHttpStatusCodes`（`Viv.Engine`）白名单保留该状态码。白名单外状态码仍强制 200；直接用框架结果类型（`Redirect(...)`/`StatusCodeResult` 等）本就透传，不受此约束。中间件逃生口 `context.SetApiResponseAsync(code, httpStatus)` 同样按该白名单门控，白名单外状态码强制 200。
+
 ### CLI commands (Viv.Cli)
 
 Create a command by implementing `AsyncCommand` and decorating it with `[VivCommand]`:
