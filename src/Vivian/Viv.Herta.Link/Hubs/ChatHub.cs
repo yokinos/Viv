@@ -19,9 +19,9 @@ namespace Viv.Herta.Link.Hubs
         {
             var httpContext = Context.GetHttpContext();
 
-            // 身份只来自网关认证后回填的 x-viv-* 头（由 RequestTokenAnalysisMagic 验签 x-request-token）。
+            // 身份只来自网关认证后回填的 x-viv-* 头（由 RequestTokenResolver 验签 x-request-token）。
             // 客户端 query 串直传的 tenantId/userId/appId 已被网关剥离，这里也一律不读——无认证即可冒充任意用户/租户的漏洞点。
-            var identity = httpContext == null ? null : RequestTokenAnalysisMagic.GetContextFromHeaders(httpContext);
+            var identity = httpContext == null ? null : RequestTokenResolver.GetContextFromHeaders(httpContext);
             if (identity == null || identity.AppId <= 0 || identity.SubjectId <= 0 || identity.UserId <= 0)
             {
                 Context.Abort();

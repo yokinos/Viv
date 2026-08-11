@@ -6,7 +6,7 @@ namespace Viv.Contracts.Models
 {
     /// <summary>
     /// Viv 自定义 JWT Claim 类型。签发（JwtTokenService）、网关透传、下游解析共用，
-    /// 避免魔法字符串漂移。与 RequestTokenAnalysisMagic 的 x-viv-* Header 契约一一对应。
+    /// 避免魔法字符串漂移。与 RequestTokenResolver 的 x-viv-* Header 契约一一对应。
     /// </summary>
     public static class VivClaimTypes
     {

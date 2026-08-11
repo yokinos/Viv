@@ -97,7 +97,7 @@ Viv.Aspire.Gateway  ── 只解析不强制：无 token 也放行 ──
 | ⑤ | 网关 | 认证通过后从 claims 回填 `x-viv-*` 头，HMAC-SHA256 签名写 `x-request-token`（载荷含 unix 时间戳，5 分钟过期）—— 防止绕过网关直连下游伪造头 |
 | ⑥ | 下游 | 信任网关透传的 `X-Forwarded-Proto/Host/For`，避免 `UseHttpsRedirection` 把浏览器 302 甩出网关 |
 | ⑦ | 下游 | JwtBearer 验签 JWT（`TokenOption=null` 的匿名服务不注册鉴权） |
-| ⑧ | 下游 | `RequestTokenAnalysisMagic.GetContextFromHeaders` 用 `EnvOption.InternalToken`（缺省回落 `TokenOption.SecretKey`）验 `x-request-token` 签名 + 时效；失败 → 视为无身份 |
+| ⑧ | 下游 | `RequestTokenResolver.GetContextFromHeaders` 用 `EnvOption.InternalToken`（缺省回落 `TokenOption.SecretKey`）验 `x-request-token` 签名 + 时效；失败 → 视为无身份 |
 | ⑨ | 下游 | 参数校验 → 业务 → 统一响应 |
 | ⑩ | 数据层 | 多租户自动隔离（EF 查询过滤 / Dapper 追加租户条件），业务代码无需手写 |
 

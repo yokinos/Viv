@@ -21,12 +21,12 @@ namespace Viv.Engine
         public virtual async Task<VivContextContent?> GetContextAsync(HttpContext context, CancellationToken cancellationToken = default)
         {
             // 优先从 Header 提取
-            var headerContext = RequestTokenAnalysisMagic.GetContextFromHeaders(context);
+            var headerContext = RequestTokenResolver.GetContextFromHeaders(context);
             if (headerContext != null)
                 return headerContext;
 
             // 其次从 JWT Token 提取
-            return await RequestTokenAnalysisMagic.GetContextFromTokenAsync(context);
+            return await RequestTokenResolver.GetContextFromTokenAsync(context);
         }
 
         public virtual bool ShouldSkip(HttpContext context)

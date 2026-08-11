@@ -164,7 +164,7 @@ namespace Viv.Engine
             app.UseAuthorization();
 
             // 认证后把用户信息透传给下游（claims 仅在认证后可用）。
-            // Header 契约与 RequestTokenAnalysisMagic 对齐：
+            // Header 契约与 RequestTokenResolver 对齐：
             //   x-viv-appId / x-viv-subjectId(=TenantId) / x-viv-userId / x-viv-serviceName
             // 先剥离客户端可能伪造的 x-viv-* 上下文头与 x-request-token，只回填来自验签 token 的值。
             // 回填后对头组做 HMAC-SHA256 签名写入 x-request-token，下游验签通过才信任——防止绕过网关直连下游伪造头。
@@ -204,7 +204,7 @@ namespace Viv.Engine
                     context.Request.Headers[VivRunDefine.AppIdHeader] = context.User.FindFirstValue(VivClaimTypes.AppId) ?? "";
                     context.Request.Headers[VivRunDefine.SubjectIdHeader] = context.User.FindFirstValue(VivClaimTypes.TenantId) ?? "";
                     context.Request.Headers[VivRunDefine.ServiceNameHeader] = VivEngine.VivOptions?.EnvOption?.ServiceName ?? "";
-                    context.Request.Headers[VivRunDefine.InnerRequestTokenHeader] = Power.RequestTokenAnalysisMagic.SignContextHeaders(context.Request.Headers);
+                    context.Request.Headers[VivRunDefine.InnerRequestTokenHeader] = Power.RequestTokenResolver.SignContextHeaders(context.Request.Headers);
                 }
 
                 await next();

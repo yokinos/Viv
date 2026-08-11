@@ -15,7 +15,7 @@ using Viv.Delusion.Extension;
 
 namespace Viv.Engine.Power
 {
-    public static class RequestTokenAnalysisMagic
+    public static class RequestTokenResolver
     {
         /// <summary>
         /// 从可信内部请求 Header 中获取上下文。
