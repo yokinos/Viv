@@ -30,19 +30,21 @@ namespace Viv.Delusion.Magic
             var setters = new List<Action<T, DataRow>>(dt.Columns.Count);
             for (int colIndex = 0; colIndex < dt.Columns.Count; colIndex++)
             {
+                // 捕获副本：闭包若直接引用循环变量 colIndex，循环结束后所有 setter 都指向 Count（越界）。
+                int index = colIndex;
                 var colName = dt.Columns[colIndex].ColumnName;
                 if (fieldInfos.TryGetValue(colName, out var fi))
                 {
                     var memberType = fi.FieldType;
                     setters.Add((target, row) =>
                     {
-                        if (row.IsNull(colIndex))
+                        if (row.IsNull(index))
                         {
                             fi.SetValue(target, null);
                             return;
                         }
 
-                        var raw = row[colIndex];
+                        var raw = row[index];
                         var converted = ConvertValue(raw, memberType);
                         fi.SetValue(target, converted);
                     });
@@ -52,13 +54,13 @@ namespace Viv.Delusion.Magic
                     var memberType = pi.PropertyType;
                     setters.Add((target, row) =>
                     {
-                        if (row.IsNull(colIndex))
+                        if (row.IsNull(index))
                         {
                             pi.SetValue(target, null);
                             return;
                         }
 
-                        var raw = row[colIndex];
+                        var raw = row[index];
                         var converted = ConvertValue(raw, memberType);
                         pi.SetValue(target, converted);
                     });
