@@ -1,4 +1,5 @@
 <p align="center">
+  <img src="https://img.shields.io/github/actions/workflow/status/yokinos/Viv/dotnet.yml?style=flat&logo=githubactions&logoColor=white&label=CI" />
   <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=flat&logo=dotnet" />
   <img src="https://img.shields.io/badge/C%23-13.0-239120?style=flat&logo=csharp" />
   <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat&logo=postgresql" />

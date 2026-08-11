@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore: [ '**.md', 'docker/**' ]
+  pull_request:
+    paths-ignore: [ '**.md', 'docker/**' ]
+  workflow_dispatch:
+
+# 最小权限：contents 只读，另给 test-reporter 写 check run / PR 评论的权限
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+# 同一分支新 push 顶掉排队中的旧 run，避免白跑
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+
+jobs:
+  build-test:
+    name: Build · Test · Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Build (Release)
+        run: dotnet build Viv.slnx -c Release --verbosity minimal
+
+      - name: Test — 6 套测试 + 覆盖率 + TRX
+        run: >
+          dotnet test Viv.slnx -c Release --no-build --verbosity minimal
+          --results-directory TestResults
+          --collect:"XPlat Code Coverage"
+          --logger "trx"
+
+      - name: Merge coverage → HTML report
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" \
+            -targetdir:"coverage-report" -reporttypes:"HtmlInline;Badges" \
+            -assemblyfilters:"-Viv.*.Tests*"
+
+      - name: Coverage summary
+        run: |
+          python3 - > /tmp/coverage-summary.md <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          total = covered = 0
+          for f in glob.glob('TestResults/**/coverage.cobertura.xml', recursive=True):
+              for cls in ET.parse(f).getroot().iter('class'):
+                  n = int(cls.get('lines') or 0); r = float(cls.get('line-rate') or 0)
+                  total += n; covered += int(n * r)
+          pct = covered * 100 / total if total else 0.0
+          print(f'**代码覆盖率（已剔除测试代码）：{pct:.1f}%** ({covered}/{total} 行)')
+          print()
+          print('- HTML 报告见 artifact `coverage-report`（含行/分支/方法覆盖率）')
+          print('- 原始 TRX 日志见 artifact `test-results`')
+          PY
+          cat /tmp/coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report
+          if-no-files-found: error
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+          if-no-files-found: ignore
+
+      - name: Report test results to PR
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Viv Test Results
+          path: TestResults/**/*.trx
+          reporter: dotnet-trx
+          fail-on-error: true
