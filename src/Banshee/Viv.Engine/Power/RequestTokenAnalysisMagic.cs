@@ -15,7 +15,7 @@ using Viv.Delusion.Extension;
 
 namespace Viv.Engine.Power
 {
-    public class RequestTokenAnalysisMagic : IDependency
+    public static class RequestTokenAnalysisMagic
     {
         /// <summary>
         /// 从可信内部请求 Header 中获取上下文。
@@ -23,7 +23,7 @@ namespace Viv.Engine.Power
         /// 否则直连下游的客户端可伪造头冒充任意租户/用户。
         /// 密钥取 EnvOption.InternalToken（缺省回落 TokenOption.SecretKey）；两者皆 null 时无法验签，按原行为信任头（该场景无租户数据）。
         /// </summary>
-        public VivContextContent? GetContextFromHeaders(HttpContext context)
+        public static VivContextContent? GetContextFromHeaders(HttpContext context)
         {
             var secret = GetInternalSecret();
             if (!string.IsNullOrWhiteSpace(secret) && !VerifySignature(context.Request.Headers, secret))
@@ -139,7 +139,7 @@ namespace Viv.Engine.Power
         /// token 由管道中更早的 UseAuthentication(JwtBearer) 完成验签并填充 context.User，
         /// 此处不再二次验签——只提取 claims，与网关认证后回填的 x-viv-* 头契约一致。
         /// </summary>
-        public Task<VivContextContent?> GetContextFromTokenAsync(HttpContext context)
+        public static Task<VivContextContent?> GetContextFromTokenAsync(HttpContext context)
         {
             var user = context.User;
             if (user.Identity?.IsAuthenticated != true)

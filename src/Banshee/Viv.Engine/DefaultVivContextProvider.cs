@@ -16,23 +16,17 @@ namespace Viv.Engine
     /// </summary>
     public class DefaultVivContextProvider : IVivContextProvider
     {
-        private readonly RequestTokenAnalysisMagic _requestMagic;
         private static readonly PathString ApiPathPrefix = new("/api");
-
-        public DefaultVivContextProvider(RequestTokenAnalysisMagic requestMagic)
-        {
-            _requestMagic = requestMagic;
-        }
 
         public virtual async Task<VivContextContent?> GetContextAsync(HttpContext context, CancellationToken cancellationToken = default)
         {
             // 优先从 Header 提取
-            var headerContext = _requestMagic.GetContextFromHeaders(context);
+            var headerContext = RequestTokenAnalysisMagic.GetContextFromHeaders(context);
             if (headerContext != null)
                 return headerContext;
 
             // 其次从 JWT Token 提取
-            return await _requestMagic.GetContextFromTokenAsync(context);
+            return await RequestTokenAnalysisMagic.GetContextFromTokenAsync(context);
         }
 
         public virtual bool ShouldSkip(HttpContext context)
