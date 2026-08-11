@@ -5,7 +5,7 @@ using Viv.EventContracts.Apex;
 using Viv.Log;
 using Viv.Nana;
 
-namespace Viv.Apex.Worker.Consemer
+namespace Viv.Apex.Worker.Consumers
 {
     public class TestApexConsumer : VivConsumer<TestApexEvent>
     {

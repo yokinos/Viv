@@ -72,7 +72,7 @@
     "ConsumerTypes": [
       {
         "AssemblyName": "Viv.Apex.Worker",
-        "Namespace": "Viv.Apex.Worker.Consemer",
+        "Namespace": "Viv.Apex.Worker.Consumers",
         "ClassNameEndsWith": "Consumer"
       }
     ],
