@@ -19,6 +19,10 @@
     <File Path="docker-compose.yml" />
   </Folder>
   <Folder Name="/src/Test/">
+    <Project Path="src/Test/Viv.Engine.Tests/Viv.Engine.Tests.csproj" Id="52a5b0c1-9c22-4387-a45c-52ffc0a21a23" />
+    <Project Path="src/Test/Viv.Momo.Tests/Viv.Momo.Tests.csproj" Id="248fec67-3ed0-42ea-b2b1-fc65fdd4faa7" />
+    <Project Path="src/Test/Viv.Nana.Tests/Viv.Nana.Tests.csproj" Id="b16aac01-c8a3-4e62-b95c-34cc7a5dc3fe" />
+    <Project Path="src/Test/Viv.Redis.Tests/Viv.Redis.Tests.csproj" Id="79277204-bbec-42bd-b773-8397dbd425e2" />
     <Project Path="src/Test/Viv.Test/Viv.Test.csproj" Id="e53540db-bd61-4609-852e-ab4806374b28" />
   </Folder>
   <Folder Name="/src/Vivian/">
