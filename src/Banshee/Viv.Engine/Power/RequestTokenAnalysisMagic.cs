@@ -17,13 +17,6 @@ namespace Viv.Engine.Power
 {
     public class RequestTokenAnalysisMagic : IDependency
     {
-        public const string AppIdHeader = "x-viv-appId"; // 这个指的是客户端的AppId
-        public const string SubjectIdHeader = "x-viv-subjectId";
-        public const string UserIdHeader = "x-viv-userId";
-        public const string ServiceNameHeader = "x-viv-serviceName"; // 这个指的是服务的名称，比如 viv.apex.api
-        public const string InnerRequestTokenHeader = "x-request-token"; // 这个指的是内部请求的 Token，于验证内部请求的合法性。
-
-
         /// <summary>
         /// 从可信内部请求 Header 中获取上下文。
         /// 安全约束：x-viv-* 上下文头只有网关（或持有共享密钥的对等服务）签名后才可信，
@@ -38,17 +31,17 @@ namespace Viv.Engine.Power
                 return null;
             }
 
-            if (!TryGetPositiveLong(context, AppIdHeader, out var appId))
+            if (!TryGetPositiveLong(context, VivRunDefine.AppIdHeader, out var appId))
             {
                 return null;
             }
 
-            if (!TryGetPositiveLong(context, UserIdHeader, out var userId))
+            if (!TryGetPositiveLong(context, VivRunDefine.UserIdHeader, out var userId))
             {
                 return null;
             }
 
-            TryGetPositiveLong(context, SubjectIdHeader, out var subjectId);
+            TryGetPositiveLong(context, VivRunDefine.SubjectIdHeader, out var subjectId);
 
             return new VivContextContent
             {
@@ -96,7 +89,7 @@ namespace Viv.Engine.Power
         /// </summary>
         public static bool VerifySignature(IHeaderDictionary headers, string secret)
         {
-            var provided = headers[InnerRequestTokenHeader].ToString();
+            var provided = headers[VivRunDefine.InnerRequestTokenHeader].ToString();
             if (string.IsNullOrWhiteSpace(provided))
             {
                 return false;
@@ -131,10 +124,10 @@ namespace Viv.Engine.Power
         private static string? ComputeSignature(IHeaderDictionary headers, string secret, long timestamp)
         {
             var payload = string.Join('\n',
-                headers[AppIdHeader].ToString(),
-                headers[SubjectIdHeader].ToString(),
-                headers[UserIdHeader].ToString(),
-                headers[ServiceNameHeader].ToString(),
+                headers[VivRunDefine.AppIdHeader].ToString(),
+                headers[VivRunDefine.SubjectIdHeader].ToString(),
+                headers[VivRunDefine.UserIdHeader].ToString(),
+                headers[VivRunDefine.ServiceNameHeader].ToString(),
                 timestamp.ToString(CultureInfo.InvariantCulture));
 
             using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));

@@ -172,11 +172,11 @@ namespace Viv.Engine
             {
                 foreach (var header in new[]
                 {
-                    Power.RequestTokenAnalysisMagic.AppIdHeader,
-                    Power.RequestTokenAnalysisMagic.SubjectIdHeader,
-                    Power.RequestTokenAnalysisMagic.UserIdHeader,
-                    Power.RequestTokenAnalysisMagic.ServiceNameHeader,
-                    Power.RequestTokenAnalysisMagic.InnerRequestTokenHeader
+                    VivRunDefine.AppIdHeader,
+                    VivRunDefine.SubjectIdHeader,
+                    VivRunDefine.UserIdHeader,
+                    VivRunDefine.ServiceNameHeader,
+                    VivRunDefine.InnerRequestTokenHeader
                 })
                 {
                     context.Request.Headers.Remove(header);
@@ -200,11 +200,11 @@ namespace Viv.Engine
                 {
                     // .NET 10 JwtBearer 只映射 sub → NameIdentifier（name 保持短格式），两种都兼容。
                     var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? "";
-                    context.Request.Headers[Power.RequestTokenAnalysisMagic.UserIdHeader] = userId;
-                    context.Request.Headers[Power.RequestTokenAnalysisMagic.AppIdHeader] = context.User.FindFirstValue(VivClaimTypes.AppId) ?? "";
-                    context.Request.Headers[Power.RequestTokenAnalysisMagic.SubjectIdHeader] = context.User.FindFirstValue(VivClaimTypes.TenantId) ?? "";
-                    context.Request.Headers[Power.RequestTokenAnalysisMagic.ServiceNameHeader] = VivEngine.VivOptions?.EnvOption?.ServiceName ?? "";
-                    context.Request.Headers[Power.RequestTokenAnalysisMagic.InnerRequestTokenHeader] = Power.RequestTokenAnalysisMagic.SignContextHeaders(context.Request.Headers);
+                    context.Request.Headers[VivRunDefine.UserIdHeader] = userId;
+                    context.Request.Headers[VivRunDefine.AppIdHeader] = context.User.FindFirstValue(VivClaimTypes.AppId) ?? "";
+                    context.Request.Headers[VivRunDefine.SubjectIdHeader] = context.User.FindFirstValue(VivClaimTypes.TenantId) ?? "";
+                    context.Request.Headers[VivRunDefine.ServiceNameHeader] = VivEngine.VivOptions?.EnvOption?.ServiceName ?? "";
+                    context.Request.Headers[VivRunDefine.InnerRequestTokenHeader] = Power.RequestTokenAnalysisMagic.SignContextHeaders(context.Request.Headers);
                 }
 
                 await next();
