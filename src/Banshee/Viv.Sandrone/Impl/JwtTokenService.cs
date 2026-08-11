@@ -27,7 +27,7 @@ namespace Viv.Sandrone.Impl
 
         public JwtTokenService()
         {
-            _options = VivConfigRegistry.Get<TokenOptions>() ?? new TokenOptions(); ;
+            _options = VivConfigRegistry.Get<TokenOptions>() ?? new TokenOptions();
             if (string.IsNullOrEmpty(_options.SecretKey))
             {
                 throw new ArgumentNullException(nameof(_options.SecretKey), "JWT签名密钥不能为空！");
