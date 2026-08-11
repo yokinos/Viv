@@ -16,9 +16,6 @@ dotnet run --project src/Vivian/Viv.Apex.Api
 
 # Run a specific Worker
 dotnet run --project src/Vivian/Viv.Apex.Worker
-
-# Run the CLI test harness
-dotnet run --project src/Test/Viv.Test
 ```
 
 ## Architecture
@@ -77,9 +74,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 
 ### Test (`src/Test/`)
 
-| Project | Role |
-|---|---|
-| `Viv.Test` | CLI command suite — built on `Viv.Cli`; commands auto-discovered via `[VivCommand]` |
+Unit test suites, one per framework project — `Viv.Delusion.Tests`、`Viv.Engine.Tests`、`Viv.Momo.Tests`、`Viv.Nana.Tests`、`Viv.Redis.Tests`、`Viv.Sandrone.Tests`。CI（`.github/workflows/dotnet.yml`）会跑全量测试并上报覆盖率。
 
 ---
 

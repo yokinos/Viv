@@ -25,7 +25,6 @@
     <Project Path="src/Test/Viv.Nana.Tests/Viv.Nana.Tests.csproj" Id="b16aac01-c8a3-4e62-b95c-34cc7a5dc3fe" />
     <Project Path="src/Test/Viv.Redis.Tests/Viv.Redis.Tests.csproj" Id="79277204-bbec-42bd-b773-8397dbd425e2" />
     <Project Path="src/Test/Viv.Sandrone.Tests/Viv.Sandrone.Tests.csproj" Id="2e5b8d7c-1a3f-4f6a-9c4b-8d2e1f0a5b6c" />
-    <Project Path="src/Test/Viv.Test/Viv.Test.csproj" Id="e53540db-bd61-4609-852e-ab4806374b28" />
   </Folder>
   <Folder Name="/src/Vivian/">
     <Project Path="src/Vivian/Viv.Elysia/Viv.Elysia.csproj" Id="e55f97d7-954b-4df1-84d5-f94197b74a64" />

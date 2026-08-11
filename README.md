@@ -160,8 +160,7 @@ Viv/
 │   │       ├── Viv.Aspire.Gateway/        # YARP 反向代理（路由自动生成）
 │   │       └── Viv.Aspire.ServiceDefaults/ # OpenTelemetry、/health、服务发现、韧性
 │   │
-│   └── Test/
-│       └── Viv.Test/                     # CLI 命令集
+│   └── Test/                             # 单元测试套件（每框架项目一个）
 ```
 
 ---
@@ -188,9 +187,6 @@ dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.AppHost
 dotnet run --project src/Vivian/Viv.Apex.Api
 dotnet run --project src/Vivian/Viv.Apex.Worker
 dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.Gateway
-
-# CLI 测试工具集
-dotnet run --project src/Test/Viv.Test
 ```
 
 ### 中央包管理（Central Package Management）
