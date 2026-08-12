@@ -83,7 +83,10 @@
   "TickOption": null,
   "EchoOption": {
     "EnableHttp": true,
-    "EnableGrpc": true
+    "GrpcOption": {
+      "EnableServer": true,
+      "Port": 7002
+    }
   },
   "S3Option": {
     "Endpoint": "https://s3.katoumegumi.net",

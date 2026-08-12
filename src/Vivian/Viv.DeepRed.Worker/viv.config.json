@@ -77,7 +77,7 @@
   "TickOption": null,
   "EchoOption": {
     "EnableHttp": true,
-    "EnableGrpc": true
+    "GrpcOption": null
   },
   "S3Option": {
     "Endpoint": "https://s3.katoumegumi.net",

@@ -2,7 +2,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Viv.Delusion;
 using Viv.Echo.Grpc;
 using Viv.Echo.Http;
-using Viv.Echo.Options;
 
 namespace Viv.Echo
 {
@@ -18,7 +17,7 @@ namespace Viv.Echo
                 services.AddScoped<IVivHttpService, VivHttpClient>();
             }
 
-            if (options.EnableGrpc)
+            if (options.GrpcOption != null)
             {
                 services.AddTransient<VivGrpcInterceptor>();
             }

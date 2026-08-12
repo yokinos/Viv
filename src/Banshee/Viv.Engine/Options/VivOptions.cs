@@ -5,7 +5,7 @@ using Viv.Aoi;
 using Viv.Clockwork.Options;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Options;
-using Viv.Echo.Options;
+using Viv.Echo;
 using Viv.Log;
 using Viv.Momo.Options;
 using Viv.Nana.Options;

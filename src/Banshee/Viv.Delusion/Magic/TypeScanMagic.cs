@@ -70,6 +70,40 @@ namespace Viv.Delusion.Magic
 
         #endregion
 
+        #region 程序集加载
+
+        /// <summary>
+        /// 强制加载当前已加载程序集的传递引用。
+        /// 业务 Core 程序集（如 Viv.Apex.Core，含 Saga/Service/gRPC 类型）在宿主启动早期往往尚未加载，
+        /// 而类型扫描只扫已加载程序集，会导致 ScanTypes/Scan 静默漏扫。仅启动时执行一次，加载失败的程序集跳过。
+        /// </summary>
+        public static void ForceLoadReferencedAssemblies()
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var queue = new Queue<Assembly>(AppDomain.CurrentDomain.GetAssemblies().Where(a => !a.IsDynamic));
+
+            while (queue.Count > 0)
+            {
+                var asm = queue.Dequeue();
+                if (asm.GetName().Name is null) continue;
+
+                foreach (var refName in asm.GetReferencedAssemblies())
+                {
+                    if (!seen.Add(refName.FullName)) continue;
+                    try
+                    {
+                        queue.Enqueue(Assembly.Load(refName));
+                    }
+                    catch
+                    {
+                        // 跳过无法加载的程序集（系统程序集/缺失引用等）
+                    }
+                }
+            }
+        }
+
+        #endregion
+
         #region 基类型 / 接口扫描
 
         /// <summary>
