@@ -55,4 +55,10 @@
   <Folder Name="/src/Vivian/SakuMai/">
     <Project Path="src/Vivian/Viv.SakuMai.Api/Viv.SakuMai.Api.csproj" />
   </Folder>
+  <Folder Name="/src/Vivian/Tests/">
+    <Project Path="src/Vivian/Viv.Apex.Tests/Viv.Apex.Tests.csproj" />
+    <Project Path="src/Vivian/Viv.DeepRed.Tests/Viv.DeepRed.Tests.csproj" Id="761358fc-21a5-4e70-966c-8d4219d469a3" />
+    <Project Path="src/Vivian/Viv.Elysia.Tests/Viv.Elysia.Tests.csproj" Id="2ddd1a6e-5980-4566-9196-448505bf46c5" />
+    <Project Path="src/Vivian/Viv.Herta.Tests/Viv.Herta.Tests.csproj" />
+  </Folder>
 </Solution>
