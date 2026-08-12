@@ -69,7 +69,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> DeleteAsync<T>(T entity) where T : IEntity
+        public async Task<bool> DeleteAsync<T>(T entity, CancellationToken cancellationToken = default) where T : IEntity
         {
             if (entity == null) return false;
 
@@ -81,7 +81,7 @@ namespace Viv.Momo.Core
                     context.Attach(entity);
 
                 context.Remove(entity);
-                var affected = await context.SaveChangesAsync();
+                var affected = await context.SaveChangesAsync(cancellationToken);
                 return affected > 0;
             }
             catch (Exception ex)
@@ -91,7 +91,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> DeleteAsync<T>(IEnumerable<T> entities) where T : class, IEntity
+        public async Task<bool> DeleteAsync<T>(IEnumerable<T> entities, CancellationToken cancellationToken = default) where T : class, IEntity
         {
             if (entities.IsNullOrEmpty()) return false;
 
@@ -103,21 +103,17 @@ namespace Viv.Momo.Core
                 var context = GetAppContext();
                 if (ids.Count < EFMaxCount)
                 {
-                    int affected = await context.Set<T>()
-                        .Where(x => ids.Contains(x.Id))
-                        .ExecuteDeleteAsync();
+                    int affected = await context.Set<T>().Where(x => ids.Contains(x.Id)).ExecuteDeleteAsync(cancellationToken);
                     return affected > 0;
                 }
                 else
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
                     var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T)) && TenantId > 0;
-                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _options.DatabaseSource)} IN @Ids"
+                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _options.DatabaseSource)} IN @Ids" 
                         + (isTenantEntity ? $" AND {SqlMagic.QuoteIdentifier("TenantId", _options.DatabaseSource)} = @TenantId" : "");
-                    int affected = await context.DbConnection.ExecuteAsync(
-                        deleteSql,
-                        isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids },
-                        _transaction, _timeOut);
+                    int affected = await context.DbConnection.ExecuteAsync(deleteSql, isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids }, _transaction, _timeOut);
                     return affected > 0;
                 }
             }

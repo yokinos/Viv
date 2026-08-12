@@ -65,7 +65,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> InsertAsync<T>(T entity) where T : IEntity
+        public async Task<bool> InsertAsync<T>(T entity, CancellationToken cancellationToken = default) where T : IEntity
         {
             if (entity == null) return false;
 
@@ -74,7 +74,7 @@ namespace Viv.Momo.Core
                 AutoSetValue(entity);
                 var context = GetAppContext();
                 context.Add(entity);
-                var count = await context.SaveChangesAsync();
+                var count = await context.SaveChangesAsync(cancellationToken);
                 return count > 0;
             }
             catch (Exception ex)
@@ -84,7 +84,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> InsertAsync<T>(IEnumerable<T> entities) where T : IEntity
+        public async Task<bool> InsertAsync<T>(IEnumerable<T> entities, CancellationToken cancellationToken = default) where T : IEntity
         {
             // 先物化再判空：IsNullOrEmpty 对惰性源（LINQ 查询/IQueryable）会先枚举一遍，ToList 又枚举一遍 → 二次枚举
             var entityList = entities?.ToList() ?? [];
@@ -99,7 +99,7 @@ namespace Viv.Momo.Core
                 if (entityList.Count < EFMaxCount)
                 {
                     context.AddRange(entityList);
-                    affected = await context.SaveChangesAsync();
+                    affected = await context.SaveChangesAsync(cancellationToken);
                 }
                 else
                 {

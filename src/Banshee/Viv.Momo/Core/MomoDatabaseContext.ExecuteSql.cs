@@ -106,7 +106,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> ExecuteSqlListAsync(List<string> sqlList, object? parameters = null, bool isTxn = true)
+        public async Task<bool> ExecuteSqlListAsync(List<string> sqlList, object? parameters = null, bool isTxn = true, CancellationToken cancellationToken = default)
         {
             if (sqlList.IsNullOrEmpty()) return false;
 
@@ -121,7 +121,7 @@ namespace Viv.Momo.Core
 
                 if (isTxn)
                 {
-                    transaction = _transaction ?? (IDbTransaction)await context.Database.BeginTransactionAsync();
+                    transaction = _transaction ?? (IDbTransaction)await context.Database.BeginTransactionAsync(cancellationToken);
                     isSelfCreatedTxn = _transaction == null;
                 }
 
@@ -136,7 +136,7 @@ namespace Viv.Momo.Core
 
                 if (isSelfCreatedTxn && transaction != null)
                 {
-                    await context.Database.CommitTransactionAsync();
+                    await context.Database.CommitTransactionAsync(cancellationToken);
                 }
 
                 return true;
@@ -145,7 +145,7 @@ namespace Viv.Momo.Core
             {
                 if (isSelfCreatedTxn && context != null && transaction != null)
                 {
-                    await context.Database.RollbackTransactionAsync();
+                    await context.Database.RollbackTransactionAsync(cancellationToken);
                 }
 
                 var log = sqlList.Count > 10
@@ -219,7 +219,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> ExecuteSqlListAsync(List<KeyValueItem<string, object?>> sqlList, bool isTxn = true)
+        public async Task<bool> ExecuteSqlListAsync(List<KeyValueItem<string, object?>> sqlList, bool isTxn = true, CancellationToken cancellationToken = default)
         {
             if (sqlList.IsNullOrEmpty()) return false;
 
@@ -234,7 +234,7 @@ namespace Viv.Momo.Core
 
                 if (isTxn)
                 {
-                    transaction = _transaction ?? (IDbTransaction)await context.Database.BeginTransactionAsync();
+                    transaction = _transaction ?? (IDbTransaction)await context.Database.BeginTransactionAsync(cancellationToken);
                     isSelfCreatedTxn = _transaction == null;
                 }
 
@@ -248,7 +248,7 @@ namespace Viv.Momo.Core
 
                 if (isSelfCreatedTxn && transaction != null)
                 {
-                    await context.Database.CommitTransactionAsync();
+                    await context.Database.CommitTransactionAsync(cancellationToken);
                 }
 
                 return true;
@@ -257,7 +257,7 @@ namespace Viv.Momo.Core
             {
                 if (isSelfCreatedTxn && context != null && transaction != null)
                 {
-                    await context.Database.RollbackTransactionAsync();
+                    await context.Database.RollbackTransactionAsync(cancellationToken);
                 }
 
                 var log = sqlList.Count > 10

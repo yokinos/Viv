@@ -72,7 +72,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> UpdateAsync<T>(T entity) where T : IEntity
+        public async Task<bool> UpdateAsync<T>(T entity, CancellationToken cancellationToken = default) where T : IEntity
         {
             if (entity == null) return false;
 
@@ -89,7 +89,7 @@ namespace Viv.Momo.Core
                     context.Update(entity);
                 }
 
-                var count = await context.SaveChangesAsync();
+                var count = await context.SaveChangesAsync(cancellationToken);
                 return count > 0;
             }
             catch (Exception ex)
@@ -99,7 +99,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> UpdateAsync<T>(IEnumerable<T> entities) where T : class, IEntity
+        public async Task<bool> UpdateAsync<T>(IEnumerable<T> entities, CancellationToken cancellationToken = default) where T : class, IEntity
         {
             // 先物化再判空：避免惰性源二次枚举
             var entityList = entities?.Where(x => x.Id > 0).ToList() ?? [];
@@ -149,11 +149,11 @@ namespace Viv.Momo.Core
             return context.SaveChanges();
         }
 
-        private static async Task<int> EFBatchUpdateAsync<T>(List<T> entities, EFAppContext context) where T : class, IEntity
+        private static async Task<int> EFBatchUpdateAsync<T>(List<T> entities, EFAppContext context, CancellationToken cancellationToken = default) where T : class, IEntity
         {
             var entityIds = entities.Select(e => e.Id).Distinct().ToList();
             // 异步方法里用 ToListAsync，避免同步阻塞线程池线程等待 DB I/O
-            var existingEntities = await context.Set<T>().Where(e => entityIds.Contains(e.Id)).ToListAsync();
+            var existingEntities = await context.Set<T>().Where(e => entityIds.Contains(e.Id)).ToListAsync(cancellationToken);
 
             foreach (var entity in entities)
             {
@@ -168,7 +168,7 @@ namespace Viv.Momo.Core
                 }
             }
 
-            return await context.SaveChangesAsync();
+            return await context.SaveChangesAsync(cancellationToken);
         }
 
         private int DapperBatchUpdate<T>(List<T> entities, EFAppContext context) where T : class, IEntity

@@ -123,14 +123,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<T?> SingleOrDefaultAsync<T>(Expression<Func<T, bool>> predicate) where T : class
+        public async Task<T?> SingleOrDefaultAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default) where T : class
         {
             if (predicate == null) return default;
 
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
-                return await context.Set<T>().SingleOrDefaultAsync(predicate).ConfigureAwait(false);
+                return await context.Set<T>().SingleOrDefaultAsync(predicate, cancellationToken).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
             {
@@ -244,14 +244,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<T?> FirstOrDefaultAsync<T>(Expression<Func<T, bool>> predicate) where T : class
+        public async Task<T?> FirstOrDefaultAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default) where T : class
         {
             if (predicate == null) return default;
 
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
-                return await context.Set<T>().FirstOrDefaultAsync(predicate).ConfigureAwait(false);
+                return await context.Set<T>().FirstOrDefaultAsync(predicate, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -311,14 +311,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<List<T>> FindListAsync<T>(Expression<Func<T, bool>> predicate) where T : class
+        public async Task<List<T>> FindListAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default) where T : class
         {
             if (predicate == null) return [];
 
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
-                return await context.Set<T>().Where(predicate).ToListAsync().ConfigureAwait(false);
+                return await context.Set<T>().Where(predicate).ToListAsync(cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

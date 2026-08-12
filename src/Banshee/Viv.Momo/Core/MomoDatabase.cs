@@ -7,13 +7,13 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
 using Viv.Delusion;
+using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
 using Viv.Log;
 using Viv.Momo.Base;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
-using Viv.Delusion.Extension;
 
 namespace Viv.Momo.Core
 {
@@ -217,7 +217,7 @@ namespace Viv.Momo.Core
         /// <summary>
         /// 异步开启事务
         /// </summary>
-        public virtual async Task<bool> BeginTransactionAsync()
+        public virtual async Task<bool> BeginTransactionAsync(CancellationToken cancellationToken = default)
         {
             // check + begin + set 全程串行：避免两个并发调用都通过 null 检查、各自开启事务的竞态
             await _transactionSemaphore.WaitAsync();
@@ -229,7 +229,7 @@ namespace Viv.Momo.Core
                 }
 
                 var context = GetAppContext(DbReadWriteType.Write);
-                var transaction = await context.Database.BeginTransactionAsync();
+                var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
                 lock (_lock)
                 {
                     _transaction = (IDbTransaction)transaction;
@@ -250,9 +250,9 @@ namespace Viv.Momo.Core
         /// <summary>
         /// 异步提交事务
         /// </summary>
-        public virtual async Task CommitTransactionAsync()
+        public virtual async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
         {
-            IDbTransaction? transactionToCommit = null;
+            IDbTransaction? transactionToCommit;
             lock (_lock)
             {
                 if (_transaction == null) return;
@@ -262,7 +262,7 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext(DbReadWriteType.Write);
-                await context.Database.CommitTransactionAsync();
+                await context.Database.CommitTransactionAsync(cancellationToken);
             }
             catch (Exception ex)
             {
@@ -282,9 +282,9 @@ namespace Viv.Momo.Core
         /// <summary>
         /// 异步回滚事务
         /// </summary>
-        public virtual async Task RollbackTransactionAsync()
+        public virtual async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
         {
-            IDbTransaction? transactionToRollback = null;
+            IDbTransaction? transactionToRollback;
             lock (_lock)
             {
                 if (_transaction == null) return;
@@ -294,7 +294,7 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext(DbReadWriteType.Write);
-                await context.Database.RollbackTransactionAsync();
+                await context.Database.RollbackTransactionAsync(cancellationToken);
             }
             catch (Exception ex)
             {
