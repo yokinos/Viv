@@ -17,7 +17,6 @@
     <ProjectReference Include="..\Viv.Aspire\Viv.Aspire.ServiceDefaults\Viv.Aspire.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Viv.DeepRed.Core\Viv.DeepRed.Core.csproj" />
     <ProjectReference Include="..\Viv.Elysia\Viv.Elysia.csproj" />
-    <ProjectReference Include="..\Viv.Sdk\Viv.Sdk.csproj" />
   </ItemGroup>
 
 </Project>

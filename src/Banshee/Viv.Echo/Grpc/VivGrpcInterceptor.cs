@@ -18,21 +18,53 @@ namespace Viv.Echo.Grpc
             ClientInterceptorContext<TRequest, TResponse> context,
             AsyncUnaryCallContinuation<TRequest, TResponse> continuation)
         {
+            return continuation(request, WithVivHeaders(context));
+        }
+
+        public override AsyncServerStreamingCall<TResponse> AsyncServerStreamingCall<TRequest, TResponse>(
+            TRequest request,
+            ClientInterceptorContext<TRequest, TResponse> context,
+            AsyncServerStreamingCallContinuation<TRequest, TResponse> continuation)
+        {
+            return continuation(request, WithVivHeaders(context));
+        }
+
+        public override AsyncClientStreamingCall<TRequest, TResponse> AsyncClientStreamingCall<TRequest, TResponse>(
+            ClientInterceptorContext<TRequest, TResponse> context,
+            AsyncClientStreamingCallContinuation<TRequest, TResponse> continuation)
+        {
+            return continuation(WithVivHeaders(context));
+        }
+
+        public override AsyncDuplexStreamingCall<TRequest, TResponse> AsyncDuplexStreamingCall<TRequest, TResponse>(
+            ClientInterceptorContext<TRequest, TResponse> context,
+            AsyncDuplexStreamingCallContinuation<TRequest, TResponse> continuation)
+        {
+            return continuation(WithVivHeaders(context));
+        }
+
+        /// <summary>
+        /// 在请求头注入 Viv 租户上下文（x-viv-* 契约，与网关透传头名一致）。
+        /// gRPC metadata 键必须小写写盘（HTTP 契约 x-viv-appId 混大小写，读端 Get 不区分大小写）。
+        /// </summary>
+        private ClientInterceptorContext<TRequest, TResponse> WithVivHeaders<TRequest, TResponse>(
+            ClientInterceptorContext<TRequest, TResponse> context)
+            where TRequest : class
+            where TResponse : class
+        {
             var headers = context.Options.Headers ?? [];
             AddVivHeaders(headers);
 
             var newOptions = context.Options.WithHeaders(headers);
-            var newContext = new ClientInterceptorContext<TRequest, TResponse>(
+            return new ClientInterceptorContext<TRequest, TResponse>(
                 context.Method, context.Host, newOptions);
-
-            return continuation(request, newContext);
         }
 
         private void AddVivHeaders(Metadata headers)
         {
-            AddIfNotExist(headers, "Viv-AppId", _vivContext.AppId.ToString());
-            AddIfNotExist(headers, "Viv-SubjectId", _vivContext.SubjectId.ToString());
-            AddIfNotExist(headers, "Viv-UserId", _vivContext.UserId.ToString());
+            AddIfNotExist(headers, VivHeaderContract.AppId.ToLowerInvariant(), _vivContext.AppId.ToString());
+            AddIfNotExist(headers, VivHeaderContract.SubjectId.ToLowerInvariant(), _vivContext.SubjectId.ToString());
+            AddIfNotExist(headers, VivHeaderContract.UserId.ToLowerInvariant(), _vivContext.UserId.ToString());
         }
 
         private static void AddIfNotExist(Metadata headers, string key, string value)

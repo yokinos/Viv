@@ -37,7 +37,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Nana` | Messaging — `IVivEventPublisher` / `NanaEventPublisher` (publish + delayed publish); `VivConsumer<T>` base class; built on **Wolverine + RabbitMQ**; Saga support with EF Core state persistence |
 | `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`) |
 | `Viv.Sandrone` | Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service` |
-| `Viv.Echo` | Service-to-service communication — HTTP + gRPC clients |
+| `Viv.Echo` | Service-to-service communication + **框架级 gRPC 宿主**（`Viv.Echo.Grpc`）— HTTP + gRPC 客户端 `VivGrpcInterceptor`/`AddVivGrpcClient`（支持服务发现）、服务端 `VivGrpcServerInterceptor`（x-viv-* 头水合 `IVivContext`）/`AddVivGrpcServer`/`AddVivGrpcKestrel`（REST + gRPC 分端口，见下） |
 | `Viv.Clockwork` | Background scheduling — `TickerQ` integration for cron/interval job execution with dashboard |
 | `Viv.Cli` | **CLI framework** — `VivCliHost` (REPL loop + Spectre.Console.Cli `CommandApp`); `[VivCommand]` auto-discovery; built-in `Cmd_Clear`; `Out` (formatted output) and `InputMagic` (interactive input) utilities |
 | `Viv.Forge` | **Source generator base library** — `VivSourceGenerator<TInfo>`（增量管线基类：候选筛选→语义提取→Collect→产出，异常兜底诊断）、`VivAttributeGenerator<TAttribute,TInfo>`（特性驱动基类，按全名匹配特性）、`SourceBuilder`（缩进/using 去重/auto-generated 头）、`SourceGenHelpers`（特性参数读取/标识符清理/字符串转义）。具体生成器标注 `[Generator]` 并继承基类，挂载到目标项目 `<ProjectReference OutputItemType="Analyzer">` |
@@ -62,7 +62,11 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Entity` | EF entity classes organized by domain (e.g. `Database/Apex/`) |
 | `Viv.Elysia` | Request validation pipeline — `RequestFilterAttribute`, `RequestValidator<T>`, `AppMemoryCache` |
 | `Viv.EventContracts` | Shared message/event class definitions for inter-service messaging |
-| `Viv.Sdk` | Shared SDK — gRPC client stubs, shared DTOs |
+| `Viv.Generators` | 应用专用源生成器（netstandard2.0，继承 `Viv.Forge` 基类，字符串全名匹配特性） |
+| `Viv.Meta` | 生成代码宿主（net10.0，挂 Viv.Forge + Viv.Generators 两个 Analyzer，业务引它拿生成类型） |
+| `Viv.ServiceProxy` | **业务侧 gRPC 实现层（服务自行 ProjectReference + 显式调用，不走 AddViv）**：`Protos/tenant_grpc.proto` 契约（4 RPC 覆盖 unary/server-streaming/client-streaming/bidi）+ `Examples/TenantGrpcService` 示例实现 + `TenantGrpcClientDemo` 客户端用法示意；框架级能力（`AddVivGrpcServer`/`AddVivGrpcClient`/服务端租户拦截器/`AddVivGrpcKestrel`）已收进 `Viv.Echo` |
+
+**REST + gRPC 明文端口约束**：gRPC 需要 HTTP/2。明文下 `Http1AndHttp2` 只认 TLS/ALPN，不认 h2c prior-knowledge 前缀（Grpc.Net.Client 明文即发前缀）→ 回 `HTTP_1_1_REQUIRED`；严格 `Http2` 会把 HTTP/1.1 REST 打挂（400）。故 REST 与 gRPC 必须**分开端口**：`AddVivGrpcKestrel(grpcPort)`（框架层 `Viv.Echo.Grpc`，宿主自行显式调用）把 gRPC 端口绑严格 HTTP/2，并把 urls（`--urls`/`ASPNETCORE_URLS`/launchSettings）显式 `Listen` 回 HTTP/1.1（显式 `Listen` 会顶掉 urls 生成的端点，必须重绑），无 urls 回落 Kestrel 默认 5000。**`AddVivGrpcKestrel` 声明端口即自动装配服务端**（内部调 `AddVivGrpcServer`，含租户上下文恢复拦截器），宿主只需声明端口 + `MapGrpcService<T>` 映射具体服务（业务服务实现类自行 `AddScoped`/IDependency 注册）。**Apex.Api 已启用 gRPC 端口 7001、Herta.Api 启用 7002**，示例 `TenantGrpcService` 经 `RunVivApi(app => app.MapGrpcService<...>())` 映射（configure 在 `MapControllers()` 后），测试用严格 Http2 的 Kestrel in-process server 验证。 |
 
 ### Aspire orchestration (`src/Vivian/Viv.Aspire/`)
 
@@ -111,7 +115,7 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 - `AddVivGateway` handles config load、Autofac、`AddViv()`、JWT 解析（读 `TokenOption` 对称密钥，**只解析不强制**）、CORS、OutputCache、RateLimiter、`AddReverseProxy().LoadFromMemory(...)`（路由/集群从 Aspire 服务发现自动生成）；`RunVivGateway` 管道：Build → VivLocator → WebSocket → CORS → OutputCache → RateLimiter → Authentication → Authorization → **上下文头透传**（先剥离客户端伪造的 `x-viv-*` 头与 `x-request-token`，再剥离 query 里客户端直传的身份参数 `tenantId/userId/appId`，认证后从 token claims 回填 `x-viv-appId`/`x-viv-subjectId`(=TenantId)/`x-viv-userId`/`x-viv-serviceName` 并 HMAC 签名写 `x-request-token`）→ `MapReverseProxy` → Run。**路由不带 AuthorizationPolicy** —— 网关不鉴权，下游服务自己用 `[Authorize]` 控制。
 - **SignalR/WS 认证**：网关 JwtBearer 支持 `access_token` 查询参数认证（`JwtBearerEvents.OnMessageReceived`，SignalR 升级请求无法带 `Authorization` 头）；客户端经 `/ws/{短名}/...` 需带有效 JWT 才能获得身份（经 `x-viv-*` 头下传），下游 hub（如 `ChatHub`）读 `RequestTokenResolver.GetContextFromHeaders` 取已验身份，**无身份即 `Context.Abort()`**——不再信任客户端 query 直传的 tenantId/userId/appId。
 - **`x-request-token` 防重放**：签名载荷含 unix 时间戳（token 格式 `{unixSeconds}:{base64Sig}`），下游验签时校验 ≤300s，超时/旧格式（无冒号）一律拒绝——截获签名头组也不能无限期重放冒充。
-- **头部契约/白名单集中存放**：上下文头名（`x-viv-appId`/`x-viv-subjectId`/`x-viv-userId`/`x-viv-serviceName`/`x-request-token`）与 HTTP 状态码白名单统一在 `VivRunDefine`（`Viv.Engine`）定义，网关/`RequestTokenResolver`/`VivApiResult` 跨层共用同一来源。
+- **头部契约/白名单集中存放**：上下文头名（`x-viv-appId`/`x-viv-subjectId`/`x-viv-userId`/`x-viv-serviceName`/`x-request-token`）**单一来源定义在 `VivHeaderContract`（`Viv.Contracts`，gRPC/HTTP 跨层共用，Echo/ServiceProxy 拦截器读它）**，`VivRunDefine`（`Viv.Engine`）以别名引用保持既有调用点不变；HTTP 状态码白名单仍在 `VivRunDefine`。网关/`RequestTokenResolver`/`VivApiResult` 跨层共用同一来源。
 - **内部签名密钥 `EnvOption.InternalToken`**：`RequestTokenResolver.GetInternalSecret()` 优先取 `VivEngine.VivOptions?.EnvOption?.InternalToken`（`viv.config.json` 的 `EnvOption` 节点，网关与**所有服务必须配同一个值**，32 位随机 hex），缺省回落到 `TokenOption.SecretKey`（向后兼容，旧部署无需改配置即可互通）。匿名服务（两者皆 null）不验签，按原行为信任头——只用于无租户数据场景。
 - **路由自动生成**：`VivGatewayRouteBuilder.Build()` 从 Aspire 注入的 `services__*` 环境变量（`WithReference`）为每个服务生成 3 条路由 + 1 个集群，**零手写 JSON**（无 `viv.yarp.json`）。新增 API 只需在 AppHost 加 `WithReference`：
   - `/api/{短名}/{**catch-all}` → `/api/{**catch-all}`（标准 API，`PathPattern` 匹配替换吃掉中间段）

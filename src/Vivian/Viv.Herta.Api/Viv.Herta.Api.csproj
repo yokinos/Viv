@@ -16,7 +16,7 @@
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
     <ProjectReference Include="..\Viv.Aspire\Viv.Aspire.ServiceDefaults\Viv.Aspire.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Viv.Herta.Core\Viv.Herta.Core.csproj" />
-    <ProjectReference Include="..\Viv.Sdk\Viv.Sdk.csproj" />
+    <ProjectReference Include="..\Viv.ServiceProxy\Viv.ServiceProxy.csproj" />
   </ItemGroup>
 
 </Project>

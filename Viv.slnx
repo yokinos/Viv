@@ -30,7 +30,9 @@
     <Project Path="src/Vivian/Viv.Elysia/Viv.Elysia.csproj" Id="e55f97d7-954b-4df1-84d5-f94197b74a64" />
     <Project Path="src/Vivian/Viv.Entity/Viv.Entity.csproj" Id="9630f360-f175-4db4-b06c-72b2730bf351" />
     <Project Path="src/Vivian/Viv.EventContracts/Viv.EventContracts.csproj" Id="d57ba383-4d07-4564-8be6-5dcbddbab6b6" />
-    <Project Path="src/Vivian/Viv.Sdk/Viv.Sdk.csproj" Id="c5bf3413-d555-4a9e-bd82-16ceb43b0206" />
+    <Project Path="src/Vivian/Viv.Generators/Viv.Generators.csproj" Id="e49ddb54-4408-4ee4-a61b-85a341534235" />
+    <Project Path="src/Vivian/Viv.Meta/Viv.Meta.csproj" Id="632440ed-6953-4e13-9d8e-f47f220d99bd" />
+    <Project Path="src/Vivian/Viv.ServiceProxy/Viv.ServiceProxy.csproj" Id="0ef53c7e-fdf2-4e23-af0c-e1a8e1f76127" />
   </Folder>
   <Folder Name="/src/Vivian/Apex/">
     <Project Path="src/Vivian/Viv.Apex.Api/Viv.Apex.Api.csproj" />
@@ -60,5 +62,6 @@
     <Project Path="src/Vivian/Viv.DeepRed.Tests/Viv.DeepRed.Tests.csproj" Id="761358fc-21a5-4e70-966c-8d4219d469a3" />
     <Project Path="src/Vivian/Viv.Elysia.Tests/Viv.Elysia.Tests.csproj" Id="2ddd1a6e-5980-4566-9196-448505bf46c5" />
     <Project Path="src/Vivian/Viv.Herta.Tests/Viv.Herta.Tests.csproj" />
+    <Project Path="src/Vivian/Viv.ServiceProxy.Tests/Viv.ServiceProxy.Tests.csproj" />
   </Folder>
 </Solution>

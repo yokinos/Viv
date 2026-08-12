@@ -1,0 +1,57 @@
+// Viv.ServiceProxy gRPC 示例契约（贴近租户业务，纯标量避免 Timestamp 等额外依赖）。
+// 4 个 RPC 各覆盖一种调用形态（unary / server-streaming / client-streaming / bidi），
+// 作为框架 gRPC 能力（客户端拦截器、服务端租户上下文恢复）的端到端验证载体。
+syntax = "proto3";
+
+package Viv.ServiceProxy.Protos;
+
+option csharp_namespace = "Viv.ServiceProxy.Protos";
+
+// ── 消息 ──────────────────────────────────────────────
+// 请求携带 subject_id，0 表示取请求上下文里的 SubjectId（租户上下文由拦截器从 x-viv-* 头恢复）
+message GetTenantRequest {
+  int64 subject_id = 1;
+}
+
+message TenantInfo {
+  int64 subject_id = 1;
+  string subject_name = 2;
+  int64 app_id = 3;
+  int64 user_id = 4;
+}
+
+message GetTenantResponse {
+  bool success = 1;
+  string message = 2;
+  TenantInfo tenant = 3;
+}
+
+message ListTenantUsersRequest {
+  int64 subject_id = 1;
+}
+
+message UserInfo {
+  int64 user_id = 1;
+  string user_name = 2;
+}
+
+message UploadTenantUsersResponse {
+  int32 count = 1;
+}
+
+message ChatMessage {
+  int64 user_id = 1;
+  string content = 2;
+}
+
+// ── 服务 ──────────────────────────────────────────────
+service TenantGrpcService {
+  // unary
+  rpc GetTenant (GetTenantRequest) returns (GetTenantResponse);
+  // server-streaming
+  rpc ListTenantUsers (ListTenantUsersRequest) returns (stream UserInfo);
+  // client-streaming
+  rpc UploadTenantUsers (stream UserInfo) returns (UploadTenantUsersResponse);
+  // bidi streaming
+  rpc Chat (stream ChatMessage) returns (stream ChatMessage);
+}

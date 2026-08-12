@@ -15,4 +15,8 @@
 		<ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Entity\Dto\Tenant\Request\" />
+	</ItemGroup>
+
 </Project>

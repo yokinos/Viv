@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Viv.Contracts.Interface;
 
 namespace Viv.Engine
 {
@@ -9,12 +10,13 @@ namespace Viv.Engine
     {
         /// <summary>
         /// 请求上下文头契约：网关认证后回填、下游验签后信任。全框架跨层共用。
+        /// 值定义在 <see cref="VivHeaderContract"/>（Viv.Contracts），此处仅作别名保持既有调用点不变。
         /// </summary>
-        public const string AppIdHeader = "x-viv-appId"; // 客户端 AppId
-        public const string SubjectIdHeader = "x-viv-subjectId"; // 租户 ID = TenantId
-        public const string UserIdHeader = "x-viv-userId";
-        public const string ServiceNameHeader = "x-viv-serviceName"; // 服务名，如 viv.apex.api
-        public const string InnerRequestTokenHeader = "x-request-token"; // 内部请求签名 Token（HMAC）
+        public const string AppIdHeader = VivHeaderContract.AppId; // 客户端 AppId
+        public const string SubjectIdHeader = VivHeaderContract.SubjectId; // 租户 ID = TenantId
+        public const string UserIdHeader = VivHeaderContract.UserId;
+        public const string ServiceNameHeader = VivHeaderContract.ServiceName; // 服务名，如 viv.apex.api
+        public const string InnerRequestTokenHeader = VivHeaderContract.InnerRequestToken; // 内部请求签名 Token（HMAC）
 
         /// <summary>
         /// 允许原样返回的 HTTP 状态码白名单。
