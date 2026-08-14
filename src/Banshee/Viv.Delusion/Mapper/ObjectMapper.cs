@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Numerics;
 using System.Text;
 using Viv.Delusion.Extension;
 
@@ -69,6 +70,7 @@ namespace Viv.Delusion.Mapper
                 [typeof(DateTime)] = (s, c, d) => ParseDateTimeInternal(s, c) ?? d,
                 [typeof(DateTimeOffset)] = (s, c, d) => ParseDateTimeOffsetInternal(s, c) ?? d,
                 [typeof(Guid)] = (s, c, d) => Guid.TryParse(s, out var g) ? g : d,
+                [typeof(BigInteger)] = (s, c, d) => BigInteger.TryParse(s, out var bi) ? bi : d,
                 [typeof(byte[])] = (s, c, d) => Encoding.UTF8.GetBytes(s)
             };
         }
