@@ -25,7 +25,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Yarp.ReverseProxy" />
 		<!-- .NET 10 已从共享框架移除 JwtBearer，需显式引用 -->
 		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
 		<!-- 与服务端 JwtTokenService（Viv.Contracts 引 System.IdentityModel.Tokens.Jwt 8.22.0）对齐 IdentityModel 版本：

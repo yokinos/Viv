@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Viv.Contracts.Interface;
 using Yarp.ReverseProxy.Configuration;
 
 namespace Viv.Engine
@@ -13,9 +14,9 @@ namespace Viv.Engine
     /// 路由不带 AuthorizationPolicy —— 网关不强制鉴权，只解析透传上下文头，由下游服务自行鉴权。
     /// 短名 = Aspire 服务名 split('-') 第二段（viv-apex-api -> apex），冲突时拼接（viv-herta-link -> hertalink）。
     /// </summary>
-    public static class VivGatewayRouteBuilder
+    public class VivGatewayRouteBuilder : IGatewayRouteProvider
     {
-        public static (IReadOnlyList<RouteConfig> Routes, IReadOnlyList<ClusterConfig> Clusters) Build()
+        public (IReadOnlyList<RouteConfig> Routes, IReadOnlyList<ClusterConfig> Clusters) Build()
         {
             var services = AspireServiceDiscovery.Load();
             var clusters = new List<ClusterConfig>(services.Count);

@@ -14,6 +14,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using Viv.Aoi;
+using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Engine.Options;
 using Yarp.ReverseProxy;
@@ -43,12 +44,14 @@ namespace Viv.Engine
         /// <param name="configureJwt">微调 JwtBearerOptions（events、挑战头等）</param>
         /// <param name="ignoreSslErrors">信任所有证书（仅开发环境应开启；默认 false，生产禁用避免 MITM）</param>
         /// <param name="rateLimitConfigFile">自定义限流策略配置，热重载</param>
+        /// <param name="gatewayRouter">自定义网关路由提供程序</param>
         public static WebApplicationBuilder AddVivGateway(
             this WebApplicationBuilder builder,
             Action<IServiceCollection>? serviceCollectionConfigure = null,
             Action<JwtBearerOptions>? configureJwt = null,
             bool ignoreSslErrors = false,
-            string rateLimitConfigFile = "viv.ratelimit.json")
+            string rateLimitConfigFile = "viv.ratelimit.json",
+            IGatewayRouteProvider? gatewayRouter = null)
         {
             var vivOptions = VivEngine.LoadVivConfig();
             ArgumentNullException.ThrowIfNull(vivOptions);
@@ -86,7 +89,8 @@ namespace Viv.Engine
             VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, jwtConfigure, throwIfMissing: true);
 
             // YARP 反向代理：路由/集群从 Aspire 服务发现（services__* 环境变量）自动生成，零手写 JSON
-            var (gatewayRoutes, gatewayClusters) = VivGatewayRouteBuilder.Build();
+            gatewayRouter ??= new VivGatewayRouteBuilder();
+            var (gatewayRoutes, gatewayClusters) = gatewayRouter.Build();
             builder.Services.AddReverseProxy().LoadFromMemory(gatewayRoutes, gatewayClusters);
 
             // CORS
