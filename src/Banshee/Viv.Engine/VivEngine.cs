@@ -1,8 +1,4 @@
 ﻿using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
-using System.Reflection;
-using System.Text;
 using Viv.Aoi;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
@@ -42,23 +38,14 @@ namespace Viv.Engine
         public static VivContextContent CurrentSnapshot => Accessor.Current;
 
         /// <summary>
-        /// 从指定 JSON 文件加载
+        /// 从 IConfiguration 的 VivOptions 节点绑定配置（appsettings.json），VivOptions__* 环境变量覆盖生效。
         /// </summary>
-        public static VivOptions LoadVivConfig(string configFile = "viv.config.json")
+        public static VivOptions LoadVivConfig(IConfiguration configuration)
         {
             _vivAppStartTime = DateTime.Now;
-            var options = LoadFromJsonFile(configFile);
+            var options = configuration.GetSection("VivOptions").Get<VivOptions>() ?? new VivOptions();
             _vivOptions = options.DeepCopy();
             return options;
-        }
-
-        private static VivOptions LoadFromJsonFile(string filePath)
-        {
-            if (!File.Exists(filePath))
-                return new VivOptions();
-
-            var json = File.ReadAllText(filePath, Encoding.UTF8);
-            return JsonConvert.DeserializeObject<VivOptions>(json) ?? new VivOptions();
         }
     }
 }

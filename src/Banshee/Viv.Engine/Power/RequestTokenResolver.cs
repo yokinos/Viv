@@ -52,7 +52,7 @@ namespace Viv.Engine.Power
         }
 
         /// <summary>
-        /// 内部请求共享密钥。优先取 EnvOption.InternalToken（viv.config.json 显式配置，网关与所有服务配同一个值）；
+        /// 内部请求共享密钥。优先取 EnvOption.InternalToken（appsettings.json 的 VivOptions.EnvOption 显式配置，网关与所有服务配同一个值）；
         /// 未配置时回落到 TokenOption.SecretKey（向后兼容，匿名服务两者皆 null 则返回 null）。
         /// </summary>
         private static string? GetInternalSecret()

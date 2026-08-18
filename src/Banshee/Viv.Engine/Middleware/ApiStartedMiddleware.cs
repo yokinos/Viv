@@ -32,7 +32,7 @@ namespace Viv.Engine.Middleware
             {
                 if (context.Request.IsAjax("/api"))
                 {
-                    await context.SetApiResponseAsync(ApiResultCode.NotFound);
+                    await context.SetApiResponseAsync(ApiResultCode.NotFound, (int)HttpStatusCode.OK);
                 }
                 else
                 {
@@ -45,7 +45,7 @@ namespace Viv.Engine.Middleware
         {
             context.Response.ContentType = "text/html; charset=utf-8";
 
-            // EnvOption 缺失（viv.config.json 未配该段）时兜底，避免下方 .Replace 链对 option 无条件解引用 NRE
+            // EnvOption 缺失（appsettings.json 未配该段）时兜底，避免下方 .Replace 链对 option 无条件解引用 NRE
             var option = VivEngine.VivOptions?.EnvOption;
             var baseDir = AppContext.BaseDirectory;
 

@@ -10,7 +10,7 @@ namespace Viv.Echo.Grpc
     {
         /// <summary>
         /// 注册框架级 gRPC 服务端（含 <see cref="VivGrpcServerInterceptor"/> 租户上下文恢复拦截器）。
-        /// 配置驱动（viv.config.json <c>EchoOption.GrpcOption.EnableServer</c>）时由 <see cref="AddVivGrpcKestrel"/>
+        /// 配置驱动（appsettings.json <c>VivOptions.EchoOption.GrpcOption.EnableServer</c>）时由 <see cref="AddVivGrpcKestrel"/>
         /// 自动调用，具体业务服务经 <see cref="VivGrpcDiscovery"/> 自动发现注册 + 映射；也可手动显式调用 +
         /// <c>MapGrpcService&lt;T&gt;()</c>。
         /// </summary>

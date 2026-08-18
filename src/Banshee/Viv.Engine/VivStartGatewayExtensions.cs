@@ -53,7 +53,7 @@ namespace Viv.Engine
             string rateLimitConfigFile = "viv.ratelimit.json",
             IGatewayRouteProvider? gatewayRouter = null)
         {
-            var vivOptions = VivEngine.LoadVivConfig();
+            var vivOptions = VivEngine.LoadVivConfig(builder.Configuration);
             ArgumentNullException.ThrowIfNull(vivOptions);
 
             // 限流配置热重载（路由/集群改为从 Aspire 服务发现自动生成，不再读 viv.yarp.json）
@@ -83,7 +83,7 @@ namespace Viv.Engine
                 builder.Services.AddSingleton<IHttpMessageHandlerBuilderFilter, IgnoreSslErrorsFilter>();
             }
 
-            // JWT 对称密钥解析（读 viv.config.json 的 TokenOption）——只解析，不强制，用于认证后透传 x-viv-* 上下文头
+            // JWT 对称密钥解析（读 appsettings.json 的 VivOptions.TokenOption）——只解析，不强制，用于认证后透传 x-viv-* 上下文头
             // SignalR/WebSocket 升级请求无法带 Authorization 头，补充 access_token 查询参数认证（SignalR 标准约定）。
             var jwtConfigure = configureJwt == null ? (Action<JwtBearerOptions>)AddAccessTokenFromQuery : options => { AddAccessTokenFromQuery(options); configureJwt(options); };
             VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, jwtConfigure, throwIfMissing: true);

@@ -19,7 +19,7 @@ namespace Viv.Engine
         /// </summary>
         public static HostApplicationBuilder AddVivWorker(this HostApplicationBuilder builder)
         {
-            var vivOptions = VivEngine.LoadVivConfig();
+            var vivOptions = VivEngine.LoadVivConfig(builder.Configuration);
             ArgumentNullException.ThrowIfNull(vivOptions);
 
             // Autofac 容器

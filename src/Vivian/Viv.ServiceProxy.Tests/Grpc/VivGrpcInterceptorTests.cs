@@ -102,8 +102,11 @@ namespace Viv.ServiceProxy.Tests.Grpc
         [Fact]
         public void 已存在的头不覆盖()
         {
-            var preHeaders = new Metadata();
-            preHeaders.Add(VivHeaderContract.AppId.ToLowerInvariant(), "999");
+            var preHeaders = new Metadata
+            {
+                { VivHeaderContract.AppId.ToLowerInvariant(), "999" }
+            };
+
             var captured = new Metadata();
 
             interceptor.AsyncUnaryCall(
@@ -134,9 +137,9 @@ namespace Viv.ServiceProxy.Tests.Grpc
             Assert.Equal("77", headers.Get(VivHeaderContract.SubjectId)!.Value);
             Assert.Equal("5", headers.Get(VivHeaderContract.UserId)!.Value);
             // gRPC metadata 键写盘小写（HTTP 契约 x-viv-appId 混大小写）
-            Assert.Contains(headers, e => e.Key == VivHeaderContract.AppId.ToLowerInvariant());
-            Assert.Contains(headers, e => e.Key == VivHeaderContract.SubjectId.ToLowerInvariant());
-            Assert.Contains(headers, e => e.Key == VivHeaderContract.UserId.ToLowerInvariant());
+            Assert.Contains(headers, e => e.Key.Equals(VivHeaderContract.AppId, StringComparison.InvariantCultureIgnoreCase));
+            Assert.Contains(headers, e => e.Key.Equals(VivHeaderContract.SubjectId, StringComparison.InvariantCultureIgnoreCase));
+            Assert.Contains(headers, e => e.Key.Equals(VivHeaderContract.UserId, StringComparison.InvariantCultureIgnoreCase));
         }
 
         private static void CopyInto(Metadata target, Metadata? source)

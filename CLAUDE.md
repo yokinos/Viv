@@ -31,7 +31,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums |
 | `Viv.Delusion` | Utility library — `TypeScanMagic` (assembly type scanning), `ObjectMapper` (Emit + Expression-based), encryption, common extensions |
 | `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios |
-| `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig("viv.config.json")` deserializes all config into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup |
+| `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig(builder.Configuration)` binds the `VivOptions` node from appsettings.json into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup |
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
 | `Viv.Momo` | Database — `IVivDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server |
 | `Viv.Nana` | Messaging — `IVivEventPublisher` / `NanaEventPublisher` (publish + delayed publish); `VivConsumer<T>` base class; built on **Wolverine + RabbitMQ**; Saga support with EF Core state persistence |
@@ -66,7 +66,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Meta` | 生成代码宿主（net10.0，挂 Viv.Forge + Viv.Generators 两个 Analyzer，业务引它拿生成类型） |
 | `Viv.ServiceProxy` | **业务侧 gRPC 实现层（服务自行 ProjectReference 挂 proto/示例，框架级装配走配置驱动）**：`Protos/tenant_grpc.proto` 契约（4 RPC 覆盖 unary/server-streaming/client-streaming/bidi）+ `Examples/TenantGrpcService` 示例实现 + `TenantGrpcClientDemo` 客户端用法示意；框架级能力（`AddVivGrpcServer`/`AddVivGrpcClient`/服务端租户拦截器/`AddVivGrpcKestrel`）已收进 `Viv.Echo`，宿主配 `EchoOption.GrpcOption` 后示例经 `VivGrpcDiscovery` 自动发现托管 |
 
-**REST + gRPC 明文端口约束**：gRPC 需要 HTTP/2。明文下 `Http1AndHttp2` 只认 TLS/ALPN，不认 h2c prior-knowledge 前缀（Grpc.Net.Client 明文即发前缀）→ 回 `HTTP_1_1_REQUIRED`；严格 `Http2` 会把 HTTP/1.1 REST 打挂（400）。故 REST 与 gRPC 必须**分开端口**。**配置驱动（宿主零手工接线）**：viv.config.json 的 `EchoOption.GrpcOption`（`EnableServer` + `Port`）启用时，`AddVivApi` 自动调 `AddVivGrpcKestrel(port)`（`Viv.Echo.Grpc`：gRPC 端口绑严格 HTTP/2，并把 urls——`--urls`/`ASPNETCORE_URLS`/launchSettings——显式 `Listen` 回 HTTP/1.1；显式 `Listen` 会顶掉 urls 生成的端点，必须重绑，无 urls 回落 Kestrel 默认 5000；声明端口即自动调 `AddVivGrpcServer` 含租户上下文恢复拦截器）+ `VivGrpcDiscovery` 自动发现注册 gRPC 服务，`RunVivApi` 在 `MapControllers()` 后自动 `MapGrpcService<T>`。**自动发现约定**：grpc_csharp_plugin 生成的基类（如 `TenantGrpcServiceBase`）**不继承 `ServiceBase`**，以基类上的 `[BindServiceMethod]` 特性沿基类链判定（`VivGrpcDiscovery.FindServices` 先 `TypeScanMagic.ForceLoadReferencedAssemblies()` 强制加载懒加载程序集）。**Apex.Api 已配 7001、Herta.Api 配 7002**，示例 `TenantGrpcService` 自动托管（保留 ServiceProxy ProjectReference）；非 gRPC 宿主服务 `EchoOption.GrpcOption: null`（死属性 `EnableGrpc` 已移除）。测试用严格 Http2 的 Kestrel in-process server 验证。 |
+**REST + gRPC 明文端口约束**：gRPC 需要 HTTP/2。明文下 `Http1AndHttp2` 只认 TLS/ALPN，不认 h2c prior-knowledge 前缀（Grpc.Net.Client 明文即发前缀）→ 回 `HTTP_1_1_REQUIRED`；严格 `Http2` 会把 HTTP/1.1 REST 打挂（400）。故 REST 与 gRPC 必须**分开端口**。**配置驱动（宿主零手工接线）**：appsettings.json 的 `VivOptions.EchoOption.GrpcOption`（`EnableServer` + `Port`）启用时，`AddVivApi` 自动调 `AddVivGrpcKestrel(port)`（`Viv.Echo.Grpc`：gRPC 端口绑严格 HTTP/2，并把 urls——`--urls`/`ASPNETCORE_URLS`/launchSettings——显式 `Listen` 回 HTTP/1.1；显式 `Listen` 会顶掉 urls 生成的端点，必须重绑，无 urls 回落 Kestrel 默认 5000；声明端口即自动调 `AddVivGrpcServer` 含租户上下文恢复拦截器）+ `VivGrpcDiscovery` 自动发现注册 gRPC 服务，`RunVivApi` 在 `MapControllers()` 后自动 `MapGrpcService<T>`。**自动发现约定**：grpc_csharp_plugin 生成的基类（如 `TenantGrpcServiceBase`）**不继承 `ServiceBase`**，以基类上的 `[BindServiceMethod]` 特性沿基类链判定（`VivGrpcDiscovery.FindServices` 先 `TypeScanMagic.ForceLoadReferencedAssemblies()` 强制加载懒加载程序集）。**Apex.Api 已配 7001、Herta.Api 配 7002**，示例 `TenantGrpcService` 自动托管（保留 ServiceProxy ProjectReference）；非 gRPC 宿主服务 `EchoOption.GrpcOption: null`（死属性 `EnableGrpc` 已移除）。测试用严格 Http2 的 Kestrel in-process server 验证。 |
 
 ### Aspire orchestration (`src/Vivian/Viv.Aspire/`)
 
@@ -105,7 +105,7 @@ builder.RunVivWorker();
 // ── Gateway（YARP 反向代理）─────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
-builder.AddVivGateway();                      // 读 viv.config.json + viv.ratelimit.json；路由从 Aspire 服务发现自动生成
+builder.AddVivGateway();                      // 读 appsettings.json 的 VivOptions + viv.ratelimit.json；路由从 Aspire 服务发现自动生成
 builder.RunVivGateway(app => app.MapDefaultEndpoints());
 ```
 
@@ -116,20 +116,22 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 - **SignalR/WS 认证**：网关 JwtBearer 支持 `access_token` 查询参数认证（`JwtBearerEvents.OnMessageReceived`，SignalR 升级请求无法带 `Authorization` 头）；客户端经 `/ws/{短名}/...` 需带有效 JWT 才能获得身份（经 `x-viv-*` 头下传），下游 hub（如 `ChatHub`）读 `RequestTokenResolver.GetContextFromHeaders` 取已验身份，**无身份即 `Context.Abort()`**——不再信任客户端 query 直传的 tenantId/userId/appId。
 - **`x-request-token` 防重放**：签名载荷含 unix 时间戳（token 格式 `{unixSeconds}:{base64Sig}`），下游验签时校验 ≤300s，超时/旧格式（无冒号）一律拒绝——截获签名头组也不能无限期重放冒充。
 - **头部契约/白名单集中存放**：上下文头名（`x-viv-appId`/`x-viv-subjectId`/`x-viv-userId`/`x-viv-serviceName`/`x-request-token`）**单一来源定义在 `VivHeaderContract`（`Viv.Contracts`，gRPC/HTTP 跨层共用，Echo/ServiceProxy 拦截器读它）**，`VivRunDefine`（`Viv.Engine`）以别名引用保持既有调用点不变；HTTP 状态码白名单仍在 `VivRunDefine`。网关/`RequestTokenResolver`/`VivApiResult` 跨层共用同一来源。
-- **内部签名密钥 `EnvOption.InternalToken`**：`RequestTokenResolver.GetInternalSecret()` 优先取 `VivEngine.VivOptions?.EnvOption?.InternalToken`（`viv.config.json` 的 `EnvOption` 节点，网关与**所有服务必须配同一个值**，32 位随机 hex），缺省回落到 `TokenOption.SecretKey`（向后兼容，旧部署无需改配置即可互通）。匿名服务（两者皆 null）不验签，按原行为信任头——只用于无租户数据场景。
+- **内部签名密钥 `EnvOption.InternalToken`**：`RequestTokenResolver.GetInternalSecret()` 优先取 `VivEngine.VivOptions?.EnvOption?.InternalToken`（appsettings.json 的 `VivOptions.EnvOption` 节点，网关与**所有服务必须配同一个值**，32 位随机 hex），缺省回落到 `TokenOption.SecretKey`（向后兼容，旧部署无需改配置即可互通）。匿名服务（两者皆 null）不验签，按原行为信任头——只用于无租户数据场景。
 - **路由自动生成**：`VivGatewayRouteBuilder.Build()` 从 Aspire 注入的 `services__*` 环境变量（`WithReference`）为每个服务生成 3 条路由 + 1 个集群，**零手写 JSON**（无 `viv.yarp.json`）。新增 API 只需在 AppHost 加 `WithReference`：
   - `/api/{短名}/{**catch-all}` → `/api/{**catch-all}`（标准 API，`PathPattern` 匹配替换吃掉中间段）
   - `/docs/{短名}/{**catch-all}` → `/{**catch-all}`（Scalar 文档）
   - `/ws/{短名}/{**catch-all}` → `/{**catch-all}`（SignalR / WebSocket 透传）
   - **短名 = 服务名 `split('-')[1]`**（`viv-apex-api` → `apex`）；第二段冲突时（`viv-herta-api` 与 `viv-herta-link` 都是 `herta`），`-api` 保留基础短名，其余服务拼接剩余段（`herta`+`link` → `hertalink`），保证集群 ID 唯一。
-- **下游自鉴权**：`AddVivApi` 自动注册 JwtBearer（读 `viv.config.json` 的 `TokenOption`），控制器用 `[Authorize]` 逐个控制；`TokenOption` 为 `null`（如 hertalink）则跳过注册保持匿名——此时 `RunVivApi` **不调用** `UseAuthentication/UseAuthorization`（否则匿名服务首请求抛 `IAuthenticationSchemeProvider` 无法解析）。网关只解析透传，不拦截未登录请求。
+- **下游自鉴权**：`AddVivApi` 自动注册 JwtBearer（读 appsettings.json 的 `VivOptions.TokenOption`），控制器用 `[Authorize]` 逐个控制；`TokenOption` 为 `null`（如 hertalink）则跳过注册保持匿名——此时 `RunVivApi` **不调用** `UseAuthentication/UseAuthorization`（否则匿名服务首请求抛 `IAuthenticationSchemeProvider` 无法解析）。网关只解析透传，不拦截未登录请求。
 - **网关代理文档**：`/docs/{短名}/{**catch-all}` 路由（如 `/docs/apex/scalar/`）把各服务 **Scalar** 文档经网关透出，欢迎页服务标签即指向此（不跳服务自身地址）。前提：Scalar.AspNetCore ≥2.16 生成的 HTML 用相对路径（`openapi/v1.json`、`./scalar.aspnetcore.js`）且自带子目录 basePath 计算，`PathPattern: "/{**catch-all}"` 去掉 `/docs/{短名}` 即可；链接需带尾斜杠 `/scalar/`，否则下游 302 后浏览器会请求网关根路径 `/scalar/`。路由自动生成，欢迎页零映射。
 - **JWT SecretKey ≥ 32 字节**：IdentityModel 8.x 的 HS256 强制要求 ≥256 bit（`IDX10720`），且 `TokenOption` 必须在**所有会签发/验证 token 的服务间保持一致**（含网关）。
 - `AddServiceDefaults()` and `MapDefaultEndpoints()` are **caller-side** Aspire concerns; the framework does not reference Aspire.
 
-### Configuration: `viv.config.json`
+### Configuration: `VivOptions` node in `appsettings.json`
 
-Every API and Worker project requires a `viv.config.json` at its root. `VivEngine.LoadVivConfig()` deserializes it into `VivOptions`, whose sub-sections drive all subsystem wiring:
+Every API and Worker project carries a `VivOptions` node in its `appsettings.json`. `VivEngine.LoadVivConfig(builder.Configuration)` binds it via `configuration.GetSection("VivOptions").Get<VivOptions>()`（MS ConfigurationBinder）and sets the static `VivEngine.VivOptions` snapshot for runtime consumers. Sub-sections drive all subsystem wiring:
+
+> **环境变量覆盖（走标准配置链后生效）**：`VivOptions__*` 可覆盖任意节点（如 `VivOptions__EnvOption__InternalToken`、`VivOptions__TokenOption__SecretKey`）——此前 `LoadVivConfig` 绕过 IConfiguration 时 env 对 viv 配置无效。各服务 appsettings.json 目前仍直接携带凭据（迁移现状，非本次引入）；要彻底抽离需配合 env/user-secrets/Key Vault 提供程序覆盖。
 
 | Section | Drives |
 |---|---|
@@ -140,7 +142,7 @@ Every API and Worker project requires a `viv.config.json` at its root. `VivEngin
 | `DatabaseOption` | Database type, read-write split, entity scan targets |
 | `NanaOption` | RabbitMQ host/port/credentials, consumer type list, retry count, Saga DB |
 | `TokenOption` | JWT secret/expiry/issuer |
-| `EchoOption` | gRPC + HTTP client enable/disable |
+| `EchoOption` | HTTP client enable + gRPC（`GrpcOption { EnableServer, Port }`） |
 | `TickOption` | TickerQ scheduler config |
 
 ### DI: Autofac root + MS DI delegation

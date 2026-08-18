@@ -9,7 +9,7 @@ namespace Viv.Engine
 {
     /// <summary>
     /// JwtBearer 对称密钥验证注册，网关与下游服务共用。
-    /// 密钥/发行方/受众来自 viv.config.json 的 TokenOption。
+    /// 密钥/发行方/受众来自 appsettings.json 的 VivOptions.TokenOption。
     /// </summary>
     public static class VivJwtBearerHelper
     {
@@ -32,7 +32,7 @@ namespace Viv.Engine
             {
                 if (throwIfMissing)
                 {
-                    throw new InvalidOperationException("需要配置 viv.config.json 的 TokenOption 节点（SecretKey/Issuer/Audience），用于 JwtBearer 对称密钥验证。");
+                    throw new InvalidOperationException("需要配置 appsettings.json 的 VivOptions.TokenOption 节点（SecretKey/Issuer/Audience），用于 JwtBearer 对称密钥验证。");
                 }
                 return false;
             }

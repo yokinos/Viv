@@ -8,19 +8,29 @@ namespace Viv.Contracts.Interface
     /// </summary>
     public static class VivHeaderContract
     {
-        /// <summary>客户端 AppId</summary>
+        /// <summary>
+        /// 客户端 AppId
+        /// </summary>
         public const string AppId = "x-viv-appId";
 
-        /// <summary>主体 Id（TenantId / CompanyId / OrgId）</summary>
+        /// <summary>
+        /// 主体 Id（TenantId / CompanyId / OrgId）
+        /// </summary>
         public const string SubjectId = "x-viv-subjectId";
 
-        /// <summary>当前登录用户 Id</summary>
+        /// <summary>
+        /// 当前登录用户 Id
+        /// </summary>
         public const string UserId = "x-viv-userId";
 
-        /// <summary>服务名，如 viv.apex.api</summary>
+        /// <summary>
+        /// 服务名，如 viv.apex.api
+        /// </summary>
         public const string ServiceName = "x-viv-serviceName";
 
-        /// <summary>内部请求签名 Token（HMAC）</summary>
+        /// <summary>
+        /// 内部请求签名 Token（HMAC）
+        /// </summary>
         public const string InnerRequestToken = "x-request-token";
     }
 }

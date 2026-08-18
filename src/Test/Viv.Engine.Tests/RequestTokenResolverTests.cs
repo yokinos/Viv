@@ -16,6 +16,7 @@ namespace Viv.Engine.Tests;
 /// 密钥优先级 EnvOption.InternalToken &gt; TokenOptions.SecretKey（回落）。全部测试收在一个类里，
 /// 因为 VivEngine.VivOptions / VivConfigRegistry 是静态共享状态，类内顺序执行可避免跨类并行污染。
 /// </summary>
+[Collection("VivEngineStaticState")]
 public class RequestTokenResolverTests
 {
     private const string Secret = "test-secret-0123456789abcdef0123456789abcdef";

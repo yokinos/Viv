@@ -34,7 +34,7 @@ namespace Viv.Engine
             Action<MvcOptions>? configureMvc = null,
             Action<IServiceCollection>? serviceCollectionConfigure = null)
         {
-            var vivOptions = VivEngine.LoadVivConfig();
+            var vivOptions = VivEngine.LoadVivConfig(builder.Configuration);
             ArgumentNullException.ThrowIfNull(vivOptions);
 
             // 暂存标题供 RunVivApi 使用
@@ -56,7 +56,7 @@ namespace Viv.Engine
             // 基础服务
             builder.Services.AddViv(vivOptions);
 
-            // gRPC 服务端（配置驱动）：viv.config.json 的 EchoOption.GrpcOption.EnableServer 时，
+            // gRPC 服务端（配置驱动）：appsettings.json 的 VivOptions.EchoOption.GrpcOption.EnableServer 时，
             // 自动装配 Kestrel 专用端口（严格 HTTP/2）+ 自动发现注册 gRPC 服务，宿主零手工接线。
             // AddVivGrpcKestrel 内部已调 AddVivGrpcServer（含 VivGrpcServerInterceptor 租户上下文恢复），
             // 勿重复调用；EnableServer 标记经 Configuration 传给 RunVivApi 决定是否自动映射。
@@ -68,7 +68,7 @@ namespace Viv.Engine
                 builder.Configuration[VivGrpcServerEnabledKey] = "true";
             }
 
-            // 下游自鉴权：注册 JwtBearer（读 viv.config.json 的 TokenOption）。
+            // 下游自鉴权：注册 JwtBearer（读 appsettings.json 的 VivOptions.TokenOption）。
             // 网关不强制鉴权，只解析透传 x-viv-* 上下文头；API 服务自己用 [Authorize] 控制。
             // TokenOption 为 null（如 hertalink）时跳过，保持匿名——此时 RunVivApi 不注册 UseAuthentication/UseAuthorization。
             var hasAuth = VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, throwIfMissing: false);

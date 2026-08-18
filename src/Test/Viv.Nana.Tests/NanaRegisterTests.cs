@@ -67,7 +67,7 @@ namespace Viv.Nana.Tests
             var filter = new FilterTypeOptions
             {
                 AssemblyName = "Viv.Nana.Tests",
-                BaseType = typeof(VivConsumer<>)
+                BaseType = typeof(VivConsumer<>).AssemblyQualifiedName
             };
 
             var types = NanaRegister.ScanConsumerTypes([filter]);

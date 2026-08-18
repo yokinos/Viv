@@ -235,11 +235,11 @@ builder.AddVivGateway(ignoreSslErrors: builder.Environment.IsDevelopment());
 builder.RunVivGateway(app => app.MapDefaultEndpoints());
 ```
 
-`AddVivApi` / `AddVivWorker` / `AddVivGateway` 自动完成：加载 `viv.config.json` → 装配 Autofac 容器 → `AddViv()` 注册全部子系统 → MVC / CORS / Swagger / 编码 → 中间件管线。`RunVivApi` 的 `configure` 回调可追加自定义端点（如 `app.UseTickerQ()`、`app.MapHub()`）。
+`AddVivApi` / `AddVivWorker` / `AddVivGateway` 自动完成：加载 appsettings.json 的 `VivOptions` 节点 → 装配 Autofac 容器 → `AddViv()` 注册全部子系统 → MVC / CORS / Swagger / 编码 → 中间件管线。`RunVivApi` 的 `configure` 回调可追加自定义端点（如 `app.UseTickerQ()`、`app.MapHub()`）。
 
-### 配置：`viv.config.json`
+### 配置：appsettings.json 的 `VivOptions` 节点
 
-每个服务项目根目录放一份 `viv.config.json`，框架按节驱动子系统装配：
+每个服务项目的 `appsettings.json` 携带一个 `VivOptions` 节点，框架按节驱动子系统装配（以下 JSON 即该节点内容，与 `Logging`/`AllowedHosts` 等同级并列）：
 
 ```jsonc
 {
@@ -323,7 +323,7 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
   "TickOption": null,                     // Clockwork 调度（TickerQ），不使用则为 null
   "EchoOption": {                         // 跨服务通信
     "EnableHttp": true,
-    "EnableGrpc": true
+    "GrpcOption": { "EnableServer": true, "Port": 7001 }   // gRPC 服务端专用端口（严格 HTTP/2），null 则只开客户端
   },
   "S3Option": {                           // 对象存储（S3 兼容，RustFS 等）
     "Endpoint": "https://s3.example.com",

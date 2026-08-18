@@ -233,14 +233,15 @@ namespace Viv.Engine
         /// <param name="context"></param>
         /// <param name="code"></param>
         /// <returns></returns>
-        public static async Task SetApiResponseAsync(this HttpContext context, ApiResultCode code, int httpStatusCode = 200)
+        public static async Task SetApiResponseAsync(this HttpContext context, ApiResultCode code, int? httpStatusCode = null)
         {
             var result = VivApiResult.ApiRsult(code);
             result.RequestId = context.TraceIdentifier;
             context.Response.Clear();
+            httpStatusCode ??= context.Response.StatusCode;
             // 与 VivApiResult.ExecuteResultAsync 保持一致：仅 VivRunDefine 白名单内的状态码原样返回，其余强制 200
-            context.Response.StatusCode = VivRunDefine.AllowedHttpStatusCodes.Contains(httpStatusCode)
-                ? httpStatusCode
+            context.Response.StatusCode = VivRunDefine.AllowedHttpStatusCodes.Contains(httpStatusCode.Value)
+                ? httpStatusCode.Value
                 : 200;
             context.Response.ContentType = "application/json;charset=UTF-8";
             await context.Response.WriteAsync(result.ToJson(JsonNetSetting.ApiResponseSettings), Encoding.UTF8);

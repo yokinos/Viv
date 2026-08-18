@@ -56,7 +56,7 @@ namespace Viv.Momo.Sync
         // ==================== Public API ====================
 
         /// <summary>
-        /// 用 TypeScanMagic 扫描 viv.config.json 中 EntityTypeOptions 配置的命名空间，
+        /// 用 TypeScanMagic 扫描 appsettings.json 的 VivOptions 中 EntityTypeOptions 配置的命名空间，
         /// 返回所有实现 IEntity 的实体类。这是"预期 Schema"的输入。
         /// </summary>
         public List<Type> ScanEntityTypes()

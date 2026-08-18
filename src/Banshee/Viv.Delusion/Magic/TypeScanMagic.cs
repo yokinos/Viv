@@ -23,6 +23,10 @@ namespace Viv.Delusion.Magic
             var assembly = Assembly.Load(filter.AssemblyName);
             var types = GetLoadableTypes(assembly);
 
+            // BaseType/AttributeType 配置里存的是程序集限定名，扫描前一次性解析，避免逐类型重复 Type.GetType
+            var baseType = ResolveType(filter.BaseType);
+            var attributeType = ResolveType(filter.AttributeType);
+
             var result = new List<Type>();
 
             foreach (var type in types)
@@ -36,10 +40,10 @@ namespace Viv.Delusion.Magic
                 if (!MatchNamePattern(type, filter))
                     continue;
 
-                if (filter.BaseType != null && !MatchBaseType(type, filter.BaseType))
+                if (baseType != null && !MatchBaseType(type, baseType))
                     continue;
 
-                if (filter.AttributeType != null && !HasAttribute(type, filter.AttributeType))
+                if (attributeType != null && !HasAttribute(type, attributeType))
                     continue;
 
                 result.Add(type);
@@ -265,7 +269,7 @@ namespace Viv.Delusion.Magic
                 AssemblyName = filter.AssemblyName,
                 Namespace = filter.Namespace,
                 BaseType = filter.BaseType,
-                AttributeType = typeof(TAttribute),
+                AttributeType = typeof(TAttribute).AssemblyQualifiedName,
                 ClassNameStartsWith = filter.ClassNameStartsWith,
                 ClassNameEndsWith = filter.ClassNameEndsWith
             };
@@ -448,6 +452,12 @@ namespace Viv.Delusion.Magic
             return type.GetCustomAttributes(attributeType, inherit: false).Length != 0;
         }
 
+        /// <summary>
+        /// 把配置里的程序集限定名解析回 Type（空白/null 返回 null，解析失败返回 null 等同未配置，不抛错）
+        /// </summary>
+        private static Type? ResolveType(string? typeName)
+            => string.IsNullOrWhiteSpace(typeName) ? null : Type.GetType(typeName, false);
+
         #endregion
     }
 
@@ -467,14 +477,17 @@ namespace Viv.Delusion.Magic
         public string Namespace { get; set; } = string.Empty;
 
         /// <summary>
-        /// 目标基类型、接口或开放泛型定义（可选）
+        /// 目标基类型、接口或开放泛型定义（可选，程序集限定名，如
+        /// "Viv.Momo.Interface.IEntity, Viv.Momo, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"）。
+        /// 存字符串而非 Type：配置天然是字符串，可被 ConfigurationBinder 直接绑定、Newtonsoft 直接回环，
+        /// 无需给 System.Type 挂转换器；扫描时由 <see cref="ResolveType"/> 一次性解析。
         /// </summary>
-        public Type? BaseType { get; set; }
+        public string? BaseType { get; set; }
 
         /// <summary>
-        /// 目标 Attribute 类型（可选）
+        /// 目标 Attribute 类型（可选，程序集限定名）
         /// </summary>
-        public Type? AttributeType { get; set; }
+        public string? AttributeType { get; set; }
 
         /// <summary>
         /// 类型名称以此开始（可选）

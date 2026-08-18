@@ -23,7 +23,7 @@ namespace Viv.Sandrone.Impl
         public VivS3Service()
         {
             _options = VivConfigRegistry.Get<S3Options>()
-                        ?? throw new InvalidOperationException("未找到 S3Options 配置，请检查 viv.config.json 中 S3Option 节点。");
+                        ?? throw new InvalidOperationException("未找到 S3Options 配置，请检查 appsettings.json 的 VivOptions.S3Option 节点。");
             var config = CreateS3Config(_options);
             _s3Client = new AmazonS3Client(_options.AccessKey, _options.SecretKey, config);
         }
