@@ -16,8 +16,8 @@ namespace Viv.Contracts.Models
         public const string AppId = "AppId";
 
         /// <summary>
-        /// 多租户 TenantId —— 下游的 SubjectId 即此值（x-viv-subjectId 头）
+        /// 多租户 SubjectId —— 下游的 SubjectId 即此值（x-viv-subjectId 头）
         /// </summary>
-        public const string TenantId = "TenantId";
+        public const string SubjectId = "SubjectId";
     }
 }

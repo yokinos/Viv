@@ -70,9 +70,9 @@ namespace Viv.Sandrone.Impl
                 claims.Add(new Claim(VivClaimTypes.AppId, payload.AppId.ToString(CultureInfo.InvariantCulture)));
             }
 
-            if (payload.TenantId > 0)
+            if (payload.SubjectId > 0)
             {
-                claims.Add(new Claim(VivClaimTypes.TenantId, payload.TenantId.ToString(CultureInfo.InvariantCulture)));
+                claims.Add(new Claim(VivClaimTypes.SubjectId, payload.SubjectId.ToString(CultureInfo.InvariantCulture)));
             }
 
             // 添加角色Claims
@@ -135,12 +135,12 @@ namespace Viv.Sandrone.Impl
                     Roles = jwtToken.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList()
                 };
 
-                // 解析 Viv 上下文 Claims（AppId / TenantId），缺失时默认 0
+                // 解析 Viv 上下文 Claims（AppId / SubjectId），缺失时默认 0
                 payload.AppId = jwtToken.Claims.FirstOrDefault(c => c.Type == VivClaimTypes.AppId)?.Value.As<long>() ?? 0;
-                payload.TenantId = jwtToken.Claims.FirstOrDefault(c => c.Type == VivClaimTypes.TenantId)?.Value.As<long>() ?? 0;
+                payload.SubjectId = jwtToken.Claims.FirstOrDefault(c => c.Type == VivClaimTypes.SubjectId)?.Value.As<long>() ?? 0;
 
                 // 解析自定义扩展字段（排除内置Claim）
-                var builtInClaims = new[] { JwtRegisteredClaimNames.Sub, JwtRegisteredClaimNames.Name, ClaimTypes.Role, JwtRegisteredClaimNames.Iss, JwtRegisteredClaimNames.Aud, JwtRegisteredClaimNames.Exp, JwtRegisteredClaimNames.Iat, VivClaimTypes.AppId, VivClaimTypes.TenantId };
+                var builtInClaims = new[] { JwtRegisteredClaimNames.Sub, JwtRegisteredClaimNames.Name, ClaimTypes.Role, JwtRegisteredClaimNames.Iss, JwtRegisteredClaimNames.Aud, JwtRegisteredClaimNames.Exp, JwtRegisteredClaimNames.Iat, VivClaimTypes.AppId, VivClaimTypes.SubjectId };
                 foreach (var claim in jwtToken.Claims.Where(c => !builtInClaims.Contains(c.Type)))
                 {
                     payload.Extensions.Add(claim.Type, claim.Value);

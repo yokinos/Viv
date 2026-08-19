@@ -34,7 +34,7 @@ namespace Viv.Engine
         internal const string DefaultRateLimiterPolicyName = "DefaultRateLimiter";
         internal const string CustomRateLimiterPolicyName = "CustomRateLimiter";
         private const int DefaultCacheSeconds = 20;
-        private static readonly string[] _vivClaimTypes = ["tenantId", "userId", "appId"];
+        private static readonly string[] _vivClaimTypes = ["subjectId", "userId", "appId"];
 
         /// <summary>
         /// 配置 Viv 网关基础服务：加载配置、限流配置热重载、Autofac、AddViv、JWT 解析、YARP（路由/集群从 Aspire 服务发现自动生成）、CORS、OutputCache、RateLimiter、编码注册。
@@ -206,7 +206,7 @@ namespace Viv.Engine
                     var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? "";
                     context.Request.Headers[VivRunDefine.UserIdHeader] = userId;
                     context.Request.Headers[VivRunDefine.AppIdHeader] = context.User.FindFirstValue(VivClaimTypes.AppId) ?? "";
-                    context.Request.Headers[VivRunDefine.SubjectIdHeader] = context.User.FindFirstValue(VivClaimTypes.TenantId) ?? "";
+                    context.Request.Headers[VivRunDefine.SubjectIdHeader] = context.User.FindFirstValue(VivClaimTypes.SubjectId) ?? "";
                     context.Request.Headers[VivRunDefine.ServiceNameHeader] = VivEngine.VivOptions?.EnvOption?.ServiceName ?? "";
                     context.Request.Headers[VivRunDefine.InnerRequestTokenHeader] = Power.RequestTokenResolver.SignContextHeaders(context.Request.Headers);
                 }

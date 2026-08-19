@@ -17,7 +17,7 @@ namespace Viv.Contracts.Models
         /// <summary>
         /// 多租户Id(不一定会有)
         /// </summary>
-        public long TenantId { get; set; }
+        public long SubjectId { get; set; }
 
         /// <summary>
         /// 用户Id 

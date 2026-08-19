@@ -67,7 +67,7 @@ public class JwtTokenServiceTests
             UserId = 42,
             UserName = "viv",
             AppId = 1,
-            TenantId = 3,
+            SubjectId = 3,
             Roles = { "admin", "user" },
             Extensions = { ["dept"] = "rnd" },
         };
@@ -77,7 +77,7 @@ public class JwtTokenServiceTests
         Assert.Equal(42, parsed!.UserId);
         Assert.Equal("viv", parsed.UserName);
         Assert.Equal(1, parsed.AppId);
-        Assert.Equal(3, parsed.TenantId);
+        Assert.Equal(3, parsed.SubjectId);
         Assert.Equal(new[] { "admin", "user" }, parsed.Roles);
         Assert.Equal("rnd", parsed.Extensions["dept"]);
     }
@@ -89,7 +89,7 @@ public class JwtTokenServiceTests
         var parsed = service.ParseToken(service.GenerateToken(new TokenPayload { UserId = 7, UserName = "x" }));
 
         Assert.Equal(0, parsed!.AppId);
-        Assert.Equal(0, parsed.TenantId);
+        Assert.Equal(0, parsed.SubjectId);
     }
 
     [Fact]

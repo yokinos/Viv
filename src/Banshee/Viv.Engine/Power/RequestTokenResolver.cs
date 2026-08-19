@@ -158,13 +158,13 @@ namespace Viv.Engine.Power
                 return Task.FromResult<VivContextContent?>(null);
             }
 
-            var tenantIdText = user.FindFirstValue(VivClaimTypes.TenantId);
-            long.TryParse(tenantIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tenantId);
+            var subjectIdText = user.FindFirstValue(VivClaimTypes.SubjectId);
+            long.TryParse(subjectIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var subjectId);
 
             return Task.FromResult<VivContextContent?>(new VivContextContent
             {
                 AppId = appId,
-                SubjectId = tenantId,
+                SubjectId = subjectId,
                 UserId = userId
             });
         }

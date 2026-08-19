@@ -38,7 +38,7 @@ namespace Viv.Apex.Core.Saga
                 OrderId = message.OrderId,
                 Amount = message.Amount,
                 AppId = message.AppId,
-                TenantId = message.TenantId
+                SubjectId = message.TenantId
             };
         }
 

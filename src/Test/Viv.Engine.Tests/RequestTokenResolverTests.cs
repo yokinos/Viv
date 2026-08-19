@@ -178,13 +178,15 @@ public class RequestTokenResolverTests
     [Fact]
     public async Task GetContextFromTokenAsync_有效claims解析()
     {
-        var ctx = new DefaultHttpContext();
-        ctx.User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        var ctx = new DefaultHttpContext
         {
-            new Claim(ClaimTypes.NameIdentifier, "2"),
-            new Claim(VivClaimTypes.AppId, "1"),
-            new Claim(VivClaimTypes.TenantId, "3"),
-        }, "test"));
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, "2"),
+                new Claim(VivClaimTypes.AppId, "1"),
+                new Claim(VivClaimTypes.SubjectId, "3"),
+            ], "test"))
+        };
 
         var result = await RequestTokenResolver.GetContextFromTokenAsync(ctx);
 

@@ -16,8 +16,8 @@ namespace Viv.Nana.Saga
         public long AppId { get; set; }
 
         /// <summary>
-        /// 多租户隔离标识
+        /// 数据隔离标识
         /// </summary>
-        public long TenantId { get; set; }
+        public long SubjectId { get; set; }
     }
 }
