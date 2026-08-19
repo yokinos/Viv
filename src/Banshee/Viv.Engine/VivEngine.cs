@@ -21,8 +21,14 @@ namespace Viv.Engine
 
         private VivEngine() { }
 
+        /// <summary>
+        /// Viv框架全局配置
+        /// </summary>
         public static VivOptions VivOptions { get => _vivOptions; }
-        
+
+        /// <summary>
+        /// Viv应用启动时间
+        /// </summary>
         public static DateTime? VivAppStartTime => _vivAppStartTime;
 
         /// <summary>
