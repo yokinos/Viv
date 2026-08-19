@@ -14,9 +14,6 @@ namespace Viv.Engine
 {
     public static class VivEngineExtensions
     {
-        private const string AjaxHeaderName = "X-Requested-With";
-        private const string AjaxHeaderValue = "XMLHttpRequest";
-
         /// <summary>
         /// 注册Viv相关服务
         /// </summary>
@@ -169,12 +166,12 @@ namespace Viv.Engine
         /// </summary>
         private static bool IsAjaxHeader(HttpRequest request)
         {
-            if (!request.Headers.TryGetValue(AjaxHeaderName, out var headerValue))
+            if (!request.Headers.TryGetValue("X-Requested-With", out var headerValue))
             {
                 return false;
             }
 
-            return headerValue.Any(value => string.Equals(value?.Trim(), AjaxHeaderValue, StringComparison.OrdinalIgnoreCase));
+            return headerValue.Any(value => string.Equals(value?.Trim(), "XMLHttpRequest", StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>
