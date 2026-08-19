@@ -1,4 +1,5 @@
 using System.Reflection;
+using Newtonsoft.Json.Linq;
 using Viv.Delusion.Extension;
 
 namespace Viv.Delusion.Magic
@@ -131,6 +132,7 @@ namespace Viv.Delusion.Magic
 
             var assemblies = AppDomain.CurrentDomain.GetAssemblies()
                 .Where(a => !a.IsDynamic)
+                .Where(IsAppAssembly)
                 .ToList();
 
             return ScanTypes(targetType, assemblies, matchPredicate);
@@ -296,6 +298,57 @@ namespace Viv.Delusion.Magic
         #endregion
 
         #region 内部实现
+
+        /// <summary>
+        /// 应用的项目程序集名（deps.json 的 libraries 段中 type=project 的库），静态懒加载。
+        /// 「扫全部已加载程序集」的入口只应枚举项目程序集：第三方 NuGet 包（如 Roslyn/OpenAI）的元数据
+        /// 可能触发 CLR 的 Assembly.GetTypes() 栈溢出（dotnet/runtime 类型交叉引用解析，加载顺序相关），
+        /// 且扫描目标（gRPC 服务/Saga/消费者/事件/IDependency 实现）永远在应用自己的程序集里。
+        /// 解析失败（非常规宿主）返回 null，调用方回落全量扫描保持旧行为。
+        /// </summary>
+        private static readonly Lazy<HashSet<string>?> ProjectAssemblyNames = new(LoadProjectAssemblyNames);
+
+        private static HashSet<string>? LoadProjectAssemblyNames()
+        {
+            try
+            {
+                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (AppContext.GetData("APP_CONTEXT_DEPS_FILES") is string depsFiles)
+                {
+                    foreach (var path in depsFiles.Split(new[] { ';', Path.PathSeparator }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (!File.Exists(path)) continue;
+
+                        var doc = JObject.Parse(File.ReadAllText(path));
+                        if (doc["libraries"] is not JObject libraries) continue;
+
+                        foreach (var kv in libraries)
+                        {
+                            if (kv.Value?["type"]?.ToString() == "project")
+                                names.Add(kv.Key.Split('/')[0]);
+                        }
+                    }
+                }
+                return names.Count > 0 ? names : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 是否应用项目程序集（不在项目名单内则跳过枚举）。名单解析失败回落 true（全量扫描）。
+        /// </summary>
+        private static bool IsAppAssembly(Assembly assembly)
+        {
+            var projects = ProjectAssemblyNames.Value;
+            if (projects == null)
+                return true;
+
+            var name = assembly.GetName().Name;
+            return name != null && projects.Contains(name);
+        }
 
         private static List<Type> ScanInternal(IEnumerable<Assembly> assemblies, Func<Type, bool> predicate)
         {
