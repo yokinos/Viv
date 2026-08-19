@@ -24,14 +24,25 @@ namespace Viv.Delusion
         /// </summary>
         public object? Data { get; set; }
 
-        public static FuncResult Success(string? msg = "操作成功", object? data = null)
+        /// <summary>
+        /// 表示当前操作成功
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        public static FuncResult Success(string? message = "操作成功", object? data = null)
         {
-            return new FuncResult { IsSuccess = true, Message = msg, Data = data };
+            return new FuncResult { IsSuccess = true, Message = message, Data = data };
         }
 
-        public static FuncResult Failed(string msg)
+        /// <summary>
+        /// 失败返回
+        /// </summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
+        public static FuncResult Failed(string? message)
         {
-            return new FuncResult { IsSuccess = false, Message = msg };
+            return new FuncResult { IsSuccess = false, Message = message };
         }
     }
 }

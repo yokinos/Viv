@@ -16,7 +16,7 @@ namespace Viv.Nana.Tests
     {
         public RequeueConsumer(ILoggerContract logger) : base(logger) { }
         public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> message, CancellationToken cancellationToken = default)
-            => Task.FromResult(SubscribeResult.Fail(true, "业务处理失败，重投"));
+            => Task.FromResult(SubscribeResult.Failed(true, "业务处理失败，重投"));
     }
 
     /// <summary>失败但不重投（记日志丢弃）</summary>
@@ -24,7 +24,7 @@ namespace Viv.Nana.Tests
     {
         public DropConsumer(ILoggerContract logger) : base(logger) { }
         public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> message, CancellationToken cancellationToken = default)
-            => Task.FromResult(SubscribeResult.Fail(false, "不可重试，丢弃"));
+            => Task.FromResult(SubscribeResult.Failed(false, "不可重试，丢弃"));
     }
 
     /// <summary>

@@ -19,7 +19,7 @@ namespace Viv.Engine
 
         public new T? Data { get; set; }
 
-        public static VivApiResult<T> Success(string message, T? data = default)
+        public static VivApiResult<T> Success(string? message, T? data = default)
         {
             return ApiRsult(ApiResultCode.Success, message, data);
         }
@@ -29,7 +29,7 @@ namespace Viv.Engine
             return ApiRsult(ApiResultCode.Success, "successful", data);
         }
 
-        public static VivApiResult<T> Failed(string message, T? data = default)
+        public static VivApiResult<T> Failed(string? message, T? data = default)
         {
             return ApiRsult(ApiResultCode.Error, message, data);
         }

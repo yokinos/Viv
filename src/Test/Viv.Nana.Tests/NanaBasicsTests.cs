@@ -18,7 +18,7 @@ namespace Viv.Nana.Tests
         [Fact]
         public void Fail_可重投()
         {
-            var r = SubscribeResult.Fail(true, "boom");
+            var r = SubscribeResult.Failed(true, "boom");
             Assert.False(r.IsSuccess);
             Assert.True(r.IsRequeue);
             Assert.Equal("boom", r.Message);
@@ -27,7 +27,7 @@ namespace Viv.Nana.Tests
         [Fact]
         public void Fail_不可重投()
         {
-            var r = SubscribeResult.Fail(false, "skip");
+            var r = SubscribeResult.Failed(false, "skip");
             Assert.False(r.IsSuccess);
             Assert.False(r.IsRequeue);
             Assert.Equal("skip", r.Message);

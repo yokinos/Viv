@@ -12,6 +12,7 @@ namespace Viv.Nana
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="content"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
         Task<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent;
 
@@ -19,7 +20,9 @@ namespace Viv.Nana
         /// 发布延迟消息
         /// </summary>
         /// <typeparam name="T"></typeparam>
+        /// <param name="delayTTL"></param>
         /// <param name="content"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
         Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent;
     }

@@ -14,16 +14,25 @@ namespace Viv.Delusion
         /// </summary>
         public new T? Data { get; set; }
 
-        public static FuncResult<T> Success(string? msg = "操作成功", T? data = default)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        public static FuncResult<T> Success(string? message = "操作成功", T? data = default)
         {
-            return new FuncResult<T> { IsSuccess = true, Message = msg, Data = data };
+            return new FuncResult<T> { IsSuccess = true, Message = message, Data = data };
         }
 
-        public static FuncResult<T> Failed(string msg)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="message"></param>
+        /// <returns></returns>
+        public static FuncResult<T> Failed(string? message)
         {
-            return new FuncResult<T> { IsSuccess = false, Message = msg };
+            return new FuncResult<T> { IsSuccess = false, Message = message };
         }
-
-
     }
 }

@@ -33,7 +33,7 @@ namespace Viv.Nana
             return new SubscribeResult(true, false);
         }
 
-        public static SubscribeResult Fail(bool isRequeue, string message)
+        public static SubscribeResult Failed(bool isRequeue, string message)
         {
             return new SubscribeResult(false, isRequeue, message);
         }
