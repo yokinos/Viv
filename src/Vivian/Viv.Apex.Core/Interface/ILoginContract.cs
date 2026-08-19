@@ -4,6 +4,7 @@ using System.Text;
 using Viv.Apex.Core.Entity.Dto.Account.Output;
 using Viv.Apex.Core.Entity.Dto.Account.Request;
 using Viv.Delusion;
+using Viv.Elysia.Request;
 
 namespace Viv.Apex.Core.Interface
 {
@@ -20,10 +21,12 @@ namespace Viv.Apex.Core.Interface
         /// 刷新Token
         /// </summary>
         /// <param name="request"></param>
+        /// <returns></returns>
         Task<FuncResult<ApexLoginOutput>> RefreshTokenAsync(ApexRefreshRequest request);
 
         /// <summary>
         /// 退出登录
+        /// </summary>
         /// <param name="request"></param>
         /// <returns></returns>
         Task<bool> LogoutAsync(ApexLoginoutRequest request);

@@ -22,14 +22,16 @@ namespace Viv.Apex.Core.Impl.Login
         private readonly IUserRepository _userRepository;
         private readonly ITokenService _tokenService;
         private readonly IRedisService _redisService;
+        private readonly IVivContext _context;
 
         private const string RefreshTokenSessionKeyPrefix = "rt:apex:";
 
-        public MasterUserLoginImpl(IUserRepository userRepository, ITokenService tokenService, IRedisService redisService)
+        public MasterUserLoginImpl(IUserRepository userRepository, ITokenService tokenService, IRedisService redisService, IVivContext context)
         {
             _userRepository = userRepository;
             _tokenService = tokenService;
             _redisService = redisService;
+            _context = context;
         }
 
         private string GetSessionKey(long appId, long userId)

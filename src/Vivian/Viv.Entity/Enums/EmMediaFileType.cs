@@ -1,22 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Text;
-using Viv.Elysia.Attributes;
 
 namespace Viv.Entity.Enums
 {
     public enum EmMediaFileType : byte
     {
-        [EnumName("图片")]
+        [Description("图片")]
         Image = 1,
 
-        [EnumName("视频")]
+        [Description("视频")]
         Video = 2,
 
-        [EnumName("音频")]
+        [Description("音频")]
         Audio = 3,
 
-        [EnumName("文档")]
+        [Description("文档")]
         Document = 4
     }
 }
