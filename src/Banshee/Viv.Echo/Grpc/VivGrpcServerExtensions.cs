@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 
@@ -21,7 +22,8 @@ namespace Viv.Echo.Grpc
 
         /// <summary>
         /// 专用 gRPC 端口的 Kestrel 配置：<paramref name="grpcPort"/> 严格 HTTP/2（明文 h2c），REST 端口沿用
-        /// urls（--urls / ASPNETCORE_URLS / launchSettings）显式绑定为 HTTP/1.1，无 urls 时回落 Kestrel 默认 5000。
+        /// urls（--urls / ASPNETCORE_URLS / launchSettings）显式绑定为 HTTP/1.1（https:// 条目保留 TLS/开发证书，
+        /// http:// 条目明文），无 urls 时回落 Kestrel 默认 5000。
         /// 同时自动注册 gRPC 服务端（含 <see cref="VivGrpcServerInterceptor"/> 租户上下文恢复拦截器）——
         /// 声明 gRPC 端口即自动装配，宿主无需再手动调 <c>AddVivGrpcServer</c>。
         /// 配置驱动时由框架 <c>AddVivApi</c>（Viv.Engine）调用，映射由 <see cref="VivGrpcDiscovery"/> 自动完成。
@@ -48,13 +50,19 @@ namespace Viv.Echo.Grpc
                         continue;
                     }
 
+                    // 显式 Listen 顶掉 urls 后必须按原 scheme 重绑：https:// 条目保留 TLS（开发证书），http:// 条目明文，
+                    // 二者都强制 HTTP/1.1（REST 与 gRPC 分端口，避免明文 Http2 冲突）
+                    var bind = u.Scheme == Uri.UriSchemeHttps
+                        ? (Action<ListenOptions>)(l => { l.Protocols = HttpProtocols.Http1; l.UseHttps(); })
+                        : l => { l.Protocols = HttpProtocols.Http1; };
+
                     if (u.Host is "localhost" or "127.0.0.1" or "::1")
                     {
-                        o.ListenLocalhost(u.Port, l => l.Protocols = HttpProtocols.Http1);
+                        o.ListenLocalhost(u.Port, bind);
                     }
                     else
                     {
-                        o.ListenAnyIP(u.Port, l => l.Protocols = HttpProtocols.Http1);
+                        o.ListenAnyIP(u.Port, bind);
                     }
 
                     restBound = true;
