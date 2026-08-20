@@ -86,16 +86,6 @@ namespace Viv.Elysia
         /// 业务操作描述
         /// </summary>
         public string? Description { get; set; }
-
-        /// <summary>
-        /// 请求参数（覆盖自动记录的）
-        /// </summary>
-        public string? RequestJson { get; set; }
-
-        /// <summary>
-        /// 响应结果（覆盖自动记录的）
-        /// </summary>
-        public string? ResponseJson { get; set; }
     }
 
 }

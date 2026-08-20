@@ -12,7 +12,6 @@ namespace Viv.Elysia.Interface
         /// <summary>
         /// 校验参数
         /// </summary>
-        /// <param name="isSkipSignValidate">是否跳过签名验证</param>
         /// <returns></returns>
         string Validate();
     }
