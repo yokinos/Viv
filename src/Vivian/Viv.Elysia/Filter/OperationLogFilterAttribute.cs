@@ -9,7 +9,7 @@ using Viv.Nana;
 namespace Viv.Elysia.Filter
 {
     /// <summary>
-    /// 操作日志过滤器（标记在 Action 上自动记录操作日志）
+    /// 操作日志过滤器
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
     public class OperationLogFilterAttribute : Attribute, IAsyncActionFilter
