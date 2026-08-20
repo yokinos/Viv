@@ -6,6 +6,7 @@ using Viv.Apex.Core.Entity.Dto.Account.Output;
 using Viv.Apex.Core.Entity.Dto.Account.Request;
 using Viv.Apex.Core.Interface;
 using Viv.Apex.Core.IService;
+using Viv.Elysia;
 using Viv.Engine;
 using Viv.Entity.Enums;
 
@@ -22,6 +23,7 @@ namespace Viv.Apex.Core.Service
 
         public async Task<VivApiResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
         {
+
             var isExist = _loginImpls.TryGetValue(request.UserType, out var loginImpl);
             if (!isExist || loginImpl == null)
             {
@@ -33,7 +35,7 @@ namespace Viv.Apex.Core.Service
             {
                 return VivApiResult<ApexLoginOutput>.Failed(loginResult.Message);
             }
-
+            ElysiaLogContextAccessor.SetLog(EmOperationModule.User, EmOperationType.Login);
             return VivApiResult<ApexLoginOutput>.Success("Login successful", loginResult.Data);
         }
     }

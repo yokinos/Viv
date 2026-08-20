@@ -1,3 +1,4 @@
+using Viv.Elysia.Extension;
 using Viv.Elysia.Filter;
 using Viv.Engine;
 
@@ -9,7 +10,7 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
-        builder.AddVivApi(new ApiInitSetting("Viv Apex API", "apex"), mvc => mvc.Filters.Add<RequestFilterAttribute>());
+        builder.AddVivApi(new ApiInitSetting("Viv Apex API", "apex"), mvc => mvc.Filters.AddElysiaFilter());
         builder.RunVivApi(app => app.MapDefaultEndpoints());
     }
 }

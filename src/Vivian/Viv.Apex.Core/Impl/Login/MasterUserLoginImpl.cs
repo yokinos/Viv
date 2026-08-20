@@ -58,7 +58,7 @@ namespace Viv.Apex.Core.Impl.Login
                 return FuncResult<ApexLoginOutput>.Failed("账号或者密码错误");
             }
 
-            if (user.Status != EmStatus.Normal)
+            if (user.Status != EmStatus.Enabled)
             {
                 return FuncResult<ApexLoginOutput>.Failed("账号被禁用");
             }
@@ -81,7 +81,7 @@ namespace Viv.Apex.Core.Impl.Login
 
             // 查找用户（校验账号状态）
             var user = await _userRepository.GetAsync(session.UserId);
-            if (user == null || user.Status != EmStatus.Normal)
+            if (user == null || user.Status != EmStatus.Enabled)
             {
                 return FuncResult<ApexLoginOutput>.Failed("账号异常，请重新登录");
             }

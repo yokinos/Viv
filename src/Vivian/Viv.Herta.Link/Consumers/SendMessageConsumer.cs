@@ -21,9 +21,9 @@ namespace Viv.Herta.Link.Consumers
             _connectionPool = connectionPool;
         }
 
-        public override async Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<SendMessageEvent> message, CancellationToken cancellationToken = default)
+        public override async Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<SendMessageEvent> envelope, CancellationToken cancellationToken = default)
         {
-            var evt = message.Content;
+            var evt = envelope.Content;
             if (evt == null)
                 return new SubscribeResult(false, false, "Message content is null");
 
@@ -31,15 +31,15 @@ namespace Viv.Herta.Link.Consumers
 
             var chatMessage = new HertaChatMessage
             {
-                Id = message.MessageId,
-                AppId = message.Context?.AppId,
+                Id = envelope.MessageId,
+                AppId = envelope.Context?.AppId,
                 FromUserId = evt.FromUserId,
                 ToUserId = evt.TargetId,
                 Body = body,
                 SentAt = DateTimeOffset.UtcNow
             };
 
-            var tenantId = message.Context?.SubjectId ?? 0;
+            var tenantId = envelope.Context?.SubjectId ?? 0;
             if (evt.ReceiverType == EmChatReceiverType.Group)
             {
                 var groupName = HertaLinkGroups.GetGroupName(tenantId, evt.TargetId);

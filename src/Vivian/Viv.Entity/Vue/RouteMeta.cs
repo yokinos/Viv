@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Apex.Core.Entity.Vue
+namespace Viv.Entity.Vue
 {
     /// <summary>
     /// 路由Meta元数据，控制菜单展示信息

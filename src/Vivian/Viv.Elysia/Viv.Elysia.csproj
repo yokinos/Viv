@@ -9,12 +9,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Folder Include="Attributes\" />
-	  <Folder Include="Extension\" />
+	  <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
+	  <ProjectReference Include="..\Viv.EventContracts\Viv.EventContracts.csproj" />
 	</ItemGroup>
 
 </Project>

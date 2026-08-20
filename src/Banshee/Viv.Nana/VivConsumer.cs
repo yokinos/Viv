@@ -33,12 +33,12 @@ namespace Viv.Nana
         /// 方法名符合 Wolverine handler 约定（HandleAsync + 消息参数），
         /// 由 AddVivWolverine 通过 Discovery.IncludeType 显式注册。
         /// </summary>
-        public async Task HandleAsync(NanaEnvelope<T> message, CancellationToken cancellationToken)
+        public async Task HandleAsync(NanaEnvelope<T> envelope, CancellationToken cancellationToken)
         {
-            if (message == null || message.Content == null)
+            if (envelope == null || envelope.Content == null)
                 return;
 
-            var result = await ReceiveMessageAsync(message, cancellationToken);
+            var result = await ReceiveMessageAsync(envelope, cancellationToken);
 
             if (result.IsSuccess)
                 return;
@@ -49,7 +49,7 @@ namespace Viv.Nana
                 throw new VivRequeueException(result.Message);
             }
 
-            _logger.Error($"消息消费失败（未回队）: {result.Message}, MessageId: {message.MessageId}");
+            _logger.Error($"消息消费失败（未回队）: {result.Message}, MessageId: {envelope.MessageId}");
         }
     }
 }

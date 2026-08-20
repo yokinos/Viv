@@ -16,7 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
     <ProjectReference Include="..\Viv.Apex.Core\Viv.Apex.Core.csproj" />
     <ProjectReference Include="..\Viv.Aspire\Viv.Aspire.ServiceDefaults\Viv.Aspire.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Viv.ServiceProxy\Viv.ServiceProxy.csproj" />

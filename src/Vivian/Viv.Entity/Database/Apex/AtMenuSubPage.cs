@@ -7,63 +7,68 @@ using Viv.Momo.Interface;
 namespace Viv.Entity.Database.Apex
 {
     /// <summary>
-    /// 菜单子页面表（对应前端路由children子路由）
-    /// 依附主菜单AtMenu.Id，存储目录下所有子页面路由
+    /// 菜单子页面表（对应前端路由 children 子路由）
+    /// 依附主菜单 AtMenu.Id，存储目录下所有子页面路由
     /// </summary>
     public class AtMenuSubPage : EntityBase, ISoftDelete
     {
         /// <summary>
-        /// 上级主菜单Id（关联AtMenu.Id，对应外层路由）
+        /// 上级主菜单 Id（关联 AtMenu.Id）
         /// </summary>
         public long MenuId { get; set; }
 
         /// <summary>
-        /// 位索引，菜单类型独立自增
+        /// 位索引（权限位运算）
         /// </summary>
         public int BitIndex { get; set; }
 
         /// <summary>
-        /// 子路由唯一名称（路由name，例：ListBase）
+        /// 子路由唯一名称（对应 Vue Router 的 name 字段）
         /// </summary>
         [StringLength(100)]
         public string? RouteName { get; set; }
 
         /// <summary>
-        /// 页面展示名称（meta.title）
+        /// 页面展示名称（对应 meta.title）
         /// </summary>
         [StringLength(100)]
-        public string? Name { get; set; }
+        public string? Title { get; set; }
 
         /// <summary>
-        /// 子页面路由path（相对路径，例：base / filter）
+        /// 子页面路由 path（相对路径，例：base / filter）
         /// </summary>
         [StringLength(500)]
         public string? Path { get; set; }
 
         /// <summary>
-        /// 前端页面组件地址（component，例：/list/base/index）
+        /// 前端页面组件地址（对应 component，例：/list/base/index）
         /// </summary>
         [StringLength(500)]
         public string? Component { get; set; }
 
         /// <summary>
-        /// 排序号（children页面展示顺序）
+        /// 排序号（对应 meta.orderNo）
         /// </summary>
         public int Sort { get; set; }
 
         /// <summary>
-        /// 是否页面缓存（meta.keepAlive）
+        /// 是否页面缓存（对应 meta.keepAlive）
         /// </summary>
         public bool IsKeepAlive { get; set; }
 
         /// <summary>
-        /// 备注描述
+        /// 是否侧边栏显示（对应 meta.hidden 的反向）
+        /// </summary>
+        public bool IsVisible { get; set; }
+
+        /// <summary>
+        /// 备注描述（仅后台使用）
         /// </summary>
         [StringLength(500)]
         public string? Remark { get; set; }
 
         /// <summary>
-        /// 状态 0禁用 1启用
+        /// 状态：0-禁用 / 1-启用
         /// </summary>
         public EmStatus Status { get; set; }
 
@@ -73,7 +78,7 @@ namespace Viv.Entity.Database.Apex
         public DateTime? CreatedAt { get; set; }
 
         /// <summary>
-        /// 创建人ID
+        /// 创建人 ID
         /// </summary>
         public long? CreatedBy { get; set; }
 
@@ -83,12 +88,12 @@ namespace Viv.Entity.Database.Apex
         public DateTime? UpdatedAt { get; set; }
 
         /// <summary>
-        /// 更新人ID
+        /// 更新人 ID
         /// </summary>
         public long? UpdatedBy { get; set; }
 
         /// <summary>
-        /// 是否删除
+        /// 是否软删除
         /// </summary>
         public bool IsDeleted { get; set; }
 

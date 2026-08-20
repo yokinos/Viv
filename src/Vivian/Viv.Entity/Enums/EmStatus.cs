@@ -11,7 +11,7 @@ namespace Viv.Entity.Enums
         /// 正常
         /// </summary>
         [Description("正常")]
-        Normal = 0,
+        Enabled = 0,
 
         /// <summary>
         /// 禁用
