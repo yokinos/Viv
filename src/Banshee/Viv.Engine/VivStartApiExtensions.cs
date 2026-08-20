@@ -146,6 +146,7 @@ namespace Viv.Engine
                 app.VivUseScalar(apiTitle);
             }
 
+            app.UseMiddleware<HttpTrackMiddleware>();
             app.UseMiddleware<ApiStartedMiddleware>();
 
             app.UseStaticFiles();

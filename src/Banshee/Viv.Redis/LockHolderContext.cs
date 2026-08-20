@@ -44,9 +44,9 @@ namespace Viv.Redis
         /// 生成分布式锁持有者Id
         /// </summary>
         /// <returns></returns>
-        private static string GenerateHolderId()
+        public static string GenerateHolderId(string? holderId = null)
         {
-            return IdMagic.NextId().ToString();
+            return holderId ?? IdMagic.NextId().ToString();
         }
     }
 }

@@ -16,6 +16,7 @@ using System.Threading.RateLimiting;
 using Viv.Aoi;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
+using Viv.Engine.Middleware;
 using Viv.Engine.Options;
 using Yarp.ReverseProxy;
 using Yarp.ReverseProxy.Configuration;
@@ -152,8 +153,8 @@ namespace Viv.Engine
             var app = builder.Build();
             VivLocator.Initialize(app.Services);
 
-            // 网关欢迎页（gateway.html）与 404 页面
-            app.UseMiddleware<Middleware.ApiStartedMiddleware>();
+            app.UseMiddleware<HttpTrackMiddleware>();
+            app.UseMiddleware<ApiStartedMiddleware>();
 
             app.UseWebSockets(new WebSocketOptions
             {

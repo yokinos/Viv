@@ -29,34 +29,19 @@ namespace Viv.Engine.Middleware
 
             try
             {
-                LockHolderContext.ResetHolderId();
-
-                var requestId = context.Request.Headers["X-Request-Id"].FirstOrDefault();
-                if (string.IsNullOrEmpty(requestId))
+                if (!_contextProvider.ShouldSkip(context))
                 {
-                    requestId = IdMagic.NextId(1).ToString();
-                }
-
-                context.TraceIdentifier = requestId;
-                context.Items["RequestId"] = requestId;
-                context.Response.Headers["X-Request-Id"] = requestId;
-
-                using (Serilog.Context.LogContext.PushProperty("RequestId", requestId))
-                {
-                    if (!_contextProvider.ShouldSkip(context))
+                    var model = await _contextProvider.GetContextAsync(context).ConfigureAwait(false);
+                    if (model == null)
                     {
-                        var model = await _contextProvider.GetContextAsync(context).ConfigureAwait(false);
-                        if (model == null)
-                        {
-                            await context.SetApiResponseAsync(ApiResultCode.TokenEmpty);
-                            return;
-                        }
-
-                        vivContext.SetSnapshot(model);
+                        await context.SetApiResponseAsync(ApiResultCode.TokenEmpty);
+                        return;
                     }
 
-                    await _next(context).ConfigureAwait(false);
+                    vivContext.SetSnapshot(model);
                 }
+
+                await _next(context).ConfigureAwait(false);
             }
             finally
             {

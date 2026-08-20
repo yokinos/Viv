@@ -1,3 +1,4 @@
+using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using Viv.Contracts.Interface;
 
@@ -17,6 +18,9 @@ namespace Viv.Engine
         public const string UserIdHeader = VivHeaderContract.UserId;
         public const string ServiceNameHeader = VivHeaderContract.ServiceName; // 服务名，如 viv.apex.api
         public const string InnerRequestTokenHeader = VivHeaderContract.InnerRequestToken; // 内部请求签名 Token（HMAC）
+
+        public const string VivTraceIdHeader = "X-Request-Id";
+        public const string ContextRequestId = "RequestId";
 
         /// <summary>
         /// 允许原样返回的 HTTP 状态码白名单。
