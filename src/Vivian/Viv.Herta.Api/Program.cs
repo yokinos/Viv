@@ -9,7 +9,7 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
-        builder.AddVivApi("Viv Herta API", mvc => mvc.Filters.Add<RequestFilterAttribute>());
+        builder.AddVivApi(new ApiInitSetting("Viv Herta API", "herta"), mvc => mvc.Filters.Add<RequestFilterAttribute>());
         builder.RunVivApi(app => app.MapDefaultEndpoints());
     }
 }

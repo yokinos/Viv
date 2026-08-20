@@ -10,7 +10,7 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
-        builder.AddVivApi("Viv SakuMai API", mvc => mvc.Filters.Add<RequestFilterAttribute>());
+        builder.AddVivApi(new ApiInitSetting("Viv SakuMai API"), mvc => mvc.Filters.Add<RequestFilterAttribute>());
         builder.RunVivApi(app =>
         {
             app.MapDefaultEndpoints();

@@ -5,11 +5,14 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.OpenApi;
 using Serilog;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using Viv.Aoi;
 using Viv.Contracts.Interface;
+using Viv.Delusion.Extension;
 using Viv.Echo.Grpc;
 using Viv.Engine.Filter;
 using Viv.Engine.Middleware;
@@ -30,15 +33,16 @@ namespace Viv.Engine
         /// </summary>
         /// <param name="configureMvc">注册额外 MVC 过滤器（默认已添加 VivExceptionFilterAttribute）</param>
         public static WebApplicationBuilder AddVivApi(this WebApplicationBuilder builder,
-            string apiTitle,
+            [NotNull] ApiInitSetting initSetting,
             Action<MvcOptions>? configureMvc = null,
             Action<IServiceCollection>? serviceCollectionConfigure = null)
         {
+            ArgumentNullException.ThrowIfNull(initSetting);
             var vivOptions = VivEngine.LoadVivConfig(builder.Configuration);
             ArgumentNullException.ThrowIfNull(vivOptions);
 
             // 暂存标题供 RunVivApi 使用
-            builder.Configuration[ApiTitleKey] = apiTitle;
+            builder.Configuration[ApiTitleKey] = initSetting?.ApiName;
             builder.Services.AddHttpContextAccessor();
 
             // Autofac 容器
@@ -101,6 +105,17 @@ namespace Viv.Engine
             {
                 options.AddOperationTransformer<VivOpenApiOperationTransformer>();
                 options.AddSchemaTransformer<VivOpenApiSchemaTransformer>();
+                if (!initSetting.ServiceName.IsNullOrEmpty())
+                {
+                    options.AddDocumentTransformer((document, context, cancellationToken) =>
+                    {
+                        document.Servers =
+                        [
+                            new OpenApiServer(){ Url = initSetting.ServiceName, Description = "API Gateway" }
+                        ];
+                        return Task.CompletedTask;
+                    });
+                }
             });
 
             // 跨域
@@ -182,5 +197,20 @@ namespace Viv.Engine
 
             app.Run();
         }
+    }
+
+
+    public class ApiInitSetting
+    {
+        public ApiInitSetting() { }
+        public ApiInitSetting(string? apiName, string? serviceName = null)
+        {
+            ApiName = apiName;
+            ServiceName = serviceName;
+        }
+
+        public string? ApiName { get; set; }
+
+        public string? ServiceName { get; set; }
     }
 }

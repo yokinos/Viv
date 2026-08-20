@@ -13,7 +13,7 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
-        builder.AddVivApi("Viv Herta Link", mvc => mvc.Filters.Add<RequestFilterAttribute>());
+        builder.AddVivApi(new ApiInitSetting("Viv Herta Link", "hertalink"), mvc => mvc.Filters.Add<RequestFilterAttribute>());
         // AddHertaLink：注册 ConnectionPool/GroupService + SignalR + Redis 背板（AddStackExchangeRedis）
         builder.Services.AddHertaLink(builder.Configuration);
         builder.RunVivApi(app =>
