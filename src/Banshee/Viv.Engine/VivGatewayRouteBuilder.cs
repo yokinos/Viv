@@ -56,10 +56,10 @@ namespace Viv.Engine
                     RouteId = $"{shortName}-docs",
                     ClusterId = clusterId,
                     Match = new RouteMatch { Path = $"/docs/{shortName}/{{**catch-all}}" },
-                    Transforms = new[]
-                    {
+                    Transforms =
+                    [
                         new Dictionary<string, string> { ["PathPattern"] = "/{**catch-all}" }
-                    }
+                    ]
                 });
 
                 // WebSocket / SignalR：/ws/hertalink/chat -> /chat
@@ -68,10 +68,10 @@ namespace Viv.Engine
                     RouteId = $"{shortName}-ws",
                     ClusterId = clusterId,
                     Match = new RouteMatch { Path = $"/ws/{shortName}/{{**catch-all}}" },
-                    Transforms = new[]
-                    {
+                    Transforms =
+                    [
                         new Dictionary<string, string> { ["PathPattern"] = "/{**catch-all}" }
-                    }
+                    ]
                 });
             }
 
