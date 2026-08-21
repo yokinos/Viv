@@ -68,7 +68,6 @@ namespace Viv.Engine.Middleware
             }
             finally
             {
-                LockHolderContext.Clear();
                 vivContext.Clear();
             }
         }

@@ -44,9 +44,9 @@ namespace Viv.Contracts
         /// 生成分布式锁持有者Id
         /// </summary>
         /// <returns></returns>
-        public static string GenerateHolderId(string? holderId = null)
+        public static string GenerateHolderId()
         {
-            return holderId ?? IdMagic.NextId().ToString();
+            return IdMagic.NextId().ToString();
         }
     }
 }

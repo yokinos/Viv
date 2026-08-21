@@ -29,7 +29,7 @@ namespace Viv.Engine.Middleware
                 }
 
                 // 用请求Id作为锁持有者Id，确保同一个请求的锁操作在同一个持有者Id下
-                LockHolderContext.GenerateHolderId(traceId);
+                LockHolderContext.SetHolderId(traceId);
 
                 context.TraceIdentifier = traceId;
                 context.Items[VivRunDefine.ContextTraceId] = traceId;
