@@ -42,10 +42,14 @@ namespace Viv.Engine
             bool isReentrant = true,
             int maxRetryCount = 5,
             int baseDelay = 200,
-            int maxDelay = 5000)
+            int maxDelay = 5000,
+            CancellationToken cancellationToken = default)
         {
             for (int attempt = 1; attempt <= maxRetryCount; attempt++)
             {
+                if (cancellationToken.IsCancellationRequested)
+                    return false;
+
                 var acquired = await _redisService.AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
                 if (acquired)
                     return true;
@@ -54,7 +58,7 @@ namespace Viv.Engine
                 {
                     var delayMs = CalculateDelay(attempt, baseDelay, maxDelay);
                     _logger.Warning($"获取锁失败，第 {attempt} 次重试，Key: {lockKey}，等待 {delayMs}ms");
-                    await Task.Delay(delayMs);
+                    await Task.Delay(delayMs, cancellationToken);
                 }
             }
 
@@ -74,12 +78,14 @@ namespace Viv.Engine
             bool isReentrant = true,
             int maxRetryCount = 5,
             int baseDelay = 200,
-            int maxDelay = 5000)
+            int maxDelay = 5000,
+            CancellationToken cancellationToken = default)
         {
             var lockKey = GenerateLockKey(key);
 
             for (int attempt = 1; attempt <= maxRetryCount; attempt++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     var acquired = await _redisService.AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
@@ -112,7 +118,7 @@ namespace Viv.Engine
                             : throw new DistributedLockException(lockKey, maxRetryCount, ex);
                     }
                     var delayMs = CalculateDelay(attempt, baseDelay, maxDelay);
-                    await Task.Delay(delayMs);
+                    await Task.Delay(delayMs, cancellationToken);
                 }
             }
 

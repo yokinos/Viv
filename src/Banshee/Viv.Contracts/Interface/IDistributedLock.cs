@@ -46,12 +46,13 @@ namespace Viv.Contracts.Interface
         /// <param name="maxRetryCount">最大重试次数，默认 5 次</param>
         /// <param name="baseDelay">退避基础延迟（毫秒），默认 200ms</param>
         /// <param name="maxDelay">最大延迟上限（毫秒），默认 5000ms</param>
+        /// <param name="cancellationToken"></param>
         /// <returns><c>true</c> = 成功获取锁；<c>false</c> = 获取失败，已达最大重试次数</returns>
         /// <remarks>
         /// 与 <see cref="AcquireLockWithExecuteAsync{T}(object, TimeSpan, Func{Task{T}}, Func{Task{T}}?, string?, bool, int, int, int)"/> 的区别：
         /// 本方法仅负责获取锁，不执行业务逻辑，锁需要调用方手动通过 <see cref="ReleaseLockAsync"/> 释放。
         /// </remarks>
-        Task<bool> AcquireLockWithRetryAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true, int maxRetryCount = 5, int baseDelay = 200, int maxDelay = 5000);
+        Task<bool> AcquireLockWithRetryAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true, int maxRetryCount = 5, int baseDelay = 200, int maxDelay = 5000, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 获取锁并执行业务委托（取锁成功执行业务，取锁失败执行降级）
@@ -66,6 +67,7 @@ namespace Viv.Contracts.Interface
         /// <param name="maxRetryCount">最大重试次数，默认 5 次</param>
         /// <param name="baseDelay">退避基础延迟（毫秒），默认 200ms</param>
         /// <param name="maxDelay">最大延迟上限（毫秒），默认 5000ms</param>
+        /// <param name="cancellationToken"></param>
         /// <returns>业务委托或降级委托的执行结果</returns>
         /// <exception cref="DistributedLockException">
         /// 获取锁失败且 <paramref name="fallbackMethod"/> 为 null 时抛出
@@ -73,6 +75,6 @@ namespace Viv.Contracts.Interface
         /// <remarks>
         /// 重试策略：指数退避 + 随机抖动（30%），避免惊群效应
         /// </remarks>
-        Task<T> AcquireLockWithExecuteAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, Func<Task<T>>? fallbackMethod = null, string? lockHolderId = null, bool isReentrant = true, int maxRetryCount = 5, int baseDelay = 200, int maxDelay = 5000);
+        Task<T> AcquireLockWithExecuteAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, Func<Task<T>>? fallbackMethod = null, string? lockHolderId = null, bool isReentrant = true, int maxRetryCount = 5, int baseDelay = 200, int maxDelay = 5000, CancellationToken cancellationToken = default);
     }
 }
