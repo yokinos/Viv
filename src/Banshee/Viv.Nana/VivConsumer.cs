@@ -1,5 +1,6 @@
 using Viv.Aoi;
 using Viv.Contracts;
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Log;
@@ -67,6 +68,11 @@ namespace Viv.Nana
                 }
 
                 _logger.Error($"消息消费失败（未回队）: {result.Message}, MessageId: {envelope.MessageId}");
+            }
+            catch (DistributedLockException ex)
+            {
+                // 抛出这个异常 由 Wolverine 捕获重试
+                throw new VivRequeueException(ex.Message);
             }
             finally
             {

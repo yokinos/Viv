@@ -10,15 +10,21 @@ namespace Viv.Apex.Worker.Consumers
 {
     public class TestApexConsumer : VivConsumer<TestApexEvent>
     {
-        public TestApexConsumer(ILoggerContract logger, IVivContext context) : base(logger, context)
-        {
+        private readonly IDistributedLock _distributedLock;
 
+        public TestApexConsumer(ILoggerContract logger, IVivContext context, IDistributedLock distributedLock) : base(logger, context)
+        {
+            _distributedLock = distributedLock;
         }
 
         public async override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
         {
-            await Task.CompletedTask;
-            return SubscribeResult.Success();
+            var result = await _distributedLock.AcquireLockWithExecuteAsync(envelope.MessageId, TimeSpan.FromSeconds(15), async () =>
+            {
+                return SubscribeResult.Success();
+            });
+
+            return result;
         }
     }
 }

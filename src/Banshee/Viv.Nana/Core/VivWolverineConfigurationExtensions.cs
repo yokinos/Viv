@@ -77,10 +77,10 @@ namespace Viv.Nana.Core
                     opts.PublishMessage(envelopeType).ToRabbitExchange(exchangeName);
                 }
 
-                // 4) 全局失败策略：重试 RetryCount 次（间隔 1s）→ 死信队列
-                //    对齐 MassTransit UseMessageRetry(Interval(RetryCount, 1s)) → DLQ；
-                //    VivRequeueException（消费者要求重投）走同一路径。
-                var retryTimes = Enumerable.Repeat(TimeSpan.FromSeconds(1), Math.Max(1, nanaOptions.RetryCount)).ToArray();
+                // 4) 全局失败策略：使用指数退避重试（基础延迟1s，最大10s，带抖动），重试次数由配置 RetryCount 决定
+                //    重试全部失败后移入死信队列（DLQ）
+                //    VivRequeueException（消费者要求重投）也走同一重试路径
+                var retryTimes = GenerateExponentialBackoff(Math.Max(1, nanaOptions.RetryCount), 1000, 10000);
                 opts.Policies.OnException<Exception>()
                     .RetryWithCooldown(retryTimes)
                     .Then
@@ -98,6 +98,33 @@ namespace Viv.Nana.Core
             });
 
             return services;
+        }
+
+        /// <summary>
+        /// 生成指数退避时间集合（带随机抖动）
+        /// </summary>
+        /// <param name="retryCount">重试次数</param>
+        /// <param name="baseDelay">基础延迟（毫秒），默认 200</param>
+        /// <param name="maxDelay">最大延迟（毫秒），默认 5000</param>
+        /// <returns>指数退避时间集合</returns>
+        private static TimeSpan[] GenerateExponentialBackoff(int retryCount, int baseDelay = 200, int maxDelay = 5000)
+        {
+            if (retryCount <= 0)
+                return [];
+
+            var result = new TimeSpan[retryCount];
+
+            for (int i = 0; i < retryCount; i++)
+            {
+                // 指数增长：baseDelay * 2^i
+                var delay = baseDelay * (int)Math.Pow(2, i);
+                delay = Math.Min(delay, maxDelay);
+                // 随机抖动 0-30%，防止惊群
+                var jitter = RandomMagic.Next(0, (int)(delay * 0.3));
+                result[i] = TimeSpan.FromMilliseconds(delay + jitter);
+            }
+
+            return result;
         }
     }
 }
