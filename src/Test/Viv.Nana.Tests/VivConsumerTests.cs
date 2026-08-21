@@ -8,7 +8,7 @@ namespace Viv.Nana.Tests
     public class SuccessConsumer : VivConsumer<TestApexEvent>
     {
         public SuccessConsumer(ILoggerContract logger, IVivContext context) : base(logger, context) { }
-        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> message, CancellationToken cancellationToken = default)
+        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
             => Task.FromResult(SubscribeResult.Success());
     }
 
@@ -16,7 +16,7 @@ namespace Viv.Nana.Tests
     public class RequeueConsumer : VivConsumer<TestApexEvent>
     {
         public RequeueConsumer(ILoggerContract logger, IVivContext context) : base(logger, context) { }
-        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> message, CancellationToken cancellationToken = default)
+        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
             => Task.FromResult(SubscribeResult.Failed(true, "业务处理失败，重投"));
     }
 
@@ -24,7 +24,7 @@ namespace Viv.Nana.Tests
     public class DropConsumer : VivConsumer<TestApexEvent>
     {
         public DropConsumer(ILoggerContract logger, IVivContext context) : base(logger, context) { }
-        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> message, CancellationToken cancellationToken = default)
+        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
             => Task.FromResult(SubscribeResult.Failed(false, "不可重试，丢弃"));
     }
 

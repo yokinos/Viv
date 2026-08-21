@@ -34,7 +34,7 @@ namespace Viv.Nana
         /// <summary>
         /// 业务消费逻辑 — 子类只需实现这个方法，框架处理重试、异常、日志
         /// </summary>
-        public abstract Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<T> message, CancellationToken cancellationToken = default);
+        public abstract Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<T> envelope, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Wolverine 消费入口（框架内部调用，子类不必关心）。
