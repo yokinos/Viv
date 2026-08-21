@@ -34,7 +34,7 @@ namespace Viv.Contracts.Interface
         /// <summary>
         /// 请求Id（唯一标识当前请求）
         /// </summary>
-        string RequestId { get; }
+        string TraceId { get; }
 
         /// <summary>
         /// 设置上下文快照

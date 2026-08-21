@@ -20,7 +20,7 @@ namespace Viv.Sandrone.Impl
 
         public long UserId => Snapshot?.UserId ?? 0;
 
-        public string RequestId => Snapshot?.RequestId ?? string.Empty;
+        public string TraceId => Snapshot?.TraceId ?? string.Empty;
 
         public VivContextContent? GetRawSnapshot()
         {

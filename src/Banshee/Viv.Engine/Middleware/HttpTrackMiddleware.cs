@@ -2,9 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Magic;
-using Viv.Redis;
 
 namespace Viv.Engine.Middleware
 {
@@ -22,20 +22,20 @@ namespace Viv.Engine.Middleware
 
             try
             {
-                var requestId = context.Request.Headers[VivRunDefine.VivTraceIdHeader].FirstOrDefault();
-                if (string.IsNullOrEmpty(requestId))
+                var traceId = context.Request.Headers[VivRunDefine.VivTraceIdHeader].FirstOrDefault();
+                if (string.IsNullOrEmpty(traceId))
                 {
-                    requestId = IdMagic.NextId(1).ToString();
+                    traceId = IdMagic.NextId(1).ToString();
                 }
 
                 // 用请求Id作为锁持有者Id，确保同一个请求的锁操作在同一个持有者Id下
-                LockHolderContext.GenerateHolderId(requestId);
+                LockHolderContext.GenerateHolderId(traceId);
 
-                context.TraceIdentifier = requestId;
-                context.Items[VivRunDefine.ContextRequestId] = requestId;
-                context.Response.Headers[VivRunDefine.VivTraceIdHeader] = requestId;
+                context.TraceIdentifier = traceId;
+                context.Items[VivRunDefine.ContextTraceId] = traceId;
+                context.Response.Headers[VivRunDefine.VivTraceIdHeader] = traceId;
 
-                using (Serilog.Context.LogContext.PushProperty(VivRunDefine.ContextRequestId, requestId))
+                using (Serilog.Context.LogContext.PushProperty(VivRunDefine.ContextTraceId, traceId))
                 {
                     await _next(context).ConfigureAwait(false);
                 }

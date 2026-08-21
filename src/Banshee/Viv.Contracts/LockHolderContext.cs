@@ -1,8 +1,8 @@
 ﻿using System.Threading;
-using Viv.Delusion.Magic;
 using Viv.Delusion.Extension;
+using Viv.Delusion.Magic;
 
-namespace Viv.Redis
+namespace Viv.Contracts
 {
     /// <summary>
     /// 锁持有者上下文

@@ -1,4 +1,4 @@
-using Viv.Redis;
+using Viv.Contracts;
 
 namespace Viv.Redis.Tests;
 

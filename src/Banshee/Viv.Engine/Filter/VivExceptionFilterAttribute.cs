@@ -34,18 +34,18 @@ namespace Viv.Engine.Filter
             var ex = context.Exception;
             var realEx = ex.InnerException ?? ex;
             var httpContext = context.HttpContext;
-            var requestId = httpContext.TraceIdentifier;
+            var traceId = httpContext.TraceIdentifier;
             var path = httpContext.Request.Path;
             var method = httpContext.Request.Method;
 
-            _logger.Error("[全局异常] {Method} {Path} | RequestId: {RequestId} | Message: {Message}", realEx, method, path, requestId, realEx.Message);
+            _logger.Error("[全局异常] {Method} {Path} | RequestId: {RequestId} | Message: {Message}", realEx, method, path, traceId, realEx.Message);
 
             var output = new ExceptionOutput
             {
                 Path = path,
                 Method = method,
                 Timestamp = DateTime.Now.ExtToString(),
-                RequestId = requestId,
+                RequestId = traceId,
                 StackTrace = _environment.IsDevelopment() ? realEx.StackTrace : null,
                 ErrorCode = (realEx as IVivBusinessException)?.Code
             };

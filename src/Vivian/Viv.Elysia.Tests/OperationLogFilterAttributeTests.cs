@@ -30,7 +30,7 @@ namespace Viv.Elysia.Tests
             public long AppId => 1;
             public long SubjectId => 2;
             public long UserId => 99;
-            public string RequestId => "req-1";
+            public string TraceId => "req-1";
             public void SetSnapshot(VivContextContent model) { }
             public void Clear() { }
             public VivContextContent? GetRawSnapshot() => null;

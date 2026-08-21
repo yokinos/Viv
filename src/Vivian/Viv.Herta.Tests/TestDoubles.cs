@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
+using Viv.Contracts.Interface;
+using Viv.Contracts.Models;
 using Viv.Herta.Link.Hubs;
 using Viv.Log;
 using Viv.Nana;
@@ -142,5 +144,31 @@ namespace Viv.Herta.Tests
         public Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default)
             where T : NanaEvent
             => throw new NotImplementedException();
+    }
+
+    public sealed class FakeContext : IVivContext
+    {
+        public long AppId => throw new NotImplementedException();
+
+        public long SubjectId => throw new NotImplementedException();
+
+        public long UserId => throw new NotImplementedException();
+
+        public string TraceId => throw new NotImplementedException();
+
+        public void Clear()
+        {
+            throw new NotImplementedException();
+        }
+
+        public VivContextContent? GetRawSnapshot()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void SetSnapshot(VivContextContent model)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

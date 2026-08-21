@@ -10,7 +10,7 @@ namespace Viv.Redis
     /// Redis 操作服务接口
     /// 封装 Redis 基础操作、Hash操作、List操作、发布订阅、分布式锁等核心功能
     /// </summary>
-    public interface IRedisService : IDistributedLock
+    public interface IRedisService
     {
         /// <summary>
         /// 新增字符串类型缓存（指定过期时间秒数）

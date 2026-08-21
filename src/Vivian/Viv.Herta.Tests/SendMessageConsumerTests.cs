@@ -24,7 +24,7 @@ namespace Viv.Herta.Tests
         }
 
         private static SendMessageConsumer CreateConsumer(FakeHubContext hub, StubConnectionPool pool)
-            => new(new FakeLogger(), hub, pool);
+            => new(new FakeLogger(),new FakeContext(), hub, pool);
 
         [Fact]
         public async Task ContentNull_ReturnsFailureWithoutSending()

@@ -1,3 +1,7 @@
+using Viv.Aoi;
+using Viv.Contracts;
+using Viv.Contracts.Interface;
+using Viv.Contracts.Models;
 using Viv.Log;
 using Viv.Nana.Core;
 
@@ -18,9 +22,12 @@ namespace Viv.Nana
     {
         protected readonly ILoggerContract _logger;
 
-        protected VivConsumer(ILoggerContract logger)
+        protected readonly IVivContext _context;
+
+        protected VivConsumer(ILoggerContract logger, IVivContext context)
         {
             _logger = logger;
+            _context = context;
         }
 
         /// <summary>
@@ -38,18 +45,33 @@ namespace Viv.Nana
             if (envelope == null || envelope.Content == null)
                 return;
 
-            var result = await ReceiveMessageAsync(envelope, cancellationToken);
-
-            if (result.IsSuccess)
-                return;
-
-            if (result.IsRequeue)
+            try
             {
-                // 抛出异常 → Wolverine 捕获 → 按 RetryCount 自动重试 → 耗尽后进死信
-                throw new VivRequeueException(result.Message);
-            }
+                if (envelope.Context != null)
+                {
+                    // 将上下文注入
+                    _context.SetSnapshot(envelope.Context);
+                    // 设置分布式锁的持有者Id
+                    LockHolderContext.SetHolderId(_context.TraceId);
+                }
 
-            _logger.Error($"消息消费失败（未回队）: {result.Message}, MessageId: {envelope.MessageId}");
+                var result = await ReceiveMessageAsync(envelope, cancellationToken).ConfigureAwait(false);
+
+                if (result.IsSuccess)
+                    return;
+
+                if (result.IsRequeue)
+                {
+                    // 抛出异常 → Wolverine 捕获 → 按 RetryCount 自动重试 → 耗尽后进死信
+                    throw new VivRequeueException(result.Message);
+                }
+
+                _logger.Error($"消息消费失败（未回队）: {result.Message}, MessageId: {envelope.MessageId}");
+            }
+            finally
+            {
+                _context?.Clear();
+            }
         }
     }
 }

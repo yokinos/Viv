@@ -27,7 +27,7 @@ namespace Viv.Contracts.Models
         /// <summary>
         /// 请求Id，用于日志记录和跟踪
         /// </summary>
-        public string? RequestId { get; set; }
+        public string? TraceId { get; set; }
 
         /// <summary>
         /// 克隆一份上下文，用于后台任务传递
@@ -39,7 +39,7 @@ namespace Viv.Contracts.Models
                 AppId = AppId,
                 SubjectId = SubjectId,
                 UserId = UserId,
-                RequestId = RequestId
+                TraceId = TraceId
             };
         }
 
@@ -50,7 +50,7 @@ namespace Viv.Contracts.Models
 
         public override string ToString()
         {
-            return $"AppId:{AppId},SubjectId:{SubjectId},UserId:{UserId},RequestId:{RequestId}";
+            return $"AppId:{AppId},SubjectId:{SubjectId},UserId:{UserId},TraceId:{TraceId}";
         }
     }
 }

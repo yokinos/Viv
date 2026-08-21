@@ -1,3 +1,5 @@
+using Viv.Contracts.Interface;
+using Viv.Contracts.Models;
 using Viv.Log;
 using Viv.Nana.Core;
 
@@ -28,5 +30,31 @@ namespace Viv.Nana.Tests
         public void Fatal(string message, Exception ex, params object[] args) { }
         public void Error(string message, params object[] args) => Errors.Add(message);
         public void Error(string message, Exception ex, params object[] args) => ErrorWithException.Add((message, ex));
+    }
+
+    public class FakeContext : IVivContext
+    {
+        public long AppId => throw new NotImplementedException();
+
+        public long SubjectId => throw new NotImplementedException();
+
+        public long UserId => throw new NotImplementedException();
+
+        public string TraceId => throw new NotImplementedException();
+
+        public void Clear()
+        {
+
+        }
+
+        public VivContextContent? GetRawSnapshot()
+        {
+            return new VivContextContent();
+        }
+
+        public void SetSnapshot(VivContextContent model)
+        {
+
+        }
     }
 }

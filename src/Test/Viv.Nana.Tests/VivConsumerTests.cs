@@ -1,3 +1,4 @@
+using Viv.Contracts.Interface;
 using Viv.Log;
 using Viv.Nana.Core;
 
@@ -6,7 +7,7 @@ namespace Viv.Nana.Tests
     /// <summary>成功消费</summary>
     public class SuccessConsumer : VivConsumer<TestApexEvent>
     {
-        public SuccessConsumer(ILoggerContract logger) : base(logger) { }
+        public SuccessConsumer(ILoggerContract logger, IVivContext context) : base(logger, context) { }
         public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> message, CancellationToken cancellationToken = default)
             => Task.FromResult(SubscribeResult.Success());
     }
@@ -14,7 +15,7 @@ namespace Viv.Nana.Tests
     /// <summary>失败并要求重投（触发 VivRequeueException → Wolverine 重试）</summary>
     public class RequeueConsumer : VivConsumer<TestApexEvent>
     {
-        public RequeueConsumer(ILoggerContract logger) : base(logger) { }
+        public RequeueConsumer(ILoggerContract logger, IVivContext context) : base(logger, context) { }
         public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> message, CancellationToken cancellationToken = default)
             => Task.FromResult(SubscribeResult.Failed(true, "业务处理失败，重投"));
     }
@@ -22,7 +23,7 @@ namespace Viv.Nana.Tests
     /// <summary>失败但不重投（记日志丢弃）</summary>
     public class DropConsumer : VivConsumer<TestApexEvent>
     {
-        public DropConsumer(ILoggerContract logger) : base(logger) { }
+        public DropConsumer(ILoggerContract logger, IVivContext context) : base(logger, context) { }
         public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> message, CancellationToken cancellationToken = default)
             => Task.FromResult(SubscribeResult.Failed(false, "不可重试，丢弃"));
     }
@@ -40,7 +41,9 @@ namespace Viv.Nana.Tests
         public async Task 成功_无异常无日志()
         {
             var logger = new StubLogger();
-            var consumer = new SuccessConsumer(logger);
+            var context = new FakeContext();
+
+            var consumer = new SuccessConsumer(logger, context);
 
             await consumer.HandleAsync(Envelope(), CancellationToken.None);
 
@@ -51,7 +54,8 @@ namespace Viv.Nana.Tests
         [Fact]
         public async Task 重投_抛VivRequeueException()
         {
-            var consumer = new RequeueConsumer(new StubLogger());
+            var context = new FakeContext();
+            var consumer = new RequeueConsumer(new StubLogger(), context);
 
             var ex = await Assert.ThrowsAsync<VivRequeueException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
 
@@ -62,7 +66,8 @@ namespace Viv.Nana.Tests
         public async Task 失败不回队_记日志不抛异常()
         {
             var logger = new StubLogger();
-            var consumer = new DropConsumer(logger);
+            var context = new FakeContext();
+            var consumer = new DropConsumer(logger,context);
 
             await consumer.HandleAsync(Envelope(), CancellationToken.None);
 
@@ -76,7 +81,8 @@ namespace Viv.Nana.Tests
         [Fact]
         public async Task 空消息_直接返回不处理()
         {
-            var consumer = new SuccessConsumer(new StubLogger());
+            var context = new FakeContext();
+            var consumer = new SuccessConsumer(new StubLogger(), context);
 
             await consumer.HandleAsync(null!, CancellationToken.None);
 
@@ -87,7 +93,8 @@ namespace Viv.Nana.Tests
         public async Task 内容为空_直接返回不处理()
         {
             var logger = new StubLogger();
-            var consumer = new DropConsumer(logger);
+            var context = new FakeContext();
+            var consumer = new DropConsumer(logger, context);
 
             await consumer.HandleAsync(new NanaEnvelope<TestApexEvent> { Content = null }, CancellationToken.None);
 

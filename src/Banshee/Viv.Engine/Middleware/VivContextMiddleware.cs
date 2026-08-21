@@ -2,9 +2,11 @@
 using System;
 using System.Text;
 using System.Threading.Tasks;
+using Viv.Contracts;
 using Viv.Contracts.Interface;
+using Viv.Contracts.Models;
+using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
-using Viv.Redis;
 
 namespace Viv.Engine.Middleware
 {
@@ -39,6 +41,27 @@ namespace Viv.Engine.Middleware
                     }
 
                     vivContext.SetSnapshot(model);
+                }
+                else
+                {
+                    context.Request.EnableBuffering();
+                    string body = string.Empty;
+                    if (context.Request.ContentLength > 0 && context.Request.ContentType?.Contains("application/json") == true)
+                    {
+                        var sr = new StreamReader(context.Request.Body);
+                        body = await sr.ReadToEndAsync();
+                        context.Request.Body.Position = 0;
+                    }
+
+                    var request = body.As<VivRequest>();
+                    if (request != null)
+                    {
+                        vivContext.SetSnapshot(new VivContextContent()
+                        {
+                            AppId = request.AppId,
+                            TraceId = context.TraceIdentifier
+                        });
+                    }
                 }
 
                 await _next(context).ConfigureAwait(false);

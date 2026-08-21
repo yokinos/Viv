@@ -23,6 +23,7 @@ namespace Viv.Apex.Core.Service
 
         public async Task<VivApiResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
         {
+            ElysiaLogContextAccessor.SetLog(EmOperationModule.User, EmOperationType.Login);
             var isExist = _loginImpls.TryGetValue(request.UserType, out var loginImpl);
             if (!isExist || loginImpl == null)
             {
@@ -35,7 +36,6 @@ namespace Viv.Apex.Core.Service
                 return VivApiResult<ApexLoginOutput>.Failed(loginResult.Message);
             }
 
-            ElysiaLogContextAccessor.SetLog(EmOperationModule.User, EmOperationType.Login);
             return VivApiResult<ApexLoginOutput>.Success("Login successful", loginResult.Data);
         }
     }

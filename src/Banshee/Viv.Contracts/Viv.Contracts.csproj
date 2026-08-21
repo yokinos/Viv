@@ -20,4 +20,8 @@
 		<PackageReference Include="Yarp.ReverseProxy" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <ProjectReference Include="..\Viv.Delusion\Viv.Delusion.csproj" />
+	</ItemGroup>
+
 </Project>
