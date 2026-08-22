@@ -105,7 +105,7 @@ namespace Viv.Engine
                     {
                         var delayMs = CalculateDelay(attempt, baseDelay, maxDelay);
                         _logger.Warning($"获取锁失败，第 {attempt} 次重试，Key: {lockKey}，等待 {delayMs}ms");
-                        await Task.Delay(delayMs);
+                        await Task.Delay(delayMs, cancellationToken);
                     }
                 }
                 catch (Exception ex)

@@ -86,6 +86,7 @@ namespace Viv.Engine
             {
                 RedisFactory.Initialize(options.CacheOption.RedisOptions);
                 services.AddSingleton<IRedisService, RedisService>();
+                services.AddSingleton<IDistributedLock, DistributedLockAccessor>();
 
                 // 将 IConnectionMultiplexer 注册到 DI，供 OpenTelemetry Redis 仪表板使用
                 // services.AddSingleton(RedisFactory.GetConnectionAsync().GetAwaiter().GetResult());
