@@ -11,6 +11,12 @@ namespace Viv.Nana
     /// <summary>
     /// Viv 消费者基类 — 自动处理消息完整性校验和重试逻辑。
     ///
+    /// 重要约束：
+    /// 1. 基类HandleAsync负责 SetSnapshot / Clear，消息结束会自动清理上下文；
+    /// 2. 子类可使用 _context 读取，**允许手动SetSnapshot/Clear，但必须保证在当前消息的async流内部，不能泄露到Task.Run后台任务**；
+    /// 3. 禁止将 _context 实例传递、闭包捕获到 Task.Run / 后台火后即忘任务；后台任务会Flow ExecutionContext，会继承当前消息快照，造成上下文串扰；
+    /// 4. LockHolderContext 由基类finally统一清理，子类不要手动管理。
+    ///
     /// 重试机制（基于 Wolverine 全局失败策略，见 VivWolverineConfigurationExtensions）：
     /// 1. 子类 <see cref="ReceiveMessageAsync"/> 返回 <see cref="SubscribeResult"/>
     /// 2. 返回 Fail(IsRequeue: true) → 抛出 <see cref="VivRequeueException"/> → Wolverine 自动重试
@@ -18,7 +24,6 @@ namespace Viv.Nana
     ///    （默认 NanaOptions.RetryCount 次，间隔 1 秒，全部失败后消息进入死信队列）
     /// 4. 返回 Fail(IsRequeue: false) → 仅记录错误日志，消息直接丢弃不回队
     /// </summary>
-    /// <typeparam name="T">消息体类型，必须继承 <see cref="NanaEvent"/></typeparam>
     public abstract class VivConsumer<T> where T : NanaEvent
     {
         protected readonly ILoggerContract _logger;
@@ -77,6 +82,7 @@ namespace Viv.Nana
             finally
             {
                 _context?.Clear();
+                LockHolderContext.Clear();
             }
         }
     }
