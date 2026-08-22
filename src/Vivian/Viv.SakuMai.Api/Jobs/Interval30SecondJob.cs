@@ -20,7 +20,8 @@ namespace Viv.SakuMai.Api.Jobs
         [TickerFunction(nameof(Interval30SecondJob), "*/30 * * * * *")]
         public async Task ExecuteAsync(TickerFunctionContext context, CancellationToken cancellationToken = default)
         {
-            await _eventPublisher.PublishDelayAsync(TimeSpan.FromSeconds(15),new TestApexEvent()
+            SetContext(11, 222);
+            await _eventPublisher.PublishDelayAsync(TimeSpan.FromSeconds(15), new TestApexEvent()
             {
                 IsJob = true,
                 TestTime = DateTime.UtcNow,
