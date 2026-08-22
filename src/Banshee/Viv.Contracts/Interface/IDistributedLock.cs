@@ -76,5 +76,15 @@ namespace Viv.Contracts.Interface
         /// 重试策略：指数退避 + 随机抖动（30%），避免惊群效应
         /// </remarks>
         Task<T> AcquireLockWithExecuteAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, Func<Task<T>>? fallbackMethod = null, string? lockHolderId = null, bool isReentrant = true, int maxRetryCount = 5, int baseDelay = 200, int maxDelay = 5000, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 获取锁并执行业务委托
+        /// </summary>
+        /// <typeparam name="T">返回值类型</typeparam>
+        /// <param name="key">锁标识（字符串或对象，对象会自动序列化为 JSON 作为 Key）</param>
+        /// <param name="expire">锁过期时间</param>
+        /// <param name="executeMethod">业务委托（取锁成功时执行）</param>
+        /// <returns></returns>
+        Task<T> AcquireLockWithExecuteAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, CancellationToken cancellationToken = default) => AcquireLockWithExecuteAsync(key, expire, executeMethod, cancellationToken: cancellationToken);
     }
 }

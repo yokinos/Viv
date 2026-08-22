@@ -22,7 +22,7 @@ namespace Viv.Apex.Worker.Consumers
             var result = await _distributedLock.AcquireLockWithExecuteAsync(envelope.MessageId, TimeSpan.FromSeconds(15), async () =>
             {
                 return SubscribeResult.Success();
-            });
+            }, cancellationToken);
 
             return result;
         }

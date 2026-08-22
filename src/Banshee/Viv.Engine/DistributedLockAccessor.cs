@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection;
 using System.Threading.Tasks;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
@@ -144,6 +145,7 @@ namespace Viv.Engine
         {
             if (key is string strKey)
                 return strKey;
+
             return System.Text.Json.JsonSerializer.Serialize(key);
         }
     }
