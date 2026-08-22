@@ -25,9 +25,21 @@ namespace Viv.Redis
     public class RedisService : VivRedis, IRedisService
     {
         /// <summary>
-        /// 续期管理：记录每个锁的取消令牌源，用于停止续期
+        /// 续期管理：记录每个锁的持有者与取消令牌源，用于停止续期
         /// </summary>
-        private static readonly ConcurrentDictionary<string, CancellationTokenSource> _renewalTasks = new();
+        private static readonly ConcurrentDictionary<string, RenewalEntry> _renewalTasks = new();
+
+        /// <summary>
+        /// 锁续期条目：持有者 + 取消令牌。
+        /// 记录持有者用于区分「同持有者重入（复用已有续期任务）」与「锁已易主（替换旧任务）」，
+        /// 避免续期任务退出时的 TryRemove 误删新持有者的登记。
+        /// </summary>
+        private sealed class RenewalEntry(string holderId, CancellationTokenSource cts)
+        {
+            public string HolderId { get; } = holderId;
+
+            public CancellationTokenSource Cts { get; } = cts;
+        }
 
         /// <summary>
         /// 锁续期阈值：在过期时间的一半时进行续期
@@ -551,9 +563,6 @@ namespace Viv.Redis
             if (string.IsNullOrWhiteSpace(lockHolderId))
                 return false;
 
-            // 停止续期（若存在）
-            StopRenewal(lockKey);
-
             return ExecuteRedis(lockKey, db =>
             {
                 if (!isReentrant)
@@ -567,7 +576,11 @@ namespace Viv.Redis
                         end";
 
                     var result = db.ScriptEvaluate(normalReleaseScript, [lockKey], [lockHolderId]);
-                    return (long)result == 1;
+                    var released = (long)result == 1;
+                    // 非重入：释放即完全释放，停续期
+                    if (released)
+                        StopRenewal(lockKey);
+                    return released;
                 }
 
                 var reentrantReleaseScript = @"
@@ -589,7 +602,11 @@ namespace Viv.Redis
                     end";
 
                 var scriptResult = db.ScriptEvaluate(reentrantReleaseScript, [lockKey], [lockHolderId, ReentrantLockTempExpireSeconds]);
-                return (long)scriptResult >= 1;
+                var code = (long)scriptResult;
+                // 仅完全释放（count 1→0，DEL）才停续期；仅递减重入计数（count>1）时锁仍持有，续期继续
+                if (code == 2)
+                    StopRenewal(lockKey);
+                return code >= 1;
             });
         }
 
@@ -604,10 +621,7 @@ namespace Viv.Redis
             if (string.IsNullOrWhiteSpace(lockHolderId))
                 return false;
 
-            // 先停止续期（无论释放成功与否，续期都应停止）
-            StopRenewal(lockKey);
-
-            var result = await ExecuteRedisAsync(lockKey, async db =>
+            return await ExecuteRedisAsync(lockKey, async db =>
             {
                 if (!isReentrant)
                 {
@@ -620,7 +634,11 @@ namespace Viv.Redis
                         end";
 
                     var res = await db.ScriptEvaluateAsync(normalReleaseScript, [lockKey], [lockHolderId]).ConfigureAwait(false);
-                    return (long)res == 1;
+                    var released = (long)res == 1;
+                    // 非重入：释放即完全释放，停续期
+                    if (released)
+                        StopRenewal(lockKey);
+                    return released;
                 }
 
                 var reentrantReleaseScript = @"
@@ -642,10 +660,12 @@ namespace Viv.Redis
                     end";
 
                 var scriptResult = await db.ScriptEvaluateAsync(reentrantReleaseScript, [lockKey], [lockHolderId, ReentrantLockTempExpireSeconds]).ConfigureAwait(false);
-                return (long)scriptResult >= 1;
+                var code = (long)scriptResult;
+                // 仅完全释放（count 1→0，DEL）才停续期；仅递减重入计数（count>1）时锁仍持有，续期继续
+                if (code == 2)
+                    StopRenewal(lockKey);
+                return code >= 1;
             }).ConfigureAwait(false);
-
-            return result;
         }
 
         /// <summary>
@@ -685,11 +705,37 @@ namespace Viv.Redis
         /// </summary>
         private void StartRenewal(string lockKey, string lockHolderId, TimeSpan expire)
         {
-            var cts = new CancellationTokenSource();
-            if (!_renewalTasks.TryAdd(lockKey, cts))
+            var entry = new RenewalEntry(lockHolderId, new CancellationTokenSource());
+            var cts = entry.Cts;
+
+            // CAS 登记循环：
+            // - 无条目 → TryAdd 登记自己；
+            // - 同持有者（重入加锁）→ 复用已有任务，不重复启动；
+            // - 不同持有者（旧锁已丢失/被接管）→ TryUpdate 原子替换（仅当当前值仍是旧条目时才替换），
+            //   替换成功后取消旧任务，保证新持有者必有续期。
+            while (true)
             {
-                cts.Dispose();
-                return; // 已存在续期任务（理论上不应发生）
+                if (!_renewalTasks.TryGetValue(lockKey, out var current))
+                {
+                    if (_renewalTasks.TryAdd(lockKey, entry))
+                        break; // 登记成功
+                    continue;   // 竞态：期间有人登记，重读
+                }
+
+                if (current.HolderId == lockHolderId)
+                {
+                    cts.Dispose();
+                    return; // 同持有者，复用已有续期任务
+                }
+
+                if (_renewalTasks.TryUpdate(lockKey, entry, current))
+                {
+                    // 原子替换成功，取消旧持有者的续期任务（避免它继续续期已易主的锁）
+                    current.Cts.Cancel();
+                    current.Cts.Dispose();
+                    break;
+                }
+                // TryUpdate 失败 = 期间条目已变化，重读重试
             }
 
             // 计算续期间隔：过期时间的一半
@@ -728,8 +774,9 @@ namespace Viv.Redis
                         break;
                     }
                 }
-                // 移除任务记录
-                _renewalTasks.TryRemove(lockKey, out _);
+                // 移除任务记录：只移除自己登记的条目（键值都匹配），
+                // 避免误删新持有者已登记的续期任务
+                _renewalTasks.TryRemove(new KeyValuePair<string, RenewalEntry>(lockKey, entry));
             }, cts.Token);
         }
 
@@ -738,10 +785,10 @@ namespace Viv.Redis
         /// </summary>
         private void StopRenewal(string lockKey)
         {
-            if (_renewalTasks.TryRemove(lockKey, out var cts))
+            if (_renewalTasks.TryRemove(lockKey, out var entry))
             {
-                cts.Cancel();
-                cts.Dispose();
+                entry.Cts.Cancel();
+                entry.Cts.Dispose();
             }
         }
 

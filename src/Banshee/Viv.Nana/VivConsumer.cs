@@ -76,8 +76,10 @@ namespace Viv.Nana
             }
             catch (DistributedLockException ex)
             {
-                // 抛出这个异常 由 Wolverine 捕获重试
-                throw new VivRequeueException(ex.Message);
+                // 拿不到锁 = 已有其他实例/服务在消费同一消息（锁 Key 通常为 MessageId），
+                // 按「拿到执行、拿不到丢弃」契约丢弃不回队，避免空转重试后进死信。
+                _logger.Warning($"获取分布式锁失败，消息丢弃（不回队）: {ex.Message}, MessageId: {envelope.MessageId}");
+                return;
             }
             finally
             {

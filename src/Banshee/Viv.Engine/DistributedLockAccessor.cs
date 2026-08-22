@@ -96,9 +96,18 @@ namespace Viv.Engine
                         {
                             return await executeMethod();
                         }
+                        catch (OperationCanceledException) { throw; }   // 业务被取消：透传，不包装
+                        catch (Exception bizEx)
+                        {
+                            // 业务委托抛出的异常：不重试（避免双重执行）、不当取锁失败处理，
+                            // 包装进 DistributedLockException.InnerException 上抛，保留原始异常。
+                            throw new DistributedLockException(lockKey, attempt, bizEx);
+                        }
                         finally
                         {
-                            await _redisService.ReleaseLockAsync(lockKey, lockHolderId, isReentrant);
+                            // 释放失败只记日志，不冒泡——否则会触发外层重试 → 重复执行业务
+                            try { await _redisService.ReleaseLockAsync(lockKey, lockHolderId, isReentrant); }
+                            catch (Exception relEx) { _logger.Error($"释放锁失败 Key: {lockKey}", relEx); }
                         }
                     }
 
@@ -109,8 +118,11 @@ namespace Viv.Engine
                         await Task.Delay(delayMs, cancellationToken);
                     }
                 }
+                catch (DistributedLockException) { throw; }        // 业务异常包装：直接透传，不重试
+                catch (OperationCanceledException) { throw; }      // 取消：直接透传（含退避等待期取消）
                 catch (Exception ex)
                 {
+                    // 只剩取锁/Redis 本身的异常才重试
                     _logger.Error($"获取锁异常，第 {attempt} 次尝试，Key: {lockKey}", ex);
                     if (attempt >= maxRetryCount)
                     {
