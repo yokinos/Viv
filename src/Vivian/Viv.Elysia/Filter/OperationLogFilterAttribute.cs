@@ -86,7 +86,7 @@ namespace Viv.Elysia.Filter
                 UserId = _vivContext.UserId,
                 IsJob = false,
                 Priority = 0
-            });
+            }).ConfigureAwait(false);
 
             ElysiaLogContextAccessor.Clear();
         }

@@ -10,10 +10,7 @@ namespace Viv.Nana.Core
         private readonly IMessageBus _bus;
         private readonly ILoggerContract _logger;
 
-        public NanaEventPublisher(
-            IVivContext context,
-            IMessageBus bus,
-            ILoggerContract logger)
+        public NanaEventPublisher(IVivContext context, IMessageBus bus, ILoggerContract logger)
         {
             _context = context;
             _bus = bus;
