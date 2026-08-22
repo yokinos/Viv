@@ -22,10 +22,11 @@ namespace Viv.Nana.Tests
     {
         public List<string> Errors { get; } = new();
         public List<(string Message, Exception? Ex)> ErrorWithException { get; } = new();
+        public List<string> Warnings { get; } = new();
 
         public void Info(string message, params object[] args) { }
         public void Debug(string message, params object[] args) { }
-        public void Warning(string message, params object[] args) { }
+        public void Warning(string message, params object[] args) => Warnings.Add(message);
         public void Fatal(string message, params object[] args) { }
         public void Fatal(string message, Exception ex, params object[] args) { }
         public void Error(string message, params object[] args) => Errors.Add(message);
@@ -55,6 +56,27 @@ namespace Viv.Nana.Tests
         public void SetSnapshot(VivContextContent model)
         {
 
+        }
+    }
+
+    /// <summary>记录信封延迟投递调用的发布器桩（延迟重投测试用）</summary>
+    public class StubPublisher : IVivEventPublisher
+    {
+        public bool PublishDelayCalled { get; private set; }
+        public object? LastEnvelope { get; private set; }
+        public bool Result { get; set; } = true;
+
+        public Task<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
+            => Task.FromResult(Result);
+
+        public Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
+            => Task.FromResult(Result);
+
+        public Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
+        {
+            PublishDelayCalled = true;
+            LastEnvelope = envelope;
+            return Task.FromResult(Result);
         }
     }
 }

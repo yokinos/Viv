@@ -1,11 +1,9 @@
 using Microsoft.AspNetCore.SignalR;
-using Viv.Contracts.Interface;
 using Viv.Entity.Enums;
 using Viv.EventContracts.Herta;
 using Viv.Herta.Core.Entity.Message;
 using Viv.Herta.Core.Magic;
 using Viv.Herta.Link.Hubs;
-using Viv.Log;
 using Viv.Nana;
 
 namespace Viv.Herta.Link.Consumers
@@ -15,8 +13,8 @@ namespace Viv.Herta.Link.Consumers
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IConnectionPool _connectionPool;
 
-        public SendMessageConsumer(ILoggerContract logger, IVivContext context, IHubContext<ChatHub> hubContext, IConnectionPool connectionPool)
-            : base(logger, context)
+        public SendMessageConsumer(VivConsumerDependency dependency, IHubContext<ChatHub> hubContext, IConnectionPool connectionPool)
+            : base(dependency)
         {
             _hubContext = hubContext;
             _connectionPool = connectionPool;

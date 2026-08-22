@@ -77,10 +77,10 @@ namespace Viv.Nana.Core
                     opts.PublishMessage(envelopeType).ToRabbitExchange(exchangeName);
                 }
 
-                // 4) 全局失败策略：使用指数退避重试（基础延迟1s，最大10s，带抖动），重试次数由配置 RetryCount 决定
+                // 4) 全局失败策略：使用指数退避重试（基础延迟5s，最大60s，带抖动），重试次数由配置 RetryCount 决定
                 //    重试全部失败后移入死信队列（DLQ）
                 //    VivRequeueException（消费者要求重投）也走同一重试路径
-                var retryTimes = GenerateExponentialBackoff(Math.Max(1, nanaOptions.RetryCount), 1000, 10000);
+                var retryTimes = GenerateExponentialBackoff(Math.Max(1, nanaOptions.RetryCount), 5 * 1000, 60 * 1000);
                 opts.Policies.OnException<Exception>()
                     .RetryWithCooldown(retryTimes)
                     .Then

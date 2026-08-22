@@ -10,6 +10,8 @@ namespace Viv.Contracts.Attributes
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
     public class VivDependencyAttribute : Attribute
     {
+        public VivDependencyAttribute() { }
+
         /// <summary>
         /// 生命周期，默认 <see cref="DependencyLifetime.Scoped"/>
         /// </summary>

@@ -1,13 +1,13 @@
-using Viv.Contracts.Interface;
-using Viv.Log;
+using Viv.Delusion;
 using Viv.Nana.Core;
+using Viv.Nana.Options;
 
 namespace Viv.Nana.Tests
 {
     /// <summary>成功消费</summary>
     public class SuccessConsumer : VivConsumer<TestApexEvent>
     {
-        public SuccessConsumer(ILoggerContract logger, IVivContext context) : base(logger, context) { }
+        public SuccessConsumer(VivConsumerDependency dependency) : base(dependency) { }
         public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
             => Task.FromResult(SubscribeResult.Success());
     }
@@ -15,7 +15,7 @@ namespace Viv.Nana.Tests
     /// <summary>失败并要求重投（触发 VivRequeueException → Wolverine 重试）</summary>
     public class RequeueConsumer : VivConsumer<TestApexEvent>
     {
-        public RequeueConsumer(ILoggerContract logger, IVivContext context) : base(logger, context) { }
+        public RequeueConsumer(VivConsumerDependency dependency) : base(dependency) { }
         public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
             => Task.FromResult(SubscribeResult.Failed(true, "业务处理失败，重投"));
     }
@@ -23,9 +23,20 @@ namespace Viv.Nana.Tests
     /// <summary>失败但不重投（记日志丢弃）</summary>
     public class DropConsumer : VivConsumer<TestApexEvent>
     {
-        public DropConsumer(ILoggerContract logger, IVivContext context) : base(logger, context) { }
+        public DropConsumer(VivConsumerDependency dependency) : base(dependency) { }
         public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
             => Task.FromResult(SubscribeResult.Failed(false, "不可重试，丢弃"));
+    }
+
+    /// <summary>失败后调用 RedeliverAsync 延迟重投</summary>
+    public class RedeliverConsumer : VivConsumer<TestApexEvent>
+    {
+        public TimeSpan Delay { get; set; } = TimeSpan.FromSeconds(5);
+
+        public RedeliverConsumer(VivConsumerDependency dependency) : base(dependency) { }
+
+        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
+            => RedeliverAsync(envelope, Delay, cancellationToken);
     }
 
     /// <summary>
@@ -37,13 +48,14 @@ namespace Viv.Nana.Tests
         private static NanaEnvelope<TestApexEvent> Envelope(TestApexEvent? content = null)
             => new() { Content = content ?? new TestApexEvent { Payload = "data" } };
 
+        private static VivConsumerDependency Dep(StubLogger logger, StubPublisher publisher)
+            => new(logger, new FakeContext(), publisher);
+
         [Fact]
         public async Task 成功_无异常无日志()
         {
             var logger = new StubLogger();
-            var context = new FakeContext();
-
-            var consumer = new SuccessConsumer(logger, context);
+            var consumer = new SuccessConsumer(Dep(logger, new StubPublisher()));
 
             await consumer.HandleAsync(Envelope(), CancellationToken.None);
 
@@ -54,8 +66,7 @@ namespace Viv.Nana.Tests
         [Fact]
         public async Task 重投_抛VivRequeueException()
         {
-            var context = new FakeContext();
-            var consumer = new RequeueConsumer(new StubLogger(), context);
+            var consumer = new RequeueConsumer(Dep(new StubLogger(), new StubPublisher()));
 
             var ex = await Assert.ThrowsAsync<VivRequeueException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
 
@@ -66,8 +77,7 @@ namespace Viv.Nana.Tests
         public async Task 失败不回队_记日志不抛异常()
         {
             var logger = new StubLogger();
-            var context = new FakeContext();
-            var consumer = new DropConsumer(logger,context);
+            var consumer = new DropConsumer(Dep(logger, new StubPublisher()));
 
             await consumer.HandleAsync(Envelope(), CancellationToken.None);
 
@@ -81,8 +91,7 @@ namespace Viv.Nana.Tests
         [Fact]
         public async Task 空消息_直接返回不处理()
         {
-            var context = new FakeContext();
-            var consumer = new SuccessConsumer(new StubLogger(), context);
+            var consumer = new SuccessConsumer(Dep(new StubLogger(), new StubPublisher()));
 
             await consumer.HandleAsync(null!, CancellationToken.None);
 
@@ -93,12 +102,61 @@ namespace Viv.Nana.Tests
         public async Task 内容为空_直接返回不处理()
         {
             var logger = new StubLogger();
-            var context = new FakeContext();
-            var consumer = new DropConsumer(logger, context);
+            var consumer = new DropConsumer(Dep(logger, new StubPublisher()));
 
             await consumer.HandleAsync(new NanaEnvelope<TestApexEvent> { Content = null }, CancellationToken.None);
 
             Assert.Empty(logger.Errors);
+        }
+
+        [Fact]
+        public async Task 延迟重投_未超上限_投递并计数()
+        {
+            VivConfigRegistry.Add(new NanaOptions { RetryCount = 3 });
+            try
+            {
+                var logger = new StubLogger();
+                var publisher = new StubPublisher();
+                var consumer = new RedeliverConsumer(Dep(logger, publisher));
+                var envelope = Envelope();
+
+                await consumer.HandleAsync(envelope, CancellationToken.None);
+
+                Assert.True(publisher.PublishDelayCalled);
+                var scheduled = Assert.IsType<NanaEnvelope<TestApexEvent>>(publisher.LastEnvelope);
+                Assert.Equal(1, scheduled.ReDeliverCount);          // 原消息 +1，重投副本继承
+                Assert.Equal(5, scheduled.DelaySecond);             // DelaySecond 携带延迟值
+                Assert.Empty(logger.Errors);
+            }
+            finally
+            {
+                VivConfigRegistry.Remove<NanaOptions>();
+            }
+        }
+
+        [Fact]
+        public async Task 延迟重投_超上限_丢弃不投递()
+        {
+            VivConfigRegistry.Add(new NanaOptions { RetryCount = 3 });
+            try
+            {
+                var logger = new StubLogger();
+                var publisher = new StubPublisher();
+                var consumer = new RedeliverConsumer(Dep(logger, publisher));
+                var envelope = Envelope();
+                envelope.ReDeliverCount = 3;                        // 已达上限
+
+                await consumer.HandleAsync(envelope, CancellationToken.None);
+
+                Assert.False(publisher.PublishDelayCalled);
+                Assert.Equal(3, envelope.ReDeliverCount);           // 未再自增
+                var warning = Assert.Single(logger.Warnings);
+                Assert.Contains("上限", warning);
+            }
+            finally
+            {
+                VivConfigRegistry.Remove<NanaOptions>();
+            }
         }
     }
 }

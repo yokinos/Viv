@@ -48,6 +48,9 @@ namespace Viv.Elysia.Tests
 
             public Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
                 => Task.FromResult(true);
+
+            public Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
+                => Task.FromResult(true);
         }
 
         private sealed class SampleController

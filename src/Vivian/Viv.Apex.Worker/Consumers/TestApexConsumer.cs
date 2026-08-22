@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Text;
 using Viv.Contracts.Interface;
 using Viv.EventContracts.Apex;
-using Viv.Log;
 using Viv.Nana;
 
 namespace Viv.Apex.Worker.Consumers
@@ -12,7 +11,7 @@ namespace Viv.Apex.Worker.Consumers
     {
         private readonly IDistributedLock _distributedLock;
 
-        public TestApexConsumer(ILoggerContract logger, IVivContext context, IDistributedLock distributedLock) : base(logger, context)
+        public TestApexConsumer(VivConsumerDependency dependency, IDistributedLock distributedLock) : base(dependency)
         {
             _distributedLock = distributedLock;
         }

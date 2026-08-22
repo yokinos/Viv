@@ -144,6 +144,10 @@ namespace Viv.Herta.Tests
         public Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default)
             where T : NanaEvent
             => throw new NotImplementedException();
+
+        public Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default)
+            where T : NanaEvent
+            => throw new NotImplementedException();
     }
 
     public sealed class FakeContext : IVivContext

@@ -24,7 +24,7 @@ namespace Viv.Nana.Core
             var message = new NanaEnvelope<T>
             {
                 Content = content,
-                Context = _context.GetRawSnapshot()?.Clone()
+                Context = _context.GetRawSnapshot()?.Clone(),
             };
 
             try
@@ -47,12 +47,30 @@ namespace Viv.Nana.Core
             var message = new NanaEnvelope<T>
             {
                 Content = content,
-                Context = _context.GetRawSnapshot()?.Clone()
+                Context = _context.GetRawSnapshot()?.Clone(),
+                DelaySecond = delayTTL.TotalSeconds
             };
 
             try
             {
                 await _bus.ScheduleAsync(message, delayTTL);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"SchedulePublish failed for {typeof(T).Name}", ex);
+                return false;
+            }
+        }
+
+        public async Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
+        {
+            if (envelope?.Content is null) return false;
+            if (delayTTL < TimeSpan.Zero) return false;
+
+            try
+            {
+                await _bus.ScheduleAsync(envelope, delayTTL);
                 return true;
             }
             catch (Exception ex)

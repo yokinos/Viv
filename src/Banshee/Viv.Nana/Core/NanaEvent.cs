@@ -17,5 +17,10 @@ namespace Viv.Nana.Core
         /// 是否由定时任务作业发出
         /// </summary>
         public bool IsJob { get; set; }
+
+        /// <summary>
+        /// 获取分布式锁失败时，是否自动触发延时消息重新投递
+        /// </summary>
+        public bool LockFailShouldRetryDeliver { get; set; }
     }
 }
