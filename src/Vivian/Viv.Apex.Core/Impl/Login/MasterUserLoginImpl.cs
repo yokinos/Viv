@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Numerics;
 using System.Threading.Tasks;
 using Viv.Apex.Core.Entity.Dto.Account.Output;
 using Viv.Apex.Core.Entity.Dto.Account.Request;
@@ -17,33 +18,40 @@ using Viv.Redis;
 namespace Viv.Apex.Core.Impl.Login
 {
     [VivDependency(Tag = EmUserType.Master)]
-    public class MasterUserLoginImpl : ILoginContract, IDependency
+    public class MasterUserLoginImpl : ApexLoginBase, ILoginContract, IDependency
     {
         private readonly IUserRepository _userRepository;
-        private readonly ITokenService _tokenService;
-        private readonly IRedisService _redisService;
-        private readonly IVivContext _context;
 
-        private const string RefreshTokenSessionKeyPrefix = "rt:apex:";
+        private readonly IClientAppRepository _clientAppRepository;
 
-        public MasterUserLoginImpl(IUserRepository userRepository, ITokenService tokenService, IRedisService redisService, IVivContext context)
+        public MasterUserLoginImpl(ITokenService tokenService, IRedisService redisService, IVivContext context, IUserRepository userRepository, IClientAppRepository clientAppRepository)
+            : base(tokenService, redisService, context)
         {
             _userRepository = userRepository;
-            _tokenService = tokenService;
-            _redisService = redisService;
-            _context = context;
+            _clientAppRepository = clientAppRepository;
         }
 
-        private string GetSessionKey(long appId, long userId)
-        {
-            return $"{RefreshTokenSessionKeyPrefix}{appId}:{userId}";
-        }
-
+        /// <summary>
+        /// 登录
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         public async Task<FuncResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
         {
             if (request.UserType != EmUserType.Master)
             {
                 return FuncResult<ApexLoginOutput>.Failed("登录类型非法");
+            }
+
+            var app = await _clientAppRepository.GetAsync(request.AppId);
+            if (app == null)
+            {
+                return FuncResult<ApexLoginOutput>.Failed("不存在的客户端");
+            }
+
+            if (app.Status != EmStatus.Enabled)
+            {
+                return FuncResult<ApexLoginOutput>.Failed("客户端已禁用，不允许登录");
             }
 
             var user = await _userRepository.GetByPhoneAsync(request.UserName, request.UserType);
@@ -68,9 +76,14 @@ namespace Viv.Apex.Core.Impl.Login
             return FuncResult<ApexLoginOutput>.Success("login success", output);
         }
 
+        /// <summary>
+        /// 刷新令牌
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         public async Task<FuncResult<ApexLoginOutput>> RefreshTokenAsync(ApexRefreshRequest request)
         {
-            string redisSessionKey = GetSessionKey(request.AppId, request.UserId);
+            var redisSessionKey = GetSessionKey(request.AppId, request.UserType, request.UserId);
             var session = await _redisService.GetAsync<RefreshTokenValue>(redisSessionKey);
 
             // 校验会话存在 + token匹配
@@ -86,54 +99,20 @@ namespace Viv.Apex.Core.Impl.Login
                 return FuncResult<ApexLoginOutput>.Failed("账号异常，请重新登录");
             }
 
-            // 组装新的登录结果（内部会自动更新 Redis 并处理旧 Token 宽限期）
+            // 组装新的登录结果
             var output = await BuildLoginOutputAsync(request.AppId, user);
             return FuncResult<ApexLoginOutput>.Success("success", output);
         }
 
+        /// <summary>
+        /// 退出登录
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         public async Task<bool> LogoutAsync(ApexLoginoutRequest request)
         {
-            return false;
-        }
-
-        /// <summary>
-        /// 提取公共逻辑：生成Token、更新Redis、组装输出对象
-        /// </summary>
-        private async Task<ApexLoginOutput> BuildLoginOutputAsync(long appId, AtUser user)
-        {
-            var tokenOptions = _tokenService.GetOptions();
-            var newAccessToken = _tokenService.GenerateToken(new Contracts.Models.TokenPayload
-            {
-                AppId = appId,
-                UserId = user.Id,
-                UserName = user.Name
-            });
-
-            var newRefreshToken = StringMagic.GenerateFastString(64);
-            var redisSessionKey = GetSessionKey(appId, user.Id);
-
-            var newExpire = CacheTimeProvider.GetRandomDays(30, 45);
-            var tokenValue = new RefreshTokenValue
-            {
-                AppId = appId,
-                UserId = user.Id,
-                RefreshToken = newRefreshToken
-            };
-
-            await _redisService.AddAsync(redisSessionKey, tokenValue, newExpire);
-
-            return new ApexLoginOutput
-            {
-                AccessToken = newAccessToken,
-                AccessTokenExpires = DateTime.UtcNow.AddMinutes(tokenOptions.ExpireMinutes),
-                RefreshToken = newRefreshToken,
-                RefreshTokenExpires = DateTime.UtcNow.AddDays(newExpire.TotalDays),
-                AvatarUrl = user.AvatarUrl,
-                Name = user.Name,
-                NickName = user.NickName,
-                Phone = user.Phone,
-                UserId = user.Id,
-            };
+            var redisSessionKey = GetSessionKey(request.AppId, request.UserType, request.UserId);
+            return await _redisService.RemoveAsync(redisSessionKey);
         }
     }
 }

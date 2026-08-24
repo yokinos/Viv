@@ -61,6 +61,11 @@ namespace Viv.Entity.Database.Apex
         public string? Remark { get; set; }
 
         /// <summary>
+        /// 状态
+        /// </summary>
+        public EmStatus Status { get; set; }
+
+        /// <summary>
         /// 创建时间
         /// </summary>
         public DateTime? CreatedAt { get; set; }
