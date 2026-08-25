@@ -1,8 +1,11 @@
-﻿using System;
+﻿using JasperFx.Events;
+using StackExchange.Redis;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Apex.Core.IRepository;
 using Viv.Contracts.Interface;
+using Viv.Delusion.Extension;
 using Viv.Delusion.Generic;
 using Viv.Elysia.CacheBucket;
 using Viv.Elysia.Interface;
@@ -33,36 +36,51 @@ namespace Viv.Apex.Core.Repository
         public async Task<bool> DeleteAsync(long roleId)
         {
             var flag = await _dbContext.DeleteAsync<AtUserRole>(roleId);
+            if (flag)
+            {
+                await RefreshAsync(roleId);
+            }
+            return flag;
         }
 
-        public Task<AtUserRole> GetAsync(long roleId)
+        public async Task<AtUserRole?> GetAsync(long roleId)
         {
-            throw new NotImplementedException();
+            var bucket = await GetCacheAsync(roleId);
+            return bucket?.Entity;
         }
 
-        public override Task<EntityBucket<AtUserRole>?> GetDbAsync(params object[] keys)
+        public async override Task<EntityBucket<AtUserRole>?> GetDbAsync(params object[] keys)
         {
-            throw new NotImplementedException();
+            var roleId = keys[0].As<long>();
+            var userRole = await _dbContext.SingleOrDefaultAsync<AtUserRole>(x => x.Id == roleId && !x.IsDeleted);
+            if (userRole == null) return null;
+            return new EntityBucket<AtUserRole>(userRole);
         }
 
-        public Task<List<AtUserRole>> GetListAsync(long userId)
+        public async Task<PagedList<AtUserRole>> GetPagedListAsync(IApiPagedRequest request)
         {
-            throw new NotImplementedException();
+            var (sql, parameter) = request.GetSqlQuery();
+            return await _dbContext.PageAsync<AtUserRole>(sql, request.PageIndex, request.PageSize, parameter);
         }
 
-        public Task<PagedList<AtUserRole>> GetPagedListAsync(IApiPagedRequest request)
+        public async Task<bool> SoftDeleteAsync(long roleId)
         {
-            throw new NotImplementedException();
+            var flag = await _dbContext.SoftDeleteAsync<AtUserRole>(roleId);
+            if (flag)
+            {
+                await RefreshAsync(roleId);
+            }
+            return flag;
         }
 
-        public Task<bool> SoftDeleteAsync(long roleId)
+        public async Task<bool> UpdateAsync(AtUserRole entity)
         {
-            throw new NotImplementedException();
-        }
-
-        public Task<bool> UpdateAsync(AtUserRole entity)
-        {
-            throw new NotImplementedException();
+            var flag = await _dbContext.UpdateAsync(entity);
+            if (flag)
+            {
+                await RefreshAsync(entity.Id);
+            }
+            return flag;
         }
     }
 }

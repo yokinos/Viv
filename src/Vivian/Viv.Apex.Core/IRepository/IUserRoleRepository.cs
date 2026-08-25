@@ -9,9 +9,7 @@ namespace Viv.Apex.Core.IRepository
 {
     public interface IUserRoleRepository
     {
-        Task<AtUserRole> GetAsync(long roleId);
-
-        Task<List<AtUserRole>> GetListAsync(long userId);
+        Task<AtUserRole?> GetAsync(long roleId);
 
         Task<bool> AddAsync(AtUserRole entity);
 

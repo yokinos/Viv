@@ -143,5 +143,12 @@ namespace Viv.Apex.Core.Repository
             var (sql, parameter) = request.GetSqlQuery();
             return await _dbContext.PageAsync<AtOrgAppRelation>(sql, request.PageIndex, request.PageSize, parameter);
         }
+
+        public async Task<(AtOrg? Org, List<AtOrgAppRelation>? Relations)> GetOrgByOrgCodeAsync(string orgCode)
+        {
+            var org = await _dbContext.SingleOrDefaultAsync<AtOrg>(x => x.OrgCode == orgCode && !x.IsDeleted);
+            if (org == null) { return default; }
+            return await GetAsync(org.Id);
+        }
     }
 }

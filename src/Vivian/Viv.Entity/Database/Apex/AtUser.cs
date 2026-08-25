@@ -65,9 +65,9 @@ namespace Viv.Entity.Database.Apex
         public DateTime? BirthDate { get; set; }
 
         /// <summary>
-        /// 是否允许删除
+        /// 是否是超级管理员 此标记将获取对应的最大授权数据
         /// </summary>
-        public byte IsAlIsAllowDelete { get; set; }
+        public bool IsSuperAdmin { get; set; }
 
         /// <summary>
         /// 状态

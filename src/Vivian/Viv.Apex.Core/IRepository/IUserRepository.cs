@@ -1,3 +1,4 @@
+using Viv.Apex.Core.Entity.CacheBucket;
 using Viv.Delusion.Generic;
 using Viv.Elysia.Interface;
 using Viv.Entity.Database.Apex;
@@ -44,5 +45,9 @@ namespace Viv.Apex.Core.IRepository
         /// 分页查询用户
         /// </summary>
         Task<PagedList<AtUser>> GetPagedListAsync(IApiPagedRequest request);
+
+        Task<AtUserBucket?> GetUserBucketAsync(long userId);
+
+        Task<List<AtUserRole>> GetAtUserRoleListAsync(long userId);
     }
 }

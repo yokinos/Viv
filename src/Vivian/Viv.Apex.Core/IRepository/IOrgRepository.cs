@@ -36,6 +36,11 @@ namespace Viv.Apex.Core.IRepository
         Task<(AtOrg? Org, List<AtOrgAppRelation>? Relations)> GetAsync(long orgId);
 
         /// <summary>
+        /// 根据Id获取组织及其App权限列表（缓存优先）
+        /// </summary>
+        Task<(AtOrg? Org, List<AtOrgAppRelation>? Relations)> GetOrgByOrgCodeAsync(string orgCode);
+
+        /// <summary>
         /// 获取子组织列表
         /// </summary>
         Task<List<AtOrg>> GetChildrenAsync(long parentId);
