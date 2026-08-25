@@ -29,6 +29,7 @@ namespace Viv.Apex.Core.Impl.Login
         {
             _userRepository = userRepository;
             _orgRepository = orgRepository;
+            _clientAppRepository = clientAppRepository;
         }
 
         public async Task<FuncResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
