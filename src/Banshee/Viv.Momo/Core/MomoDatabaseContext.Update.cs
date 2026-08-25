@@ -89,7 +89,7 @@ namespace Viv.Momo.Core
                     context.Update(entity);
                 }
 
-                var count = await context.SaveChangesAsync(cancellationToken);
+                var count = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 return count > 0;
             }
             catch (Exception ex)
@@ -168,7 +168,7 @@ namespace Viv.Momo.Core
                 }
             }
 
-            return await context.SaveChangesAsync(cancellationToken);
+            return await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
 
         private int DapperBatchUpdate<T>(List<T> entities, EFAppContext context) where T : class, IEntity
@@ -190,7 +190,7 @@ namespace Viv.Momo.Core
             foreach (var item in sqlList)
             {
                 if (string.IsNullOrEmpty(item.Key)) continue;
-                count += await context.DbConnection.ExecuteAsync(item.Key, item.Value, _transaction, _timeOut);
+                count += await context.DbConnection.ExecuteAsync(item.Key, item.Value, _transaction, _timeOut).ConfigureAwait(false);
             }
             return count;
         }

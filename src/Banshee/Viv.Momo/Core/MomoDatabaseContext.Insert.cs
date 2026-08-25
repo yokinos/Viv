@@ -74,7 +74,7 @@ namespace Viv.Momo.Core
                 AutoSetValue(entity);
                 var context = GetAppContext();
                 context.Add(entity);
-                var count = await context.SaveChangesAsync(cancellationToken);
+                var count = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 return count > 0;
             }
             catch (Exception ex)
@@ -99,13 +99,13 @@ namespace Viv.Momo.Core
                 if (entityList.Count < EFMaxCount)
                 {
                     context.AddRange(entityList);
-                    affected = await context.SaveChangesAsync(cancellationToken);
+                    affected = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
                     var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
                     var tempSql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _options.DatabaseSource);
-                    affected = await context.DbConnection.ExecuteAsync(tempSql, entityList, _transaction, _timeOut);
+                    affected = await context.DbConnection.ExecuteAsync(tempSql, entityList, _transaction, _timeOut).ConfigureAwait(false);
                 }
 
                 return affected > 0;

@@ -81,7 +81,7 @@ namespace Viv.Momo.Core
                     context.Attach(entity);
 
                 context.Remove(entity);
-                var affected = await context.SaveChangesAsync(cancellationToken);
+                var affected = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 return affected > 0;
             }
             catch (Exception ex)
@@ -103,7 +103,7 @@ namespace Viv.Momo.Core
                 var context = GetAppContext();
                 if (ids.Count < EFMaxCount)
                 {
-                    int affected = await context.Set<T>().Where(x => ids.Contains(x.Id)).ExecuteDeleteAsync(cancellationToken);
+                    int affected = await context.Set<T>().Where(x => ids.Contains(x.Id)).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
                     return affected > 0;
                 }
                 else
@@ -111,9 +111,9 @@ namespace Viv.Momo.Core
                     cancellationToken.ThrowIfCancellationRequested();
                     var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
                     var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T)) && TenantId > 0;
-                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _options.DatabaseSource)} IN @Ids" 
+                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _options.DatabaseSource)} IN @Ids"
                         + (isTenantEntity ? $" AND {SqlMagic.QuoteIdentifier("TenantId", _options.DatabaseSource)} = @TenantId" : "");
-                    int affected = await context.DbConnection.ExecuteAsync(deleteSql, isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids }, _transaction, _timeOut);
+                    int affected = await context.DbConnection.ExecuteAsync(deleteSql, isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids }, _transaction, _timeOut).ConfigureAwait(false);
                     return affected > 0;
                 }
             }
@@ -156,12 +156,50 @@ namespace Viv.Momo.Core
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
-                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut);
+                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
                 return count > 0;
             }
             catch (Exception ex)
             {
                 WriteLog($"DeleteAsync（委托）,{ex.Message}", ex);
+                return false;
+            }
+        }
+
+        public bool Delete<T>(long id) where T : class, IEntity
+        {
+            if (id <= 0) return false;
+
+            try
+            {
+                var context = GetAppContext();
+                var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
+                var (sql, parameter) = SqlMagic.GetDeleteSql<T>(tableName, x => x.Id == id, _options.DatabaseSource, TenantId);
+                var count = context.DbConnection.Execute(sql, parameter, _transaction, _timeOut);
+                return (count > 0);
+            }
+            catch (Exception ex)
+            {
+                WriteLog($"Delete (Id),{ex.Message},{id}", ex);
+                return false;
+            }
+        }
+
+        public async Task<bool> DeleteAsync<T>(long id) where T : class, IEntity
+        {
+            if (id <= 0) return false;
+
+            try
+            {
+                var context = GetAppContext();
+                var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
+                var (sql, parameter) = SqlMagic.GetDeleteSql<T>(tableName, x => x.Id == id, _options.DatabaseSource, TenantId);
+                var count = await context.DbConnection.ExecuteAsync(sql, parameter, _transaction, _timeOut).ConfigureAwait(false);
+                return (count > 0);
+            }
+            catch (Exception ex)
+            {
+                WriteLog($"DeleteAsync (Id),{ex.Message},{id}", ex);
                 return false;
             }
         }
@@ -202,7 +240,7 @@ namespace Viv.Momo.Core
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
-                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut);
+                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
                 return count > 0;
             }
             catch (Exception ex)
@@ -242,7 +280,7 @@ namespace Viv.Momo.Core
                 var tableName = SqlMagic.GetTableName<T>(_options.DatabaseSource);
                 var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _options.DatabaseSource, TenantId);
                 var context = GetAppContext(DbReadWriteType.Write);
-                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut);
+                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
                 return count > 0;
             }
             catch (Exception ex)

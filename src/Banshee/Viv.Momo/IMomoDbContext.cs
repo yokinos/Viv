@@ -30,6 +30,8 @@ namespace Viv.Momo
         Task<bool> DeleteAsync<T>(IEnumerable<T> entity, CancellationToken cancellationToken = default) where T : class, IEntity;
         bool Delete<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
         Task<bool> DeleteAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity;
+        bool Delete<T>(long id) where T : class, IEntity;
+        Task<bool> DeleteAsync<T>(long id) where T : class, IEntity;
         bool SoftDelete<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity, ISoftDelete;
         Task<bool> SoftDeleteAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity, ISoftDelete;
         bool SoftDelete<T>(long id) where T : class, IEntity, ISoftDelete;
