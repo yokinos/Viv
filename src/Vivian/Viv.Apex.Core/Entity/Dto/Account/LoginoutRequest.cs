@@ -11,10 +11,6 @@ namespace Viv.Apex.Core.Entity.Dto.Account
     public class LoginoutRequest : ApiRequestBase
     {
         [Required]
-        [DisplayName("用户Id")]
-        public long UserId { get; set; }
-
-        [Required]
         [DisplayName("用户类型")]
         public EmUserType UserType { get; set; }
     }
