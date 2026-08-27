@@ -10,7 +10,7 @@ namespace Viv.Entity.Database.Apex
     /// 1. 控制组织可上架/使用哪些客户端App
     /// 2. 配套三组最大功能掩码，限制该OEM组织售卖套餐的功能上限
     /// </summary>
-    public class AtOrgAppRelation : EntityBase, ISoftDelete
+    public class AtOrgAppRelation : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 组织Id（关联AtOrg.Id）

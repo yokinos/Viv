@@ -13,7 +13,7 @@ public class TenantUserEntity : IEntity, ITenant
 }
 
 /// <summary>租户软删除实体</summary>
-public class SoftDeleteTenantEntity : IEntity, ITenant, ISoftDelete
+public class SoftDeleteTenantEntity : IEntity, ITenant, ISoftDeleted
 {
     public long Id { get; set; }
     public long TenantId { get; set; }

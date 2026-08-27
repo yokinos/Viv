@@ -12,6 +12,11 @@ namespace Viv.Contracts.Attributes
     {
         public VivDependencyAttribute() { }
 
+        public VivDependencyAttribute(object tag)
+        {
+            Tag = tag;
+        }
+
         /// <summary>
         /// 生命周期，默认 <see cref="DependencyLifetime.Scoped"/>
         /// </summary>

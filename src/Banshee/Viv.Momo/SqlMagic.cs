@@ -172,13 +172,13 @@ namespace Viv.Momo
             string tableName,
             Expression<Func<T, bool>> expression,
             DatabaseSourceType databaseSource,
-            long tenantId = 0) where T : IEntity, ISoftDelete
+            long tenantId = 0) where T : IEntity, ISoftDeleted
         {
             if (expression == null)
                 return (string.Empty, []);
 
-            var isDeletedCol = QuoteIdentifier(nameof(ISoftDelete.IsDeleted), databaseSource);
-            var deletedAtCol = QuoteIdentifier(nameof(ISoftDelete.DeletedAt), databaseSource);
+            var isDeletedCol = QuoteIdentifier(nameof(ISoftDeleted.IsDeleted), databaseSource);
+            var deletedAtCol = QuoteIdentifier(nameof(ISoftDeleted.DeletedAt), databaseSource);
 
             string dateValue, boolValue;
             switch (databaseSource)

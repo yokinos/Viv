@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 角色表
     /// </summary>
-    public class AtUserRole : EntityBase, ISoftDelete
+    public class AtUserRole : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 角色名称

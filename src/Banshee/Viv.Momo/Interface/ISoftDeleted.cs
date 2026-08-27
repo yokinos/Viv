@@ -7,7 +7,7 @@ namespace Viv.Momo.Interface
     /// <summary>
     /// 软删除定义
     /// </summary>
-    public interface ISoftDelete
+    public interface ISoftDeleted
     {
          bool IsDeleted { get; set; }
 

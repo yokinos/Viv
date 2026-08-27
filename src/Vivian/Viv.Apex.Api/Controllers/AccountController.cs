@@ -2,8 +2,8 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
-using Viv.Apex.Core.Entity.Dto.Account.Output;
-using Viv.Apex.Core.Entity.Dto.Account.Request;
+using Viv.Apex.Core.Entity.Dto.Account;
+using Viv.Apex.Core.Entity.Vo.Account;
 using Viv.Apex.Core.IService;
 using Viv.Elysia.Filter;
 
@@ -26,11 +26,36 @@ namespace Viv.Apex.Api.Controllers
         /// <param name="request"></param>
         /// <returns></returns>
         [AllowAnonymous]
-        [ProducesResponseType(typeof(ApexLoginOutput), (int)HttpStatusCode.OK)]
-        [HttpPost("apexLogin")]
-        public async Task<IActionResult> ApexLoginAsync(ApexLoginRequest request)
+        [ProducesResponseType(typeof(LoginOutput), (int)HttpStatusCode.OK)]
+        [HttpPost("login")]
+        public async Task<IActionResult> LoginAsync(LoginRequest request)
         {
             return await _userService.LoginAsync(request);
+        }
+
+        /// <summary>
+        /// 刷新登录令牌
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
+        [Authorize]
+        [ProducesResponseType(typeof(LoginOutput), (int)HttpStatusCode.OK)]
+        [HttpPost("refreshToken")]
+        public async Task<IActionResult> RefreshTokenAsync(RefreshRequest request)
+        {
+            return await _userService.RefreshTokenAsync(request);
+        }
+
+        /// <summary>
+        /// 退出登录
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
+        [Authorize]
+        [HttpPost("logout")]
+        public async Task<IActionResult> LogoutAsync(LoginoutRequest request)
+        {
+            return await _userService.LogoutAsync(request);
         }
     }
 }

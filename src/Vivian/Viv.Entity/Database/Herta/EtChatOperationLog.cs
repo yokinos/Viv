@@ -7,7 +7,7 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 聊天操作审计日志
     /// </summary>
-    public class EtChatOperationLog : EntityBase, ITenant, ISoftDelete
+    public class EtChatOperationLog : EntityBase, ITenant, ISoftDeleted
     {
         /// <summary>
         /// 租户ID

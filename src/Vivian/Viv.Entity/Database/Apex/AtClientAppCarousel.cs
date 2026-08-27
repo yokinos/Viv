@@ -11,7 +11,7 @@ namespace Viv.Entity.Database.Apex
     /// App首页轮播图表
     /// 平台类App首页广告Banner，绑定指定App
     /// </summary>
-    public class AtClientAppCarousel : EntityBase, ISoftDelete
+    public class AtClientAppCarousel : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 所属客户端AppId

@@ -573,7 +573,7 @@ namespace Viv.Momo.Core
 
         #region SoftDelete
 
-        public bool SoftDelete<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity, ISoftDelete
+        public bool SoftDelete<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity, ISoftDeleted
         {
             if (predicate == null) return false;
 
@@ -594,7 +594,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> SoftDeleteAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity, ISoftDelete
+        public async Task<bool> SoftDeleteAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity, ISoftDeleted
         {
             if (predicate == null) return false;
 
@@ -615,7 +615,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public bool SoftDelete<T>(long id) where T : class, IEntity, ISoftDelete
+        public bool SoftDelete<T>(long id) where T : class, IEntity, ISoftDeleted
         {
             if (id <= 0) return false;
 
@@ -635,7 +635,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> SoftDeleteAsync<T>(long id) where T : class, IEntity, ISoftDelete
+        public async Task<bool> SoftDeleteAsync<T>(long id) where T : class, IEntity, ISoftDeleted
         {
             if (id <= 0) return false;
 

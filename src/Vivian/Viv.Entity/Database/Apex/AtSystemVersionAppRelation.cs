@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// 套餐与客户端应用关联表
     /// 一套版本可绑定多个App，每个App独立配置一套功能掩码
     /// </summary>
-    public class AtSystemVersionAppRelation : EntityBase, ISoftDelete
+    public class AtSystemVersionAppRelation : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 套餐主表Id（关联AtSystemVersion.Id）

@@ -8,7 +8,7 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 单聊私聊消息表
     /// </summary>
-    public class EtUserChatMessage : EntityBase, ITenant, ISoftDelete
+    public class EtUserChatMessage : EntityBase, ITenant, ISoftDeleted
     {
         /// <summary>
         /// 租户ID

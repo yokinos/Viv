@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 资讯文章详情表
     /// </summary>
-    public class AtClientAppArticle : EntityBase, ISoftDelete
+    public class AtClientAppArticle : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 关联客户端AppId集合，多个Id使用逗号分隔

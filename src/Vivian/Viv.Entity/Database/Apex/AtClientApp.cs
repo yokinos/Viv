@@ -12,7 +12,7 @@ namespace Viv.Entity.Database.Apex
     /// 同一应用不同平台 = 不同 AppId
     /// 同一应用不同版本 = 共用同一个 AppId（版本管理见 <see cref="AtClientAppVersion"/>）
     /// </summary>
-    public class AtClientApp : EntityBase, ISoftDelete
+    public class AtClientApp : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 对外唯一鉴权AppId

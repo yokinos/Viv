@@ -8,7 +8,7 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 群邀请记录表
     /// </summary>
-    public class EtGroupChatInvite : EntityBase, ITenant, ISoftDelete
+    public class EtGroupChatInvite : EntityBase, ITenant, ISoftDeleted
     {
         /// <summary>
         /// 租户ID

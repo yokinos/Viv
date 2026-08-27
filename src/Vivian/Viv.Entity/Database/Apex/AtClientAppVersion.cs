@@ -10,7 +10,7 @@ namespace Viv.Entity.Database.Apex
     /// 客户端应用版本表
     /// 一对多关联 AtClientApp，一个应用多条版本记录
     /// </summary>
-    public class AtClientAppVersion : EntityBase, ISoftDelete
+    public class AtClientAppVersion : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 关联客户端应用主键Id（AtClientApp.Id）

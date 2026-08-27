@@ -8,7 +8,7 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 聊天好友关系表
     /// </summary>
-    public class EtChatUserRelation : EntityBase, ITenant, ISoftDelete
+    public class EtChatUserRelation : EntityBase, ITenant, ISoftDeleted
     {
         /// <summary>
         /// 租户ID

@@ -8,7 +8,7 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 用户主动申请加入群申请表
     /// </summary>
-    public class EtGroupJoinApply : EntityBase, ITenant, ISoftDelete
+    public class EtGroupJoinApply : EntityBase, ITenant, ISoftDeleted
     {
         /// <summary>
         /// 租户ID

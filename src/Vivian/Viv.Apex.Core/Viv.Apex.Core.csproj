@@ -16,7 +16,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Entity\Dto\Tenant\Request\" />
+	  <Folder Include="Entity\Dto\Tenant\" />
 	  <Folder Include="Entity\Converters\" />
 	</ItemGroup>
 

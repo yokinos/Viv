@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Viv.Apex.Core.Entity.Dto.Account.Output;
-using Viv.Apex.Core.Entity.Dto.Account.Request;
+using Viv.Apex.Core.Entity.Dto.Account;
+using Viv.Apex.Core.Entity.Vo.Account;
 using Viv.Apex.Core.Interface;
 using Viv.Apex.Core.Service;
 using Viv.Delusion;
@@ -11,7 +11,7 @@ namespace Viv.Apex.Tests
 {
     public class UserServiceTests
     {
-        private static ApexLoginRequest CreateLoginRequest() => new()
+        private static LoginRequest CreateLoginRequest() => new()
         {
             AppId = 7,
             Version = 1000,
@@ -36,7 +36,7 @@ namespace Viv.Apex.Tests
         {
             var impl = new StubLoginContract
             {
-                LoginResult = FuncResult<ApexLoginOutput>.Failed("登录失败")
+                LoginResult = FuncResult<LoginOutput>.Failed("登录失败")
             };
             var index = new FakeLoginIndex(new Dictionary<EmUserType, ILoginContract>
             {
@@ -53,10 +53,10 @@ namespace Viv.Apex.Tests
         [Fact]
         public async Task LoginAsync_ImplSucceeds_ReturnsSuccessWithData()
         {
-            var output = new ApexLoginOutput { UserId = 42, AccessToken = "access-token" };
+            var output = new LoginOutput { UserId = 42, AccessToken = "access-token" };
             var impl = new StubLoginContract
             {
-                LoginResult = FuncResult<ApexLoginOutput>.Success("login success", output)
+                LoginResult = FuncResult<LoginOutput>.Success("login success", output)
             };
             var index = new FakeLoginIndex(new Dictionary<EmUserType, ILoginContract>
             {

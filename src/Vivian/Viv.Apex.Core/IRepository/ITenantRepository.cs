@@ -14,6 +14,9 @@ namespace Viv.Apex.Core.IRepository
         Task<bool> DeleteAsync(long tenantId);
         Task<bool> SoftDeleteAsync(long tenantId);
         Task<AtTenant?> GetTenantAsync(long tenantId);
+
+        Task<AtTenant?> GetTenantByCodeAsync(string code);
+
         Task<PagedList<AtTenant>> GetPagedListAsync(IApiPagedRequest request);
         Task<List<AtTenantAppRelation>> GetAtTenantAppsAsync(long tenantId);
     }

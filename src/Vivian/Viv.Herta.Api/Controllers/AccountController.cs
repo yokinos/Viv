@@ -2,8 +2,8 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Viv.Engine;
-using Viv.Herta.Core.Entity.Dto.Account.Output;
-using Viv.Herta.Core.Entity.Dto.Account.Request;
+using Viv.Herta.Core.Entity.Dto.Account;
+using Viv.Herta.Core.Entity.Vo.Account;
 using Viv.Herta.Core.IService;
 
 namespace Viv.Herta.Api.Controllers

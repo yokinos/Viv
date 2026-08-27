@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Apex.Core.Entity.Dto.Tenant.Output
+namespace Viv.Apex.Core.Entity.Vo.Tenant
 {
     public class GetTenantOutput
     {

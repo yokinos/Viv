@@ -10,7 +10,7 @@ namespace Viv.Entity.Database.Apex
     /// 菜单主表（对应前端路由）
     /// 按 ClientAppId 隔离不同客户端应用菜单，全局顶层表无租户隔离
     /// </summary>
-    public class AtMenu : EntityBase, ISoftDelete
+    public class AtMenu : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 所属客户端应用Id（关联 AtClientApp.Id）

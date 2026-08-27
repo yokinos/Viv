@@ -6,7 +6,7 @@ using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
-    public class AtUserBind : EntityBase, ISoftDelete
+    public class AtUserBind : EntityBase, ISoftDeleted
     {
         public long UserId { get; set; }
         public bool IsDeleted { get; set; }

@@ -8,7 +8,7 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 聊天敏感词过滤表
     /// </summary>
-    public class EtChatSensitiveWord : EntityBase, ITenant, ISoftDelete
+    public class EtChatSensitiveWord : EntityBase, ITenant, ISoftDeleted
     {
         /// <summary>
         /// 租户ID

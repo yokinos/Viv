@@ -10,7 +10,7 @@ namespace Viv.Entity.Database.Apex
     /// 系统售卖版本主表
     /// 仅存储套餐基础信息，各App独立权限存放于AtSystemVersionAppRelation
     /// </summary>
-    public class AtSystemVersion : EntityBase, ISoftDelete
+    public class AtSystemVersion : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 所属组织Id，关联AtOrg.Id

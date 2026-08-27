@@ -6,9 +6,9 @@ using System.Text;
 using Viv.Elysia.Request;
 using Viv.Entity.Enums;
 
-namespace Viv.Apex.Core.Entity.Dto.Account.Request
+namespace Viv.Apex.Core.Entity.Dto.Account
 {
-    public class ApexRefreshRequest : ApiRequestBase
+    public class LoginoutRequest : ApiRequestBase
     {
         [Required]
         [DisplayName("用户Id")]
@@ -17,9 +17,5 @@ namespace Viv.Apex.Core.Entity.Dto.Account.Request
         [Required]
         [DisplayName("用户类型")]
         public EmUserType UserType { get; set; }
-
-        [Required]
-        [DisplayName("刷新令牌")]
-        public string? RefreshToken { get; set; }
     }
 }

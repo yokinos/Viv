@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 租户表
     /// </summary>
-    public class AtTenant : EntityBase, ISoftDelete
+    public class AtTenant : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 所属组织Id，关联AtOrg.Id
@@ -36,7 +36,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 租户购买的系统售卖版本Id（关联AtSystemVersion.Id）
         /// </summary>
-        public long SystemVersionId { get; set; }
+        public long? SystemVersionId { get; set; }
 
         /// <summary>
         /// 到期时间，null代表永久有效

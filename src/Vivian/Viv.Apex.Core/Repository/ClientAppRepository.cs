@@ -12,7 +12,7 @@ using Viv.Redis;
 
 namespace Viv.Apex.Core.Repository
 {
-    public class ClientAppRepository : DataAccessCacheBase<EntityBucket<AtClientApp>>, IClientAppRepository
+    public class ClientAppRepository : DataAccessCacheBase<EntityListBucket<AtClientApp>>, IClientAppRepository
     {
         public ClientAppRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, ILoggerContract logger)
             : base(context, dbContext, redisService, logger)
@@ -67,12 +67,12 @@ namespace Viv.Apex.Core.Repository
             return bucket?.Entity;
         }
 
-        public override async Task<EntityBucket<AtClientApp>?> GetDbAsync(params object[] keys)
+        public override async Task<EntityListBucket<AtClientApp>?> GetDbAsync(params object[] keys)
         {
             var appId = keys[0].As<long>();
             var app = await _dbContext.SingleOrDefaultAsync<AtClientApp>(x => x.Id == appId && !x.IsDeleted);
             if (app == null) return null;
-            return new EntityBucket<AtClientApp>(app);
+            return new EntityListBucket<AtClientApp>(app);
         }
 
         public async Task<PagedList<AtClientApp>> GetPagedListAsync(IApiPagedRequest request)

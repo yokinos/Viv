@@ -1,20 +1,18 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Text;
 using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
-    /// <summary>
-    /// 租户应用关联表
-    /// 在组织允许的App范围内，精细化管控单个租户可用应用
-    /// </summary>
-    public class AtTenantAppRelation : EntityBase
+    public class AtCompanyAppRelation : EntityBase
     {
         /// <summary>
         /// 租户Id（关联AtTenant.Id）
         /// </summary>
-        public long TenantId { get; set; }
+        public long CompanyId { get; set; }
 
         /// <summary>
         /// 客户端应用Id（关联AtClientApp.Id）

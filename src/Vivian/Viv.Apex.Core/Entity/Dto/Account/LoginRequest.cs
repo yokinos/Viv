@@ -3,9 +3,9 @@ using Viv.Delusion.Extension;
 using Viv.Elysia.Request;
 using Viv.Entity.Enums;
 
-namespace Viv.Apex.Core.Entity.Dto.Account.Request
+namespace Viv.Apex.Core.Entity.Dto.Account
 {
-    public class ApexLoginRequest : ApiRequestBase
+    public class LoginRequest : ApiRequestBase
     {
         /// <summary>
         /// 账户名

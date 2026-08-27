@@ -11,7 +11,7 @@ namespace Viv.Entity.Database.Apex
     /// 配置分组字典表
     /// 区分全局配置分组 / App专属配置分组，统一维护分组编码与名称
     /// </summary>
-    public class AtConfigGroup : EntityBase, ISoftDelete
+    public class AtConfigGroup : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 分组归属类型：Global全局 / App应用

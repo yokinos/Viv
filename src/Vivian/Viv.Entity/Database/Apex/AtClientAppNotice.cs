@@ -11,7 +11,7 @@ namespace Viv.Entity.Database.Apex
     /// 客户端公告广播表
     /// 每条公告绑定单个ClientApp，实现不同App推送不同公告
     /// </summary>
-    public class AtClientAppNotice : EntityBase, ISoftDelete
+    public class AtClientAppNotice : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 绑定客户端AppId（关联AtClientApp.Id）

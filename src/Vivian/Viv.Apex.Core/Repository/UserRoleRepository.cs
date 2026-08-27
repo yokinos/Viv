@@ -17,7 +17,7 @@ using Viv.Redis;
 
 namespace Viv.Apex.Core.Repository
 {
-    public class UserRoleRepository : DataAccessCacheBase<EntityBucket<AtUserRole>>, IUserRoleRepository
+    public class UserRoleRepository : DataAccessCacheBase<EntityListBucket<AtUserRole>>, IUserRoleRepository
     {
         public UserRoleRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, ILoggerContract logger)
             : base(context, dbContext, redisService, logger)
@@ -49,12 +49,12 @@ namespace Viv.Apex.Core.Repository
             return bucket?.Entity;
         }
 
-        public async override Task<EntityBucket<AtUserRole>?> GetDbAsync(params object[] keys)
+        public async override Task<EntityListBucket<AtUserRole>?> GetDbAsync(params object[] keys)
         {
             var roleId = keys[0].As<long>();
             var userRole = await _dbContext.SingleOrDefaultAsync<AtUserRole>(x => x.Id == roleId && !x.IsDeleted);
             if (userRole == null) return null;
-            return new EntityBucket<AtUserRole>(userRole);
+            return new EntityListBucket<AtUserRole>(userRole);
         }
 
         public async Task<PagedList<AtUserRole>> GetPagedListAsync(IApiPagedRequest request)

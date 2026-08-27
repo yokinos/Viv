@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 上传文件记录
     /// </summary>
-    public class AtFileRecord : EntityBase, ISoftDelete
+    public class AtFileRecord : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 所属客户端AppId

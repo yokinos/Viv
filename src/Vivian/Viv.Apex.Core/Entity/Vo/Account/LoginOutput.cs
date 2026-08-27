@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Apex.Core.Entity.Dto.Account.Output
+namespace Viv.Apex.Core.Entity.Vo.Account
 {
     /// <summary>
     /// 账号登录成功返回输出DTO
     /// </summary>
-    public class ApexLoginOutput
+    public class LoginOutput
     {
         /// <summary>
         /// 访问令牌，用于接口鉴权

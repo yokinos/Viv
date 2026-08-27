@@ -10,7 +10,7 @@ namespace Viv.Entity.Database.Apex
     /// 菜单子页面表（对应前端路由 children 子路由）
     /// 依附主菜单 AtMenu.Id，存储目录下所有子页面路由
     /// </summary>
-    public class AtMenuSubPage : EntityBase, ISoftDelete
+    public class AtMenuSubPage : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 上级主菜单 Id（关联 AtMenu.Id）

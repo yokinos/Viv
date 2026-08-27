@@ -7,7 +7,7 @@ using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
-    public class AtUser : EntityBase, ISoftDelete
+    public class AtUser : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 用户类型

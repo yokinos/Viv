@@ -44,7 +44,6 @@
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.Gateway/Viv.Aspire.Gateway.csproj" />
     <Project Path="src/Vivian/Viv.Aspire/Viv.Aspire.ServiceDefaults/Viv.Aspire.ServiceDefaults.csproj" />
   </Folder>
-  <Folder Name="/src/Vivian/Bangboo/" />
   <Folder Name="/src/Vivian/DeepRed/">
     <Project Path="src/Vivian/Viv.DeepRed.Api/Viv.DeepRed.Api.csproj" />
     <Project Path="src/Vivian/Viv.DeepRed.Core/Viv.DeepRed.Core.csproj" Id="13fbeb5a-0504-4851-a62f-53c3c9f1d5e0" />

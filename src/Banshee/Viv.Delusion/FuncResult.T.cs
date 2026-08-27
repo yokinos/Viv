@@ -20,9 +20,20 @@ namespace Viv.Delusion
         /// <param name="message"></param>
         /// <param name="data"></param>
         /// <returns></returns>
-        public static FuncResult<T> Success(string? message = "操作成功", T? data = default)
+        public static FuncResult<T> Success(string? message, T? data = default)
         {
             return new FuncResult<T> { IsSuccess = true, Message = message, Data = data };
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        public static FuncResult<T> Success(T? data = default)
+        {
+            return new FuncResult<T> { IsSuccess = true, Message = "Successful", Data = data };
         }
 
         /// <summary>

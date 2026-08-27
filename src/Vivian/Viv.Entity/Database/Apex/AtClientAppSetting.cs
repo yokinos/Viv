@@ -11,7 +11,7 @@ namespace Viv.Entity.Database.Apex
     /// 客户端App专属配置表
     /// 单App独立业务参数、开关配置，仅绑定ClientApp，与全局配置AtGlobalConfig区分
     /// </summary>
-    public class AtClientAppSetting : EntityBase, ISoftDelete
+    public class AtClientAppSetting : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 所属客户端AppId

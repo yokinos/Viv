@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text;
 using Viv.Elysia.Request;
 
-namespace Viv.Herta.Core.Entity.Dto.Account.Request
+namespace Viv.Herta.Core.Entity.Dto.Account
 {
     public class HertaLoginRequest : ApiRequestBase
     {

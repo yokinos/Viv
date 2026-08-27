@@ -8,7 +8,7 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 敏感词命中审计日志
     /// </summary>
-    public class EtChatSensitiveLog : EntityBase, ITenant, ISoftDelete
+    public class EtChatSensitiveLog : EntityBase, ITenant, ISoftDeleted
     {
         /// <summary>
         /// 租户ID

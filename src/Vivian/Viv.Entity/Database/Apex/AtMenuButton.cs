@@ -10,7 +10,7 @@ namespace Viv.Entity.Database.Apex
     /// 菜单按钮表
     /// 一对多关联 AtMenu 页面菜单，一个页面多条操作按钮
     /// </summary>
-    public class AtMenuButton : EntityBase, ISoftDelete
+    public class AtMenuButton : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 所属页面菜单Id（仅关联Type=Page的菜单）

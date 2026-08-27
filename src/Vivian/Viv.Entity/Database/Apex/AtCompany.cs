@@ -9,17 +9,12 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 集团公司主体，多个租户机构可归属同一集团
     /// </summary>
-    public class AtCompany : EntityBase, ISoftDelete
+    public class AtCompany : EntityBase, ISoftDeleted
     {
         /// <summary>
         /// 所属售卖平台ID（关联AtOrg.Id）
         /// </summary>
         public long OrgId { get; set; }
-
-        /// <summary>
-        /// 直营机构（关联AtTenant.Id）
-        /// </summary>
-        public long TenantId { get; set; }
 
         /// <summary>
         /// 集团登录编码，唯一
@@ -56,6 +51,11 @@ namespace Viv.Entity.Database.Apex
         /// </summary>
         [StringLength(300)]
         public string? Address { get; set; }
+
+        /// <summary>
+        /// 最大机构数量
+        /// </summary>
+        public int? MaxTenantCount { get; set; }
 
         /// <summary>
         /// 备注说明

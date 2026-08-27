@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Autofac.Features.Indexed;
 using StackExchange.Redis;
-using Viv.Apex.Core.Entity.Dto.Account.Output;
-using Viv.Apex.Core.Entity.Dto.Account.Request;
+using Viv.Apex.Core.Entity.Dto.Account;
+using Viv.Apex.Core.Entity.Vo.Account;
 using Viv.Apex.Core.Interface;
 using Viv.Apex.Core.IRepository;
 using Viv.Contracts.Interface;
@@ -153,15 +153,15 @@ namespace Viv.Apex.Tests
     /// <summary>登录实现替身——可预设 LoginAsync 返回值。</summary>
     public sealed class StubLoginContract : ILoginContract
     {
-        public FuncResult<ApexLoginOutput>? LoginResult { get; set; }
+        public FuncResult<LoginOutput>? LoginResult { get; set; }
 
-        public Task<FuncResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
-            => Task.FromResult(LoginResult ?? FuncResult<ApexLoginOutput>.Failed("未设置登录结果"));
+        public Task<FuncResult<LoginOutput>> LoginAsync(LoginRequest request)
+            => Task.FromResult(LoginResult ?? FuncResult<LoginOutput>.Failed("未设置登录结果"));
 
-        public Task<FuncResult<ApexLoginOutput>> RefreshTokenAsync(ApexRefreshRequest request)
+        public Task<FuncResult<LoginOutput>> RefreshTokenAsync(RefreshRequest request)
             => throw new NotImplementedException();
 
-        public Task<bool> LogoutAsync(ApexLoginoutRequest request)
+        public Task<bool> LogoutAsync(LoginoutRequest request)
             => throw new NotImplementedException();
     }
 

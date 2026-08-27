@@ -2,8 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Apex.Core.Entity.Dto.Account.Output;
-using Viv.Apex.Core.Entity.Dto.Account.Request;
+using Viv.Apex.Core.Entity.Dto.Account;
+using Viv.Apex.Core.Entity.Vo.Account;
 using Viv.Apex.Core.Interface;
 using Viv.Apex.Core.IService;
 using Viv.Elysia;
@@ -21,22 +21,56 @@ namespace Viv.Apex.Core.Service
             _loginImpls = loginImpls;
         }
 
-        public async Task<VivApiResult<ApexLoginOutput>> LoginAsync(ApexLoginRequest request)
+        public async Task<VivApiResult<LoginOutput>> LoginAsync(LoginRequest request)
         {
             ElysiaLogContextAccessor.SetLog(EmOperationModule.User, EmOperationType.Login);
             var isExist = _loginImpls.TryGetValue(request.UserType, out var loginImpl);
             if (!isExist || loginImpl == null)
             {
-                return VivApiResult<ApexLoginOutput>.Failed("未知的用户类型");
+                return VivApiResult<LoginOutput>.Failed("未知的用户类型");
             }
 
-            var loginResult = await loginImpl.LoginAsync(request);
-            if (!loginResult.IsSuccess)
+            var result = await loginImpl.LoginAsync(request);
+            if (!result.IsSuccess)
             {
-                return VivApiResult<ApexLoginOutput>.Failed(loginResult.Message);
+                return VivApiResult<LoginOutput>.Failed(result.Message);
             }
 
-            return VivApiResult<ApexLoginOutput>.Success("Login successful", loginResult.Data);
+            return VivApiResult<LoginOutput>.Success("登录成功", result.Data);
+        }
+
+        public async Task<VivApiResult> LogoutAsync(LoginoutRequest request)
+        {
+            var isExist = _loginImpls.TryGetValue(request.UserType, out var loginImpl);
+            if (!isExist || loginImpl == null)
+            {
+                return VivApiResult<LoginOutput>.Failed("未知的用户类型");
+            }
+
+            var flag = await loginImpl.LogoutAsync(request);
+            if (flag)
+            {
+                ElysiaLogContextAccessor.SetLog(EmOperationModule.User, EmOperationType.Logout);
+            }
+
+            return VivApiResult<LoginOutput>.Success("退出登录成功");
+        }
+
+        public async Task<VivApiResult<LoginOutput>> RefreshTokenAsync(RefreshRequest request)
+        {
+            var isExist = _loginImpls.TryGetValue(request.UserType, out var loginImpl);
+            if (!isExist || loginImpl == null)
+            {
+                return VivApiResult<LoginOutput>.Failed("未知的用户类型");
+            }
+
+            var result = await loginImpl.RefreshTokenAsync(request);
+            if (!result.IsSuccess)
+            {
+                return VivApiResult<LoginOutput>.Failed(result.Message);
+            }
+
+            return VivApiResult<LoginOutput>.Success("刷新成功", result.Data);
         }
     }
 }

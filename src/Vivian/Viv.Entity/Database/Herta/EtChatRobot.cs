@@ -8,7 +8,7 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 聊天机器人账号表
     /// </summary>
-    public class EtChatRobot : EntityBase, ITenant, ISoftDelete
+    public class EtChatRobot : EntityBase, ITenant, ISoftDeleted
     {
         /// <summary>
         /// 租户ID

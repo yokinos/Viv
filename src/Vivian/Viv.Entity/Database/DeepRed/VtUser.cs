@@ -6,7 +6,7 @@ using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.DeepRed
 {
-    public class VtUser : EntityBase, ITenant, ISoftDelete
+    public class VtUser : EntityBase, ITenant, ISoftDeleted
     {
         public long TenantId { get; set; }
         public string Name { get; set; }
