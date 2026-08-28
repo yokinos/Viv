@@ -9,15 +9,18 @@ using Viv.Elysia.Filter;
 
 namespace Viv.Apex.Api.Controllers
 {
+    /// <summary>
+    /// 用户登录账号模块
+    /// </summary>
     [Route("api/[controller]")]
     [ApiController]
     public class AccountController : ControllerBase
     {
-        private readonly IUserService _userService;
+        private readonly IAccountService _accountService;
 
-        public AccountController(IUserService userService)
+        public AccountController(IAccountService accountService)
         {
-            _userService = userService;
+            _accountService = accountService;
         }
 
         /// <summary>
@@ -30,7 +33,7 @@ namespace Viv.Apex.Api.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> LoginAsync(LoginRequest request)
         {
-            return await _userService.LoginAsync(request);
+            return await _accountService.LoginAsync(request);
         }
 
         /// <summary>
@@ -38,12 +41,12 @@ namespace Viv.Apex.Api.Controllers
         /// </summary>
         /// <param name="request"></param>
         /// <returns></returns>
-        [Authorize]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(LoginOutput), (int)HttpStatusCode.OK)]
         [HttpPost("refreshToken")]
         public async Task<IActionResult> RefreshTokenAsync(RefreshRequest request)
         {
-            return await _userService.RefreshTokenAsync(request);
+            return await _accountService.RefreshTokenAsync(request);
         }
 
         /// <summary>
@@ -55,7 +58,7 @@ namespace Viv.Apex.Api.Controllers
         [HttpPost("logout")]
         public async Task<IActionResult> LogoutAsync(LoginoutRequest request)
         {
-            return await _userService.LogoutAsync(request);
+            return await _accountService.LogoutAsync(request);
         }
     }
 }

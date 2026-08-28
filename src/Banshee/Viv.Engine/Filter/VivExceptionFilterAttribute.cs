@@ -40,19 +40,30 @@ namespace Viv.Engine.Filter
 
             _logger.Error("[全局异常] {Method} {Path} | RequestId: {RequestId} | Message: {Message}", realEx, method, path, traceId, realEx.Message);
 
-            var output = new ExceptionOutput
+            if (ex is VivBusinessException exception1)
             {
-                Path = path,
-                Method = method,
-                Timestamp = DateTime.Now.ExtToString(),
-                RequestId = traceId,
-                StackTrace = _environment.IsDevelopment() ? realEx.StackTrace : null,
-                ErrorCode = (realEx as IVivBusinessException)?.Code
-            };
+                context.Result = VivApiResult.ApiRsult(ApiResultCode.ServerError, exception1.Message, exception1.Output);
+            }
+            else if (realEx is VivBusinessException exception2)
+            {
+                context.Result = VivApiResult.ApiRsult(ApiResultCode.ServerError, exception2.Message, exception2.Output);
+            }
+            else
+            {
+                var output = new ExceptionOutput
+                {
+                    Path = path,
+                    Method = method,
+                    Timestamp = DateTime.Now.ExtToString(),
+                    RequestId = traceId,
+                    StackTrace = _environment.IsDevelopment() ? realEx.StackTrace : null,
+                    ErrorCode = (realEx as IVivBusinessException)?.Code
+                };
 
-            context.Result = VivApiResult.ApiRsult(ApiResultCode.ServerError, null, output);
+                context.Result = VivApiResult.ApiRsult(ApiResultCode.ServerError, ex.Message, output);
+            }
+
             context.ExceptionHandled = true;
-
             await Task.CompletedTask;
         }
     }

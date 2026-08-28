@@ -1,6 +1,7 @@
 ﻿using Autofac;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
 using System.Text;
 using Viv.Aoi;
 using Viv.Contracts.Attributes;
@@ -41,18 +42,35 @@ namespace Viv.Engine
             var serviceImplTypes = TypeScanMagic.Scan(diOptions.ServiceImplementation);
             if (!serviceImplTypes.IsNullOrEmpty())
             {
+                var closedTypes = serviceImplTypes.Where(t => !t.IsGenericTypeDefinition).ToArray();
+                var openGenericTypes = serviceImplTypes.Where(t => t.IsGenericTypeDefinition).ToArray();
 
-                builder.RegisterTypes(serviceImplTypes.ToArray())
-                       .AsImplementedInterfaces()
-                       .InstancePerLifetimeScope();
+                if (closedTypes.Length != 0)
+                {
+                    builder.RegisterTypes(closedTypes).AsImplementedInterfaces().InstancePerLifetimeScope();
+                }
+
+                foreach (var openGeneric in openGenericTypes)
+                {
+                    builder.RegisterGeneric(openGeneric).AsImplementedInterfaces().InstancePerLifetimeScope();
+                }
             }
 
             var repoImplTypes = TypeScanMagic.Scan(diOptions.RepositoryImplementation);
             if (!repoImplTypes.IsNullOrEmpty())
             {
-                builder.RegisterTypes(repoImplTypes.ToArray())
-                   .AsImplementedInterfaces()
-                   .InstancePerLifetimeScope();
+                var closedTypes = repoImplTypes.Where(t => !t.IsGenericTypeDefinition).ToArray();
+                var openGenericTypes = repoImplTypes.Where(t => t.IsGenericTypeDefinition).ToArray();
+
+                if (closedTypes.Length != 0)
+                {
+                    builder.RegisterTypes(closedTypes).AsImplementedInterfaces().InstancePerLifetimeScope();
+                }
+
+                foreach (var openGeneric in openGenericTypes)
+                {
+                    builder.RegisterGeneric(openGeneric).AsImplementedInterfaces().InstancePerLifetimeScope();
+                }
             }
         }
 
@@ -63,53 +81,63 @@ namespace Viv.Engine
         private static void AutoDependencyRegister(ContainerBuilder builder)
         {
             var typeList = TypeScanMagic.ScanTypes<IDependency>();
-            if (typeList.IsNullOrEmpty())
-                return;
+            if (typeList.IsNullOrEmpty()) return;
 
             foreach (var implementationType in typeList)
             {
-                var dependencyAttribute = implementationType.GetCustomAttributes(typeof(VivDependencyAttribute), true).OfType<VivDependencyAttribute>().SingleOrDefault();
-
+                var dependencyAttribute = implementationType.GetCustomAttribute<VivDependencyAttribute>();
                 var lifetime = dependencyAttribute?.Lifetime ?? DependencyLifetime.Scoped;
                 var asSelf = dependencyAttribute?.AsSelf ?? false;
-                var registration = builder.RegisterType(implementationType);
                 var tag = dependencyAttribute?.Tag;
-
-                if (asSelf)
+                 
+                if (implementationType.IsGenericTypeDefinition)
                 {
-                    registration = registration.AsSelf();
+                    var registration = builder.RegisterGeneric(implementationType);
+
+                    if (asSelf)
+                        registration = registration.AsSelf();
+                    else
+                    {
+                        var interfaces = implementationType.GetInterfaces().Where(i => i != typeof(IDependency)).ToArray();
+                        if (interfaces.Length == 0)
+                            registration = registration.AsSelf();
+                        else if (tag != null)
+                            foreach (var i in interfaces) registration = registration.Keyed(tag, i);
+                        else
+                            registration = registration.AsImplementedInterfaces();
+                    }
+
+                    registration = lifetime switch
+                    {
+                        DependencyLifetime.Singleton => registration.SingleInstance(),
+                        DependencyLifetime.Transient => registration.InstancePerDependency(),
+                        _ => registration.InstancePerLifetimeScope()
+                    };
                 }
                 else
                 {
-                    var interfaces = implementationType.GetInterfaces().Where(x => x != typeof(IDependency)).ToArray();
-                    if (interfaces.IsNullOrEmpty())
-                    {
-                        registration = registration.AsSelf();
-                        continue;
-                    }
+                    var registration = builder.RegisterType(implementationType);
 
-                    if (tag != null)
-                    {
-                        foreach (var contract in interfaces)
-                        {
-                            registration = registration.Keyed(tag, contract);
-                        }
-                    }
+                    if (asSelf)
+                        registration = registration.AsSelf();
                     else
                     {
-                        registration = registration.AsImplementedInterfaces();
+                        var interfaces = implementationType.GetInterfaces().Where(i => i != typeof(IDependency)).ToArray();
+                        if (interfaces.Length == 0)
+                            registration = registration.AsSelf();
+                        else if (tag != null)
+                            foreach (var i in interfaces) registration = registration.Keyed(tag, i);
+                        else
+                            registration = registration.AsImplementedInterfaces();
                     }
+
+                    registration = lifetime switch
+                    {
+                        DependencyLifetime.Singleton => registration.SingleInstance(),
+                        DependencyLifetime.Transient => registration.InstancePerDependency(),
+                        _ => registration.InstancePerLifetimeScope()
+                    };
                 }
-
-                registration = lifetime switch
-                {
-                    DependencyLifetime.Singleton => registration.SingleInstance(),
-                    DependencyLifetime.Transient => registration.InstancePerDependency(),
-                    DependencyLifetime.Scoped => registration.InstancePerLifetimeScope(),
-                    _ => registration.InstancePerLifetimeScope()
-                };
-
-                registration.PreserveExistingDefaults();
             }
         }
 

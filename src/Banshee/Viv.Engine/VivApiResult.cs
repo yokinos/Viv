@@ -27,7 +27,7 @@ namespace Viv.Engine
         }
 
         /// <summary>
-        /// 请求Id
+        /// 请求追踪Id
         /// </summary>
         public string TraceId { get; set; }
 

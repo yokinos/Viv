@@ -169,6 +169,12 @@ namespace Viv.Apex.Core.Impl.Login
                 return FuncResult<LoginOutput>.Failed("登录凭证已失效，请重新登录");
             }
 
+            var validateApp = await ValidateAppAsync(request.AppId);
+            if (!validateApp.IsSuccess)
+            {
+                return FuncResult<LoginOutput>.Failed(validateApp.Message);
+            }
+
             var validateUser = await ValidateUserAsync(session.UserId);
             if (!validateUser.IsSuccess)
             {

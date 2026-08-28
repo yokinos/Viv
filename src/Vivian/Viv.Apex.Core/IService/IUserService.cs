@@ -9,10 +9,6 @@ namespace Viv.Apex.Core.IService
 {
     public interface IUserService
     {
-        Task<VivApiResult<LoginOutput>> LoginAsync(LoginRequest request);
 
-        Task<VivApiResult<LoginOutput>> RefreshTokenAsync(RefreshRequest request);
-
-        Task<VivApiResult> LogoutAsync(LoginoutRequest request);
     }
 }
