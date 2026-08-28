@@ -153,7 +153,7 @@ namespace Viv.Engine
             var app = builder.Build();
             VivLocator.Initialize(app.Services);
 
-            app.UseMiddleware<HttpTrackMiddleware>();
+            app.UseMiddleware<RequestTrackMiddleware>();
             app.UseMiddleware<ApiStartedMiddleware>();
 
             app.UseWebSockets(new WebSocketOptions

@@ -31,7 +31,7 @@ namespace Viv.Contracts
         public static void ResetHolderId() => _holderId.Value = GenerateHolderId();
 
         /// <summary>
-        /// 显式设置持有者 ID（可用于测试或特殊情况）
+        /// 显式设置持有者Id
         /// </summary>
         public static void SetHolderId(string holderId) => _holderId.Value = holderId;
 

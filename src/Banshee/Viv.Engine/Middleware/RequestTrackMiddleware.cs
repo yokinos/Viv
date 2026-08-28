@@ -8,10 +8,13 @@ using Viv.Delusion.Magic;
 
 namespace Viv.Engine.Middleware
 {
-    public class HttpTrackMiddleware
+    /// <summary>
+    /// [中间件] 请求追踪中间件
+    /// </summary>
+    public class RequestTrackMiddleware
     {
         private readonly RequestDelegate _next;
-        public HttpTrackMiddleware(RequestDelegate next)
+        public RequestTrackMiddleware(RequestDelegate next)
         {
             _next = next;
         }

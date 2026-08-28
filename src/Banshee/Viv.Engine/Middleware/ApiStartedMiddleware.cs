@@ -9,6 +9,9 @@ using Viv.Delusion.Extension;
 
 namespace Viv.Engine.Middleware
 {
+    /// <summary>
+    /// [中间件] Viv Api 启动中间件
+    /// </summary>
     public class ApiStartedMiddleware
     {
         private readonly RequestDelegate _next;
