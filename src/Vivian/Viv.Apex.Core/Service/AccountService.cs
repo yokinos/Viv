@@ -26,14 +26,6 @@ namespace Viv.Apex.Core.Service
 
         public async Task<VivApiResult<LoginOutput>> LoginAsync(LoginRequest request)
         {
-            return await _distributedLock.AcquireLockAsync(
-                new { request.AppId, request.UserType, request.UserName },
-                TimeSpan.FromSeconds(5),
-                async () => await ProcessLoginAsync(request));
-        }
-
-        public async Task<VivApiResult<LoginOutput>> ProcessLoginAsync(LoginRequest request)
-        {
             var isExist = _loginImpls.TryGetValue(request.UserType, out var loginImpl);
             if (!isExist || loginImpl == null)
             {
