@@ -103,10 +103,10 @@ namespace Viv.Momo
         {
             int offset = (pageIndex - 1) * pageSize;
             var sqlWithoutOrderBy = RemoveOrderBy(sql);
-            var countSql = $"SELECT COUNT(*) FROM ({sqlWithoutOrderBy}) AS t";
 
             if (databaseSource == DatabaseSourceType.PostgreSQL)
             {
+                var countSql = $"SELECT COUNT(*) FROM ({sqlWithoutOrderBy}) AS t";
                 var pageSql = $"{sql} LIMIT {pageSize} OFFSET {offset}";
                 return (pageSql, countSql);
             }

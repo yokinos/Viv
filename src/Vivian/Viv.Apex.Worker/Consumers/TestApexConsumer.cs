@@ -18,7 +18,7 @@ namespace Viv.Apex.Worker.Consumers
 
         public async override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
         {
-            var result = await _distributedLock.AcquireLockWithExecuteAsync(envelope.MessageId, TimeSpan.FromSeconds(15), async () =>
+            var result = await _distributedLock.AcquireLockAsync(envelope.MessageId, TimeSpan.FromSeconds(15), async () =>
             {
                 return SubscribeResult.Success();
             }, cancellationToken);

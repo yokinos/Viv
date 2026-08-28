@@ -55,10 +55,10 @@ namespace Viv.Engine
         ParamFormatError = -202,
 
         /// <summary>
-        /// 参数数值超出业务允许区间，如负数、超过最大值等
+        /// 业务繁忙请稍后再试
         /// </summary>
-        [Description("参数值超出允许范围")]
-        ParamRangeInvalid = -203,
+        [Description("业务繁忙请稍后再试")]
+        BusyError = -203,
 
         /// <summary>
         /// 重复提交操作，防重复点击、重复下单场景使用

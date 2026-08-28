@@ -16,7 +16,10 @@ namespace Viv.Engine
     public class DistributedLockAccessor : IDistributedLock
     {
         private readonly IRedisService _redisService;
+
         private readonly ILoggerContract _logger;
+
+        private static readonly ConcurrentDictionary<Type, PropertyInfo[]> _lockKeyPropCache = new();
 
         public DistributedLockAccessor(IRedisService redisService, ILoggerContract logger)
         {
@@ -161,8 +164,6 @@ namespace Viv.Engine
 
         //    return $"lock:{System.Text.Json.JsonSerializer.Serialize(key)}";
         //}
-
-        private static readonly ConcurrentDictionary<Type, PropertyInfo[]> _lockKeyPropCache = new();
 
         private static string GenerateLockKey(object key)
         {

@@ -24,7 +24,7 @@ namespace Viv.Elysia.Filter
                 // 参数值为空（请求未提供该参数）→ 判空拦截
                 if (value is null)
                 {
-                    context.Result = VivApiResult.ApiRsult(ApiResultCode.ParamMissing, $"{key} 不能为空");
+                    context.Result = VivApiResult.ApiResult(ApiResultCode.ParamMissing, $"{key} 不能为空");
                     context.HttpContext.Response.StatusCode = (int)HttpStatusCode.OK;
                     return;
                 }
@@ -35,7 +35,7 @@ namespace Viv.Elysia.Filter
                     var errMsg = request.Validate();
                     if (!string.IsNullOrEmpty(errMsg))
                     {
-                        context.Result = VivApiResult.ApiRsult(ApiResultCode.Error, errMsg);
+                        context.Result = VivApiResult.ApiResult(ApiResultCode.Error, errMsg);
                         context.HttpContext.Response.StatusCode = (int)HttpStatusCode.OK;
                         return;
                     }

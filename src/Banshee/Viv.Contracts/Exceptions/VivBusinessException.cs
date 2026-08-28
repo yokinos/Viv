@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Contracts.Interface;
 
 namespace Viv.Contracts.Exceptions
 {
     /// <summary>
     /// 通用业务异常
     /// </summary>
-    public class VivBusinessException : Exception
+    public class VivBusinessException : Exception, IVivBusinessException
     {
         /// <summary>
         /// 发生此异常时返回给前端的错误Code 

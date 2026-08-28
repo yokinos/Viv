@@ -6,6 +6,7 @@ using Viv.Apex.Core.Entity.Dto.Account;
 using Viv.Apex.Core.Entity.Vo.Account;
 using Viv.Apex.Core.Interface;
 using Viv.Apex.Core.IService;
+using Viv.Contracts.Interface;
 using Viv.Elysia;
 using Viv.Engine;
 using Viv.Entity.Enums;
@@ -15,15 +16,24 @@ namespace Viv.Apex.Core.Service
     public class AccountService : IAccountService
     {
         private readonly IIndex<EmUserType, ILoginContract> _loginImpls;
+        private readonly IDistributedLock _distributedLock;
 
-        public AccountService(IIndex<EmUserType, ILoginContract> loginImpls)
+        public AccountService(IIndex<EmUserType, ILoginContract> loginImpls, IDistributedLock distributedLock)
         {
             _loginImpls = loginImpls;
+            _distributedLock = distributedLock;
         }
 
         public async Task<VivApiResult<LoginOutput>> LoginAsync(LoginRequest request)
         {
-            ElysiaLogContextAccessor.SetLog(EmOperationModule.User, EmOperationType.Login);
+            return await _distributedLock.AcquireLockAsync(
+                new { request.AppId, request.UserType, request.UserName },
+                TimeSpan.FromSeconds(5),
+                async () => await ProcessLoginAsync(request));
+        }
+
+        public async Task<VivApiResult<LoginOutput>> ProcessLoginAsync(LoginRequest request)
+        {
             var isExist = _loginImpls.TryGetValue(request.UserType, out var loginImpl);
             if (!isExist || loginImpl == null)
             {
@@ -36,6 +46,7 @@ namespace Viv.Apex.Core.Service
                 return VivApiResult<LoginOutput>.Failed(result.Message);
             }
 
+            ElysiaLogContextAccessor.SetLog(EmOperationModule.User, EmOperationType.Login);
             return VivApiResult<LoginOutput>.Success("登录成功", result.Data);
         }
 

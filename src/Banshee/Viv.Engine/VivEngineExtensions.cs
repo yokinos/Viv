@@ -260,7 +260,7 @@ namespace Viv.Engine
         /// <returns></returns>
         public static async Task SetApiResponseAsync(this HttpContext context, ApiResultCode code, int? httpStatusCode = null)
         {
-            var result = VivApiResult.ApiRsult(code);
+            var result = VivApiResult.ApiResult(code);
             result.TraceId = context.TraceIdentifier;
             context.Response.Clear();
             httpStatusCode ??= context.Response.StatusCode;

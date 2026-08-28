@@ -21,20 +21,20 @@ namespace Viv.Engine
 
         public static VivApiResult<T> Success(string? message, T? data = default)
         {
-            return ApiRsult(ApiResultCode.Success, message, data);
+            return ApiResult(ApiResultCode.Success, message, data);
         }
 
         public static VivApiResult<T> Success(T? data = default)
         {
-            return ApiRsult(ApiResultCode.Success, "successful", data);
+            return ApiResult(ApiResultCode.Success, "successful", data);
         }
 
         public static VivApiResult<T> Failed(string? message, T? data = default)
         {
-            return ApiRsult(ApiResultCode.Error, message, data);
+            return ApiResult(ApiResultCode.Error, message, data);
         }
 
-        public static VivApiResult<T> ApiRsult(ApiResultCode code, string? message = null, T? data = default)
+        public static VivApiResult<T> ApiResult(ApiResultCode code, string? message = null, T? data = default)
         {
             message ??= code.GetDescription();
             return new VivApiResult<T>((int)code, message, data);

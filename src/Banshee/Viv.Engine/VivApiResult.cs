@@ -70,20 +70,20 @@ namespace Viv.Engine
 
         public static VivApiResult Success(string message, object? data = null)
         {
-            return ApiRsult(ApiResultCode.Success, message, data);
+            return ApiResult(ApiResultCode.Success, message, data);
         }
 
         public static VivApiResult Success(object? data = null)
         {
-            return ApiRsult(ApiResultCode.Success, "successful", data);
+            return ApiResult(ApiResultCode.Success, "successful", data);
         }
 
         public static VivApiResult Failed(string message, object? data = null)
         {
-            return ApiRsult(ApiResultCode.Error, message, data);
+            return ApiResult(ApiResultCode.Error, message, data);
         }
 
-        public static VivApiResult ApiRsult(ApiResultCode code, string? message = null, object? data = null)
+        public static VivApiResult ApiResult(ApiResultCode code, string? message = null, object? data = null)
         {
             message ??= code.GetDescription();
             return new VivApiResult((int)code, message, data);
