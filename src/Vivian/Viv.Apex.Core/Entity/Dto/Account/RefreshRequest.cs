@@ -8,7 +8,7 @@ using Viv.Entity.Enums;
 
 namespace Viv.Apex.Core.Entity.Dto.Account
 {
-    public class RefreshRequest : ApiRequestBase
+    public class RefreshRequest : VivApiRequest
     {
         [Required]
         [DisplayName("用户Id")]

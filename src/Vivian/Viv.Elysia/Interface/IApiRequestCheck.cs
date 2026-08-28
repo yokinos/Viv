@@ -16,6 +16,6 @@ namespace Viv.Elysia.Interface
         /// </summary>
         /// <param name="request"></param>
         /// <returns></returns>
-        Task<FuncResult> CheckRequestAsync(ApiRequestBase request);
+        Task<FuncResult> CheckRequestAsync(VivApiRequest request);
     }
 }

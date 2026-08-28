@@ -8,7 +8,7 @@ using Viv.Entity.Enums;
 
 namespace Viv.Apex.Core.Entity.Dto.Account
 {
-    public class LoginoutRequest : ApiRequestBase
+    public class LoginoutRequest : VivApiRequest
     {
         [Required]
         [DisplayName("用户类型")]

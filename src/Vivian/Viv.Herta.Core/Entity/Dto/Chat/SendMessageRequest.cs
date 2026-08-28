@@ -8,7 +8,7 @@ using Viv.Entity.Enums;
 
 namespace Viv.Herta.Core.Entity.Dto.Chat
 {
-    public class SendMessageRequest : ApiRequestBase
+    public class SendMessageRequest : VivApiRequest
     {
         /// <summary>
         /// [可选]发送方的Id 不选默认为当前登录人的Id

@@ -6,7 +6,7 @@ using Viv.Elysia.Request;
 
 namespace Viv.Herta.Core.Entity.Dto.Account
 {
-    public class HertaLoginRequest : ApiRequestBase
+    public class HertaLoginRequest : VivApiRequest
     {
         /// <summary>
         /// 机构编码（标识是哪家机构的账号登录的）

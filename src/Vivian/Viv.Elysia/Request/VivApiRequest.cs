@@ -13,7 +13,7 @@ namespace Viv.Elysia.Request
     /// API 请求基类
     /// </summary>
     [Serializable]
-    public class ApiRequestBase : IApiRequest
+    public class VivApiRequest : IApiRequest
     {
         [Required]
         [DisplayName("客户端AppId")]

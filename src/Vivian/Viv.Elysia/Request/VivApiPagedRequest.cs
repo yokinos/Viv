@@ -7,7 +7,7 @@ using Viv.Elysia.Interface;
 
 namespace Viv.Elysia.Request
 {
-    public abstract class ApiPagedRequestBase : ApiRequestBase, IApiPagedRequest
+    public abstract class VivApiPagedRequest : VivApiRequest, IApiPagedRequest
     {
         /// <summary>
         /// 当前页码

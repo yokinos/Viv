@@ -5,7 +5,7 @@ using Viv.Entity.Enums;
 
 namespace Viv.Apex.Core.Entity.Dto.Account
 {
-    public class LoginRequest : ApiRequestBase
+    public class LoginRequest : VivApiRequest
     {
         /// <summary>
         /// 账户名

@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Viv.Elysia.Request
 {
-    public class ApiIdRequest : ApiRequestBase
+    public class ApiIdRequest : VivApiRequest
     {
         public long Id { get; set; }
 

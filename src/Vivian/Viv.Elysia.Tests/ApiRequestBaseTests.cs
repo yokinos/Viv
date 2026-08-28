@@ -4,7 +4,7 @@ namespace Viv.Elysia.Tests
 {
     public class ApiRequestBaseTests
     {
-        private sealed class TestPagedRequest : ApiPagedRequestBase
+        private sealed class TestPagedRequest : VivApiPagedRequest
         {
             public override (string sql, object parameters) GetSqlQuery() => ("", new object());
         }
