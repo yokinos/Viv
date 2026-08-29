@@ -8,8 +8,8 @@ namespace Viv.Apex.Core.Entity.Vo.Tenant
     {
         public long TenantId { get; set; }
 
-        public string TenantName { get; set; }
+        public string? Name { get; set; }
 
-        public string TenantCode { get; set; }
+        public string? TenantCode { get; set; }
     }
 }

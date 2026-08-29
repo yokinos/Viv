@@ -187,7 +187,7 @@ namespace Viv.Apex.Core.Impl.Login
 
         public virtual async Task<bool> LogoutAsync(LoginoutRequest request)
         {
-            var redisSessionKey = GetSessionKey(request.AppId, request.UserType, _context.UserId);
+            var redisSessionKey = GetSessionKey(_context.AppId, request.UserType, _context.UserId);
             return await _redisService.RemoveAsync(redisSessionKey);
         }
     }
