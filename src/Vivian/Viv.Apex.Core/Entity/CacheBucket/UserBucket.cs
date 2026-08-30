@@ -7,9 +7,9 @@ using Viv.Momo.Interface;
 
 namespace Viv.Apex.Core.Entity.CacheBucket
 {
-    public class AtUserBucket : ICacheBucket
+    public class UserBucket : ICacheBucket
     {
-        public AtUser User { get; set; }
+        public AtUser? User { get; set; }
 
         public AtUserBind? UserBind { get; set; }
 
@@ -19,7 +19,7 @@ namespace Viv.Apex.Core.Entity.CacheBucket
 
         public string GetCacheKey(params object[] keys)
         {
-            return $"AtUserBucket_{string.Join(",", keys)}";
+            return $"UserBucket_{string.Join(",", keys)}";
         }
     }
 }

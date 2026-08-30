@@ -14,7 +14,7 @@ using Viv.Redis;
 
 namespace Viv.Apex.Core.Repository
 {
-    public class UserRepository : DataAccessCacheBase<AtUserBucket>, IUserRepository
+    public class UserRepository : DataAccessCacheBase<UserBucket>, IUserRepository
     {
         public UserRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, ILoggerContract logger)
             : base(context, dbContext, redisService, logger)
@@ -67,12 +67,12 @@ namespace Viv.Apex.Core.Repository
             return bucket?.User;
         }
 
-        public override async Task<AtUserBucket?> GetDbAsync(params object[] keys)
+        public override async Task<UserBucket?> GetDbAsync(params object[] keys)
         {
             var userId = keys[0].As<long>();
             var user = await _dbContext.SingleOrDefaultAsync<AtUser>(x => x.Id == userId && !x.IsDeleted);
             if (user == null) return null;
-            return new AtUserBucket()
+            return new UserBucket()
             {
                 User = user,
                 UserBind = await _dbContext.SingleOrDefaultAsync<AtUserBind>(x => x.UserId == user.Id),
@@ -91,7 +91,7 @@ namespace Viv.Apex.Core.Repository
             return await _dbContext.PageAsync<AtUser>(sql, request.PageIndex, request.PageSize, parameter);
         }
 
-        public async Task<AtUserBucket?> GetUserBucketAsync(long userId)
+        public async Task<UserBucket?> GetUserBucketAsync(long userId)
         {
             var bucket = await GetCacheAsync(userId);
             return bucket;

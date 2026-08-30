@@ -3,11 +3,11 @@ using Viv.Momo.Interface;
 
 namespace Viv.Elysia.CacheBucket
 {
-    public class EntityListBucket<T> : ICacheBucket
+    public class EntityBucket<T> : ICacheBucket
     {
-        public EntityListBucket() { }
+        public EntityBucket() { }
 
-        public EntityListBucket(T entity)
+        public EntityBucket(T entity)
         {
             Entity = entity;
         }

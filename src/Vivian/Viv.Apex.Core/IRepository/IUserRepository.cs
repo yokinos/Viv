@@ -46,7 +46,7 @@ namespace Viv.Apex.Core.IRepository
         /// </summary>
         Task<PagedList<AtUser>> GetPagedListAsync(IApiPagedRequest request);
 
-        Task<AtUserBucket?> GetUserBucketAsync(long userId);
+        Task<UserBucket?> GetUserBucketAsync(long userId);
 
         Task<List<AtUserRole>> GetAtUserRoleListAsync(long userId);
     }

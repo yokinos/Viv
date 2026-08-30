@@ -12,7 +12,7 @@ using Viv.Redis;
 
 namespace Viv.Apex.Core.Repository
 {
-    public class ClientAppCarouselRepository : DataAccessCacheBase<EntityListBucket<AtClientAppCarousel>>, IClientAppCarouselRepository
+    public class ClientAppCarouselRepository : DataAccessCacheBase<EntityBucket<AtClientAppCarousel>>, IClientAppCarouselRepository
     {
         public ClientAppCarouselRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, ILoggerContract logger)
             : base(context, dbContext, redisService, logger)
@@ -65,14 +65,14 @@ namespace Viv.Apex.Core.Repository
             return bucket?.Entity;
         }
 
-        public override async Task<EntityListBucket<AtClientAppCarousel>?> GetDbAsync(params object[] keys)
+        public override async Task<EntityBucket<AtClientAppCarousel>?> GetDbAsync(params object[] keys)
         {
             var clientAppId = keys[0].As<long>();
             var position = keys[1].As<byte>();
             var carousel = await _dbContext.SingleOrDefaultAsync<AtClientAppCarousel>(
                 x => x.ClientAppId == clientAppId && x.Position == position && !x.IsDeleted);
             if (carousel == null) return null;
-            return new EntityListBucket<AtClientAppCarousel>(carousel);
+            return new EntityBucket<AtClientAppCarousel>(carousel);
         }
 
         public async Task<List<AtClientAppCarousel>> GetCarouselsByAppAsync(long clientAppId)
