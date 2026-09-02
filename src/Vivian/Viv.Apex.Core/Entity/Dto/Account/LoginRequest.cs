@@ -7,6 +7,10 @@ namespace Viv.Apex.Core.Entity.Dto.Account
 {
     public class LoginRequest : VivApiRequest
     {
+        [Required]
+        [Display(Name = "客户端AppId")]
+        public long AppId { get; set; }
+
         /// <summary>
         /// 账户名
         /// </summary>

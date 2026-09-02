@@ -16,10 +16,6 @@ namespace Viv.Elysia.Request
     public class VivApiRequest : IApiRequest
     {
         [Required]
-        [DisplayName("客户端AppId")]
-        public long AppId { get; set; }
-
-        [Required]
         [DisplayName("服务器内部版本号")]
         [Range(1000, 9999)]
         public int Version { get; set; }

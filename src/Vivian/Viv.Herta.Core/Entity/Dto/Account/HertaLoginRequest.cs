@@ -8,6 +8,10 @@ namespace Viv.Herta.Core.Entity.Dto.Account
 {
     public class HertaLoginRequest : VivApiRequest
     {
+        [Required]
+        [Display(Name = "客户端AppId")]
+        public long AppId { get; set; }
+
         /// <summary>
         /// 机构编码（标识是哪家机构的账号登录的）
         /// </summary>

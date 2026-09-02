@@ -19,34 +19,34 @@ namespace Viv.Elysia.Tests
         }
 
         [Fact]
-        public void Validate_ValidAppIdButZeroVersion_ReturnsError()
-            => Assert.NotEmpty(new ApiEmptyRequest { AppId = 1 }.Validate());
+        public void Validate_ZeroVersion_ReturnsError()
+            => Assert.NotEmpty(new ApiEmptyRequest().Validate());
 
         [Fact]
         public void Validate_ValidRequest_ReturnsEmpty()
         {
-            var request = new ApiEmptyRequest { AppId = 1, Version = 1000 };
+            var request = new ApiEmptyRequest { Version = 1000 };
             Assert.Equal("", request.Validate());
         }
 
         [Fact]
         public void Validate_PageIndexZero_ReturnsRangeError()
         {
-            var error = new TestPagedRequest { AppId = 1, Version = 1000 }.Validate();
+            var error = new TestPagedRequest { Version = 1000 }.Validate();
             Assert.Contains("当前页码", error);
         }
 
         [Fact]
         public void Validate_PageSizeOverMax_ReturnsRangeError()
         {
-            var error = new TestPagedRequest { AppId = 1, Version = 1000, PageIndex = 1, PageSize = 10001 }.Validate();
+            var error = new TestPagedRequest { Version = 1000, PageIndex = 1, PageSize = 10001 }.Validate();
             Assert.Contains("每页条数", error);
         }
 
         [Fact]
         public void Validate_ValidPagedRequest_ReturnsEmpty()
         {
-            var request = new TestPagedRequest { AppId = 1, Version = 1000, PageIndex = 1, PageSize = 10 };
+            var request = new TestPagedRequest { Version = 1000, PageIndex = 1, PageSize = 10 };
             Assert.Equal("", request.Validate());
         }
     }

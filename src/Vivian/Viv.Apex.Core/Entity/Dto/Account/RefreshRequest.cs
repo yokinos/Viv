@@ -11,6 +11,10 @@ namespace Viv.Apex.Core.Entity.Dto.Account
     public class RefreshRequest : VivApiRequest
     {
         [Required]
+        [DisplayName("客户端AppId")]
+        public long AppId { get; set; }
+
+        [Required]
         [DisplayName("用户Id")]
         public long UserId { get; set; }
 
