@@ -9,32 +9,38 @@ using Viv.Nana.Options;
 namespace Viv.Nana
 {
     /// <summary>
-    /// Viv 消费者基类 — 自动处理消息完整性校验、消费锁和重试逻辑。
+    /// Viv 消费者基类 — 封装消息上下文、Redis消费锁、异常与重试编排。
     ///
-    /// 重要约束：
-    /// 1. 基类HandleAsync负责 SetSnapshot / Clear，消息结束会自动清理上下文；
-    /// 2. 子类可使用 _context 读取，**允许手动SetSnapshot/Clear，但必须保证在当前消息的async流内部，不能泄露到Task.Run后台任务**；
-    /// 3. 禁止将 _context 实例传递、闭包捕获到 Task.Run / 后台火后即忘任务；后台任务会Flow ExecutionContext，会继承当前消息快照，造成上下文串扰；
-    /// 4. LockHolderContext 由基类finally统一清理，子类不要手动管理。
+    /// 【上下文约束】
+    /// 1. 基类 HandleAsync 自动执行 SetSnapshot / Clear，消息处理完成强制清理上下文；
+    /// 2. 子类允许手动 SetSnapshot/Clear，但仅限**当前消息的async执行流内**；
+    /// 3. ❗禁止将 _context 捕获/传入 Task.Run、后台即忘任务；ExecutionContext 会发生流动，造成多消息上下文串扰；
+    /// 4. LockHolderContext 由基类 finally 统一释放清理，子类切勿手动操作。
     ///
-    /// 消费锁（框架级，谁取到锁谁进业务）：
-    /// HandleAsync 在调用 <see cref="ReceiveMessageAsync"/> 前按
-    /// <c>nana:{ServiceName}:{EventType}:{MessageId}</c> 取 Redis 分布式锁。
-    /// ServiceName 与队列后缀相同（入口程序集名），fanout 下各订阅服务各持一把锁、各处理一份。
-    /// 取到 → 进业务，结束释放；拿不到 → 视为已有实例在处理，走既有 DistributedLockException 契约
-    /// （默认丢弃 ack；<see cref="NanaEvent.LockFailShouldRetryDeliver"/> 则延迟重投）。
-    /// 未注册 <see cref="IDistributedLock"/>（无 Redis）时跳过取锁，行为与加锁前一致。
+    /// 【消费锁逻辑】
+    /// HandleAsync 在执行业务 ReceiveMessageAsync 之前，抢占 Redis 分布式锁，锁Key：
+    /// <c>nana:{ServiceName}:{EventType}:{MessageId}</c>
+    /// - ServiceName：队列后缀，取自入口程序集；Fanout广播模式下，每个订阅服务持有独立锁，互不干扰。
+    /// - ✅获取锁：执行业务逻辑，finally块自动释放锁；
+    /// - ❌抢锁失败：默认ACK确认原消息，直接丢弃，不会回原始队列、不会触发Wolverine重试、不进死信；
+    ///   若事件标记 <see cref="NanaEvent.LockFailShouldRetryDeliver"/> = true，且未达重投上限，则走延迟重投；
+    ///   重投到达上限依旧执行丢弃。
+    /// - 未注入 <see cref="IDistributedLock"/>（无Redis环境）：完全跳过锁逻辑。
     ///
-    /// 重试机制（Wolverine 全局失败策略 + 延迟重投）：
-    /// 1. 子类 <see cref="ReceiveMessageAsync"/> 返回 <see cref="SubscribeResult"/>
-    /// 2. 返回 Fail(IsRequeue: true) → 抛出 <see cref="VivRequeueException"/> → Wolverine 内存退避重试
-    /// 3. 重试策略由 AddVivWolverine 中的 RetryWithCooldown 控制
-    ///    （默认 NanaOptions.RetryCount 次，指数退避 5s 起、最大 600s，全部失败后消息进入死信队列）
-    /// 4. 返回 Fail(IsRequeue: false) → 仅记录错误日志，消息直接丢弃不回队
-    /// 5. 延迟重投（推荐）→ 调用 <see cref="RedeliverAsync"/>：把原消息经 RabbitMQ 延迟交换机在指定
-    ///    延迟后重新投递到 fanout（各订阅服务各收一份），ReDeliverCount+1
-    ///    并携带 DelaySecond；超过 NanaOptions.RetryCount 上限则丢弃（不回队）。
+    /// 【两套重试机制区分】
+    /// ① Wolverine 内存退避重试（业务异常重试）
+    /// 子类 <see cref="ReceiveMessageAsync"/> 返回 Fail(IsRequeue:true) → 抛出 <see cref="VivRequeueException"/>
+    /// 由 AddVivWolverine 配置 RetryWithCooldown 控制：默认 NanaOptions.RetryCount 次，5s起指数退避，上限600s；耗尽后消息转入死信队列。
+    /// 返回 Fail(IsRequeue:false)：仅记录错误日志，消息ACK直接丢弃，不重试。
+    ///
+    /// ② RabbitMQ延迟重投（锁竞争/业务主动延迟，推荐）
+    /// 调用 <see cref="RedeliverAsync"/>，生成全新消息副本，经延迟交换机延时投递Fanout；ReDeliverCount自增，携带DelaySecond；
+    /// 原消息直接ACK完成；超过 NanaOptions.RetryCount 重投上限则丢弃副本。
+    /// Fanout下全部订阅服务接收副本，依靠消费锁保证单个服务只处理一次。
+    ///
+    /// 注意：分布式锁抢占失败的异常会被基类捕获消化，**不会抛给Wolverine，内存重试策略对锁竞争无效**。
     /// </summary>
+
     public abstract class VivConsumer<T> where T : NanaEvent
     {
         /// <summary>消费锁 TTL：覆盖一次业务处理时长，并靠 Redis 续期；处理完即释放。</summary>
@@ -83,13 +89,13 @@ namespace Viv.Nana
                     if (!string.IsNullOrEmpty(_context.TraceId))
                         holderId = _context.TraceId;
                 }
-                LockHolderContext.SetHolderId(holderId);
 
+                LockHolderContext.SetHolderId(holderId);
                 if (_distributedLock != null)
                 {
                     acquired = await _distributedLock.AcquireLockAsync(lockKey, ConsumerLockExpire, holderId).ConfigureAwait(false);
                     if (!acquired)
-                        throw new DistributedLockException(lockKey, 0);
+                        return;// 拿不到锁 = 已有其他实例在消费同一消息，按契约丢弃不回队
                 }
 
                 var result = await ReceiveMessageAsync(envelope, cancellationToken).ConfigureAwait(false);

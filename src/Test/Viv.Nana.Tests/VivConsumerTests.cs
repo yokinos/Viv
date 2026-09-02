@@ -193,43 +193,21 @@ namespace Viv.Nana.Tests
         }
 
         [Fact]
-        public async Task 拿不到锁_不进业务_记警告()
+        public async Task 拿不到锁_不进业务_直接确认()
         {
             var logger = new StubLogger();
+            var publisher = new StubPublisher();
             var distributedLock = new StubDistributedLock { AcquireResult = false };
-            var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), distributedLock));
+            var consumer = new CountingConsumer(Dep(logger, publisher, distributedLock));
 
             await consumer.HandleAsync(Envelope(), CancellationToken.None);
 
             Assert.Equal(0, consumer.Calls);
             Assert.Equal(1, distributedLock.AcquireCalls);
             Assert.Equal(0, distributedLock.ReleaseCalls);
-            var warning = Assert.Single(logger.Warnings);
-            Assert.Contains("获取分布式锁失败", warning);
-        }
-
-        [Fact]
-        public async Task 拿不到锁且声明重投_延迟重投()
-        {
-            VivConfigRegistry.Add(new NanaOptions { RetryCount = 3 });
-            try
-            {
-                var logger = new StubLogger();
-                var publisher = new StubPublisher();
-                var distributedLock = new StubDistributedLock { AcquireResult = false };
-                var consumer = new CountingConsumer(Dep(logger, publisher, distributedLock));
-                var envelope = Envelope(new TestApexEvent { LockFailShouldRetryDeliver = true });
-
-                await consumer.HandleAsync(envelope, CancellationToken.None);
-
-                Assert.Equal(0, consumer.Calls);
-                Assert.True(publisher.PublishDelayCalled);
-                Assert.Empty(logger.Warnings.FindAll(w => w.Contains("丢弃")));
-            }
-            finally
-            {
-                VivConfigRegistry.Remove<NanaOptions>();
-            }
+            Assert.False(publisher.PublishDelayCalled);
+            Assert.Empty(logger.Warnings);
+            Assert.Empty(logger.Errors);
         }
     }
 }

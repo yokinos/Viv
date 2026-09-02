@@ -371,7 +371,7 @@ public class UserService : IUserService
 
 ### 消息 Nana（Wolverine + RabbitMQ）
 
-发布订阅语义：每条事件进 fanout 交换机 `{EventName}Exchange`，每个订阅服务持一条独立队列 `{EventName}Queue.{ServiceName}` 各收一份。同服务只执行一次由 `VivConsumer<T>` 基类按 `nana:{ServiceName}:{EventType}:{MessageId}` 取 Redis 锁：谁取到谁进业务，拿不到则丢弃（或 `LockFailShouldRetryDeliver` 延迟重投）。未配 Redis 时跳过取锁。
+发布订阅语义：每条事件进 fanout 交换机 `{EventName}Exchange`，每个订阅服务持一条独立队列 `{EventName}Queue.{ServiceName}` 各收一份。同服务只执行一次由 `VivConsumer<T>` 基类按 `nana:{ServiceName}:{EventType}:{MessageId}` 取 Redis 锁：谁取到谁进业务，拿不到当前实例直接 return（ack，不回队）。未配 Redis 时跳过取锁。
 
 ```csharp
 // 发布（消息类需继承 NanaEvent）
