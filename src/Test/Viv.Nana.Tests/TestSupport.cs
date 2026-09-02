@@ -85,7 +85,10 @@ namespace Viv.Nana.Tests
     public class StubDistributedLock : IDistributedLock
     {
         public bool AcquireResult { get; set; } = true;
+        public bool IsHeldResult { get; set; } = true;
+        public bool IsHeldThrows { get; set; }
         public int AcquireCalls { get; private set; }
+        public int HeldCalls { get; private set; }
         public int ReleaseCalls { get; private set; }
         public string? LastLockKey { get; private set; }
 
@@ -94,6 +97,14 @@ namespace Viv.Nana.Tests
             AcquireCalls++;
             LastLockKey = lockKey;
             return Task.FromResult(AcquireResult);
+        }
+
+        public Task<bool> IsLockHeldAsync(string lockKey)
+        {
+            HeldCalls++;
+            if (IsHeldThrows)
+                throw new DistributedLockException(lockKey, 0);
+            return Task.FromResult(IsHeldResult);
         }
 
         public Task<bool> ReleaseLockAsync(string lockKey, string? lockHolderId = null, bool isReentrant = true)

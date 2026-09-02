@@ -1,4 +1,4 @@
-using Viv.Contracts;
+﻿using Viv.Contracts;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Delusion;
@@ -22,9 +22,8 @@ namespace Viv.Nana
     /// <c>nana:{ServiceName}:{EventType}:{MessageId}</c>
     /// - ServiceName：队列后缀，取自入口程序集；Fanout广播模式下，每个订阅服务持有独立锁，互不干扰。
     /// - ✅获取锁：执行业务逻辑，finally块自动释放锁；
-    /// - ❌抢锁失败：默认ACK确认原消息，直接丢弃，不会回原始队列、不会触发Wolverine重试、不进死信；
-    ///   若事件标记 <see cref="NanaEvent.LockFailShouldRetryDeliver"/> = true，且未达重投上限，则走延迟重投；
-    ///   重投到达上限依旧执行丢弃。
+    /// - ❌抢锁失败：二次裁决锁是否真被持有——确实被持有（真竞争）→ ACK确认丢弃，不回队；
+    ///   锁未被持有或无法确认（瞬时不稳/Redis故障）→ 抛异常交由 Wolverine 重试，耗尽进死信。
     /// - 未注入 <see cref="IDistributedLock"/>（无Redis环境）：完全跳过锁逻辑。
     ///
     /// 【两套重试机制区分】
@@ -33,12 +32,13 @@ namespace Viv.Nana
     /// 由 AddVivWolverine 配置 RetryWithCooldown 控制：默认 NanaOptions.RetryCount 次，5s起指数退避，上限600s；耗尽后消息转入死信队列。
     /// 返回 Fail(IsRequeue:false)：仅记录错误日志，消息ACK直接丢弃，不重试。
     ///
-    /// ② RabbitMQ延迟重投（锁竞争/业务主动延迟，推荐）
+    /// ② RabbitMQ延迟重投（业务主动延迟，推荐）
     /// 调用 <see cref="RedeliverAsync"/>，生成全新消息副本，经延迟交换机延时投递Fanout；ReDeliverCount自增，携带DelaySecond；
     /// 原消息直接ACK完成；超过 NanaOptions.RetryCount 重投上限则丢弃副本。
     /// Fanout下全部订阅服务接收副本，依靠消费锁保证单个服务只处理一次。
     ///
-    /// 注意：分布式锁抢占失败的异常会被基类捕获消化，**不会抛给Wolverine，内存重试策略对锁竞争无效**。
+    /// 注意：锁服务异常（DistributedLockException）会重新抛出给 Wolverine，由全局重试 + 死信策略兜底；
+    /// 锁竞争（IsLockHeldAsync 确认被持有）直接 ACK 丢弃，不会触发重试。
     /// </summary>
 
     public abstract class VivConsumer<T> where T : NanaEvent
@@ -92,7 +92,14 @@ namespace Viv.Nana
                 {
                     acquired = await _distributedLock.AcquireLockAsync(lockKey, TimeSpan.FromMinutes(5), holderId).ConfigureAwait(false);
                     if (!acquired)
-                        return;// 拿不到锁 = 已有其他实例在消费同一消息，按契约丢弃不回队
+                    {
+                        // 二次裁决：锁确实被其他实例持有 → 真竞争，丢弃不回队；
+                        // 锁未被持有但取锁失败（瞬时不稳/命令异常）→ 抛异常交由 Wolverine 重试；
+                        // 裁决本身失败（Redis 不可用）→ 异常冒泡，同样交由 Wolverine 重试/进死信。
+                        if (await _distributedLock.IsLockHeldAsync(lockKey).ConfigureAwait(false))
+                            return;
+                        throw new DistributedLockException(lockKey, 0);
+                    }
                 }
 
                 var result = await ReceiveMessageAsync(envelope, cancellationToken).ConfigureAwait(false);
@@ -110,20 +117,10 @@ namespace Viv.Nana
             }
             catch (DistributedLockException ex)
             {
-                // 仅「纯拿锁失败」（InnerException == null，非业务/Redis 异常）+ 消息声明重投时自动延迟重投；
-                // 已安排重投则原消息正常确认（ack），不打印「丢弃」
-                if (ex.InnerException == null && envelope.Content.LockFailShouldRetryDeliver)
-                {
-                    var retry = await RedeliverAsync(envelope, TimeSpan.FromMinutes(2 * (envelope.ReDeliverCount + 1)), cancellationToken);
-                    if (retry.IsSuccess)
-                        return;
-                    // 达重投上限 → RedeliverAsync 已记 warning，落入下方丢弃日志
-                }
-
-                // 拿不到锁 = 已有其他实例在消费同一消息（锁 Key = 服务名+事件+MessageId），
-                // 按「拿到执行、拿不到丢弃」契约丢弃不回队，避免空转重试后进死信。
-                _logger.Warning($"获取分布式锁失败，消息丢弃（不回队）: {ex.Message}, MessageId: {envelope.MessageId}");
-                return;
+                // 锁服务故障 / 无法确认锁状态 → 交由 Wolverine 全局策略重试 → 耗尽进死信队列；
+                // 真竞争已在取锁处二次裁决为丢弃，不会走到这里。
+                _logger.Warning($"分布式锁服务异常，交由 Wolverine 重试/死信: {ex.Message}, MessageId: {envelope.MessageId}");
+                throw;
             }
             finally
             {

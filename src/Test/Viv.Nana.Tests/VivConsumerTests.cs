@@ -1,3 +1,4 @@
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Delusion;
 using Viv.Nana.Core;
@@ -193,21 +194,51 @@ namespace Viv.Nana.Tests
         }
 
         [Fact]
-        public async Task 拿不到锁_不进业务_直接确认()
+        public async Task 拿不到锁_锁被持有_真竞争丢弃()
         {
             var logger = new StubLogger();
             var publisher = new StubPublisher();
-            var distributedLock = new StubDistributedLock { AcquireResult = false };
+            var distributedLock = new StubDistributedLock { AcquireResult = false, IsHeldResult = true };
             var consumer = new CountingConsumer(Dep(logger, publisher, distributedLock));
 
             await consumer.HandleAsync(Envelope(), CancellationToken.None);
 
             Assert.Equal(0, consumer.Calls);
             Assert.Equal(1, distributedLock.AcquireCalls);
+            Assert.Equal(1, distributedLock.HeldCalls);
             Assert.Equal(0, distributedLock.ReleaseCalls);
             Assert.False(publisher.PublishDelayCalled);
             Assert.Empty(logger.Warnings);
             Assert.Empty(logger.Errors);
+        }
+
+        [Fact]
+        public async Task 取锁失败_锁未被持有_抛异常重试()
+        {
+            var logger = new StubLogger();
+            var distributedLock = new StubDistributedLock { AcquireResult = false, IsHeldResult = false };
+            var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), distributedLock));
+
+            var ex = await Assert.ThrowsAsync<DistributedLockException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
+
+            Assert.Equal(0, consumer.Calls);
+            Assert.Equal(1, distributedLock.HeldCalls);
+            Assert.Equal(0, distributedLock.ReleaseCalls);
+            Assert.Contains("锁", ex.Message);
+        }
+
+        [Fact]
+        public async Task 取锁失败_裁决异常_抛异常重试()
+        {
+            var logger = new StubLogger();
+            var distributedLock = new StubDistributedLock { AcquireResult = false, IsHeldThrows = true };
+            var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), distributedLock));
+
+            await Assert.ThrowsAsync<DistributedLockException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
+
+            Assert.Equal(0, consumer.Calls);
+            Assert.Equal(1, distributedLock.HeldCalls);
+            Assert.Equal(0, distributedLock.ReleaseCalls);
         }
     }
 }

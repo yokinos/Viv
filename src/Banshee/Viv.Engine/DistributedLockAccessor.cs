@@ -32,6 +32,11 @@ namespace Viv.Engine
             return await _redisService.AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
         }
 
+        public async Task<bool> IsLockHeldAsync(string lockKey)
+        {
+            return await _redisService.IsLockHeldAsync(lockKey);
+        }
+
         public async Task<bool> ReleaseLockAsync(string lockKey, string? lockHolderId = null, bool isReentrant = true)
         {
             return await _redisService.ReleaseLockAsync(lockKey, lockHolderId, isReentrant);

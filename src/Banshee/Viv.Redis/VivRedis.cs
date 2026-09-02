@@ -28,7 +28,7 @@ namespace Viv.Redis
         /// 可空类型标注：返回值可能为null/默认值，需结合业务判断有效性
         /// </returns>
         [return: MaybeNull]
-        public async Task<T?> ExecuteRedisAsync<T>(string key, Func<IDatabase, Task<T>> func)
+        public async Task<T?> ExecuteRedisAsync<T>(string key, Func<IDatabase, Task<T>> func, bool isThrowException = false)
         {
             try
             {
@@ -38,6 +38,11 @@ namespace Viv.Redis
             }
             catch (Exception ex)
             {
+                if (isThrowException)
+                {
+                    throw;
+                }
+
                 WriteLog($"Redis操作执行失败: {ex.Message}", ex);
                 return default;
             }
@@ -54,7 +59,7 @@ namespace Viv.Redis
         /// 可空类型标注：返回值可能为null/默认值，需结合业务判断有效性
         /// </returns>
         [return: MaybeNull]
-        public T ExecuteRedis<T>(string key, Func<IDatabase, T> func)
+        public T ExecuteRedis<T>(string key, Func<IDatabase, T> func, bool isThrowException = false)
         {
             try
             {
@@ -64,6 +69,11 @@ namespace Viv.Redis
             }
             catch (Exception ex)
             {
+                if (isThrowException)
+                {
+                    throw;
+                }
+
                 WriteLog($"Redis操作执行失败: {ex.Message}", ex);
                 return default;
             }

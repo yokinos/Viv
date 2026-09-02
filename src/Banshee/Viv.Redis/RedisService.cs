@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Viv.Contracts;
+using Viv.Contracts.Exceptions;
 using Viv.Delusion.Extension;
 
 #nullable disable
@@ -479,14 +480,15 @@ namespace Viv.Redis
                 return false;
 
             // 同步锁不支持续期（续期需要后台线程，同步场景易死锁）
+            // 取锁失败统一返回 false，由调用方通过 IsLockHeldAsync 二次裁决（真竞争 vs 服务故障）
             return ExecuteRedis(lockKey, db =>
-            {
-                if (!isReentrant)
                 {
-                    return db.StringSet(lockKey, lockHolderId, expire, When.NotExists);
-                }
+                    if (!isReentrant)
+                    {
+                        return db.StringSet(lockKey, lockHolderId, expire, When.NotExists);
+                    }
 
-                var reentrantLockScript = @"
+                    var reentrantLockScript = @"
                     local currentVal = redis.call('GET', KEYS[1])
                     if currentVal == false then
                         redis.call('SET', KEYS[1], ARGV[1] .. '_1', 'EX', ARGV[2])
@@ -501,9 +503,9 @@ namespace Viv.Redis
                         return 0
                     end";
 
-                var scriptResult = db.ScriptEvaluate(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]);
-                return (long)scriptResult == 1;
-            });
+                    var scriptResult = db.ScriptEvaluate(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]);
+                    return (long)scriptResult == 1;
+                });
         }
 
         /// <summary>
@@ -518,13 +520,13 @@ namespace Viv.Redis
                 return false;
 
             var success = await ExecuteRedisAsync(lockKey, async db =>
-            {
-                if (!isReentrant)
                 {
-                    return await db.StringSetAsync(lockKey, lockHolderId, expire, When.NotExists).ConfigureAwait(false);
-                }
+                    if (!isReentrant)
+                    {
+                        return await db.StringSetAsync(lockKey, lockHolderId, expire, When.NotExists).ConfigureAwait(false);
+                    }
 
-                var reentrantLockScript = @"
+                    var reentrantLockScript = @"
                     local currentVal = redis.call('GET', KEYS[1])
                     if currentVal == false then
                         redis.call('SET', KEYS[1], ARGV[1] .. '_1', 'EX', ARGV[2])
@@ -539,9 +541,9 @@ namespace Viv.Redis
                         return 0
                     end";
 
-                var scriptResult = await db.ScriptEvaluateAsync(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]).ConfigureAwait(false);
-                return (long)scriptResult == 1;
-            }).ConfigureAwait(false);
+                    var scriptResult = await db.ScriptEvaluateAsync(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]).ConfigureAwait(false);
+                    return (long)scriptResult == 1;
+                }).ConfigureAwait(false);
 
             if (success && isReentrant)
             {
@@ -550,6 +552,28 @@ namespace Viv.Redis
             }
 
             return success;
+        }
+
+        /// <summary>
+        /// 查询锁当前是否被持有（取锁失败后用于区分「真竞争」与「服务瞬时不稳/故障」）
+        /// </summary>
+        /// <param name="lockKey">锁的唯一标识</param>
+        /// <returns>
+        /// <c>true</c> = 锁确实被其他持有者占用（真竞争）；
+        /// <c>false</c> = 锁未被持有（说明刚才取锁失败是瞬时不稳/命令异常）
+        /// </returns>
+        /// <exception cref="DistributedLockException">Redis 不可用、无法确认锁状态时抛出</exception>
+        public async Task<bool> IsLockHeldAsync(string lockKey)
+        {
+            try
+            {
+                return await ExecuteRedisAsync(lockKey, async db => await db.KeyExistsAsync(lockKey).ConfigureAwait(false), true).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                WriteLog($"查询分布式锁状态失败 Key:{lockKey}, Error:{ex.Message}", ex);
+                throw new DistributedLockException(lockKey, 0, ex); //无法确认锁状态，交由上层按故障处理
+            }
         }
 
         /// <summary>
@@ -783,7 +807,7 @@ namespace Viv.Redis
         /// <summary>
         /// 停止锁续期（内部方法）
         /// </summary>
-        private void StopRenewal(string lockKey)
+        private static void StopRenewal(string lockKey)
         {
             if (_renewalTasks.TryRemove(lockKey, out var entry))
             {

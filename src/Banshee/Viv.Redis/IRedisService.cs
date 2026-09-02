@@ -388,6 +388,17 @@ namespace Viv.Redis
         bool ForceReleaseLock(string lockKey);
 
         /// <summary>
+        /// 查询锁当前是否被持有（取锁失败后用于区分「真竞争」与「服务瞬时不稳/故障」）
+        /// </summary>
+        /// <param name="lockKey">锁的唯一标识</param>
+        /// <returns>
+        /// <c>true</c> = 锁确实被其他持有者占用（真竞争）；
+        /// <c>false</c> = 锁未被持有（说明刚才取锁失败是瞬时不稳/命令异常）
+        /// </returns>
+        /// <exception cref="DistributedLockException">Redis 不可用、无法确认锁状态时抛出</exception>
+        Task<bool> IsLockHeldAsync(string lockKey);
+
+        /// <summary>
         /// 获取分布式锁
         /// </summary>
         /// <param name="lockKey">锁的唯一标识</param>
