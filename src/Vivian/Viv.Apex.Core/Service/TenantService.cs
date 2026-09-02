@@ -30,7 +30,7 @@ namespace Viv.Apex.Core.Service
             {
                 TenantId = tenant.Id,
                 TenantCode = tenant.Code,
-                TenantName = tenant.Name
+                Name = tenant.Name,
             };
 
             return VivApiResult<GetTenantOutput>.Success(output);
