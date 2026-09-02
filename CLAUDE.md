@@ -20,7 +20,7 @@ dotnet run --project src/Vivian/Viv.Apex.Worker
 
 ## Architecture
 
-The solution splits into two top-level namespaces: **Banshee** (framework) and **Vivian** (application). A third namespace, **Test**, holds CLI tooling.
+The solution splits into two top-level namespaces: **Banshee** (framework) and **Vivian** (application). A third namespace, **Test** (`src/Test/`), holds per-project unit tests. CLI tooling lives in `Viv.Cli`.
 
 ---
 
@@ -33,7 +33,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios |
 | `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig(builder.Configuration)` binds the `VivOptions` node from appsettings.json into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup |
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
-| `Viv.Momo` | Database — `IVivDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server |
+| `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server |
 | `Viv.Nana` | Messaging — `IVivEventPublisher` / `NanaEventPublisher` (publish + delayed publish); `VivConsumer<T>` base class; built on **Wolverine + RabbitMQ**; Saga support with EF Core state persistence |
 | `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`) |
 | `Viv.Sandrone` | Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service` |
@@ -92,7 +92,7 @@ Do **not** copy `Program.cs` boilerplate. Use the framework extension methods:
 // ── API ──────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
-builder.AddVivApi("Viv XXX API", mvc => mvc.Filters.Add<RequestFilterAttribute>());
+builder.AddVivApi(new ApiInitSetting("Viv XXX API"), mvc => mvc.Filters.Add<RequestFilterAttribute>());
 builder.RunVivApi(app => app.MapDefaultEndpoints());
 
 // ── Worker ────────────────────────────────────────
@@ -116,9 +116,9 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 - **SignalR/WS 认证**：网关 JwtBearer 支持 `access_token` 查询参数认证（`JwtBearerEvents.OnMessageReceived`，SignalR 升级请求无法带 `Authorization` 头）；客户端经 `/ws/{短名}/...` 需带有效 JWT 才能获得身份（经 `x-viv-*` 头下传），下游 hub（如 `ChatHub`）读 `RequestTokenResolver.GetContextFromHeaders` 取已验身份，**无身份即 `Context.Abort()`**——不再信任客户端 query 直传的 tenantId/userId/appId。
 - **`x-request-token` 防重放**：签名载荷含 unix 时间戳（token 格式 `{unixSeconds}:{base64Sig}`），下游验签时校验 ≤300s，超时/旧格式（无冒号）一律拒绝——截获签名头组也不能无限期重放冒充。
 - **头部契约/白名单集中存放**：上下文头名（`x-viv-appId`/`x-viv-subjectId`/`x-viv-userId`/`x-viv-serviceName`/`x-request-token`）**单一来源定义在 `VivHeaderContract`（`Viv.Contracts`，gRPC/HTTP 跨层共用，Echo/ServiceProxy 拦截器读它）**，`VivRunDefine`（`Viv.Engine`）以别名引用保持既有调用点不变；HTTP 状态码白名单仍在 `VivRunDefine`。网关/`RequestTokenResolver`/`VivApiResult` 跨层共用同一来源。
-- **内部签名密钥 `EnvOption.InternalToken`**：`RequestTokenResolver.GetInternalSecret()` 优先取 `VivEngine.VivOptions?.EnvOption?.InternalToken`（appsettings.json 的 `VivOptions.EnvOption` 节点，网关与**所有服务必须配同一个值**，32 位随机 hex），缺省回落到 `TokenOption.SecretKey`（向后兼容，旧部署无需改配置即可互通）。匿名服务（两者皆 null）不验签，按原行为信任头——只用于无租户数据场景。
+- **内部签名密钥 `EnvOption.InternalToken`**：`RequestTokenResolver.GetInternalSecret()` 只取 `VivEngine.VivOptions?.EnvOption?.InternalToken`（appsettings.json 的 `VivOptions.EnvOption` 节点，网关与**所有服务必须配同一个值**，32 位随机 hex），**不回落** `TokenOption.SecretKey`。未配 InternalToken 时不验签，按原行为信任头——只用于无租户数据场景。
 - **路由自动生成**：`VivGatewayRouteBuilder.Build()` 从 Aspire 注入的 `services__*` 环境变量（`WithReference`）为每个服务生成 3 条路由 + 1 个集群，**零手写 JSON**（无 `viv.yarp.json`）。新增 API 只需在 AppHost 加 `WithReference`：
-  - `/api/{短名}/{**catch-all}` → `/api/{**catch-all}`（标准 API，`PathPattern` 匹配替换吃掉中间段）
+  - `/{短名}/api/{**catch-all}` → `/api/{**catch-all}`（标准 API，如 `/apex/api/...`，`PathPattern` 匹配替换吃掉短名前缀）
   - `/docs/{短名}/{**catch-all}` → `/{**catch-all}`（Scalar 文档）
   - `/ws/{短名}/{**catch-all}` → `/{**catch-all}`（SignalR / WebSocket 透传）
   - **短名 = 服务名 `split('-')[1]`**（`viv-apex-api` → `apex`）；第二段冲突时（`viv-herta-api` 与 `viv-herta-link` 都是 `herta`），`-api` 保留基础短名，其余服务拼接剩余段（`herta`+`link` → `hertalink`），保证集群 ID 唯一。
@@ -161,11 +161,11 @@ Business-layer services and repositories are registered via **type scanning** dr
 基于 **Wolverine 6.25.3（MIT）** + RabbitMQ（`WolverineFx` / `WolverineFx.RabbitMQ` / `WolverineFx.EntityFrameworkCore` / `WolverineFx.RuntimeCompilation`）。对外抽象不变（`IVivEventPublisher` / `VivConsumer<T>` / `NanaEvent` / `SubscribeResult` / `NanaEnvelope<T>`），应用层无需感知传输实现。
 
 - **Producer:** `IVivEventPublisher.PublishAsync<T>()` / `PublishDelayAsync<T>(TimeSpan, T)` — messages must extend `NanaEvent`（not `VivMessage`）。`NanaEventPublisher` 内部包成 `NanaEnvelope<T>`（含 `IVivContext` 快照 `Context`，租户上下文随消息透传），调 `IMessageBus.PublishAsync(envelope)` / `ScheduleAsync(envelope, delay)`。
-- **Consumer:** Extend `VivConsumer<T>`, override `ReceiveMessageAsync()` — return `SubscribeResult` 指示成功或重投。基类 `HandleAsync(NanaEnvelope<T>, CancellationToken)`（Wolverine handler 约定，`Discovery.IncludeType` 显式注册）将结果映射：`Success` → 确认；`Requeue` → 抛 `VivRequeueException`（走全局重试策略）；失败 → 记日志丢弃。
-- **延迟重投（`VivConsumer.RedeliverAsync`）**：业务失败想延迟再试时调用 `RedeliverAsync(envelope, delay)`，把**原信封**经 RabbitMQ 延迟交换机在 delay 后重投 fanout（各订阅服务各收一份，谁爱消费谁消费，分布式锁保证只执行一次）。`NanaEnvelope` 加 `ReDeliverCount`/`DelaySecond` 字段随信封透传；`IVivEventPublisher` 新增**信封版** `PublishDelayAsync(TimeSpan, NanaEnvelope<T>, ...)` 直接 `ScheduleAsync` 原信封——内容版重载会新建信封，丢 MessageId/ReDeliverCount/DelaySecond/Context（锁 Key 与计数无法存活）。重投前 `ReDeliverCount+1`，超过 `NanaOptions.RetryCount` 上限返回 Failed(IsRequeue:false) 丢弃不回队。上限经 `VivConfigRegistry.Get<NanaOptions>()` 静态取（`NanaRegister.Initialize` 已把 NanaOptions 放进注册表，**无需 DI 注入**）；`VivConsumer` 构造注入 **`VivConsumerDependency`**（聚合 `ILoggerContract`/`IVivContext`/`IVivEventPublisher`，`: IDependency` 经 `AutoDependencyRegister` 自动注册 **AsSelf + Scoped**，子类构造 `: base(dependency)` 透传即可）。**拿锁失败自动重投（可选，opt-in）**：producer 在 `NanaEvent` 上设 `LockFailShouldRetryDeliver=true`（随内容序列化、重投副本天然继承）且 `DistributedLockException.InnerException == null`（**纯拿锁失败**——业务在锁内抛异常/Redis 异常都有 Inner，不触发自动重投，业务自己处理）时，基类按 `2×(ReDeliverCount+1)` 分钟递增延迟重投，成功重投原消息 ack（不打印丢弃）；同样受 `RetryCount` 上限约束，达上限才丢弃。
+- **Consumer:** Extend `VivConsumer<T>`, override `ReceiveMessageAsync()` — return `SubscribeResult` 指示成功或重投。基类 `HandleAsync(NanaEnvelope<T>, CancellationToken)`（Wolverine handler 约定，`Discovery.IncludeType` 显式注册）先按 `nana:{ServiceName}:{EventType}:{MessageId}` 取 Redis 锁（`IDistributedLock`，未注册则跳过）：**谁取到锁谁进业务**，fanout 下各服务 Key 不同所以各处理一份；拿不到锁走既有 `DistributedLockException` 契约。然后将结果映射：`Success` → 确认；`Requeue` → 抛 `VivRequeueException`（走全局重试策略）；失败 → 记日志丢弃。
+- **延迟重投（`VivConsumer.RedeliverAsync`）**：业务失败想延迟再试时调用 `RedeliverAsync(envelope, delay)`，把**原信封**经 RabbitMQ 延迟交换机在 delay 后重投 fanout（各订阅服务各收一份，谁爱消费谁消费，同服务消费锁保证只进一次业务）。`NanaEnvelope` 加 `ReDeliverCount`/`DelaySecond` 字段随信封透传；`IVivEventPublisher` 新增**信封版** `PublishDelayAsync(TimeSpan, NanaEnvelope<T>, ...)` 直接 `ScheduleAsync` 原信封——内容版重载会新建信封，丢 MessageId/ReDeliverCount/DelaySecond/Context（锁 Key 与计数无法存活）。重投前 `ReDeliverCount+1`，超过 `NanaOptions.RetryCount` 上限返回 Failed(IsRequeue:false) 丢弃不回队。上限经 `VivConfigRegistry.Get<NanaOptions>()` 静态取（`NanaRegister.Initialize` 已把 NanaOptions 放进注册表，**无需 DI 注入**）；`VivConsumer` 构造注入 **`VivConsumerDependency`**（聚合 `ILoggerContract`/`IVivContext`/`IVivEventPublisher`/`IDistributedLock?`，`: IDependency` 经 `AutoDependencyRegister` 自动注册 **AsSelf + Scoped**，子类构造 `: base(dependency)` 透传即可）。**拿锁失败自动重投（可选，opt-in）**：producer 在 `NanaEvent` 上设 `LockFailShouldRetryDeliver=true`（随内容序列化、重投副本天然继承）且 `DistributedLockException.InnerException == null`（**纯拿锁失败**——业务在锁内抛异常/Redis 异常都有 Inner，不触发自动重投，业务自己处理）时，基类按 `2×(ReDeliverCount+1)` 分钟递增延迟重投，成功重投原消息 ack（不打印丢弃）；同样受 `RetryCount` 上限约束，达上限才丢弃。
 - **配置（`AddVivWolverine`，`AddViv()` 内调用）：**
   - `UseRabbitMq(amqp://user:pass@host:port/vhost).AutoProvision()` — 队列/交换机自动声明（**先清理旧 MassTransit 拓扑遗留的队列**，否则 `406 PRECONDITION_FAILED`）。
-  - **发布订阅拓扑**：发布侧 `PublishMessage<NanaEnvelope<T>>().ToRabbitExchange({EventName}Exchange)`（fanout 交换机）；消费侧 `ListenToRabbitQueue({EventName}Queue.{ServiceName})` + `transport.BindExchange({EventName}Exchange, ExchangeType.Fanout).ToQueue(queue)`——每个订阅服务建一条**独立队列**绑到交换机，**各收一份**（`NanaRegister.GetExchangeName`/`GetConsumerQueueName` 约定；`ServiceName` = 入口程序集名，同服务多实例共享队列轮询）。**"只执行一次"由业务层自己拿 Redis 分布式锁保证**（拿到执行、拿不到丢弃），框架只负责广播。
+  - **发布订阅拓扑**：发布侧 `PublishMessage<NanaEnvelope<T>>().ToRabbitExchange({EventName}Exchange)`（fanout 交换机）；消费侧 `ListenToRabbitQueue({EventName}Queue.{ServiceName})` + `transport.BindExchange({EventName}Exchange, ExchangeType.Fanout).ToQueue(queue)`——每个订阅服务建一条**独立队列**绑到交换机，**各收一份**（`NanaRegister.GetExchangeName`/`GetConsumerQueueName` 约定；`ServiceName` = 入口程序集名，同服务多实例共享队列轮询）。**同服务只执行一次由 `VivConsumer.HandleAsync` 取 Redis 锁保证**（Key = `nana:{ServiceName}:{EventType}:{MessageId}`，拿到进业务、拿不到丢弃）；框架仍只负责广播，锁按服务隔离所以 Apex 与 DeepRed 会各处理一份。
   - **消费并发/预取调优**：`VivConsumer<T>` 子类可标 `[NanaConsumer(ConsumerCount, PrefetchCount, MaximumParallelMessages)]` 控制该队列的消费通道数（>1 丢失同队列严格顺序）、每通道预取（basic.qos）、端点最大并行；特性缺席回落框架默认 **prefetch=20**（收敛 Wolverine 原生 100，降低崩溃重投放大）、队列 **Quorum**（多副本防丢消息）。`AddVivWolverine` 内**直接写 `RabbitMqQueue` 属性**（`VivWolverineConfigurationExtensions`）——该 fork 的 fluent `PreFetchCount/ListenerCount/QueueType` 是空壳（编译通过但不落盘），必须直写。⚠️ 已存在的 classic 队列不会自动变 quorum，重声明类型不一致会 `406 PRECONDITION_FAILED`，切换前需清掉旧队列。
   - 全局失败策略：`OnException<Exception>().RetryWithCooldown(指数退避 5s 起、最大 60s，共 RetryCount 次).Then.MoveToErrorQueue()`（死信 → `wolverine-dead-letter-queue`）。
   - **EF Saga 持久化**：`NanaOption.SagaConnectionString` 已配且扫到 `VivSagaState` 子类（`TypeScanMagic.ScanTypes<VivSagaState>()`，需 `ForceLoadReferencedAssemblies()` 强制加载业务 Core 程序集）时启用：`opts.UseEntityFrameworkCoreTransactions(TransactionMiddlewareMode.Lightweight)`（**内联在 options 里**，规避 JasperFx/wolverine#1140 DI 修改 bug；**Lightweight = 无 durable outbox**，默认 Eager 要求数据库消息持久化会抛 "not using Database backed message persistence"）+ `VivSagaDbContext` 映射 `Saga_{SagaTypeName}` 表。
@@ -174,7 +174,7 @@ Business-layer services and repositories are registered via **type scanning** dr
 
 ### Database (Momo)
 
-`VivDatabaseContext` (implements `IVivDbContext`) uses EF Core for small operations and Dapper for bulk queries (threshold: `EFMaxCount`). `EFAppContext` is created as either read or write — reads randomly select a slave connection, writes always use the master. Entities are auto-scanned via `DatabaseOption.EntityTypeOptions`.
+`MomoDatabaseContext` (implements `IMomoDbContext`) uses EF Core for small operations and Dapper for bulk queries (threshold: `EFMaxCount`). `EFAppContext` is created as either read or write — reads randomly select a slave connection, writes always use the master. Entities are auto-scanned via `DatabaseOption.EntityTypeOptions`.
 
 ### Multi-tenancy
 

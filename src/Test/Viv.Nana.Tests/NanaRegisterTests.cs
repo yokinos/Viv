@@ -43,6 +43,15 @@ namespace Viv.Nana.Tests
         }
 
         [Fact]
+        public void GetConsumerLockKey_含服务名事件和MessageId()
+        {
+            var key = NanaRegister.GetConsumerLockKey(nameof(TestApexEvent), 42);
+
+            Assert.Equal($"nana:{NanaRegister.CurrentServiceName}:TestApexEvent:42", key);
+            Assert.StartsWith("nana:", key);
+        }
+
+        [Fact]
         public void ExtractMessageType_从VivConsumer提取T()
         {
             Assert.Equal(typeof(TestApexEvent), NanaRegister.ExtractMessageType(typeof(RequeueConsumer)));

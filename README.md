@@ -30,7 +30,7 @@
 |:--|:--|:--|
 | **Banshee** | 报丧女妖 | 框架层 — 幕后驱动一切基础设施 |
 | **Vivian** | 薇薇安 | 应用层 — 台前承载业务服务 |
-| **Test** | — | CLI 工具集 — 命令自动发现 |
+| **Test** | — | 单元测试套件（`src/Test/` 框架测试；CLI 在 `Viv.Cli`） |
 
 ---
 
@@ -98,7 +98,7 @@ Viv.Aspire.Gateway  ── 只解析不强制：无 token 也放行 ──
 | ⑤ | 网关 | 认证通过后从 claims 回填 `x-viv-*` 头，HMAC-SHA256 签名写 `x-request-token`（载荷含 unix 时间戳，5 分钟过期）—— 防止绕过网关直连下游伪造头 |
 | ⑥ | 下游 | 信任网关透传的 `X-Forwarded-Proto/Host/For`，避免 `UseHttpsRedirection` 把浏览器 302 甩出网关 |
 | ⑦ | 下游 | JwtBearer 验签 JWT（`TokenOption=null` 的匿名服务不注册鉴权） |
-| ⑧ | 下游 | `RequestTokenResolver.GetContextFromHeaders` 用 `EnvOption.InternalToken`（缺省回落 `TokenOption.SecretKey`）验 `x-request-token` 签名 + 时效；失败 → 视为无身份 |
+| ⑧ | 下游 | `RequestTokenResolver.GetContextFromHeaders` 用 `EnvOption.InternalToken` 验 `x-request-token` 签名 + 时效；失败 → 视为无身份 |
 | ⑨ | 下游 | 参数校验 → 业务 → 统一响应 |
 | ⑩ | 数据层 | 多租户自动隔离（EF 查询过滤 / Dapper 追加租户条件），业务代码无需手写 |
 
@@ -110,7 +110,7 @@ Viv.Aspire.Gateway  ── 只解析不强制：无 token 也放行 ──
 | `x-viv-subjectId` | 租户 ID = TenantId（claims: `tenantId`） |
 | `x-viv-userId` | 用户 ID（claims: `sub`） |
 | `x-viv-serviceName` | 服务名（网关填自己的 `EnvOption.ServiceName`） |
-| `x-request-token` | `{unixSeconds}:{base64Sig}` — 对上面 4 个头 + 时间戳的 HMAC-SHA256（密钥 `EnvOption.InternalToken`，网关与所有服务同值；缺省回落 `TokenOption.SecretKey`）。下游验签 + ≤300s 时效通过才信任头组 |
+| `x-request-token` | `{unixSeconds}:{base64Sig}` — 对上面 4 个头 + 时间戳的 HMAC-SHA256（密钥 `EnvOption.InternalToken`，网关与所有服务同值，不回落 JWT SecretKey）。下游验签 + ≤300s 时效通过才信任头组 |
 
 **SignalR / WebSocket 链路**：
 
@@ -148,7 +148,9 @@ Viv/
 │   │   ├── Viv.Entity/                   # 数据库实体（按领域分目录）
 │   │   ├── Viv.Elysia/                   # 请求校验管线（RequestFilterAttribute、RequestValidator<T>）
 │   │   ├── Viv.EventContracts/           # 跨服务消息定义
-│   │   ├── Viv.Sdk/                      # 公共 SDK（gRPC 存根、DTO）
+│   │   ├── Viv.ServiceProxy/             # 业务侧 gRPC 示例（proto + 实现；框架装配在 Echo）
+│   │   ├── Viv.Generators/               # 应用源生成器（继承 Viv.Forge）
+│   │   ├── Viv.Meta/                     # 生成代码宿主
 │   │   │
 │   │   ├── Viv.Apex.Core|Api|Worker/     # Apex 领域
 │   │   ├── Viv.DeepRed.Core|Api|Worker/  # DeepRed 领域
@@ -160,7 +162,7 @@ Viv/
 │   │       ├── Viv.Aspire.Gateway/        # YARP 反向代理（路由自动生成）
 │   │       └── Viv.Aspire.ServiceDefaults/ # OpenTelemetry、/health、服务发现、韧性
 │   │
-│   └── Test/                             # 单元测试套件（每框架项目一个）
+│   └── Test/                             # 框架单元测试套件（每 Banshee 项目一套）
 ```
 
 ---
@@ -218,7 +220,7 @@ dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.Gateway
 // ── API ──────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
-builder.AddVivApi("Viv Apex API", mvc => mvc.Filters.Add<RequestFilterAttribute>());
+builder.AddVivApi(new ApiInitSetting("Viv Apex API", "apex"), mvc => mvc.Filters.Add<RequestFilterAttribute>());
 builder.RunVivApi(app => app.MapDefaultEndpoints());
 
 // ── Worker（消息消费者 / 后台任务）──────────────────
@@ -247,7 +249,7 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
     "Env": 0,                             // 0=Development 1=Test 2=PreRelease 3=Production
     "ServiceName": "viv.apex.api",        // 服务名（Nana 队列名 / 网关路由短名依赖它）
     "MachineId": 101,                     // 机器 ID（分布式 ID 生成）
-    "InternalToken": "<32位随机hex>"       // x-request-token 签名密钥（网关与所有服务必须同一个值；缺省回落 TokenOption.SecretKey）
+    "InternalToken": "<32位随机hex>"       // x-request-token 签名密钥（网关与所有服务必须同一个值；不回落 TokenOption.SecretKey）
   },
   "DIOption": {                           // Service / Repository 自动扫描注册
     "ServiceImplementation": {
@@ -369,7 +371,7 @@ public class UserService : IUserService
 
 ### 消息 Nana（Wolverine + RabbitMQ）
 
-发布订阅语义：每条事件进 fanout 交换机 `{EventName}Exchange`，每个订阅服务持一条独立队列 `{EventName}Queue.{ServiceName}` 各收一份；"只执行一次"由业务侧拿 Redis 分布式锁保证。
+发布订阅语义：每条事件进 fanout 交换机 `{EventName}Exchange`，每个订阅服务持一条独立队列 `{EventName}Queue.{ServiceName}` 各收一份。同服务只执行一次由 `VivConsumer<T>` 基类按 `nana:{ServiceName}:{EventType}:{MessageId}` 取 Redis 锁：谁取到谁进业务，拿不到则丢弃（或 `LockFailShouldRetryDeliver` 延迟重投）。未配 Redis 时跳过取锁。
 
 ```csharp
 // 发布（消息类需继承 NanaEvent）
@@ -407,7 +409,7 @@ public class UserCreatedConsumer : VivConsumer<UserCreated> { ... }
 
 ### 统一响应
 
-所有 API 返回 `VivApiResult` 信封，**HTTP 状态码恒为 200**，业务结果由 `Code` 表达：
+所有 API 返回 `VivApiResult` 信封。**业务成败走信封 `Code`，与 HTTP 状态码无关**——业务失败也是 HTTP 200。需要原样返回 301/304/404 等时，先写 `Response.StatusCode`（仅白名单内状态码会保留）：
 
 ```json
 { "code": 200, "message": "请求处理成功", "data": { ... } }
@@ -441,11 +443,11 @@ public class UserCreatedConsumer : VivConsumer<UserCreated> { ... }
 
 | 路由 | 目标 | 用途 |
 |:--|:--|:--|
-| `/api/{短名}/{**catch-all}` | `/api/{**catch-all}` | 标准 API |
+| `/{短名}/api/{**catch-all}` | `/api/{**catch-all}` | 标准 API（如 `/apex/api/...`） |
 | `/docs/{短名}/{**catch-all}` | `/{**catch-all}` | Scalar 文档（经网关透出） |
 | `/ws/{短名}/{**catch-all}` | `/{**catch-all}` | WebSocket / SignalR |
 
-网关只**解析不透传强制**鉴权：JWT 有就验签回填 `x-viv-*` 头（先剥离客户端伪造头与 query 身份参数，再 HMAC 签名 `x-request-token` 防绕过直连），无则放行；鉴权由下游服务 `[Authorize]` 自己控制。签名密钥取 `EnvOption.InternalToken`（缺省回落 `TokenOption.SecretKey`）。限流策略在 `viv.ratelimit.json` 热重载。
+网关只**解析不透传强制**鉴权：JWT 有就验签回填 `x-viv-*` 头（先剥离客户端伪造头与 query 身份参数，再 HMAC 签名 `x-request-token` 防绕过直连），无则放行；鉴权由下游服务 `[Authorize]` 自己控制。签名密钥只取 `EnvOption.InternalToken`（不回落 `TokenOption.SecretKey`）。限流策略在 `viv.ratelimit.json` 热重载。
 
 ### CLI 命令
 

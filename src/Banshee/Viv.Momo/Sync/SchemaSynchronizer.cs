@@ -28,7 +28,7 @@ namespace Viv.Momo.Sync
     ///   var diff = sync.Diff(expected, actual);                   // 4. 对比
     ///   Console.WriteLine(SchemaSynchronizer.GenerateReport(diff));// 5. 报告
     ///   var ddl = sync.GenerateDdl(diff);                          // 6. 生成 DDL
-    ///   // 7. 执行 DDL（用 IVivDbContext.ExecuteSqlListAsync）
+    ///   // 7. 执行 DDL（用 IMomoDbContext.ExecuteSqlListAsync）
     /// </code>
     /// </summary>
     public class SchemaSynchronizer
@@ -212,7 +212,7 @@ namespace Viv.Momo.Sync
 
         /// <summary>
         /// 根据 Diff 结果生成 DDL 语句列表（CREATE TABLE、ALTER TABLE、DROP TABLE 等）。
-        /// DDL 是纯字符串列表，需要自行执行（用 IVivDbContext.ExecuteSqlListAsync 或直接拿连接执行）。
+        /// DDL 是纯字符串列表，需要自行执行（用 IMomoDbContext.ExecuteSqlListAsync 或直接拿连接执行）。
         /// 执行顺序建议：先 DROP TABLE → CREATE TABLE → ALTER TABLE（先删依赖再建）。
         /// </summary>
         public List<string> GenerateDdl(SyncDiffResult diff)

@@ -1,3 +1,4 @@
+using Viv.Contracts.Interface;
 using Viv.Delusion;
 using Viv.Nana.Core;
 using Viv.Nana.Options;
@@ -39,6 +40,20 @@ namespace Viv.Nana.Tests
             => RedeliverAsync(envelope, Delay, cancellationToken);
     }
 
+    /// <summary>记录业务是否进入</summary>
+    public class CountingConsumer : VivConsumer<TestApexEvent>
+    {
+        public int Calls { get; private set; }
+
+        public CountingConsumer(VivConsumerDependency dependency) : base(dependency) { }
+
+        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return Task.FromResult(SubscribeResult.Success());
+        }
+    }
+
     /// <summary>
     /// 消费者重试/确认/丢弃语义 —— VivConsumer.HandleAsync 是 Wolverine handler 入口，
     /// 结果映射到框架行为（确认 / 抛 VivRequeueException / 记日志丢弃）。
@@ -48,8 +63,8 @@ namespace Viv.Nana.Tests
         private static NanaEnvelope<TestApexEvent> Envelope(TestApexEvent? content = null)
             => new() { Content = content ?? new TestApexEvent { Payload = "data" } };
 
-        private static VivConsumerDependency Dep(StubLogger logger, StubPublisher publisher)
-            => new(logger, new FakeContext(), publisher);
+        private static VivConsumerDependency Dep(StubLogger logger, StubPublisher publisher, IDistributedLock? distributedLock = null)
+            => new(logger, new FakeContext(), publisher, distributedLock);
 
         [Fact]
         public async Task 成功_无异常无日志()
@@ -152,6 +167,64 @@ namespace Viv.Nana.Tests
                 Assert.Equal(3, envelope.ReDeliverCount);           // 未再自增
                 var warning = Assert.Single(logger.Warnings);
                 Assert.Contains("上限", warning);
+            }
+            finally
+            {
+                VivConfigRegistry.Remove<NanaOptions>();
+            }
+        }
+
+        [Fact]
+        public async Task 取到锁_进入业务并释放()
+        {
+            var logger = new StubLogger();
+            var distributedLock = new StubDistributedLock { AcquireResult = true };
+            var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), distributedLock));
+            var envelope = Envelope();
+            envelope.MessageId = 42;
+
+            await consumer.HandleAsync(envelope, CancellationToken.None);
+
+            Assert.Equal(1, consumer.Calls);
+            Assert.Equal(1, distributedLock.AcquireCalls);
+            Assert.Equal(1, distributedLock.ReleaseCalls);
+            Assert.Equal(NanaRegister.GetConsumerLockKey(nameof(TestApexEvent), 42), distributedLock.LastLockKey);
+            Assert.Empty(logger.Warnings);
+        }
+
+        [Fact]
+        public async Task 拿不到锁_不进业务_记警告()
+        {
+            var logger = new StubLogger();
+            var distributedLock = new StubDistributedLock { AcquireResult = false };
+            var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), distributedLock));
+
+            await consumer.HandleAsync(Envelope(), CancellationToken.None);
+
+            Assert.Equal(0, consumer.Calls);
+            Assert.Equal(1, distributedLock.AcquireCalls);
+            Assert.Equal(0, distributedLock.ReleaseCalls);
+            var warning = Assert.Single(logger.Warnings);
+            Assert.Contains("获取分布式锁失败", warning);
+        }
+
+        [Fact]
+        public async Task 拿不到锁且声明重投_延迟重投()
+        {
+            VivConfigRegistry.Add(new NanaOptions { RetryCount = 3 });
+            try
+            {
+                var logger = new StubLogger();
+                var publisher = new StubPublisher();
+                var distributedLock = new StubDistributedLock { AcquireResult = false };
+                var consumer = new CountingConsumer(Dep(logger, publisher, distributedLock));
+                var envelope = Envelope(new TestApexEvent { LockFailShouldRetryDeliver = true });
+
+                await consumer.HandleAsync(envelope, CancellationToken.None);
+
+                Assert.Equal(0, consumer.Calls);
+                Assert.True(publisher.PublishDelayCalled);
+                Assert.Empty(logger.Warnings.FindAll(w => w.Contains("丢弃")));
             }
             finally
             {

@@ -7,7 +7,7 @@ namespace Viv.Engine
 {
     /// <summary>
     /// 从 Aspire 服务发现自动生成网关路由（零手写 JSON）：
-    ///   /api/{short}/{**catch-all}  -> /api/{**catch-all}  （标准 API，匹配替换）
+    ///   /{short}/api/{**catch-all}  -> /api/{**catch-all}  （标准 API，匹配替换）
     ///   /docs/{short}/{**catch-all} -> /{**catch-all}     （Scalar 文档经网关透出）
     ///   /ws/{short}/{**catch-all}   -> /{**catch-all}     （SignalR / WebSocket 透传，如 hertalink 的 /chat hub）
     ///

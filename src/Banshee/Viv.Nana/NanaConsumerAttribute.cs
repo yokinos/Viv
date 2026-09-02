@@ -6,7 +6,7 @@ namespace Viv.Nana
     /// 消费并发/预取调优特性 — 标在 <see cref="VivConsumer{T}"/> 子类上，框架扫描时读取并应用到该消费者对应的队列监听。
     /// 特性缺席时回落到框架默认值。
     /// 注意：ConsumerCount &gt; 1 会失去同一队列内的严格消息顺序（RabbitMQ 多通道轮询分发），
-    /// 业务侧"只执行一次"仍需用 Redis 分布式锁保证（框架只负责广播）。
+    /// 同服务只执行一次由 <see cref="VivConsumer{T}"/> 基类取 Redis 锁保证（框架负责广播 + 消费锁）。
     /// </summary>
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
     public sealed class NanaConsumerAttribute : Attribute

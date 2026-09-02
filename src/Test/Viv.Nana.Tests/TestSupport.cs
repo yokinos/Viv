@@ -1,3 +1,4 @@
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Log;
@@ -77,6 +78,69 @@ namespace Viv.Nana.Tests
             PublishDelayCalled = true;
             LastEnvelope = envelope;
             return Task.FromResult(Result);
+        }
+    }
+
+    /// <summary>记录取锁/释放调用的分布式锁桩</summary>
+    public class StubDistributedLock : IDistributedLock
+    {
+        public bool AcquireResult { get; set; } = true;
+        public int AcquireCalls { get; private set; }
+        public int ReleaseCalls { get; private set; }
+        public string? LastLockKey { get; private set; }
+
+        public Task<bool> AcquireLockAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true)
+        {
+            AcquireCalls++;
+            LastLockKey = lockKey;
+            return Task.FromResult(AcquireResult);
+        }
+
+        public Task<bool> ReleaseLockAsync(string lockKey, string? lockHolderId = null, bool isReentrant = true)
+        {
+            ReleaseCalls++;
+            return Task.FromResult(true);
+        }
+
+        public Task<bool> AcquireLockWithRetryAsync(
+            string lockKey,
+            TimeSpan expire,
+            string? lockHolderId = null,
+            bool isReentrant = true,
+            int maxRetryCount = 5,
+            int baseDelay = 200,
+            int maxDelay = 5000,
+            CancellationToken cancellationToken = default)
+            => AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
+
+        public async Task<T> AcquireLockWithExecuteAsync<T>(
+            object key,
+            TimeSpan expire,
+            Func<Task<T>> executeMethod,
+            Func<Task<T>>? fallbackMethod = null,
+            string? lockHolderId = null,
+            bool isReentrant = true,
+            int maxRetryCount = 5,
+            int baseDelay = 200,
+            int maxDelay = 5000,
+            CancellationToken cancellationToken = default)
+        {
+            var lockKey = key?.ToString() ?? "null";
+            if (!await AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant))
+            {
+                if (fallbackMethod is not null)
+                    return await fallbackMethod();
+                throw new DistributedLockException(lockKey, maxRetryCount);
+            }
+
+            try
+            {
+                return await executeMethod();
+            }
+            finally
+            {
+                await ReleaseLockAsync(lockKey, lockHolderId, isReentrant);
+            }
         }
     }
 }

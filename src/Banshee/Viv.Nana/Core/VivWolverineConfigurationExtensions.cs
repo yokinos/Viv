@@ -18,12 +18,6 @@ namespace Viv.Nana.Core
     /// </summary>
     public static class VivWolverineConfigurationExtensions
     {
-        /// <summary>
-        /// 消费服务名（入口程序集名）。发布订阅队列 {EventName}Queue.{ServiceName} 的唯一后缀，
-        /// 保证不同服务各建一条队列、各自收一份；同一服务多实例共享队列（轮询）。
-        /// </summary>
-        private static readonly string ServiceName = Assembly.GetEntryAssembly()?.GetName().Name ?? AppDomain.CurrentDomain.FriendlyName ?? "app";
-
         public static IServiceCollection AddVivWolverine(this IServiceCollection services, NanaOptions nanaOptions, List<Type>? sagaTypes)
         {
             services.AddWolverine(opts =>
@@ -38,7 +32,7 @@ namespace Viv.Nana.Core
                     .AutoProvision();
 
                 // 2) 消费方：发布订阅拓扑——每服务一条独立队列绑到 {EventName}Exchange（fanout 广播）
-                //    每个订阅服务各收一份；"只执行一次"由业务层拿分布式锁保证（拿到执行，拿不到丢弃）
+                //    每个订阅服务各收一份；同服务只执行一次由 VivConsumer 基类取 Redis 锁（拿到进业务，拿不到丢弃）
                 foreach (var consumerType in NanaRegister.ScanConsumerTypes(nanaOptions.ConsumerTypes))
                 {
                     opts.Discovery.IncludeType(consumerType);
@@ -47,7 +41,7 @@ namespace Viv.Nana.Core
                     if (messageType == null) continue;
 
                     var exchangeName = NanaRegister.GetExchangeName(messageType);
-                    var queueName = NanaRegister.GetConsumerQueueName(messageType, ServiceName);
+                    var queueName = NanaRegister.GetConsumerQueueName(messageType, NanaRegister.CurrentServiceName);
 
                     var listener = opts.ListenToRabbitQueue(queueName);
                     transport.BindExchange(exchangeName, ExchangeType.Fanout).ToQueue(queueName);

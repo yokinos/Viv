@@ -1,3 +1,4 @@
+using System.Reflection;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
@@ -51,11 +52,27 @@ namespace Viv.Nana
         /// <summary>
         /// 生成消费方队列名称：{EventName}Queue.{ServiceName}
         /// 发布订阅拓扑：每个消费服务建一条独立队列绑到 {EventName}Exchange，各自收一份；
-        /// 同一服务多实例共享同一队列（RabbitMQ 轮询分派），"只执行一次"由业务层分布式锁保证。
+        /// 同一服务多实例共享同一队列（RabbitMQ 轮询分派）。同服务只执行一次由
+        /// <see cref="VivConsumer{T}"/> 基类按 <see cref="GetConsumerLockKey"/> 取锁保证。
         /// </summary>
         public static string GetConsumerQueueName(Type messageType, string serviceName)
         {
             return $"{GetQueueName(messageType)}.{serviceName}";
+        }
+
+        /// <summary>
+        /// 消费服务名（入口程序集名）。队列后缀与消费锁 Key 共用，保证 fanout 下各服务各持一把锁。
+        /// </summary>
+        public static string CurrentServiceName { get; } =
+            Assembly.GetEntryAssembly()?.GetName().Name ?? AppDomain.CurrentDomain.FriendlyName ?? "app";
+
+        /// <summary>
+        /// 框架消费锁 Key：<c>nana:{ServiceName}:{EventType}:{MessageId}</c>。
+        /// 含服务名，避免 Apex / DeepRed 抢同一把锁导致只有一个服务进业务。
+        /// </summary>
+        public static string GetConsumerLockKey(string eventTypeName, long messageId)
+        {
+            return $"nana:{CurrentServiceName}:{eventTypeName}:{messageId}";
         }
 
         /// <summary>
