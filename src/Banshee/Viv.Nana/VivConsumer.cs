@@ -43,9 +43,6 @@ namespace Viv.Nana
 
     public abstract class VivConsumer<T> where T : NanaEvent
     {
-        /// <summary>消费锁 TTL：覆盖一次业务处理时长，并靠 Redis 续期；处理完即释放。</summary>
-        private static readonly TimeSpan ConsumerLockExpire = TimeSpan.FromMinutes(5);
-
         protected readonly ILoggerContract _logger;
 
         protected readonly IVivContext _context;
@@ -93,7 +90,7 @@ namespace Viv.Nana
                 LockHolderContext.SetHolderId(holderId);
                 if (_distributedLock != null)
                 {
-                    acquired = await _distributedLock.AcquireLockAsync(lockKey, ConsumerLockExpire, holderId).ConfigureAwait(false);
+                    acquired = await _distributedLock.AcquireLockAsync(lockKey, TimeSpan.FromMinutes(5), holderId).ConfigureAwait(false);
                     if (!acquired)
                         return;// 拿不到锁 = 已有其他实例在消费同一消息，按契约丢弃不回队
                 }
