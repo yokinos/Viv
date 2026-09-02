@@ -199,7 +199,7 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext();
-                var existingEntity = await context.FindAsync(typeof(T), entity.Id);
+                var existingEntity = await context.FindAsync(typeof(T), [entity.Id], cancellationToken).ConfigureAwait(false);
                 if (existingEntity != null)
                 {
                     context.Entry(existingEntity).CurrentValues.SetValues(entity);
@@ -232,7 +232,7 @@ namespace Viv.Momo.Core
 
                 if (entityList.Count < EFMaxCount)
                 {
-                    count = await EFBatchUpdateAsync(entityList, context);
+                    count = await EFBatchUpdateAsync(entityList, context, cancellationToken);
                 }
                 else
                 {
