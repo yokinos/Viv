@@ -1,6 +1,7 @@
 using Google.Protobuf;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
+using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Echo.Grpc;
@@ -125,6 +126,7 @@ namespace Viv.ServiceProxy.Tests.Grpc
 
         private static VivGrpcInterceptor CreateInterceptor()
         {
+            GrpcTestToken.EnsureRegistered();
             var accessor = new VivContextAccessor();
             var vivContext = new VivContext(accessor);
             vivContext.SetSnapshot(new VivContextContent { AppId = 1001, SubjectId = 77, UserId = 5 });
@@ -136,7 +138,15 @@ namespace Viv.ServiceProxy.Tests.Grpc
             Assert.Equal("1001", headers.Get(VivHeaderContract.AppId)!.Value);
             Assert.Equal("77", headers.Get(VivHeaderContract.SubjectId)!.Value);
             Assert.Equal("5", headers.Get(VivHeaderContract.UserId)!.Value);
-            // gRPC metadata 键写盘小写（HTTP 契约 x-viv-appId 混大小写）
+            Assert.Equal(GrpcTestToken.ServiceName, headers.Get(VivHeaderContract.ServiceName)!.Value);
+            Assert.NotNull(headers.Get(VivHeaderContract.InnerRequestToken));
+            Assert.True(VivRequestToken.TryVerify(
+                headers.Get(VivHeaderContract.InnerRequestToken)!.Value,
+                headers.Get(VivHeaderContract.AppId)!.Value,
+                headers.Get(VivHeaderContract.SubjectId)!.Value,
+                headers.Get(VivHeaderContract.UserId)!.Value,
+                headers.Get(VivHeaderContract.ServiceName)!.Value,
+                GrpcTestToken.Secret));
             Assert.Contains(headers, e => e.Key.Equals(VivHeaderContract.AppId, StringComparison.InvariantCultureIgnoreCase));
             Assert.Contains(headers, e => e.Key.Equals(VivHeaderContract.SubjectId, StringComparison.InvariantCultureIgnoreCase));
             Assert.Contains(headers, e => e.Key.Equals(VivHeaderContract.UserId, StringComparison.InvariantCultureIgnoreCase));

@@ -39,7 +39,6 @@ namespace Viv.Momo.Core
         {
             ArgumentNullException.ThrowIfNull(vivContext);
             _vivContext = vivContext;
-            TenantId = _vivContext.SubjectId;
             _logger = logger;
 
             SetOptions();
@@ -103,9 +102,17 @@ namespace Viv.Momo.Core
         public bool IsAutoSetValue { get; protected set; } = true;
 
         /// <summary>
-        /// 当前实例的TenantId
+        /// 当前租户。调用时从 <see cref="IVivContext"/> 读取，不在构造时缓存
+        /// （Wolverine 先构造 DbContext 再 SetSnapshot，构造时冻结会让 Dapper 整条消息 TenantId=0）。
+        /// <see cref="MomoDatabaseContext.ChangeTenant"/> 可覆盖本实例，不改请求上下文。
         /// </summary>
-        public long TenantId { get; protected set; }
+        public long TenantId
+        {
+            get => _tenantOverride ?? _vivContext.SubjectId;
+            protected set => _tenantOverride = value;
+        }
+
+        private long? _tenantOverride;
 
         /// <summary>
         /// 获取当前写库的数据库连接（用于Dapper混合事务）

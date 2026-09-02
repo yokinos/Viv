@@ -94,12 +94,14 @@ namespace Viv.Engine
             var (gatewayRoutes, gatewayClusters) = gatewayRouter.Build();
             builder.Services.AddReverseProxy().LoadFromMemory(gatewayRoutes, gatewayClusters);
 
-            // CORS
+            // CORS：网关带凭证，必须显式 Origin（Development 默认本机回环）
+            var corsOrigins = vivOptions.CorsOption?.Origins;
+            var corsIsDev = builder.Environment.IsDevelopment() || vivOptions.EnvOption?.Env == Viv.Contracts.Enums.VivEnv.Development;
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy(DefaultCorsPolicyName, policy =>
                 {
-                    policy.SetIsOriginAllowedToAllowWildcardSubdomains().AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+                    VivCors.Apply(policy, corsOrigins, corsIsDev, allowCredentials: true);
                 });
             });
 

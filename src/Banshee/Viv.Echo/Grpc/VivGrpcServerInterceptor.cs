@@ -2,22 +2,19 @@ using Grpc.AspNetCore.Server;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Microsoft.Extensions.DependencyInjection;
+using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
+using Viv.Contracts.Options;
+using Viv.Delusion;
 
 namespace Viv.Echo.Grpc
 {
     /// <summary>
     /// gRPC 服务端租户上下文恢复拦截器。
     ///
-    /// 为什么需要：<c>VivContextMiddleware</c> 只对 <c>/api</c> 前缀请求水合上下文
-    /// （DefaultVivContextProvider.ShouldSkip），gRPC 端点路径（如
-    /// <c>/Viv.ServiceProxy.Protos.TenantGrpcService/GetTenant</c>）会被跳过，
-    /// 必须由本拦截器在调用进入服务实现前，从客户端注入的 <c>x-viv-*</c> 请求头恢复租户上下文
-    /// （SetSnapshot 写 IVivContextAccessor 的 AsyncLocal，EF 租户过滤可读到），调用结束 Clear。
-    ///
-    /// 注意：v1 信任 x-viv-* 头（对齐 VivContextMiddleware 语义，不验 x-request-token HMAC），
-    /// gRPC 端口不应公网暴露；HMAC 验签列为后续项。
+    /// VivContextMiddleware 只对 /api 前缀水合上下文，gRPC 路径必须由此拦截器从 x-viv-* 头恢复。
+    /// 配置了 InternalToken 时必须验 x-request-token；未配置密钥则不信任裸头（不灌上下文）。
     /// </summary>
     public class VivGrpcServerInterceptor : Interceptor
     {
@@ -67,7 +64,6 @@ namespace Viv.Echo.Grpc
             return continuation(requestStream, responseStream, context);
         }
 
-        /// <summary>从请求头恢复租户上下文，返回作用域释放器（请求结束 Clear）。</summary>
         private static IDisposable BeginVivContext(ServerCallContext context)
         {
             var vivContext = context.GetHttpContext().RequestServices.GetRequiredService<IVivContext>();
@@ -81,11 +77,16 @@ namespace Viv.Echo.Grpc
         }
 
         /// <summary>
-        /// 对齐 RequestTokenResolver 语义：AppId + UserId 必须为正才认头；SubjectId 可选。
-        /// Metadata.Get 不区分大小写，直接读契约常量。
+        /// AppId + UserId 必须为正才认头；SubjectId 可选。有 InternalToken 时必须 HMAC 通过。
         /// </summary>
         private static VivContextContent? TryBuildContext(Metadata headers)
         {
+            var secret = VivConfigRegistry.Get<VivInternalTokenOptions>()?.InternalToken;
+            if (string.IsNullOrWhiteSpace(secret))
+            {
+                return null;
+            }
+
             if (!TryReadPositiveLong(headers, VivHeaderContract.AppId, out var appId))
             {
                 return null;
@@ -97,6 +98,20 @@ namespace Viv.Echo.Grpc
             }
 
             TryReadPositiveLong(headers, VivHeaderContract.SubjectId, out var subjectId);
+            var serviceName = headers.Get(VivHeaderContract.ServiceName)?.Value ?? "";
+            var token = headers.Get(VivHeaderContract.InnerRequestToken)?.Value;
+
+            if (!VivRequestToken.TryVerify(
+                    token,
+                    headers.Get(VivHeaderContract.AppId)?.Value ?? "",
+                    headers.Get(VivHeaderContract.SubjectId)?.Value ?? "",
+                    headers.Get(VivHeaderContract.UserId)?.Value ?? "",
+                    serviceName,
+                    secret))
+            {
+                return null;
+            }
+
             return new VivContextContent
             {
                 AppId = appId,
@@ -121,7 +136,10 @@ namespace Viv.Echo.Grpc
                 _vivContext = vivContext;
             }
 
-            public void Dispose() => _vivContext.Clear();
+            public void Dispose()
+            {
+                _vivContext.Clear();
+            }
         }
     }
 }

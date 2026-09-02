@@ -1,6 +1,9 @@
 using Grpc.Core;
 using Grpc.Core.Interceptors;
+using Viv.Contracts;
 using Viv.Contracts.Interface;
+using Viv.Contracts.Options;
+using Viv.Delusion;
 
 namespace Viv.Echo.Grpc
 {
@@ -44,8 +47,8 @@ namespace Viv.Echo.Grpc
         }
 
         /// <summary>
-        /// 在请求头注入 Viv 租户上下文（x-viv-* 契约，与网关透传头名一致）。
-        /// gRPC metadata 键必须小写写盘（HTTP 契约 x-viv-appId 混大小写，读端 Get 不区分大小写）。
+        /// 注入 x-viv-* 契约头，有 InternalToken 时再签 x-request-token。
+        /// gRPC metadata 键必须小写写盘。
         /// </summary>
         private ClientInterceptorContext<TRequest, TResponse> WithVivHeaders<TRequest, TResponse>(
             ClientInterceptorContext<TRequest, TResponse> context)
@@ -62,9 +65,28 @@ namespace Viv.Echo.Grpc
 
         private void AddVivHeaders(Metadata headers)
         {
+            var tokenOptions = VivConfigRegistry.Get<VivInternalTokenOptions>();
+            var serviceName = tokenOptions?.ServiceName ?? "";
+
             AddIfNotExist(headers, VivHeaderContract.AppId.ToLowerInvariant(), _vivContext.AppId.ToString());
             AddIfNotExist(headers, VivHeaderContract.SubjectId.ToLowerInvariant(), _vivContext.SubjectId.ToString());
             AddIfNotExist(headers, VivHeaderContract.UserId.ToLowerInvariant(), _vivContext.UserId.ToString());
+            AddIfNotExist(headers, VivHeaderContract.ServiceName.ToLowerInvariant(), serviceName);
+
+            var secret = tokenOptions?.InternalToken;
+            if (string.IsNullOrWhiteSpace(secret)
+                || headers.Get(VivHeaderContract.InnerRequestToken) != null)
+            {
+                return;
+            }
+
+            var token = VivRequestToken.Sign(
+                headers.Get(VivHeaderContract.AppId)?.Value ?? "",
+                headers.Get(VivHeaderContract.SubjectId)?.Value ?? "",
+                headers.Get(VivHeaderContract.UserId)?.Value ?? "",
+                headers.Get(VivHeaderContract.ServiceName)?.Value ?? "",
+                secret);
+            headers.Add(VivHeaderContract.InnerRequestToken.ToLowerInvariant(), token);
         }
 
         private static void AddIfNotExist(Metadata headers, string key, string value)

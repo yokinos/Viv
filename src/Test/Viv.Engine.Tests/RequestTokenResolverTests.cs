@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Http;
+using Viv.Contracts;
 using Viv.Contracts.Models;
 using Viv.Contracts.Options;
 using Viv.Delusion;
@@ -13,7 +14,7 @@ namespace Viv.Engine.Tests;
 /// <summary>
 /// RequestTokenResolver —— 网关与下游间的 x-request-token 共享密钥签名协议（P0 安全路径）。
 /// 纯逻辑：HMAC-SHA256 签名 4 个 x-viv-* 头 + unix 时间戳，下游在 300s 防重放窗口内验签。
-/// 密钥优先级 EnvOption.InternalToken &gt; TokenOptions.SecretKey（回落）。全部测试收在一个类里，
+/// 密钥只取 EnvOption.InternalToken，不回落 TokenOptions.SecretKey。全部测试收在一个类里，
 /// 因为 VivEngine.VivOptions / VivConfigRegistry 是静态共享状态，类内顺序执行可避免跨类并行污染。
 /// </summary>
 [Collection("VivEngineStaticState")]
@@ -24,7 +25,6 @@ public class RequestTokenResolverTests
     public RequestTokenResolverTests()
     {
         EngineTestEnv.ForceFallbackMode();
-        VivConfigRegistry.Remove<TokenOptions>();
     }
 
     #region 签名 / 验签
@@ -38,7 +38,7 @@ public class RequestTokenResolverTests
     [Fact]
     public void SignContextHeaders_有密钥返回冒号分隔签名()
     {
-        VivConfigRegistry.Add(new TokenOptions { SecretKey = Secret });
+        EngineTestEnv.ForceEnvTokenMode(Secret);
         var headers = ContextHeaders();
 
         var token = RequestTokenResolver.SignContextHeaders(headers);
@@ -52,7 +52,7 @@ public class RequestTokenResolverTests
     [Fact]
     public void 签名验证_回环成功()
     {
-        VivConfigRegistry.Add(new TokenOptions { SecretKey = Secret });
+        EngineTestEnv.ForceEnvTokenMode(Secret);
         var headers = ContextHeaders();
         headers[VivRunDefine.InnerRequestTokenHeader] = RequestTokenResolver.SignContextHeaders(headers);
 
@@ -62,7 +62,7 @@ public class RequestTokenResolverTests
     [Fact]
     public void 签名验证_篡改头失败()
     {
-        VivConfigRegistry.Add(new TokenOptions { SecretKey = Secret });
+        EngineTestEnv.ForceEnvTokenMode(Secret);
         var headers = ContextHeaders();
         headers[VivRunDefine.InnerRequestTokenHeader] = RequestTokenResolver.SignContextHeaders(headers);
         headers[VivRunDefine.UserIdHeader] = "999"; // 篡改
@@ -108,11 +108,31 @@ public class RequestTokenResolverTests
     [Fact]
     public void 签名验证_密钥不匹配失败()
     {
-        VivConfigRegistry.Add(new TokenOptions { SecretKey = "secret-A" });
+        EngineTestEnv.ForceEnvTokenMode("secret-A");
         var headers = ContextHeaders();
         headers[VivRunDefine.InnerRequestTokenHeader] = RequestTokenResolver.SignContextHeaders(headers);
 
         Assert.False(RequestTokenResolver.VerifySignature(headers, "secret-B"));
+    }
+
+    [Fact]
+    public void 签名验证_未来时间戳拒绝()
+    {
+        var headers = ContextHeaders();
+        long futureTs = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + VivRequestToken.MaxFutureSkewSeconds + 1;
+        headers[VivRunDefine.InnerRequestTokenHeader] = futureTs + ":" + ComputeSignature(headers, Secret, futureTs);
+
+        Assert.False(RequestTokenResolver.VerifySignature(headers, Secret));
+    }
+
+    [Fact]
+    public void 签名验证_未来偏差内通过()
+    {
+        var headers = ContextHeaders();
+        long futureTs = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + VivRequestToken.MaxFutureSkewSeconds - 1;
+        headers[VivRunDefine.InnerRequestTokenHeader] = futureTs + ":" + ComputeSignature(headers, Secret, futureTs);
+
+        Assert.True(RequestTokenResolver.VerifySignature(headers, Secret));
     }
 
     #endregion
@@ -133,7 +153,7 @@ public class RequestTokenResolverTests
     [Fact]
     public void GetContextFromHeaders_有密钥未签名返回null()
     {
-        VivConfigRegistry.Add(new TokenOptions { SecretKey = Secret });
+        EngineTestEnv.ForceEnvTokenMode(Secret);
 
         Assert.Null(RequestTokenResolver.GetContextFromHeaders(HttpContextFrom(ContextHeaders())));
     }
@@ -141,7 +161,7 @@ public class RequestTokenResolverTests
     [Fact]
     public void GetContextFromHeaders_有密钥签名后解析()
     {
-        VivConfigRegistry.Add(new TokenOptions { SecretKey = Secret });
+        EngineTestEnv.ForceEnvTokenMode(Secret);
         var headers = ContextHeaders();
         headers[VivRunDefine.InnerRequestTokenHeader] = RequestTokenResolver.SignContextHeaders(headers);
 
@@ -218,24 +238,24 @@ public class RequestTokenResolverTests
 
     #endregion
 
-    #region EnvOption.InternalToken 优先级
+    #region EnvOption.InternalToken
 
     [Fact]
-    public void InternalToken优先于TokenOptions回落()
+    public void InternalToken不回落SecretKey()
     {
         try
         {
-            // 故意放一个冲突的回落密钥
-            VivConfigRegistry.Add(new TokenOptions { SecretKey = "fallback-secret" });
-            EngineTestEnv.ForceEnvTokenMode("env-secret");
+            VivConfigRegistry.Add(new TokenOptions { SecretKey = Secret });
+            EngineTestEnv.ForceFallbackMode();
 
+            Assert.Null(RequestTokenResolver.SignContextHeaders(ContextHeaders()));
+
+            EngineTestEnv.ForceEnvTokenMode("env-secret");
             var headers = ContextHeaders();
             headers[VivRunDefine.InnerRequestTokenHeader] = RequestTokenResolver.SignContextHeaders(headers);
 
-            // 用 EnvOption.InternalToken 验签通过 → 证明签名用的是 EnvOption
             Assert.True(RequestTokenResolver.VerifySignature(headers, "env-secret"));
-            // 回落密钥验签失败
-            Assert.False(RequestTokenResolver.VerifySignature(headers, "fallback-secret"));
+            Assert.False(RequestTokenResolver.VerifySignature(headers, Secret));
         }
         finally
         {

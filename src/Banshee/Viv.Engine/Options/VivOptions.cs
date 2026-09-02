@@ -64,6 +64,11 @@ namespace Viv.Engine.Options
         public EchoOptions EchoOption { get; set; }
 
         /// <summary>
+        /// CORS 允许的 Origin。未配置时 Development 允许本机回环，其他环境不允许跨域。
+        /// </summary>
+        public CorsOptions CorsOption { get; set; }
+
+        /// <summary>
         /// 默认的OpenAI配置（用于调用OpenAI API）
         /// </summary>
         public OpenAIOptions OpenAIOption { get; set; }

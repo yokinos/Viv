@@ -118,13 +118,15 @@ namespace Viv.Engine
                 }
             });
 
-            // 跨域
+            // 跨域：显式 Origin。未配置时 Development 允许本机回环，禁止 AllowAnyOrigin。
             var corsPolicyName = Assembly.GetEntryAssembly()?.GetName().Name ?? "VivApi";
+            var corsOrigins = vivOptions.CorsOption?.Origins;
+            var corsIsDev = builder.Environment.IsDevelopment() || vivOptions.EnvOption?.Env == Viv.Contracts.Enums.VivEnv.Development;
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy(corsPolicyName, policy =>
                 {
-                    policy.AllowAnyMethod().AllowAnyHeader().AllowAnyOrigin();
+                    VivCors.Apply(policy, corsOrigins, corsIsDev, allowCredentials: false);
                 });
             });
 

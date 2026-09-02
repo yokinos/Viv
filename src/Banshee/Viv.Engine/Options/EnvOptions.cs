@@ -17,7 +17,7 @@ namespace Viv.Engine.Options
 
         /// <summary>
         /// 内部请求共享签名密钥（x-request-token HMAC-SHA256）。
-        /// 网关与所有服务必须配置同一个值；缺省时回落到 TokenOptions.SecretKey（向后兼容）。
+        /// 网关与所有服务必须配置同一个值；不再回落到 TokenOptions.SecretKey。
         /// </summary>
         public string? InternalToken { get; set; }
     }

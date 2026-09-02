@@ -15,11 +15,13 @@ namespace Viv.ServiceProxy.Tests
     /// </summary>
     public class TenantGrpcServiceE2ETests : IClassFixture<GrpcTestServer>
     {
+        private readonly GrpcTestServer _server;
         private readonly TenantGrpcService.TenantGrpcServiceClient _client;
         private readonly VivContextContent _sentContext = new() { AppId = 1001, SubjectId = 77, UserId = 5 };
 
         public TenantGrpcServiceE2ETests(GrpcTestServer server)
         {
+            _server = server;
             var accessor = new VivContextAccessor();
             var vivContext = new VivContext(accessor);
             vivContext.SetSnapshot(_sentContext);
@@ -98,6 +100,23 @@ namespace Viv.ServiceProxy.Tests
             Assert.Equal(2, replies.Count);
             Assert.Equal("echo:hi", replies[0].Content);
             Assert.Equal("echo:yo", replies[1].Content);
+        }
+
+        [Fact]
+        public async Task Unary_未签名头_不恢复租户()
+        {
+            using var channel = GrpcChannel.ForAddress(_server.Address, new GrpcChannelOptions
+            {
+                HttpHandler = new SocketsHttpHandler { EnableMultipleHttp2Connections = true }
+            });
+            var unsigned = new TenantGrpcService.TenantGrpcServiceClient(channel);
+
+            var response = await unsigned.GetTenantAsync(new GetTenantRequest());
+
+            Assert.True(response.Success);
+            Assert.Equal(0, response.Tenant!.AppId);
+            Assert.Equal(0, response.Tenant.UserId);
+            Assert.Equal(0, response.Tenant.SubjectId);
         }
     }
 }

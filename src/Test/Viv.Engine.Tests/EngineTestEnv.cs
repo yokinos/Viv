@@ -5,15 +5,15 @@ namespace Viv.Engine.Tests;
 
 /// <summary>
 /// 测试环境 —— 控制 RequestTokenResolver 密钥来源（VivEngine.VivOptions 静态状态）。
-/// VivEngine.VivOptions 只能经 LoadVivConfig 设置且无重置 API，测试通过 in-memory IConfiguration 切换密钥模式。
+/// 密钥只走 EnvOption.InternalToken，不再回落 TokenOptions.SecretKey。
 /// </summary>
 internal static class EngineTestEnv
 {
-    /// <summary>强制回落模式：VivOptions 无 InternalToken，密钥走 VivConfigRegistry 的 TokenOptions。</summary>
+    /// <summary>清空 InternalToken（无法签名）。</summary>
     public static void ForceFallbackMode()
         => VivEngine.LoadVivConfig(new ConfigurationBuilder().Build());
 
-    /// <summary>写入指定 InternalToken 并加载，验证 EnvOption 优先级。</summary>
+    /// <summary>写入指定 InternalToken 并加载。</summary>
     public static void ForceEnvTokenMode(string internalToken)
         => VivEngine.LoadVivConfig(new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>

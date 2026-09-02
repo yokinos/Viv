@@ -38,6 +38,7 @@ namespace Viv.ServiceProxy.Tests.Grpc
             builder.Services.AddVivGrpcServer();
             builder.Services.AddSingleton<IVivContextAccessor, VivContextAccessor>();
             builder.Services.AddScoped<IVivContext, VivContext>();
+            GrpcTestToken.EnsureRegistered();
             // 配置驱动接线：自动发现 + 注册，宿主不再手工 AddScoped<TenantGrpcService>()
             VivGrpcDiscovery.RegisterServices(builder.Services);
 

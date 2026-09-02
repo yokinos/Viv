@@ -1,17 +1,10 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
-using System;
-using System.Collections.Generic;
+﻿using Microsoft.AspNetCore.Http;
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
+using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
-using Viv.Contracts.Options;
-using Viv.Delusion;
-using Viv.Delusion.Extension;
 
 namespace Viv.Engine.Power
 {
@@ -19,9 +12,8 @@ namespace Viv.Engine.Power
     {
         /// <summary>
         /// 从可信内部请求 Header 中获取上下文。
-        /// 安全约束：x-viv-* 上下文头只有网关（或持有共享密钥的对等服务）签名后才可信，
-        /// 否则直连下游的客户端可伪造头冒充任意租户/用户。
-        /// 密钥取 EnvOption.InternalToken（缺省回落 TokenOption.SecretKey）；两者皆 null 时无法验签，按原行为信任头（该场景无租户数据）。
+        /// 安全约束：x-viv-* 上下文头只有网关（或持有共享密钥的对等服务）签名后才可信。
+        /// 密钥只取 EnvOption.InternalToken；未配置时无法验签，按原行为信任头（该场景无租户数据）。
         /// </summary>
         public static VivContextContent? GetContextFromHeaders(HttpContext context)
         {
@@ -52,24 +44,16 @@ namespace Viv.Engine.Power
         }
 
         /// <summary>
-        /// 内部请求共享密钥。优先取 EnvOption.InternalToken（appsettings.json 的 VivOptions.EnvOption 显式配置，网关与所有服务配同一个值）；
-        /// 未配置时回落到 TokenOption.SecretKey（向后兼容，匿名服务两者皆 null 则返回 null）。
+        /// 内部请求共享密钥，只取 EnvOption.InternalToken。不回落 JWT SecretKey。
         /// </summary>
         private static string? GetInternalSecret()
-            => !string.IsNullOrWhiteSpace(VivEngine.VivOptions?.EnvOption?.InternalToken)
-                ? VivEngine.VivOptions.EnvOption.InternalToken
-                : VivConfigRegistry.Get<TokenOptions>()?.SecretKey;
-
-        /// <summary>
-        /// 签名有效期（秒）。网关签完后下游在秒级内收到，5 分钟足够抵消时钟偏差；
-        /// 超过该窗口的请求视为重放攻击，下游拒绝。
-        /// </summary>
-        private const long MaxReplayAgeSeconds = 300;
+            => string.IsNullOrWhiteSpace(VivEngine.VivOptions?.EnvOption?.InternalToken)
+                ? null
+                : VivEngine.VivOptions.EnvOption.InternalToken;
 
         /// <summary>
         /// 对当前 x-viv-* 上下文头组计算 HMAC-SHA256 签名，网关认证后写入 x-request-token。
-        /// 签名载荷包含 unix 时间戳（格式 {unixSeconds}:{base64Sig}），下游验签时校验时效，防止无限期重放。
-        /// 无共享密钥时返回 null（不签名）。
+        /// 无 InternalToken 时返回 null（不签名）。
         /// </summary>
         public static string? SignContextHeaders(IHeaderDictionary headers)
         {
@@ -79,59 +63,26 @@ namespace Viv.Engine.Power
                 return null;
             }
 
-            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            return timestamp.ToString(CultureInfo.InvariantCulture) + ":" + ComputeSignature(headers, secret, timestamp);
-        }
-
-        /// <summary>
-        /// 校验 x-request-token 是否为持有共享密钥的一方对当前头组生成的签名，且时间戳未超时（<see cref="MaxReplayAgeSeconds"/>）。
-        /// 旧格式（无时间戳前缀）或已超时的令牌一律拒绝。
-        /// </summary>
-        public static bool VerifySignature(IHeaderDictionary headers, string secret)
-        {
-            var provided = headers[VivRunDefine.InnerRequestTokenHeader].ToString();
-            if (string.IsNullOrWhiteSpace(provided))
-            {
-                return false;
-            }
-
-            // 格式 {unixSeconds}:{base64Sig}（base64 字符集不含 ':'，首个冒号安全切分）
-            var sep = provided.IndexOf(':');
-            if (sep <= 0 || sep >= provided.Length - 1)
-            {
-                return false;
-            }
-
-            if (!long.TryParse(provided.AsSpan(0, sep), NumberStyles.Integer, CultureInfo.InvariantCulture, out var timestamp))
-            {
-                return false;
-            }
-
-            if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timestamp > MaxReplayAgeSeconds)
-            {
-                return false;
-            }
-
-            var expected = ComputeSignature(headers, secret, timestamp);
-            return expected != null && CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(provided.Substring(sep + 1)),
-                Encoding.UTF8.GetBytes(expected));
-        }
-
-        /// <summary>
-        /// 固定顺序拼接 4 个 x-viv-* 头值（缺失补空串）+ 签名时间戳，保证签名对头值顺序不敏感、对缺失值稳定。
-        /// </summary>
-        private static string? ComputeSignature(IHeaderDictionary headers, string secret, long timestamp)
-        {
-            var payload = string.Join('\n',
+            return VivRequestToken.Sign(
                 headers[VivRunDefine.AppIdHeader].ToString(),
                 headers[VivRunDefine.SubjectIdHeader].ToString(),
                 headers[VivRunDefine.UserIdHeader].ToString(),
                 headers[VivRunDefine.ServiceNameHeader].ToString(),
-                timestamp.ToString(CultureInfo.InvariantCulture));
+                secret);
+        }
 
-            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
-            return Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload)));
+        /// <summary>
+        /// 校验 x-request-token：签名匹配、未超时、且时间戳不在未来（允许 <see cref="VivRequestToken.MaxFutureSkewSeconds"/> 偏差）。
+        /// </summary>
+        public static bool VerifySignature(IHeaderDictionary headers, string secret)
+        {
+            return VivRequestToken.TryVerify(
+                headers[VivRunDefine.InnerRequestTokenHeader].ToString(),
+                headers[VivRunDefine.AppIdHeader].ToString(),
+                headers[VivRunDefine.SubjectIdHeader].ToString(),
+                headers[VivRunDefine.UserIdHeader].ToString(),
+                headers[VivRunDefine.ServiceNameHeader].ToString(),
+                secret);
         }
 
         /// <summary>
@@ -147,11 +98,9 @@ namespace Viv.Engine.Power
                 return Task.FromResult<VivContextContent?>(null);
             }
 
-            // .NET 10 JwtBearer 只映射 sub → NameIdentifier（与网关读取模式保持一致，两种都兼容）
             var userIdText = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue(JwtRegisteredClaimNames.Sub);
             var appIdText = user.FindFirstValue(VivClaimTypes.AppId);
 
-            // 与旧实现语义一致：AppId、UserId 必须有效且大于 0，否则视为无有效上下文
             if (!long.TryParse(userIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var userId) || userId <= 0
                 || !long.TryParse(appIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var appId) || appId <= 0)
             {
@@ -169,9 +118,6 @@ namespace Viv.Engine.Power
             });
         }
 
-        /// <summary>
-        /// 从请求 Header 中读取大于 0 的 long 值。
-        /// </summary>
         private static bool TryGetPositiveLong(HttpContext context, string headerName, out long value)
         {
             value = 0;
