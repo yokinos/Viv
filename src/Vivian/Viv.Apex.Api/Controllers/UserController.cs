@@ -1,7 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Net;
+using Viv.Apex.Core.Entity.Vo.User;
 using Viv.Apex.Core.IService;
+using Viv.Elysia.Request;
 
 namespace Viv.Apex.Api.Controllers
 {
@@ -20,6 +23,17 @@ namespace Viv.Apex.Api.Controllers
             _userService = userService;
         }
 
-
+        /// <summary>
+        /// 获取登录数据
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(GetLoginDataOutput), (int)HttpStatusCode.OK)]
+        [HttpPost("getLoginData")]
+        public async Task<IActionResult> GetLoginDataAsync(ApiEmptyRequest request)
+        {
+            return await _userService.GetLoginDataAsync(request);
+        }
     }
 }

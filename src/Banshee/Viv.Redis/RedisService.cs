@@ -482,13 +482,13 @@ namespace Viv.Redis
             // 同步锁不支持续期（续期需要后台线程，同步场景易死锁）
             // 取锁失败统一返回 false，由调用方通过 IsLockHeldAsync 二次裁决（真竞争 vs 服务故障）
             return ExecuteRedis(lockKey, db =>
+            {
+                if (!isReentrant)
                 {
-                    if (!isReentrant)
-                    {
-                        return db.StringSet(lockKey, lockHolderId, expire, When.NotExists);
-                    }
+                    return db.StringSet(lockKey, lockHolderId, expire, When.NotExists);
+                }
 
-                    var reentrantLockScript = @"
+                var reentrantLockScript = @"
                     local currentVal = redis.call('GET', KEYS[1])
                     if currentVal == false then
                         redis.call('SET', KEYS[1], ARGV[1] .. '_1', 'EX', ARGV[2])
@@ -503,9 +503,9 @@ namespace Viv.Redis
                         return 0
                     end";
 
-                    var scriptResult = db.ScriptEvaluate(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]);
-                    return (long)scriptResult == 1;
-                });
+                var scriptResult = db.ScriptEvaluate(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]);
+                return (long)scriptResult == 1;
+            });
         }
 
         /// <summary>
@@ -520,13 +520,13 @@ namespace Viv.Redis
                 return false;
 
             var success = await ExecuteRedisAsync(lockKey, async db =>
+            {
+                if (!isReentrant)
                 {
-                    if (!isReentrant)
-                    {
-                        return await db.StringSetAsync(lockKey, lockHolderId, expire, When.NotExists).ConfigureAwait(false);
-                    }
+                    return await db.StringSetAsync(lockKey, lockHolderId, expire, When.NotExists).ConfigureAwait(false);
+                }
 
-                    var reentrantLockScript = @"
+                var reentrantLockScript = @"
                     local currentVal = redis.call('GET', KEYS[1])
                     if currentVal == false then
                         redis.call('SET', KEYS[1], ARGV[1] .. '_1', 'EX', ARGV[2])
@@ -541,9 +541,9 @@ namespace Viv.Redis
                         return 0
                     end";
 
-                    var scriptResult = await db.ScriptEvaluateAsync(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]).ConfigureAwait(false);
-                    return (long)scriptResult == 1;
-                }).ConfigureAwait(false);
+                var scriptResult = await db.ScriptEvaluateAsync(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]).ConfigureAwait(false);
+                return (long)scriptResult == 1;
+            }).ConfigureAwait(false);
 
             if (success && isReentrant)
             {
