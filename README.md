@@ -1,3 +1,15 @@
+<div align="center">
+
+<p align="center">
+  <img src="assets/vivian.jpg" alt="薇薇安·班希" width="120" height="120" style="border-radius:50%" />
+</p>
+
+# Viv
+
+**基于 .NET 10 的微服务基础设施框架** — 从数据访问、消息队列、缓存、认证到网关编排的一站式方案。
+
+业务侧只需声明 **实体 + Service + Repository**，框架自动完成扫描注册、租户隔离、统一响应与运维支撑。
+
 <p align="center">
   <img src="https://img.shields.io/github/actions/workflow/status/yokinos/Viv/dotnet.yml?style=flat&logo=githubactions&logoColor=white&label=CI" />
   <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=flat&logo=dotnet" />
@@ -9,10 +21,6 @@
   <img src="https://img.shields.io/badge/Aspire-13.x-8250DF?style=flat&logo=dotnet" />
 </p>
 
-# Viv
-
-基于 **.NET 10** 的微服务基础设施框架。从数据访问、消息队列、缓存、认证到网关编排，提供一站式基础设施能力。业务侧只需声明 **实体 + Service + Repository**，框架自动完成扫描注册、租户隔离、统一响应与运维支撑。
-
 ```
    ██╗   ██╗██╗██╗   ██╗
    ██║   ██║██║██║   ██║
@@ -22,19 +30,80 @@
      ╚═══╝  ╚═╝  ╚═══╝
 ```
 
+</div>
+
+## 核心能力
+
+- **多租户隔离** — `Org > Company > Tenant` 分层组织；`IVivContext`（AsyncLocal）承载租户身份，EF 全局过滤 / Dapper 自动追加租户条件，业务零手写
+- **数据访问** — EF Core + Dapper 混合（小操作走变更追踪、大查询走纯 SQL），读写分离、软删除、事务、按实体自动建表
+- **消息** — Wolverine + RabbitMQ 发布订阅、延迟重投、Saga 状态机；消费锁 + 死信兜底
+- **缓存与分布式锁** — Redis 多库路由、Cache-Aside 防击穿，可重入 / 非重入锁 + 自动续期
+- **网关** — YARP 反向代理，路由自动生成；JWT 解析 + `x-request-token` HMAC 验签回填，防绕过直连伪造身份
+- **跨服务通信** — HTTP + gRPC 双通道、服务发现、`x-viv-*` 上下文透传
+- **工程化** — 中央包管理、Aspire 统一编排、OpenTelemetry + Seq、TickerQ 调度、代码生成
+
 ---
 
-## 命名
+## 目录
 
-| 命名空间 | 代号 | 定位 |
-|:--|:--|:--|
-| **Banshee** | 报丧女妖 | 框架层 — 幕后驱动一切基础设施 |
-| **Vivian** | 薇薇安 | 应用层 — 台前承载业务服务 |
-| **Test** | — | 单元测试套件（`src/Test/` 框架测试；CLI 在 `Viv.Cli`） |
+- [快速开始](#快速开始)
+- [架构](#架构)
+- [框架用法](#框架用法)
+- [命名](#命名)
+- [License](#license)
 
 ---
 
-## 架构总览
+## 快速开始
+
+### 环境依赖
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- PostgreSQL 16+ 或 SQL Server 2022+
+- Redis 7.x
+- RabbitMQ 3.x
+
+### 启动
+
+```bash
+# 构建
+dotnet build
+
+# 一键启动全部服务（AppHost 编排，含网关）
+dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.AppHost
+
+# 或单独启动
+dotnet run --project src/Vivian/Viv.Apex.Api
+dotnet run --project src/Vivian/Viv.Apex.Worker
+dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.Gateway
+```
+
+### 中央包管理（Central Package Management）
+
+所有 NuGet 包版本集中在仓库根 [Directory.Packages.props](Directory.Packages.props) 声明，各项目的 `<PackageReference>` 一律不写 `Version`：
+
+```xml
+<!-- Directory.Packages.props -->
+<PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+
+<!-- 任一 csproj -->
+<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+```
+
+- **升级 / 加包 / 钉传递依赖版本，只改 `Directory.Packages.props` 一处**，全仓库同步生效
+- 已开启 `CentralPackageTransitivePinningEnabled`：中央文件里即使无项目直接引用的包也会按中央版本解析
+
+> [!WARNING]
+> **安全钉版**：`Microsoft.OpenApi 2.7.5` —— 修复 [GHSA-v5pm-xwqc-g5wc](https://github.com/advisories/GHSA-v5pm-xwqc-g5wc) / CVE-2026-49451（OpenAPI 循环 schema 引用导致栈溢出 DoS，CVSS 7.5），由 `Microsoft.AspNetCore.OpenApi 10.0.x` 传递引入，原先触发 NuGet 审计 NU1903。
+
+> [!NOTE]
+> `NU1608` 已静默：EF Design 10.0.10 传递的 `Microsoft.CodeAnalysis.Workspaces 5.0.0` 精确要求 `Common =5.0.0`，与中央钉的 5.6.0 冲突；解析结果与未启用 CPM 时一致（NuGet 本就取最高版本），故为预期噪音。
+
+---
+
+## 架构
+
+### 架构总览
 
 ```
                   ┌─────────────────────┐
@@ -89,28 +158,28 @@ Viv.Aspire.Gateway  ── 只解析不强制：无 token 也放行 ──
 返回：{ Code, Message, Data }（HTTP 恒 200）
 ```
 
-| 步骤 | 环节 | 职责 |
-|:--|:--|:--|
-| ① | 客户端 | 携带 `Authorization: Bearer <JWT>`；SignalR 升级请求无法带 Authorization 头，改用 `?access_token=<JWT>` |
-| ② | 网关 | 限流、输出缓存、CORS |
-| ③ | 网关 | JwtBearer 解析（`OnMessageReceived` 支持 `access_token` 查询参数，供 WS/SignalR 场景） |
-| ④ | 网关 | 认证**前**剥离客户端可伪造的 `x-viv-appId/subjectId/userId/serviceName`、`x-request-token` 头，以及 query 里的 `tenantId/userId/appId` —— 身份只允许来自验签后的 token claims |
-| ⑤ | 网关 | 认证通过后从 claims 回填 `x-viv-*` 头，HMAC-SHA256 签名写 `x-request-token`（载荷含 unix 时间戳，5 分钟过期）—— 防止绕过网关直连下游伪造头 |
-| ⑥ | 下游 | 信任网关透传的 `X-Forwarded-Proto/Host/For`，避免 `UseHttpsRedirection` 把浏览器 302 甩出网关 |
-| ⑦ | 下游 | JwtBearer 验签 JWT（`TokenOption=null` 的匿名服务不注册鉴权） |
-| ⑧ | 下游 | `RequestTokenResolver.GetContextFromHeaders` 用 `EnvOption.InternalToken` 验 `x-request-token` 签名 + 时效；失败 → 视为无身份 |
-| ⑨ | 下游 | 参数校验 → 业务 → 统一响应 |
-| ⑩ | 数据层 | 多租户自动隔离（EF 查询过滤 / Dapper 追加租户条件），业务代码无需手写 |
+各环节职责：
 
-**身份/租户上下文契约**（由网关验签后回填，下游验签才信任）：
+1. **客户端** — 携带 `Authorization: Bearer <JWT>`；SignalR 升级请求无法带 Authorization 头，改用 `?access_token=<JWT>`
+2. **网关** — 限流、输出缓存、CORS；JwtBearer 解析（`OnMessageReceived` 支持 `access_token` 查询参数，供 WS/SignalR 场景）
+3. **网关（认证前）** — 剥离客户端可伪造的 `x-viv-appId/subjectId/userId/serviceName`、`x-request-token` 头，以及 query 里的 `tenantId/userId/appId` —— 身份只允许来自验签后的 token claims
+4. **网关（认证后）** — 从 claims 回填 `x-viv-*` 头，HMAC-SHA256 签名写 `x-request-token`（载荷含 unix 时间戳，5 分钟过期）—— 防止绕过网关直连下游伪造头
+5. **下游** — 信任网关透传的 `X-Forwarded-Proto/Host/For`；JwtBearer 验签 JWT（`TokenOption=null` 的匿名服务不注册鉴权）
+6. **下游** — `RequestTokenResolver.GetContextFromHeaders` 用 `EnvOption.InternalToken` 验 `x-request-token` 签名 + 时效；失败 → 视为无身份
+7. **下游** — 参数校验 → 业务 → 统一响应
+8. **数据层** — 多租户自动隔离（EF 查询过滤 / Dapper 追加租户条件），业务代码无需手写
 
-| Header | 说明 |
-|:--|:--|
-| `x-viv-appId` | 客户端应用 ID（claims: `appId`） |
-| `x-viv-subjectId` | 租户 ID = TenantId（claims: `tenantId`） |
-| `x-viv-userId` | 用户 ID（claims: `sub`） |
-| `x-viv-serviceName` | 服务名（网关填自己的 `EnvOption.ServiceName`） |
-| `x-request-token` | `{unixSeconds}:{base64Sig}` — 对上面 4 个头 + 时间戳的 HMAC-SHA256（密钥 `EnvOption.InternalToken`，网关与所有服务同值，不回落 JWT SecretKey）。下游验签 + ≤300s 时效通过才信任头组 |
+**身份 / 租户上下文契约**（由网关验签后回填，下游验签才信任）：
+
+```
+x-viv-appId        客户端应用 ID（claims: appId）
+x-viv-subjectId    租户 ID = TenantId（claims: tenantId）
+x-viv-userId       用户 ID（claims: sub）
+x-viv-serviceName  服务名（网关填自己的 EnvOption.ServiceName）
+x-request-token    {unixSeconds}:{base64Sig} — 对上面 4 个头 + 时间戳的 HMAC-SHA256
+                   （密钥 EnvOption.InternalToken，网关与所有服务同值，不回落 JWT SecretKey）；
+                   下游验签 + ≤300s 时效通过才信任头组
+```
 
 **SignalR / WebSocket 链路**：
 
@@ -122,9 +191,7 @@ Viv.Aspire.Gateway  ── 只解析不强制：无 token 也放行 ──
   → 通过 → 加入连接池 + 用户组
 ```
 
----
-
-## 项目结构
+### 项目结构
 
 ```
 Viv/
@@ -164,49 +231,6 @@ Viv/
 │   │
 │   └── Test/                             # 框架单元测试套件（每 Banshee 项目一套）
 ```
-
----
-
-## 快速开始
-
-### 环境依赖
-
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- PostgreSQL 16+ 或 SQL Server 2022+
-- Redis 7.x
-- RabbitMQ 3.x
-
-### 启动
-
-```bash
-# 构建
-dotnet build
-
-# 一键启动全部服务（AppHost 编排，含网关）
-dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.AppHost
-
-# 或单独启动
-dotnet run --project src/Vivian/Viv.Apex.Api
-dotnet run --project src/Vivian/Viv.Apex.Worker
-dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.Gateway
-```
-
-### 中央包管理（Central Package Management）
-
-所有 NuGet 包版本集中在仓库根 [Directory.Packages.props](Directory.Packages.props) 声明，各项目的 `<PackageReference>` 一律不写 `Version`：
-
-```xml
-<!-- Directory.Packages.props -->
-<PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
-
-<!-- 任一 csproj -->
-<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
-```
-
-- **升级 / 加包 / 钉传递依赖版本，只改 `Directory.Packages.props` 一处**，全仓库同步生效。
-- 已开启 `CentralPackageTransitivePinningEnabled`：中央文件里即使无项目直接引用的包（如 `Microsoft.OpenApi`）也会按中央版本解析。
-- **安全钉版**：`Microsoft.OpenApi 2.7.5` —— 修复 [GHSA-v5pm-xwqc-g5wc](https://github.com/advisories/GHSA-v5pm-xwqc-g5wc) / CVE-2026-49451（OpenAPI 循环 schema 引用导致栈溢出 DoS，CVSS 7.5），由 `Microsoft.AspNetCore.OpenApi 10.0.x` 传递引入，原先触发 NuGet 审计 NU1903。
-- `NU1608` 已静默：EF Design 10.0.10 传递的 `Microsoft.CodeAnalysis.Workspaces 5.0.0` 精确要求 `Common =5.0.0`，与中央钉的 5.6.0 冲突；解析结果与未启用 CPM 时一致（NuGet 本就取最高版本），故为预期噪音。
 
 ---
 
@@ -369,6 +393,9 @@ public class UserService : IUserService
 - **事务** — `BeginTransactionAsync` / `CommitTransactionAsync` / `RollbackTransactionAsync`
 - **建表** — `SyncTableAsync` 按实体自动同步表结构
 
+> [!NOTE]
+> 访问失败统一抛 `VivConnectionException`（映射 `-501` 数据库错误），`Insert` / `Update` / `Delete` 的 `false` 只表示影响 0 行或入参无效，不表示数据库故障。
+
 ### 消息 Nana（Wolverine + RabbitMQ）
 
 发布订阅语义：每条事件进 fanout 交换机 `{EventName}Exchange`，每个订阅服务持一条独立队列 `{EventName}Queue.{ServiceName}` 各收一份。同服务只执行一次由 `VivConsumer<T>` 基类按 `nana:{ServiceName}:{EventType}:{MessageId}` 取 Redis 锁：谁取到谁进业务，拿不到当前实例直接 return（ack，不回队）。未配 Redis 时跳过取锁。
@@ -398,7 +425,8 @@ public class UserCreatedConsumer : VivConsumer<UserCreated>
 
 消费失败自动按 `RetryCount × 1s` 重试，耗尽后进死信队列；租户上下文（`NanaEnvelope<T>.Context`）随消息透传到下游，消费侧多租户隔离不受影响。Saga 状态机可基于 EF 持久化（配 `SagaConnectionString` 自动启用）。
 
-**消费并发/预取调优**：框架默认每通道预取 **20** 条（低于 Wolverine 原生 100，降低崩溃重投放大）、队列用 **Quorum** 类型（多副本防丢消息）。需要吞吐时给消费者标特性覆盖：
+> [!TIP]
+> **消费并发 / 预取调优**：框架默认每通道预取 **20** 条（低于 Wolverine 原生 100，降低崩溃重投放大）、队列用 **Quorum** 类型（多副本防丢消息）。需要吞吐时给消费者标特性覆盖：
 
 ```csharp
 [NanaConsumer(ConsumerCount = 4, PrefetchCount = 200, MaximumParallelMessages = 32)]
@@ -415,37 +443,28 @@ public class UserCreatedConsumer : VivConsumer<UserCreated> { ... }
 { "code": 200, "message": "请求处理成功", "data": { ... } }
 ```
 
-| 区间 | 含义 |
-|:--|:--|
-| `2xx`（如 `200`、`201`） | 成功类 |
-| `-2xx`（如 `-200` 通用业务错误、`-201` 缺参、`-202` 格式错） | 参数与基础业务拦截 |
-| `-4xx`（如 `-400` Token 空、`-401` Token 异常、`-404` 资源不存在） | 鉴权 / Token / 身份 |
-| `-6xx`（如 `-601` 无权限、`-602` 越权访问） | 功能 / 数据 / 渠道权限 |
-| `-5xx`（如 `-500` 兜底、`-501` 数据库、`-502` 缓存、`-503` 消息队列） | 系统 / 中间件异常 |
+错误码区间：
 
-细分业务错误统一用 `-200`，自定义提示文案即可，不新增业务专属枚举。
+- `2xx` 成功 — `200` 请求成功、`201` 已创建
+- `-2xx` 参数 / 基础业务 — `-200` 通用业务错误、`-201` 缺参、`-202` 格式错误
+- `-4xx` 鉴权 / Token / 身份 — `-400` Token 空、`-401` Token 异常、`-404` 资源不存在
+- `-5xx` 系统 / 中间件 — `-500` 兜底、`-501` 数据库、`-502` 缓存、`-503` 消息队列
+- `-6xx` 功能 / 数据 / 渠道权限 — `-601` 无权限、`-602` 越权访问
+
+> [!NOTE]
+> 细分业务错误统一用 `-200`，自定义提示文案即可，不新增业务专属枚举。
 
 ### 多租户与网关
 
-**上下文头**（由网关验签后回填，下游验签才信任）：
-
-| Header | 说明 |
-|:--|:--|
-| `x-viv-appId` | 客户端应用 ID |
-| `x-viv-subjectId` | 租户 ID（TenantId） |
-| `x-viv-userId` | 用户 ID |
-| `x-viv-serviceName` | 服务名 |
-| `x-request-token` | HMAC-SHA256 签名（`{unixSeconds}:{base64Sig}`，5 分钟过期） |
-
-`VivContextMiddleware` 解析头部（或 JWT claims）填充 `IVivContext`，数据层据此自动做租户过滤。完整链路见上节**请求链路**。
+上下文头契约见 [请求链路](#请求链路完整) —— 由网关验签后回填，下游验签才信任。`VivContextMiddleware` 解析头部（或 JWT claims）填充 `IVivContext`，数据层据此自动做租户过滤。
 
 **网关路由自动生成**（零手写 JSON）：从 Aspire 服务发现为每个服务生成 3 条路由 + 1 个集群：
 
-| 路由 | 目标 | 用途 |
-|:--|:--|:--|
-| `/{短名}/api/{**catch-all}` | `/api/{**catch-all}` | 标准 API（如 `/apex/api/...`） |
-| `/docs/{短名}/{**catch-all}` | `/{**catch-all}` | Scalar 文档（经网关透出） |
-| `/ws/{短名}/{**catch-all}` | `/{**catch-all}` | WebSocket / SignalR |
+```
+/{短名}/api/{**catch-all}      →  /api/{**catch-all}        标准 API（如 /apex/api/...）
+/docs/{短名}/{**catch-all}     →  /{**catch-all}            Scalar 文档（经网关透出）
+/ws/{短名}/{**catch-all}       →  /{**catch-all}            WebSocket / SignalR
+```
 
 网关只**解析不透传强制**鉴权：JWT 有就验签回填 `x-viv-*` 头（先剥离客户端伪造头与 query 身份参数，再 HMAC 签名 `x-request-token` 防绕过直连），无则放行；鉴权由下游服务 `[Authorize]` 自己控制。签名密钥只取 `EnvOption.InternalToken`（不回落 `TokenOption.SecretKey`）。限流策略在 `viv.ratelimit.json` 热重载。
 
@@ -471,6 +490,14 @@ if (InputMagic.Confirm("确认?")) { ... }             // y/n
 Out.PrintlnSuccess("完成");
 Out.PrintlnFormatJson(someObject);                   // JSON Panel
 ```
+
+---
+
+## 命名
+
+- **Banshee**（报丧女妖）— 框架层，幕后驱动一切基础设施
+- **Vivian**（薇薇安）— 应用层，台前承载业务服务
+- **Test** — 单元测试套件（`src/Test/` 框架测试；CLI 在 `Viv.Cli`）
 
 ---
 
