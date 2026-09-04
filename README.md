@@ -377,8 +377,8 @@ public class UserService : IUserService
 // 发布（消息类需继承 NanaEvent）
 public interface IVivEventPublisher
 {
-    Task<bool> PublishAsync<T>(T content, CancellationToken ct = default) where T : NanaEvent;
-    Task<bool> PublishDelayAsync<T>(TimeSpan delay, T content, CancellationToken ct = default) where T : NanaEvent;
+    ValueTask<bool> PublishAsync<T>(T content, CancellationToken ct = default) where T : NanaEvent;
+    ValueTask<bool> PublishDelayAsync<T>(TimeSpan delay, T content, CancellationToken ct = default) where T : NanaEvent;
 }
 
 // 消费（继承 VivConsumer<T>，实现业务逻辑）

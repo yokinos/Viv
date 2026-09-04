@@ -13,8 +13,8 @@ namespace Viv.Nana
         /// <typeparam name="T"></typeparam>
         /// <param name="content"></param>
         /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        Task<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent;
+        /// <returns>content 为 null 时 false；发布成功 true。传输失败抛连接异常。</returns>
+        ValueTask<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent;
 
         /// <summary>
         /// 发布延迟消息
@@ -23,8 +23,8 @@ namespace Viv.Nana
         /// <param name="delayTTL"></param>
         /// <param name="content"></param>
         /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent;
+        /// <returns>入参无效时 false；调度成功 true。传输失败抛连接异常。</returns>
+        ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent;
 
         /// <summary>
         /// 发布延迟消息（信封重投）—— 直接调度原信封，保留 MessageId/ReDeliverCount/DelaySecond/Context，
@@ -34,7 +34,7 @@ namespace Viv.Nana
         /// <param name="delayTTL"></param>
         /// <param name="envelope"></param>
         /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent;
+        /// <returns>入参无效时 false；调度成功 true。传输失败抛连接异常。</returns>
+        ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent;
     }
 }

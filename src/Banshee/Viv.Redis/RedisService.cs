@@ -567,12 +567,15 @@ namespace Viv.Redis
         {
             try
             {
-                return await ExecuteRedisAsync(lockKey, async db => await db.KeyExistsAsync(lockKey).ConfigureAwait(false), true).ConfigureAwait(false);
+                return await ExecuteRedisAsync(lockKey, async db => await db.KeyExistsAsync(lockKey).ConfigureAwait(false)).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                WriteLog($"查询分布式锁状态失败 Key:{lockKey}, Error:{ex.Message}", ex);
-                throw new DistributedLockException(lockKey, 0, ex); //无法确认锁状态，交由上层按故障处理
+                throw new DistributedLockException(lockKey, 0, ex);
             }
         }
 

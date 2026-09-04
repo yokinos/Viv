@@ -1,3 +1,5 @@
+using Viv.Contracts.Enums;
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Log;
 using Wolverine;
@@ -17,9 +19,10 @@ namespace Viv.Nana.Core
             _logger = logger;
         }
 
-        public async Task<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
+        public async ValueTask<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
         {
             if (content is null) return false;
+            cancellationToken.ThrowIfCancellationRequested();
 
             var message = new NanaEnvelope<T>
             {
@@ -32,17 +35,21 @@ namespace Viv.Nana.Core
                 await _bus.PublishAsync(message);
                 return true;
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                _logger.Error($"Publish failed for {typeof(T).Name}", ex);
-                return false;
+                throw WrapMqException($"Publish failed for {typeof(T).Name}", ex);
             }
         }
 
-        public async Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
+        public async ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
         {
             if (content is null) return false;
             if (delayTTL < TimeSpan.Zero) return false;
+            cancellationToken.ThrowIfCancellationRequested();
 
             var message = new NanaEnvelope<T>
             {
@@ -56,28 +63,41 @@ namespace Viv.Nana.Core
                 await _bus.ScheduleAsync(message, delayTTL);
                 return true;
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                _logger.Error($"SchedulePublish failed for {typeof(T).Name}", ex);
-                return false;
+                throw WrapMqException($"SchedulePublish failed for {typeof(T).Name}", ex);
             }
         }
 
-        public async Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
+        public async ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
         {
             if (envelope?.Content is null) return false;
             if (delayTTL < TimeSpan.Zero) return false;
+            cancellationToken.ThrowIfCancellationRequested();
 
             try
             {
                 await _bus.ScheduleAsync(envelope, delayTTL);
                 return true;
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                _logger.Error($"SchedulePublish failed for {typeof(T).Name}", ex);
-                return false;
+                throw WrapMqException($"SchedulePublish failed for {typeof(T).Name}", ex);
             }
+        }
+
+        private VivConnectionException WrapMqException(string message, Exception ex)
+        {
+            _logger.Error(message, ex);
+            return new VivConnectionException(VivConnType.RabbitMQ, message, ex);
         }
     }
 }

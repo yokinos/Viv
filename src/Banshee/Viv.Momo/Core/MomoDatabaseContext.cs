@@ -41,10 +41,10 @@ namespace Viv.Momo.Core
                 var count = context.SaveChanges();
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Insert,{ex.Message},{entity.ToJson()}", ex);
-                return false;
+                throw WrapDatabaseException($"Insert,{ex.Message},{entity.ToJson()}", ex);
             }
         }
 
@@ -74,10 +74,10 @@ namespace Viv.Momo.Core
 
                 return affected > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Insert（批量）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"Insert（批量）,{ex.Message}", ex);
             }
         }
 
@@ -93,10 +93,10 @@ namespace Viv.Momo.Core
                 var count = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"InsertAsync,{ex.Message},{entity.ToJson()}", ex);
-                return false;
+                throw WrapDatabaseException($"InsertAsync,{ex.Message},{entity.ToJson()}", ex);
             }
         }
 
@@ -126,10 +126,10 @@ namespace Viv.Momo.Core
 
                 return affected > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"InsertAsync（批量）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"InsertAsync（批量）,{ex.Message}", ex);
             }
         }
 
@@ -157,10 +157,10 @@ namespace Viv.Momo.Core
                 var count = context.SaveChanges();
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Update,{ex.Message},{entity.ToJson()}", ex);
-                return false;
+                throw WrapDatabaseException($"Update,{ex.Message},{entity.ToJson()}", ex);
             }
         }
 
@@ -186,10 +186,10 @@ namespace Viv.Momo.Core
 
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Update（批量）,{entityList.Count},{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"Update（批量）,{entityList.Count},{ex.Message}", ex);
             }
         }
 
@@ -213,10 +213,10 @@ namespace Viv.Momo.Core
                 var count = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"UpdateAsync,{ex.Message},{entity.ToJson()}", ex);
-                return false;
+                throw WrapDatabaseException($"UpdateAsync,{ex.Message},{entity.ToJson()}", ex);
             }
         }
 
@@ -242,10 +242,10 @@ namespace Viv.Momo.Core
 
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"UpdateAsync（批量）,{entityList.Count},{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"UpdateAsync（批量）,{entityList.Count},{ex.Message}", ex);
             }
         }
 
@@ -396,10 +396,10 @@ namespace Viv.Momo.Core
                 var affected = context.SaveChanges();
                 return affected > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Delete,{ex.Message},{entity.ToJson()}", ex);
-                return false;
+                throw WrapDatabaseException($"Delete,{ex.Message},{entity.ToJson()}", ex);
             }
         }
 
@@ -428,10 +428,10 @@ namespace Viv.Momo.Core
                     return affected > 0;
                 }
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Delete（批量）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"Delete（批量）,{ex.Message}", ex);
             }
         }
 
@@ -450,10 +450,10 @@ namespace Viv.Momo.Core
                 var affected = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 return affected > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"DeleteAsync,{ex.Message},{entity.ToJson()}", ex);
-                return false;
+                throw WrapDatabaseException($"DeleteAsync,{ex.Message},{entity.ToJson()}", ex);
             }
         }
 
@@ -483,10 +483,10 @@ namespace Viv.Momo.Core
                     return affected > 0;
                 }
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"DeleteAsync（批量）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"DeleteAsync（批量）,{ex.Message}", ex);
             }
         }
 
@@ -504,10 +504,10 @@ namespace Viv.Momo.Core
                 var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Delete（委托）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"Delete（委托）,{ex.Message}", ex);
             }
         }
 
@@ -525,10 +525,10 @@ namespace Viv.Momo.Core
                 var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"DeleteAsync（委托）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"DeleteAsync（委托）,{ex.Message}", ex);
             }
         }
 
@@ -544,10 +544,10 @@ namespace Viv.Momo.Core
                 var count = context.DbConnection.Execute(sql, parameter, _transaction, _timeOut);
                 return (count > 0);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Delete (Id),{ex.Message},{id}", ex);
-                return false;
+                throw WrapDatabaseException($"Delete (Id),{ex.Message},{id}", ex);
             }
         }
 
@@ -563,10 +563,10 @@ namespace Viv.Momo.Core
                 var count = await context.DbConnection.ExecuteAsync(sql, parameter, _transaction, _timeOut).ConfigureAwait(false);
                 return (count > 0);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"DeleteAsync (Id),{ex.Message},{id}", ex);
-                return false;
+                throw WrapDatabaseException($"DeleteAsync (Id),{ex.Message},{id}", ex);
             }
         }
 
@@ -588,10 +588,10 @@ namespace Viv.Momo.Core
                 var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"SoftDelete（委托）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"SoftDelete（委托）,{ex.Message}", ex);
             }
         }
 
@@ -609,10 +609,10 @@ namespace Viv.Momo.Core
                 var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"SoftDeleteAsync（委托）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"SoftDeleteAsync（委托）,{ex.Message}", ex);
             }
         }
 
@@ -629,10 +629,10 @@ namespace Viv.Momo.Core
                 var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"SoftDelete（Id）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"SoftDelete（Id）,{ex.Message}", ex);
             }
         }
 
@@ -649,10 +649,10 @@ namespace Viv.Momo.Core
                 var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"SoftDeleteAsync（Id）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"SoftDeleteAsync（Id）,{ex.Message}", ex);
             }
         }
 
@@ -670,10 +670,10 @@ namespace Viv.Momo.Core
                 var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"ExecuteSql（SQL）,{sql},{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"ExecuteSql（SQL）,{sql},{ex.Message}", ex);
             }
         }
 
@@ -687,10 +687,10 @@ namespace Viv.Momo.Core
                 var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
                 return count > 0;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"ExecuteSqlAsync（SQL）,{sql},{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"ExecuteSqlAsync（SQL）,{sql},{ex.Message}", ex);
             }
         }
 
@@ -729,6 +729,14 @@ namespace Viv.Momo.Core
 
                 return true;
             }
+            catch (OperationCanceledException)
+            {
+                if (isSelfCreatedTxn && context != null && transaction != null)
+                {
+                    context.Database.RollbackTransaction();
+                }
+                throw;
+            }
             catch (Exception ex)
             {
                 if (isSelfCreatedTxn && context != null && transaction != null)
@@ -739,8 +747,7 @@ namespace Viv.Momo.Core
                 var log = sqlList.Count > 10
                     ? $"前10条SQL：{string.Join(",", sqlList.Take(10))}...（共{sqlList.Count}条）"
                     : string.Join(",", sqlList);
-                WriteLog(log, ex);
-                return false;
+                throw WrapDatabaseException(log, ex);
             }
             finally
             {
@@ -786,6 +793,14 @@ namespace Viv.Momo.Core
 
                 return true;
             }
+            catch (OperationCanceledException)
+            {
+                if (isSelfCreatedTxn && context != null && transaction != null)
+                {
+                    await context.Database.RollbackTransactionAsync(cancellationToken).ConfigureAwait(false);
+                }
+                throw;
+            }
             catch (Exception ex)
             {
                 if (isSelfCreatedTxn && context != null && transaction != null)
@@ -796,8 +811,7 @@ namespace Viv.Momo.Core
                 var log = sqlList.Count > 10
                     ? $"前10条SQL：{string.Join(",", sqlList.Take(10))}...（共{sqlList.Count}条）"
                     : string.Join(",", sqlList);
-                WriteLog(log, ex);
-                return false;
+                throw WrapDatabaseException(log, ex);
             }
             finally
             {
@@ -842,6 +856,14 @@ namespace Viv.Momo.Core
 
                 return true;
             }
+            catch (OperationCanceledException)
+            {
+                if (isSelfCreatedTxn && context != null && transaction != null)
+                {
+                    context.Database.RollbackTransaction();
+                }
+                throw;
+            }
             catch (Exception ex)
             {
                 if (isSelfCreatedTxn && context != null && transaction != null)
@@ -852,8 +874,7 @@ namespace Viv.Momo.Core
                 var log = sqlList.Count > 10
                     ? $"前10条SQL：{string.Join(",", sqlList.Take(10).Select(x => x.Key))}...（共{sqlList.Count}条）"
                     : string.Join(",", sqlList.Select(x => x.Key));
-                WriteLog(log, ex);
-                return false;
+                throw WrapDatabaseException(log, ex);
             }
             finally
             {
@@ -898,6 +919,14 @@ namespace Viv.Momo.Core
 
                 return true;
             }
+            catch (OperationCanceledException)
+            {
+                if (isSelfCreatedTxn && context != null && transaction != null)
+                {
+                    await context.Database.RollbackTransactionAsync(cancellationToken).ConfigureAwait(false);
+                }
+                throw;
+            }
             catch (Exception ex)
             {
                 if (isSelfCreatedTxn && context != null && transaction != null)
@@ -908,8 +937,7 @@ namespace Viv.Momo.Core
                 var log = sqlList.Count > 10
                     ? $"前10条SQL：{string.Join(",", sqlList.Take(10).Select(x => x.Key))}...（共{sqlList.Count}条）"
                     : string.Join(",", sqlList.Select(x => x.Key));
-                WriteLog(log, ex);
-                return false;
+                throw WrapDatabaseException(log, ex);
             }
             finally
             {
@@ -933,10 +961,10 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 return context.Set<T>().Any(predicate);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Exist（委托）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"Exist（委托）,{ex.Message}", ex);
             }
         }
 
@@ -949,10 +977,10 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 return await context.Set<T>().AnyAsync(predicate).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"ExistAsync（委托）,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"ExistAsync（委托）,{ex.Message}", ex);
             }
         }
 
@@ -965,10 +993,10 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 return context.Set<T>().Count(predicate);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Count（委托）,{ex.Message}", ex);
-                return -1;
+                throw WrapDatabaseException($"Count（委托）,{ex.Message}", ex);
             }
         }
 
@@ -981,10 +1009,10 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 return await context.Set<T>().CountAsync(predicate).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"CountAsync（委托）,{ex.Message}", ex);
-                return -1;
+                throw WrapDatabaseException($"CountAsync（委托）,{ex.Message}", ex);
             }
         }
 
@@ -1000,12 +1028,12 @@ namespace Viv.Momo.Core
             catch (InvalidOperationException ex)
             {
                 WriteLog($"SingleOrDefault（委托）: 实体{typeof(T).Name}符合条件的记录超过1条，异常：{ex.Message}", ex);
-                return default;
+                throw;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"SingleOrDefault（委托）,{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"SingleOrDefault（委托）,{ex.Message}", ex);
             }
         }
 
@@ -1022,12 +1050,12 @@ namespace Viv.Momo.Core
             catch (InvalidOperationException ex)
             {
                 WriteLog($"SingleOrDefault（SQL）: 实体{typeof(T).Name}符合条件的记录超过1条，SQL：{sql}，异常：{ex.Message}", ex);
-                return default;
+                throw;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"SingleOrDefault（SQL）,{sql},{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"SingleOrDefault（SQL）,{sql},{ex.Message}", ex);
             }
         }
 
@@ -1043,12 +1071,12 @@ namespace Viv.Momo.Core
             catch (InvalidOperationException ex)
             {
                 WriteLog($"SingleOrDefaultAsync（委托）: 实体{typeof(T).Name}符合条件的记录超过1条，异常：{ex.Message}", ex);
-                return default;
+                throw;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"SingleOrDefaultAsync（委托）,{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"SingleOrDefaultAsync（委托）,{ex.Message}", ex);
             }
         }
 
@@ -1065,12 +1093,12 @@ namespace Viv.Momo.Core
             catch (InvalidOperationException ex)
             {
                 WriteLog($"SingleOrDefaultAsync（SQL）: 实体{typeof(T).Name}符合条件的记录超过1条，SQL：{sql}，异常：{ex.Message}", ex);
-                return default;
+                throw;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"SingleOrDefaultAsync（SQL）,{sql},{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"SingleOrDefaultAsync（SQL）,{sql},{ex.Message}", ex);
             }
         }
 
@@ -1089,10 +1117,10 @@ namespace Viv.Momo.Core
                 object parameters = isTenantEntity ? new { Id = id, TenantId } : new { Id = id };
                 return connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Find,Table:{tableName},Id:{id},{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"Find,Table:{tableName},Id:{id},{ex.Message}", ex);
             }
         }
 
@@ -1110,10 +1138,10 @@ namespace Viv.Momo.Core
                 object parameters = isTenantEntity ? new { Id = id, TenantId } : new { Id = id };
                 return await connection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"FindAsync,Table:{tableName},Id:{id},{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"FindAsync,Table:{tableName},Id:{id},{ex.Message}", ex);
             }
         }
 
@@ -1126,10 +1154,10 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 return context.Set<T>().FirstOrDefault(predicate);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"FirstOrDefault（委托）,{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"FirstOrDefault（委托）,{ex.Message}", ex);
             }
         }
 
@@ -1143,10 +1171,10 @@ namespace Viv.Momo.Core
                 var connection = context.DbConnection;
                 return connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"FirstOrDefault（SQL）,{sql},{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"FirstOrDefault（SQL）,{sql},{ex.Message}", ex);
             }
         }
 
@@ -1159,10 +1187,10 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 return await context.Set<T>().FirstOrDefaultAsync(predicate, cancellationToken).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"FirstOrDefaultAsync（委托）,{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"FirstOrDefaultAsync（委托）,{ex.Message}", ex);
             }
         }
 
@@ -1176,10 +1204,10 @@ namespace Viv.Momo.Core
                 var connection = context.DbConnection;
                 return await connection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"FirstOrDefaultAsync（SQL）,{sql},{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"FirstOrDefaultAsync（SQL）,{sql},{ex.Message}", ex);
             }
         }
 
@@ -1193,10 +1221,10 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 return context.Set<T>().Where(predicate).ToList();
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"FindList（委托）,{ex.Message}", ex);
-                return [];
+                throw WrapDatabaseException($"FindList（委托）,{ex.Message}", ex);
             }
         }
 
@@ -1210,10 +1238,10 @@ namespace Viv.Momo.Core
                 var result = context.DbConnection.Query<T>(sql, parameters, null, true, _timeOut);
                 return result.ToList();
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"FindList（SQL）,{sql},{ex.Message}", ex);
-                return [];
+                throw WrapDatabaseException($"FindList（SQL）,{sql},{ex.Message}", ex);
             }
         }
 
@@ -1226,10 +1254,10 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 return await context.Set<T>().Where(predicate).ToListAsync(cancellationToken).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"FindListAsync（委托）,{ex.Message}", ex);
-                return [];
+                throw WrapDatabaseException($"FindListAsync（委托）,{ex.Message}", ex);
             }
         }
 
@@ -1243,10 +1271,10 @@ namespace Viv.Momo.Core
                 var result = await context.DbConnection.QueryAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
                 return result.ToList();
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"FindListAsync（SQL）,{sql},{ex.Message}", ex);
-                return [];
+                throw WrapDatabaseException($"FindListAsync（SQL）,{sql},{ex.Message}", ex);
             }
         }
 
@@ -1259,10 +1287,10 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 return context.DbConnection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"FindScalar（SQL）,{sql},{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"FindScalar（SQL）,{sql},{ex.Message}", ex);
             }
         }
 
@@ -1276,10 +1304,10 @@ namespace Viv.Momo.Core
                 var result = await context.DbConnection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
                 return result;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"FindScalarAsync（SQL）,{sql},{ex.Message}", ex);
-                return default;
+                throw WrapDatabaseException($"FindScalarAsync（SQL）,{sql},{ex.Message}", ex);
             }
         }
 
@@ -1309,10 +1337,10 @@ namespace Viv.Momo.Core
                 }
                 return result;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"Page（SQL）,{sql},{ex.Message}", ex);
-                return result;
+                throw WrapDatabaseException($"Page（SQL）,{sql},{ex.Message}", ex);
             }
         }
 
@@ -1338,10 +1366,10 @@ namespace Viv.Momo.Core
                 }
                 return result;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                WriteLog($"PageAsync（SQL）,{sql},{ex.Message}", ex);
-                return result;
+                throw WrapDatabaseException($"PageAsync（SQL）,{sql},{ex.Message}", ex);
             }
         }
 

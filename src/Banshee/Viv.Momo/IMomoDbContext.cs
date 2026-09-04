@@ -12,7 +12,8 @@ using Viv.Momo.Options;
 namespace Viv.Momo
 {
     /// <summary>
-    /// Viv 数据库访问定义
+    /// Viv 数据库访问定义。访问失败抛 <see cref="Viv.Contracts.Exceptions.VivConnectionException"/>；
+    /// 写操作返回 false 仅表示影响 0 行或入参无效，不表示数据库故障。
     /// </summary>
     public interface IMomoDbContext : IDisposable
     {

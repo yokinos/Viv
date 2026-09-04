@@ -67,17 +67,17 @@ namespace Viv.Nana.Tests
         public object? LastEnvelope { get; private set; }
         public bool Result { get; set; } = true;
 
-        public Task<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
-            => Task.FromResult(Result);
+        public ValueTask<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
+            => ValueTask.FromResult(Result);
 
-        public Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
-            => Task.FromResult(Result);
+        public ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
+            => ValueTask.FromResult(Result);
 
-        public Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
+        public ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
         {
             PublishDelayCalled = true;
             LastEnvelope = envelope;
-            return Task.FromResult(Result);
+            return ValueTask.FromResult(Result);
         }
     }
 

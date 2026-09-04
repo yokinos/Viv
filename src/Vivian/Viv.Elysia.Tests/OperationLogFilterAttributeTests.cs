@@ -40,17 +40,17 @@ namespace Viv.Elysia.Tests
         {
             public List<NanaEvent> Published { get; } = new();
 
-            public Task<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
+            public ValueTask<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
             {
                 Published.Add(content);
-                return Task.FromResult(true);
+                return ValueTask.FromResult(true);
             }
 
-            public Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
-                => Task.FromResult(true);
+            public ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
+                => ValueTask.FromResult(true);
 
-            public Task<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
-                => Task.FromResult(true);
+            public ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
+                => ValueTask.FromResult(true);
         }
 
         private sealed class SampleController

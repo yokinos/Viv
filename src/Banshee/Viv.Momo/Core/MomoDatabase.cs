@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
+using Viv.Contracts.Enums;
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
@@ -162,8 +164,7 @@ namespace Viv.Momo.Core
                 }
                 catch (Exception ex)
                 {
-                    WriteLog($"BeginTransaction,{ex.Message}", ex);
-                    return false;
+                    throw WrapDatabaseException($"BeginTransaction,{ex.Message}", ex);
                 }
             }
         }
@@ -184,8 +185,7 @@ namespace Viv.Momo.Core
                 }
                 catch (Exception ex)
                 {
-                    WriteLog($"CommitTransaction,{ex.Message}", ex);
-                    throw;
+                    throw WrapDatabaseException($"CommitTransaction,{ex.Message}", ex);
                 }
                 finally
                 {
@@ -196,7 +196,7 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
-        /// 回滚当前事务
+        /// 回滚当前事务。回滚失败只记日志不抛出，避免掩盖触发回滚的原始异常。
         /// </summary>
         public virtual void RollbackTransaction()
         {
@@ -243,10 +243,13 @@ namespace Viv.Momo.Core
                 }
                 return true;
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                WriteLog($"BeginTransactionAsync,{ex.Message}", ex);
-                return false;
+                throw WrapDatabaseException($"BeginTransactionAsync,{ex.Message}", ex);
             }
             finally
             {
@@ -271,10 +274,13 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Write);
                 await context.Database.CommitTransactionAsync(cancellationToken);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                WriteLog($"CommitTransactionAsync,{ex.Message}", ex);
-                throw;
+                throw WrapDatabaseException($"CommitTransactionAsync,{ex.Message}", ex);
             }
             finally
             {
@@ -287,7 +293,7 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
-        /// 异步回滚事务
+        /// 异步回滚事务。回滚失败只记日志不抛出，避免掩盖触发回滚的原始异常。
         /// </summary>
         public virtual async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
         {
@@ -337,6 +343,19 @@ namespace Viv.Momo.Core
         protected void WriteLog(string message, Exception ex)
         {
             _logger.Error(message, ex);
+        }
+
+        /// <summary>
+        /// 数据库访问失败：记日志后包装为 <see cref="VivConnectionException"/> 抛出。
+        /// 取消不包装，避免把 <see cref="OperationCanceledException"/> 吞成连接故障。
+        /// </summary>
+        protected VivConnectionException WrapDatabaseException(string message, Exception ex)
+        {
+            WriteLog(message, ex);
+            var connType = _options.DatabaseSource == DatabaseSourceType.PostgreSQL
+                ? VivConnType.PostgreSQL
+                : VivConnType.SqlServer;
+            return new VivConnectionException(connType, message, ex);
         }
 
         public void Dispose()

@@ -4,11 +4,11 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
+using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Log;
-using Viv.Nana;
 
 namespace Viv.Engine.Filter
 {
@@ -52,29 +52,41 @@ namespace Viv.Engine.Filter
                 return;
 
             var ex = context.Exception;
-            var realEx = ex.InnerException ?? ex;      // 解包内部异常
+            // 包装异常（VivConnectionException）按外层类型映射，不解包成 SqlException 否则丢失 -501
+            var mappedEx = SelectMappedException(ex);
             var httpContext = context.HttpContext;
             var traceId = httpContext.TraceIdentifier;
             var path = httpContext.Request.Path;
             var method = httpContext.Request.Method;
 
             // 记录日志（结构化日志，包含堆栈）
-            // 对于分布式锁异常，可以降级为 Warning，避免告警风暴（此处保留 Error，可根据需要调整）
             // 分布式锁异常只记 Warning，避免告警风暴
-            if (realEx is DistributedLockException)
+            if (mappedEx is DistributedLockException)
             {
-                _logger.Warning("[全局异常] {Method} {Path} | RequestId: {RequestId} | Message: {Message}", realEx, method, path, traceId, realEx.Message);
+                _logger.Warning("[全局异常] {Method} {Path} | RequestId: {RequestId} | Message: {Message}", mappedEx, method, path, traceId, mappedEx.Message);
             }
             else
             {
-                _logger.Error("[全局异常] {Method} {Path} | RequestId: {RequestId} | Message: {Message}", realEx, method, path, traceId, realEx.Message);
+                _logger.Error("[全局异常] {Method} {Path} | RequestId: {RequestId} | Message: {Message}", mappedEx, method, path, traceId, mappedEx.Message);
             }
 
             // 根据异常类型构建响应
-            context.Result = BuildErrorResponse(realEx, httpContext);
+            context.Result = BuildErrorResponse(mappedEx, httpContext);
             context.ExceptionHandled = true;
 
             await Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// 优先按外层已登记类型映射；未登记再解包 InnerException（兼容只抛提供商异常的旧路径）。
+        /// </summary>
+        private static Exception SelectMappedException(Exception ex)
+        {
+            if (ex is VivConnectionException)
+                return ex;
+            if (_exceptionHandlers.ContainsKey(ex.GetType()))
+                return ex;
+            return ex.InnerException ?? ex;
         }
 
         /// <summary>
@@ -82,6 +94,17 @@ namespace Viv.Engine.Filter
         /// </summary>
         private VivApiResult BuildErrorResponse(Exception ex, HttpContext httpContext)
         {
+            if (ex is VivConnectionException connEx)
+            {
+                var code = connEx.ConnType switch
+                {
+                    VivConnType.Redis => ApiResultCode.CacheError,
+                    VivConnType.RabbitMQ => ApiResultCode.MqError,
+                    _ => ApiResultCode.DatabaseError
+                };
+                return VivApiResult.ApiResult(code, ex.Message, null);
+            }
+
             // 如果异常类型在映射表中，使用对应的错误码和数据
             if (_exceptionHandlers.TryGetValue(ex.GetType(), out var handler))
             {

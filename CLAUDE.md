@@ -35,7 +35,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
 | `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server |
 | `Viv.Nana` | Messaging — `IVivEventPublisher` / `NanaEventPublisher` (publish + delayed publish); `VivConsumer<T>` base class; built on **Wolverine + RabbitMQ**; Saga support with EF Core state persistence |
-| `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`) |
+| `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`)。访问失败抛 `VivConnectionException(Redis)`（API 过滤器 `-502`），不再吞成 default；锁续期后台任务仍只记日志后停止 |
 | `Viv.Sandrone` | Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service` |
 | `Viv.Echo` | Service-to-service communication + **框架级 gRPC 宿主**（`Viv.Echo.Grpc`）— HTTP + gRPC 客户端 `VivGrpcInterceptor`/`AddVivGrpcClient`（支持服务发现）、服务端 `VivGrpcServerInterceptor`（x-viv-* 头水合 `IVivContext`）/`AddVivGrpcServer`/`AddVivGrpcKestrel`/`VivGrpcDiscovery`（自动发现 `[BindServiceMethod]` 实现类 + 注册 + 反射映射；REST + gRPC 分端口，见下） |
 | `Viv.Clockwork` | Background scheduling — `TickerQ` integration for cron/interval job execution with dashboard |
@@ -160,7 +160,7 @@ Business-layer services and repositories are registered via **type scanning** dr
 
 基于 **Wolverine 6.25.3（MIT）** + RabbitMQ（`WolverineFx` / `WolverineFx.RabbitMQ` / `WolverineFx.EntityFrameworkCore` / `WolverineFx.RuntimeCompilation`）。对外抽象不变（`IVivEventPublisher` / `VivConsumer<T>` / `NanaEvent` / `SubscribeResult` / `NanaEnvelope<T>`），应用层无需感知传输实现。
 
-- **Producer:** `IVivEventPublisher.PublishAsync<T>()` / `PublishDelayAsync<T>(TimeSpan, T)` — messages must extend `NanaEvent`（not `VivMessage`）。`NanaEventPublisher` 内部包成 `NanaEnvelope<T>`（含 `IVivContext` 快照 `Context`，租户上下文随消息透传），调 `IMessageBus.PublishAsync(envelope)` / `ScheduleAsync(envelope, delay)`。
+- **Producer:** `IVivEventPublisher.PublishAsync<T>()` / `PublishDelayAsync<T>(TimeSpan, T)` — messages must extend `NanaEvent`。`NanaEventPublisher` 内部包成 `NanaEnvelope<T>`（含 `IVivContext` 快照 `Context`），调 `IMessageBus.PublishAsync` / `ScheduleAsync`。传输失败抛 `VivConnectionException(RabbitMQ)`（API 过滤器 `-503`），`false` 只表示入参无效。
 - **Consumer:** Extend `VivConsumer<T>`, override `ReceiveMessageAsync()` — return `SubscribeResult` 指示成功或重投。基类 `HandleAsync(NanaEnvelope<T>, CancellationToken)`（Wolverine handler 约定，`Discovery.IncludeType` 显式注册）先按 `nana:{ServiceName}:{EventType}:{MessageId}` 取 Redis 锁（`IDistributedLock`，未注册则跳过）：**谁取到锁谁进业务**，fanout 下各服务 Key 不同所以各处理一份；拿不到锁走既有 `DistributedLockException` 契约。然后将结果映射：`Success` → 确认；`Requeue` → 抛 `VivRequeueException`（走全局重试策略）；失败 → 记日志丢弃。
 - **延迟重投（`VivConsumer.RedeliverAsync`）**：业务失败想延迟再试时调用 `RedeliverAsync(envelope, delay)`，把**原信封**经 RabbitMQ 延迟交换机在 delay 后重投 fanout（各订阅服务各收一份，谁爱消费谁消费，同服务消费锁保证只进一次业务）。`NanaEnvelope` 加 `ReDeliverCount`/`DelaySecond` 字段随信封透传；`IVivEventPublisher` 新增**信封版** `PublishDelayAsync(TimeSpan, NanaEnvelope<T>, ...)` 直接 `ScheduleAsync` 原信封——内容版重载会新建信封，丢 MessageId/ReDeliverCount/DelaySecond/Context（锁 Key 与计数无法存活）。重投前 `ReDeliverCount+1`，超过 `NanaOptions.RetryCount` 上限返回 Failed(IsRequeue:false) 丢弃不回队。上限经 `VivConfigRegistry.Get<NanaOptions>()` 静态取（`NanaRegister.Initialize` 已把 NanaOptions 放进注册表，**无需 DI 注入**）；`VivConsumer` 构造注入 **`VivConsumerDependency`**（聚合 `ILoggerContract`/`IVivContext`/`IVivEventPublisher`/`IDistributedLock?`，`: IDependency` 经 `AutoDependencyRegister` 自动注册 **AsSelf + Scoped**，子类构造 `: base(dependency)` 透传即可）。**拿锁失败自动重投（可选，opt-in）**：producer 在 `NanaEvent` 上设 `LockFailShouldRetryDeliver=true`（随内容序列化、重投副本天然继承）且 `DistributedLockException.InnerException == null`（**纯拿锁失败**——业务在锁内抛异常/Redis 异常都有 Inner，不触发自动重投，业务自己处理）时，基类按 `2×(ReDeliverCount+1)` 分钟递增延迟重投，成功重投原消息 ack（不打印丢弃）；同样受 `RetryCount` 上限约束，达上限才丢弃。
 - **配置（`AddVivWolverine`，`AddViv()` 内调用）：**
@@ -174,7 +174,7 @@ Business-layer services and repositories are registered via **type scanning** dr
 
 ### Database (Momo)
 
-`MomoDatabaseContext` (implements `IMomoDbContext`) uses EF Core for small operations and Dapper for bulk queries (threshold: `EFMaxCount`). `EFAppContext` is created as either read or write — reads randomly select a slave connection, writes always use the master. Entities are auto-scanned via `DatabaseOption.EntityTypeOptions`.
+`MomoDatabaseContext` (implements `IMomoDbContext`) uses EF Core for small operations and Dapper for bulk queries (threshold: `EFMaxCount`). `EFAppContext` is created as either read or write — reads randomly select a slave connection, writes always use the master. Entities are auto-scanned via `DatabaseOption.EntityTypeOptions`. **访问失败抛 `VivConnectionException`**（记日志后包装，API 过滤器映射 `-501 DatabaseError`）；`Insert`/`Update`/`Delete` 的 `false` 只表示语句成功但影响 0 行（或入参为空）。`Exist`/`Count`/`Find` 遇库故障不再返回 false/default/-1。`OperationCanceledException` 原样冒泡。回滚失败只记日志，避免掩盖原始异常。
 
 ### Multi-tenancy
 

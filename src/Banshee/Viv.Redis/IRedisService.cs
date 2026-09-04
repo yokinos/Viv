@@ -68,14 +68,14 @@ namespace Viv.Redis
         /// 检查指定键是否存在
         /// </summary>
         /// <param name="key">Redis键</param>
-        /// <returns>存在返回true，否则返回false</returns>
+        /// <returns>存在 true，不存在 false。Redis 不可用时抛连接异常。</returns>
         bool Exist(string key);
 
         /// <summary>
         /// 异步检查指定键是否存在
         /// </summary>
         /// <param name="key">Redis键</param>
-        /// <returns>存在返回true，否则返回false</returns>
+        /// <returns>存在 true，不存在 false。Redis 不可用时抛连接异常。</returns>
         Task<bool> ExistAsync(string key);
 
         /// <summary>
