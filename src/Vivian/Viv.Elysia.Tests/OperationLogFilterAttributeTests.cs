@@ -113,6 +113,7 @@ namespace Viv.Elysia.Tests
             await filter.OnActionExecutionAsync(ctx, next);
 
             Assert.Empty(publisher.Published);
+            Assert.Null(ElysiaLogContextAccessor.Current);
         }
 
         [Fact]
@@ -154,6 +155,38 @@ namespace Viv.Elysia.Tests
             await filter.OnActionExecutionAsync(ctx, next);
 
             Assert.Empty(publisher.Published);
+            Assert.Null(ElysiaLogContextAccessor.Current);
+        }
+
+        [Fact]
+        public async Task 上一请求残留空容器_下一请求仍按特性播种()
+        {
+            ElysiaLogContextAccessor.Clear();
+            var (filterA, ctxA, nextA, _) =
+                Create(DescriptorFor(nameof(SampleController.NoAttr)), VivApiResult.Success("ok"));
+            await filterA.OnActionExecutionAsync(ctxA, nextA);
+            Assert.Null(ElysiaLogContextAccessor.Current);
+
+            var (filterB, ctxB, nextB, publisherB) =
+                Create(DescriptorFor(nameof(SampleController.WithLoginAttr)), VivApiResult.Success("登录成功"));
+            await filterB.OnActionExecutionAsync(ctxB, nextB);
+
+            var evt = Assert.IsType<UserOperationLogEvent>(Assert.Single(publisherB.Published));
+            Assert.Equal(EmOperationType.Login, evt.Operation);
+            Assert.Null(ElysiaLogContextAccessor.Current);
+        }
+
+        [Fact]
+        public async Task action抛异常_仍清空上下文()
+        {
+            ElysiaLogContextAccessor.Clear();
+            var (filter, ctx, _, _) =
+                Create(DescriptorFor(nameof(SampleController.WithLoginAttr)), VivApiResult.Success("ok"));
+            ActionExecutionDelegate throwing = () => throw new InvalidOperationException("boom");
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => filter.OnActionExecutionAsync(ctx, throwing));
+
+            Assert.Null(ElysiaLogContextAccessor.Current);
         }
 
         [Fact]

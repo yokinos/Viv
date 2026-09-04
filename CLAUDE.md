@@ -197,7 +197,7 @@ Controllers return `VivApiResult` (implements `IActionResult`) — a `{ Code, Me
 
 - **触发（两条路径）**：① action 标 `[OperationLog(module, operation, params int[] codes)]`（`Viv.Elysia.Attributes`，**声明式 opt-in**，无需业务调 SetLog）② 业务代码 `ElysiaLogContextAccessor.SetLog(module, operation, description?, isRecord?)` 程序式声明。两条路径都需 `AddElysiaFilter()`（`ElysiaApiExtensions`，替换原来手动 `Filters.Add<RequestFilterAttribute>()`，同时注册 `RequestFilterAttribute` + `OperationLogFilterAttribute`）。
 - **入口优先级（有 Current 优先）**：filter 入口先看 `ElysiaLogContextAccessor.Current`——已有值（外部已 Set/SetLog）**不覆盖**；为 null 才读 action 上的 `[OperationLog]` 特性播种（`Module/Operation` + `IsSet=true`）；无特性则预置空容器等业务 SetLog。`opCtx` 在 `await next()` 后被清空时兜底回退读特性。
-- **AsyncLocal 预置容器（关键机制）**：AsyncLocal 只从父流向子，action 里 `SetLog` 的写入跨 `await` 流不回 filter 续段——`OperationLogFilterAttribute` 在 `await next()` 前先 `ElysiaLogContextAccessor.Set(new OperationLogContext())` 预置可变容器，`SetLog` 改的是容器**字段**（引用不变），filter 续段读同一引用即拿到结果。
+- **AsyncLocal 预置容器（关键机制）**：AsyncLocal 只从父流向子，action 里 `SetLog` 的写入跨 `await` 流不回 filter 续段——`OperationLogFilterAttribute` 在 `await next()` 前先 `ElysiaLogContextAccessor.Set(new OperationLogContext())` 预置可变容器，`SetLog` 改的是容器**字段**（引用不变），filter 续段读同一引用即拿到结果。`OnActionExecutionAsync` **`finally` 一律 `Clear()`**（跳过发布 / 异常同样清），避免 keep-alive 或线程复用把 `Current` 带到下一请求，导致特性播种被跳过、串号或漏记。
 - **`IsSet` 门控**：`OperationLogContext.IsSet` 区分「未声明记录意图」（无特性且业务没 SetLog → 跳过发布）与「明确不记录」（`isRecord:false`）——避免误发布未标注操作日志的请求。
 - **状态码门控（仅特性播种时生效）**：result 为 `VivApiResult` 且业务信封码 `Code` 不在 `Codes` 内 → 不记录；`Codes` 默认 `[200]`（只记成功，`ApiResultCode.Success=200`）。
 - **Description 缺省**：特性播种且业务没设 Description → 取 `result.Message`（特性注释：以返回结果的 Message 为日志内容）。
