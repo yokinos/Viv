@@ -90,7 +90,8 @@ namespace Viv.Nana
                 LockHolderContext.SetHolderId(holderId);
                 if (_distributedLock != null)
                 {
-                    acquired = await _distributedLock.AcquireLockAsync(lockKey, TimeSpan.FromMinutes(5), holderId).ConfigureAwait(false);
+                    // 取锁失败 → 二次裁决锁状态，确认是否真竞争 这里的锁采用不可重入模式，避免同一消息在多个服务内消费时重复取锁
+                    acquired = await _distributedLock.AcquireLockAsync(lockKey, TimeSpan.FromMinutes(5), holderId, false).ConfigureAwait(false);
                     if (!acquired)
                     {
                         // 二次裁决：锁确实被其他实例持有 → 真竞争，丢弃不回队；

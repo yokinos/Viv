@@ -18,21 +18,18 @@ namespace Viv.Contracts.Exceptions
         /// <summary>
         /// 发生此异常时返回给前端的数据
         /// </summary>
-        public object Output { get; set; }
+        public object? Output { get; set; }
 
         public VivBusinessException(string message) : base(message) { }
 
         public VivBusinessException(string message, Exception innerException) : base(message, innerException) { }
 
-        public VivBusinessException(int code, string message) : base(message)
-        {
-            Code = code;
-        }
+        public VivBusinessException(string message, int code) : base(message) { Code = code; }
 
-        public VivBusinessException(int code, string message, object output) : base(message)
-        {
-            Code = code;
-            Output = output;
-        }
+        public VivBusinessException(string message, int code, object output) : base(message) { Code = code; Output = output; }
+
+        public VivBusinessException(string message, int code, Exception innerException) : base(message, innerException) { Code = code; }
+
+        public VivBusinessException(string message, int code, object output, Exception innerException) : base(message, innerException) { Code = code; Output = output; }
     }
 }

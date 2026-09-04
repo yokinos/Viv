@@ -96,6 +96,6 @@ namespace Viv.Contracts.Interface
         /// <param name="expire">锁过期时间</param>
         /// <param name="executeMethod">业务委托（取锁成功时执行）</param>
         /// <returns></returns>
-        Task<T> AcquireLockAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, CancellationToken cancellationToken = default) => AcquireLockWithExecuteAsync(key, expire, executeMethod, null, null, true, 5, 200, 5000, cancellationToken);
+        Task<T> AcquireLockAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, string? lockHolderId = null, bool isReentrant = true, CancellationToken cancellationToken = default) => AcquireLockWithExecuteAsync(key, expire, executeMethod, null, lockHolderId, isReentrant, 5, 200, 5000, cancellationToken);
     }
 }

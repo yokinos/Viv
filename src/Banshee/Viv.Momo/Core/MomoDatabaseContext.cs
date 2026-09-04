@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Generic;

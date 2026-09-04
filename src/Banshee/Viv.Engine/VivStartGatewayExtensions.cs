@@ -172,7 +172,7 @@ namespace Viv.Engine
 
             // 认证后把用户信息透传给下游（claims 仅在认证后可用）。
             // Header 契约与 RequestTokenResolver 对齐：
-            //   x-viv-appId / x-viv-subjectId(=TenantId) / x-viv-userId / x-viv-serviceName
+            //   x-viv-appId / x-viv-subjectId(=SubjectId) / x-viv-userId / x-viv-serviceName
             // 先剥离客户端可能伪造的 x-viv-* 上下文头与 x-request-token，只回填来自验签 token 的值。
             // 回填后对头组做 HMAC-SHA256 签名写入 x-request-token，下游验签通过才信任——防止绕过网关直连下游伪造头。
             app.Use(async (context, next) =>
@@ -189,7 +189,7 @@ namespace Viv.Engine
                     context.Request.Headers.Remove(header);
                 }
 
-                // 剥离客户端可伪造的身份 query 参数（tenantId/userId/appId）：
+                // 剥离客户端可伪造的身份 query 参数（subjectId/userId/appId）：
                 // 身份只允许来自认证后回填的 x-viv-* 头，客户端经 query 直传的身份一律丢弃，防止冒充任意用户/租户。
                 var spoofableIdentityKeys = _vivClaimTypes;
                 if (context.Request.Query.Count > 0)
