@@ -1,10 +1,8 @@
 ﻿using StackExchange.Redis;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Viv.Contracts;
 using Viv.Contracts.Exceptions;
@@ -25,28 +23,6 @@ namespace Viv.Redis
     /// </summary>
     public class RedisService : VivRedis, IRedisService
     {
-        /// <summary>
-        /// 续期管理：记录每个锁的持有者与取消令牌源，用于停止续期
-        /// </summary>
-        private static readonly ConcurrentDictionary<string, RenewalEntry> _renewalTasks = new();
-
-        /// <summary>
-        /// 锁续期条目：持有者 + 取消令牌。
-        /// 记录持有者用于区分「同持有者重入（复用已有续期任务）」与「锁已易主（替换旧任务）」，
-        /// 避免续期任务退出时的 TryRemove 误删新持有者的登记。
-        /// </summary>
-        private sealed class RenewalEntry(string holderId, CancellationTokenSource cts)
-        {
-            public string HolderId { get; } = holderId;
-
-            public CancellationTokenSource Cts { get; } = cts;
-        }
-
-        /// <summary>
-        /// 锁续期阈值：在过期时间的一半时进行续期
-        /// </summary>
-        private const double RenewalThreshold = 0.5;
-
         /// <summary>
         /// 重入锁释放时的临时续期时间（秒），防止释放过程中锁过期
         /// </summary>
@@ -501,8 +477,7 @@ namespace Viv.Redis
 
             if (success)
             {
-                // 加锁成功，启动续期任务
-                StartRenewal(lockKey, lockHolderId, expire);
+                LockAutoRenewal.Start(lockKey, lockHolderId, expire, () => TryRenewAsync(lockKey, lockHolderId, expire));
             }
 
             return success;
@@ -560,7 +535,7 @@ namespace Viv.Redis
                     var released = (long)result == 1;
                     // 非重入：释放即完全释放，停续期
                     if (released)
-                        StopRenewal(lockKey);
+                        LockAutoRenewal.Stop(lockKey);
                     return released;
                 }
 
@@ -568,7 +543,7 @@ namespace Viv.Redis
                 var code = (long)scriptResult;
                 // 仅完全释放（count 1→0，DEL）才停续期；仅递减重入计数（count>1）时锁仍持有，续期继续
                 if (code == 2)
-                    StopRenewal(lockKey);
+                    LockAutoRenewal.Stop(lockKey);
                 return code >= 1;
             });
         }
@@ -600,7 +575,7 @@ namespace Viv.Redis
                     var released = (long)res == 1;
                     // 非重入：释放即完全释放，停续期
                     if (released)
-                        StopRenewal(lockKey);
+                        LockAutoRenewal.Stop(lockKey);
                     return released;
                 }
 
@@ -608,7 +583,7 @@ namespace Viv.Redis
                 var code = (long)scriptResult;
                 // 仅完全释放（count 1→0，DEL）才停续期；仅递减重入计数（count>1）时锁仍持有，续期继续
                 if (code == 2)
-                    StopRenewal(lockKey);
+                    LockAutoRenewal.Stop(lockKey);
                 return code >= 1;
             }).ConfigureAwait(false);
         }
@@ -619,7 +594,7 @@ namespace Viv.Redis
         public bool ForceReleaseLock(string lockKey)
         {
             // 强制释放同样要停掉后台续期任务，否则它会一直空转续查
-            StopRenewal(lockKey);
+            LockAutoRenewal.Stop(lockKey);
 
             var script = "return redis.call('del', KEYS[1])";
             return ExecuteRedis(lockKey, db =>
@@ -635,7 +610,7 @@ namespace Viv.Redis
         public async Task<bool> ForceReleaseLockAsync(string lockKey)
         {
             // 强制释放同样要停掉后台续期任务，否则它会一直空转续查
-            StopRenewal(lockKey);
+            LockAutoRenewal.Stop(lockKey);
 
             var script = "return redis.call('del', KEYS[1])";
             return await ExecuteRedisAsync(lockKey, async db =>
@@ -646,94 +621,29 @@ namespace Viv.Redis
         }
 
         /// <summary>
-        /// 启动锁续期任务（内部方法）
+        /// 执行一次续期 Lua。失败记日志并返回 false，由 <see cref="LockAutoRenewal"/> 停转。
         /// </summary>
-        private void StartRenewal(string lockKey, string lockHolderId, TimeSpan expire)
+        private async Task<bool> TryRenewAsync(string lockKey, string lockHolderId, TimeSpan expire)
         {
-            var entry = new RenewalEntry(lockHolderId, new CancellationTokenSource());
-            var cts = entry.Cts;
-
-            // CAS 登记循环：
-            // - 无条目 → TryAdd 登记自己；
-            // - 同持有者（重入加锁）→ 复用已有任务，不重复启动；
-            // - 不同持有者（旧锁已丢失/被接管）→ TryUpdate 原子替换（仅当当前值仍是旧条目时才替换），
-            //   替换成功后取消旧任务，保证新持有者必有续期。
-            while (true)
+            try
             {
-                if (!_renewalTasks.TryGetValue(lockKey, out var current))
+                return await ExecuteRedisAsync(lockKey, async db =>
                 {
-                    if (_renewalTasks.TryAdd(lockKey, entry))
-                        break; // 登记成功
-                    continue;   // 竞态：期间有人登记，重读
-                }
-
-                if (current.HolderId == lockHolderId)
-                {
-                    cts.Dispose();
-                    return; // 同持有者，复用已有续期任务
-                }
-
-                if (_renewalTasks.TryUpdate(lockKey, entry, current))
-                {
-                    // 原子替换成功，取消旧持有者的续期任务（避免它继续续期已易主的锁）
-                    current.Cts.Cancel();
-                    current.Cts.Dispose();
-                    break;
-                }
-                // TryUpdate 失败 = 期间条目已变化，重读重试
+                    var result = await db.ScriptEvaluateAsync(
+                        RedisLockScripts.Renew,
+                        [lockKey],
+                        [lockHolderId, (int)expire.TotalSeconds]).ConfigureAwait(false);
+                    return (long)result == 1;
+                }).ConfigureAwait(false);
             }
-
-            // 计算续期间隔：过期时间的一半
-            var interval = TimeSpan.FromSeconds(expire.TotalSeconds * RenewalThreshold);
-            Task.Run(async () =>
+            catch (OperationCanceledException)
             {
-                var token = cts.Token;
-                while (!token.IsCancellationRequested)
-                {
-                    try
-                    {
-                        await Task.Delay(interval, token).ConfigureAwait(false);
-                        if (token.IsCancellationRequested) break;
-
-                        // 执行续期脚本
-                        var renewed = await ExecuteRedisAsync(lockKey, async db =>
-                        {
-                            var result = await db.ScriptEvaluateAsync(RedisLockScripts.Renew, [lockKey], [lockHolderId, (int)expire.TotalSeconds]).ConfigureAwait(false);
-                            return (long)result == 1;
-                        }).ConfigureAwait(false);
-
-                        // 续期失败 = 锁已丢失（被强制释放 / 被他人覆盖 / 已过期），停止续期，避免无限空转
-                        if (!renewed)
-                        {
-                            break;
-                        }
-                    }
-                    catch (TaskCanceledException)
-                    {
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        WriteLog($"锁续期失败 Key:{lockKey}, Error:{ex.Message}", ex);
-                        // 续期失败时停止续期，避免无限重试
-                        break;
-                    }
-                }
-                // 移除任务记录：只移除自己登记的条目（键值都匹配），
-                // 避免误删新持有者已登记的续期任务
-                _renewalTasks.TryRemove(new KeyValuePair<string, RenewalEntry>(lockKey, entry));
-            }, cts.Token);
-        }
-
-        /// <summary>
-        /// 停止锁续期（内部方法）
-        /// </summary>
-        private static void StopRenewal(string lockKey)
-        {
-            if (_renewalTasks.TryRemove(lockKey, out var entry))
+                throw;
+            }
+            catch (Exception ex)
             {
-                entry.Cts.Cancel();
-                entry.Cts.Dispose();
+                WriteLog($"锁续期失败 Key:{lockKey}, Error:{ex.Message}", ex);
+                return false;
             }
         }
 
