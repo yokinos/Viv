@@ -18,18 +18,25 @@ namespace Viv.Echo.Grpc
     /// </summary>
     public class VivGrpcServerInterceptor : Interceptor
     {
-        public override Task<TResponse> UnaryServerHandler<TRequest, TResponse>(
+        public override async Task<TResponse> UnaryServerHandler<TRequest, TResponse>(
             TRequest request,
             ServerCallContext context,
             UnaryServerMethod<TRequest, TResponse> continuation)
             where TRequest : class
             where TResponse : class
         {
-            using var _ = BeginVivContext(context);
-            return continuation(request, context);
+            var scope = BeginVivContext(context);
+            try
+            {
+                return await continuation(request, context).ConfigureAwait(false);
+            }
+            finally
+            {
+                scope.Dispose();
+            }
         }
 
-        public override Task ServerStreamingServerHandler<TRequest, TResponse>(
+        public override async Task ServerStreamingServerHandler<TRequest, TResponse>(
             TRequest request,
             IServerStreamWriter<TResponse> responseStream,
             ServerCallContext context,
@@ -37,22 +44,36 @@ namespace Viv.Echo.Grpc
             where TRequest : class
             where TResponse : class
         {
-            using var _ = BeginVivContext(context);
-            return continuation(request, responseStream, context);
+            var scope = BeginVivContext(context);
+            try
+            {
+                await continuation(request, responseStream, context).ConfigureAwait(false);
+            }
+            finally
+            {
+                scope.Dispose();
+            }
         }
 
-        public override Task<TResponse> ClientStreamingServerHandler<TRequest, TResponse>(
+        public override async Task<TResponse> ClientStreamingServerHandler<TRequest, TResponse>(
             IAsyncStreamReader<TRequest> requestStream,
             ServerCallContext context,
             ClientStreamingServerMethod<TRequest, TResponse> continuation)
             where TRequest : class
             where TResponse : class
         {
-            using var _ = BeginVivContext(context);
-            return continuation(requestStream, context);
+            var scope = BeginVivContext(context);
+            try
+            {
+                return await continuation(requestStream, context).ConfigureAwait(false);
+            }
+            finally
+            {
+                scope.Dispose();
+            }
         }
 
-        public override Task DuplexStreamingServerHandler<TRequest, TResponse>(
+        public override async Task DuplexStreamingServerHandler<TRequest, TResponse>(
             IAsyncStreamReader<TRequest> requestStream,
             IServerStreamWriter<TResponse> responseStream,
             ServerCallContext context,
@@ -60,8 +81,15 @@ namespace Viv.Echo.Grpc
             where TRequest : class
             where TResponse : class
         {
-            using var _ = BeginVivContext(context);
-            return continuation(requestStream, responseStream, context);
+            var scope = BeginVivContext(context);
+            try
+            {
+                await continuation(requestStream, responseStream, context).ConfigureAwait(false);
+            }
+            finally
+            {
+                scope.Dispose();
+            }
         }
 
         private static IDisposable BeginVivContext(ServerCallContext context)
@@ -147,6 +175,9 @@ namespace Viv.Echo.Grpc
             public void Dispose()
             {
                 _vivContext.Clear();
+                // 与 HTTP(RequestTrackMiddleware) / Nana(VivConsumer) 对齐：
+                // gRPC 请求结束必须清锁持有者，否则 AsyncLocal 残留会串到线程池复用的下一个请求。
+                LockHolderContext.Clear();
             }
         }
     }

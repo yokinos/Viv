@@ -48,27 +48,11 @@ namespace Viv.Redis
         private const double RenewalThreshold = 0.5;
 
         /// <summary>
-        /// 续期脚本（仅续期，不改变重入计数）
-        /// </summary>
-        private const string RenewScript = @"
-            local current = redis.call('GET', KEYS[1])
-            if current then
-                local holder = string.match(current, '^(.*)_%d+$') or current
-                if holder == ARGV[1] then
-                    redis.call('EXPIRE', KEYS[1], ARGV[2])
-                    return 1
-                end
-            end
-            return 0";
-
-        /// <summary>
         /// 重入锁释放时的临时续期时间（秒），防止释放过程中锁过期
         /// </summary>
         private const int ReentrantLockTempExpireSeconds = 60;
 
-        public RedisService()
-        {
-        }
+        public RedisService() { }
 
         /// <summary>
         /// 反序列化 RedisValue → T。
@@ -488,22 +472,7 @@ namespace Viv.Redis
                     return db.StringSet(lockKey, lockHolderId, expire, When.NotExists);
                 }
 
-                var reentrantLockScript = @"
-                    local currentVal = redis.call('GET', KEYS[1])
-                    if currentVal == false then
-                        redis.call('SET', KEYS[1], ARGV[1] .. '_1', 'EX', ARGV[2])
-                        return 1
-                    else
-                        local holder = string.match(currentVal, '^(.*)_%d+$') or currentVal
-                        if holder == ARGV[1] then
-                            local count = tonumber(string.match(currentVal, '_(%d+)$')) or 1
-                            redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count + 1), 'EX', ARGV[2])
-                            return 1
-                        end
-                        return 0
-                    end";
-
-                var scriptResult = db.ScriptEvaluate(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]);
+                var scriptResult = db.ScriptEvaluate(RedisLockScripts.ReentrantAcquire, [lockKey], [lockHolderId, (int)expire.TotalSeconds]);
                 return (long)scriptResult == 1;
             });
         }
@@ -526,22 +495,7 @@ namespace Viv.Redis
                     return await db.StringSetAsync(lockKey, lockHolderId, expire, When.NotExists).ConfigureAwait(false);
                 }
 
-                var reentrantLockScript = @"
-                    local currentVal = redis.call('GET', KEYS[1])
-                    if currentVal == false then
-                        redis.call('SET', KEYS[1], ARGV[1] .. '_1', 'EX', ARGV[2])
-                        return 1
-                    else
-                        local holder = string.match(currentVal, '^(.*)_%d+$') or currentVal
-                        if holder == ARGV[1] then
-                            local count = tonumber(string.match(currentVal, '_(%d+)$')) or 1
-                            redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count + 1), 'EX', ARGV[2])
-                            return 1
-                        end
-                        return 0
-                    end";
-
-                var scriptResult = await db.ScriptEvaluateAsync(reentrantLockScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]).ConfigureAwait(false);
+                var scriptResult = await db.ScriptEvaluateAsync(RedisLockScripts.ReentrantAcquire, [lockKey], [lockHolderId, (int)expire.TotalSeconds]).ConfigureAwait(false);
                 return (long)scriptResult == 1;
             }).ConfigureAwait(false);
 
@@ -610,25 +564,7 @@ namespace Viv.Redis
                     return released;
                 }
 
-                var reentrantReleaseScript = @"
-                    local currentVal = redis.call('GET', KEYS[1])
-                    if currentVal == false then
-                        return 0
-                    end
-                    local holder = string.match(currentVal, '^(.*)_%d+$') or currentVal
-                    if holder ~= ARGV[1] then
-                        return 0
-                    end
-                    local count = tonumber(string.match(currentVal, '_(%d+)$')) or 1
-                    if count > 1 then
-                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count - 1), 'EX', ARGV[2])
-                        return 1
-                    else
-                        redis.call('DEL', KEYS[1])
-                        return 2
-                    end";
-
-                var scriptResult = db.ScriptEvaluate(reentrantReleaseScript, [lockKey], [lockHolderId, ReentrantLockTempExpireSeconds]);
+                var scriptResult = db.ScriptEvaluate(RedisLockScripts.ReentrantRelease, [lockKey], [lockHolderId, ReentrantLockTempExpireSeconds]);
                 var code = (long)scriptResult;
                 // 仅完全释放（count 1→0，DEL）才停续期；仅递减重入计数（count>1）时锁仍持有，续期继续
                 if (code == 2)
@@ -668,25 +604,7 @@ namespace Viv.Redis
                     return released;
                 }
 
-                var reentrantReleaseScript = @"
-                    local currentVal = redis.call('GET', KEYS[1])
-                    if currentVal == false then
-                        return 0
-                    end
-                    local holder = string.match(currentVal, '^(.*)_%d+$') or currentVal
-                    if holder ~= ARGV[1] then
-                        return 0
-                    end
-                    local count = tonumber(string.match(currentVal, '_(%d+)$')) or 1
-                    if count > 1 then
-                        redis.call('SET', KEYS[1], ARGV[1] .. '_' .. (count - 1), 'EX', ARGV[2])
-                        return 1
-                    else
-                        redis.call('DEL', KEYS[1])
-                        return 2
-                    end";
-
-                var scriptResult = await db.ScriptEvaluateAsync(reentrantReleaseScript, [lockKey], [lockHolderId, ReentrantLockTempExpireSeconds]).ConfigureAwait(false);
+                var scriptResult = await db.ScriptEvaluateAsync(RedisLockScripts.ReentrantRelease, [lockKey], [lockHolderId, ReentrantLockTempExpireSeconds]).ConfigureAwait(false);
                 var code = (long)scriptResult;
                 // 仅完全释放（count 1→0，DEL）才停续期；仅递减重入计数（count>1）时锁仍持有，续期继续
                 if (code == 2)
@@ -780,7 +698,7 @@ namespace Viv.Redis
                         // 执行续期脚本
                         var renewed = await ExecuteRedisAsync(lockKey, async db =>
                         {
-                            var result = await db.ScriptEvaluateAsync(RenewScript, [lockKey], [lockHolderId, (int)expire.TotalSeconds]).ConfigureAwait(false);
+                            var result = await db.ScriptEvaluateAsync(RedisLockScripts.Renew, [lockKey], [lockHolderId, (int)expire.TotalSeconds]).ConfigureAwait(false);
                             return (long)result == 1;
                         }).ConfigureAwait(false);
 
