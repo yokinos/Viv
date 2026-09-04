@@ -19,7 +19,7 @@ public class TenantIdCallTimeTests
         try
         {
             var ctx = new MutableVivContext();
-            var db = new MomoDatabase(ctx, new NullLogger());
+            var db = new MomoDatabase(ctx, new NullLogger(), new DefaultDatabaseOptionsProvider());
 
             Assert.Equal(0, db.TenantId);
 
@@ -40,7 +40,7 @@ public class TenantIdCallTimeTests
         {
             var ctx = new MutableVivContext();
             ctx.SetSnapshot(new VivContextContent { SubjectId = 11 });
-            var db = new MomoDatabaseContext(ctx, new NullLogger());
+            var db = new MomoDatabaseContext(ctx, new NullLogger(), new DefaultDatabaseOptionsProvider());
 
             db.ChangeTenant(99);
             Assert.Equal(99, db.TenantId);

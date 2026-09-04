@@ -14,6 +14,7 @@ using Viv.Log;
 using Viv.Momo;
 using Viv.Momo.Core;
 using Viv.Momo.Enums;
+using Viv.Momo.Interface;
 using Viv.Nana;
 using Viv.Nana.Core;
 using Viv.Nana.Saga;
@@ -158,6 +159,7 @@ namespace Viv.Engine
             if (options.DatabaseOption == null) return;
 
             MomoRegister.Initialize(options.DatabaseOption);
+            services.AddScoped<IDatabaseOptionsProvider, DefaultDatabaseOptionsProvider>();
             services.AddScoped<IMomoDbContext, MomoDatabaseContext>();
         }
 

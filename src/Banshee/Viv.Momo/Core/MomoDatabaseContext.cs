@@ -1,5 +1,6 @@
 using Dapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
@@ -24,8 +25,8 @@ namespace Viv.Momo.Core
     {
         private bool _disposed;
 
-        public MomoDatabaseContext(IVivContext vivContext, ILoggerContract logger)
-            : base(vivContext, logger) { }
+        public MomoDatabaseContext(IVivContext vivContext, ILoggerContract logger, IDatabaseOptionsProvider optionsProvider)
+            : base(vivContext, logger, optionsProvider) { }
 
         #region Insert
 
@@ -1380,7 +1381,7 @@ namespace Viv.Momo.Core
         public IMomoDbContext? CreateContext(DatabaseOptions options)
         {
             if (options == null) return null;
-            var dataContext = new MomoDatabaseContext(_vivContext, _logger);
+            var dataContext = new MomoDatabaseContext(_vivContext, _logger, _optionsProvider);
             dataContext.SetOptions(options);
             return dataContext;
         }

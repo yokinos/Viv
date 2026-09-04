@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -24,7 +25,7 @@ namespace Viv.Momo.Core
         protected readonly IVivContext _vivContext;
         protected DatabaseOptions _options;
         protected readonly ILoggerContract _logger;
-
+        protected readonly IDatabaseOptionsProvider _optionsProvider;
         protected EFAppContext? _writeDbContext;
         protected EFAppContext? _readDbContext;
 
@@ -37,12 +38,12 @@ namespace Viv.Momo.Core
         private readonly SemaphoreSlim _transactionSemaphore = new(1, 1);
         private bool _disposed = false;
 
-        public MomoDatabase(IVivContext vivContext, ILoggerContract logger)
+        public MomoDatabase(IVivContext vivContext, ILoggerContract logger, IDatabaseOptionsProvider optionsProvider)
         {
             ArgumentNullException.ThrowIfNull(vivContext);
             _vivContext = vivContext;
+            _optionsProvider = optionsProvider;
             _logger = logger;
-
             SetOptions();
         }
 
@@ -50,8 +51,10 @@ namespace Viv.Momo.Core
         {
             var realOptions = options ?? VivConfigRegistry.Get<DatabaseOptions>();
             ArgumentNullException.ThrowIfNull(realOptions);
-            _options = realOptions;
-            _timeOut = realOptions.Timeout;
+            // 只有"未显式指定"（默认配置路径）才走 provider 可插拔覆盖；
+            // CreateContext 显式传入的 options 是调用方已选定的配置，不再被 provider 二次改
+            _options = options == null ? _optionsProvider.GetOptions(realOptions) : realOptions;
+            _timeOut = _options.Timeout;
         }
 
         /// <summary>
