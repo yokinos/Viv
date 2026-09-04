@@ -545,7 +545,7 @@ namespace Viv.Redis
                 return (long)scriptResult == 1;
             }).ConfigureAwait(false);
 
-            if (success && isReentrant)
+            if (success)
             {
                 // 加锁成功，启动续期任务
                 StartRenewal(lockKey, lockHolderId, expire);

@@ -67,6 +67,8 @@ namespace Viv.Nana.Tests
         public object? LastEnvelope { get; private set; }
         public bool Result { get; set; } = true;
 
+        public Exception? DelayException { get; set; }
+
         public ValueTask<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
             => ValueTask.FromResult(Result);
 
@@ -75,6 +77,9 @@ namespace Viv.Nana.Tests
 
         public ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
         {
+            if (DelayException is not null)
+                throw DelayException;
+
             PublishDelayCalled = true;
             LastEnvelope = envelope;
             return ValueTask.FromResult(Result);
@@ -92,10 +97,14 @@ namespace Viv.Nana.Tests
         public int ReleaseCalls { get; private set; }
         public string? LastLockKey { get; private set; }
 
+        public Exception? AcquireException { get; set; }
+
         public Task<bool> AcquireLockAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true)
         {
             AcquireCalls++;
             LastLockKey = lockKey;
+            if (AcquireException is not null)
+                throw AcquireException;
             return Task.FromResult(AcquireResult);
         }
 

@@ -7,6 +7,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
+using Viv.Delusion.Extension;
 using Viv.Engine.Filter;
 using Viv.Log;
 
@@ -24,7 +25,9 @@ public class VivExceptionFilterTests
             VivConnType.PostgreSQL, "insert failed", new InvalidOperationException("provider")));
 
         Assert.Equal((int)ApiResultCode.DatabaseError, result.Code);
-        Assert.Contains("insert failed", result.Message);
+        Assert.Equal(ApiResultCode.DatabaseError.GetDescription(), result.Message);
+        Assert.DoesNotContain("insert failed", result.Message);
+        Assert.DoesNotContain("provider", result.Message);
     }
 
     [Fact]
@@ -32,6 +35,8 @@ public class VivExceptionFilterTests
     {
         var result = await Execute(new VivConnectionException(VivConnType.Redis, "cache down"));
         Assert.Equal((int)ApiResultCode.CacheError, result.Code);
+        Assert.Equal(ApiResultCode.CacheError.GetDescription(), result.Message);
+        Assert.DoesNotContain("cache down", result.Message);
     }
 
     [Fact]
@@ -39,6 +44,8 @@ public class VivExceptionFilterTests
     {
         var result = await Execute(new VivConnectionException(VivConnType.RabbitMQ, "mq down"));
         Assert.Equal((int)ApiResultCode.MqError, result.Code);
+        Assert.Equal(ApiResultCode.MqError.GetDescription(), result.Message);
+        Assert.DoesNotContain("mq down", result.Message);
     }
 
     [Fact]

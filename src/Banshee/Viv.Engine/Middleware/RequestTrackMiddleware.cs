@@ -28,11 +28,11 @@ namespace Viv.Engine.Middleware
                 var traceId = context.Request.Headers[VivRunDefine.VivTraceIdHeader].FirstOrDefault();
                 if (string.IsNullOrEmpty(traceId))
                 {
-                    traceId = IdMagic.NextId(1).ToString();
+                    traceId = IdMagic.NextId(1024).ToString();
                 }
 
-                // 用请求Id作为锁持有者Id，确保同一个请求的锁操作在同一个持有者Id下
-                LockHolderContext.SetHolderId(traceId);
+                // 生成一个新的 HolderId 并设置到 LockHolderContext 中
+                LockHolderContext.GenerateHolderId();
 
                 context.TraceIdentifier = traceId;
                 context.Items[VivRunDefine.ContextTraceId] = traceId;

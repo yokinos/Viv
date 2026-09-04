@@ -102,7 +102,8 @@ namespace Viv.Engine.Filter
                     VivConnType.RabbitMQ => ApiResultCode.MqError,
                     _ => ApiResultCode.DatabaseError
                 };
-                return VivApiResult.ApiResult(code, ex.Message, null);
+                // 详情已在 OnExceptionAsync 记日志；客户端只回枚举固定文案，避免实体 JSON / 底层异常泄漏
+                return VivApiResult.ApiResult(code);
             }
 
             // 如果异常类型在映射表中，使用对应的错误码和数据

@@ -29,17 +29,42 @@ namespace Viv.Engine
 
         public async Task<bool> AcquireLockAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true)
         {
-            return await _redisService.AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
+            try
+            {
+                return await _redisService.AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
+            }
+            catch (VivConnectionException ex)
+            {
+                throw new DistributedLockException(lockKey, 0, ex);
+            }
         }
 
         public async Task<bool> IsLockHeldAsync(string lockKey)
         {
-            return await _redisService.IsLockHeldAsync(lockKey);
+            try
+            {
+                return await _redisService.IsLockHeldAsync(lockKey);
+            }
+            catch (DistributedLockException)
+            {
+                throw;
+            }
+            catch (VivConnectionException ex)
+            {
+                throw new DistributedLockException(lockKey, 0, ex);
+            }
         }
 
         public async Task<bool> ReleaseLockAsync(string lockKey, string? lockHolderId = null, bool isReentrant = true)
         {
-            return await _redisService.ReleaseLockAsync(lockKey, lockHolderId, isReentrant);
+            try
+            {
+                return await _redisService.ReleaseLockAsync(lockKey, lockHolderId, isReentrant);
+            }
+            catch (VivConnectionException ex)
+            {
+                throw new DistributedLockException(lockKey, 0, ex);
+            }
         }
 
         /// <summary>
@@ -60,9 +85,18 @@ namespace Viv.Engine
                 if (cancellationToken.IsCancellationRequested)
                     return false;
 
-                var acquired = await _redisService.AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
-                if (acquired)
-                    return true;
+                try
+                {
+                    var acquired = await _redisService.AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
+                    if (acquired)
+                        return true;
+                }
+                catch (VivConnectionException ex)
+                {
+                    _logger.Error($"获取锁异常，第 {attempt} 次尝试，Key: {lockKey}", ex);
+                    if (attempt >= maxRetryCount)
+                        throw new DistributedLockException(lockKey, maxRetryCount, ex);
+                }
 
                 if (attempt < maxRetryCount)
                 {

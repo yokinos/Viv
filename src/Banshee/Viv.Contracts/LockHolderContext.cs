@@ -46,7 +46,7 @@ namespace Viv.Contracts
         /// <returns></returns>
         public static string GenerateHolderId()
         {
-            return IdMagic.NextId().ToString();
+            return IdMagic.NextId(1023).ToString();
         }
     }
 }

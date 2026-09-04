@@ -148,6 +148,7 @@ namespace Viv.Nana
         /// 返回 Success 时原消息正常确认（ack），重投的新副本才是重试——业务直接返回本方法结果即可。
         /// 超过重投上限（NanaOptions.RetryCount，经 VivConfigRegistry 静态取，见 NanaRegister.Initialize）
         /// 返回 Failed(IsRequeue:false)，消息丢弃不回队。
+        /// 传输失败抛连接异常（原消息未 ack，Wolverine 重试）；入参无效才返回 Failed 丢弃。
         /// </summary>
         protected async Task<SubscribeResult> RedeliverAsync(NanaEnvelope<T> envelope, TimeSpan delay, CancellationToken cancellationToken = default)
         {
@@ -162,11 +163,12 @@ namespace Viv.Nana
             envelope.ReDeliverCount++;
             envelope.DelaySecond = delay.TotalSeconds;
 
+            // 入参无效才返回 false；传输失败抛 VivConnectionException，原消息未 ack，由 Wolverine 重试。
             var ok = await _publisher.PublishDelayAsync(delay, envelope, cancellationToken).ConfigureAwait(false);
             if (!ok)
             {
-                _logger.Error($"延迟重投发布失败，消息丢弃: MessageId: {envelope.MessageId}");
-                return SubscribeResult.Failed(false, "延迟重投发布失败，丢弃");
+                _logger.Error($"延迟重投入参无效，消息丢弃: MessageId: {envelope.MessageId}");
+                return SubscribeResult.Failed(false, "延迟重投入参无效，丢弃");
             }
 
             _logger.Info($"消息延迟重投，第 {envelope.ReDeliverCount} 次，{delay.TotalSeconds:0.#} 秒后重投: MessageId: {envelope.MessageId}");

@@ -1,4 +1,5 @@
-using System.Diagnostics.CodeAnalysis;
+using Viv.Contracts.Enums;
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Log;
 using Viv.Momo;
@@ -10,13 +11,14 @@ namespace Viv.Momo.Base
     /// <summary>
     /// 数据访问缓存基类 — Cache-Aside 模式
     /// 缓存优先 → 未命中则查库 → 回写缓存
-    /// 
+    ///
     /// 特性：
     /// 1. 缓存命中直接返回
     /// 2. 缓存未命中时使用分布式锁防止击穿
     /// 3. 双重检查，避免重复查库
     /// 4. 支持空值缓存，防止缓存穿透
     /// 5. 未拿到锁时短暂退避后重试缓存，避免直接打爆数据库
+    /// 6. Redis 不可用时当作 miss，回源数据库，不把缓存单点变成接口 502
     /// </summary>
     /// <typeparam name="T">缓存 Bucket 类型，必须实现 <see cref="ICacheBucket"/></typeparam>
     public abstract class DataAccessCacheBase<T> where T : ICacheBucket, new()
@@ -49,69 +51,93 @@ namespace Viv.Momo.Base
 
         /// <summary>
         /// 从缓存获取数据
-        /// 缓存不存在时自动回源数据库
+        /// 缓存不存在时自动回源数据库。Redis 故障时同样回源，不向外抛连接异常。
         /// </summary>
         public async Task<T?> GetCacheAsync(params object[] keys)
         {
             var bucket = new T();
             var cacheKey = bucket.GetCacheKey(keys);
-
-            // 先查缓存
-            var cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
-            if (cacheValue != null)
-                return cacheValue;
-
-            // 尝试获取分布式锁，避免缓存击穿
             var lockKey = $"lock:{cacheKey}";
-            bool hasLock = false;
+            var hasLock = false;
 
-            for (int i = 0; i < MaxLockRetries; i++)
-            {
-                hasLock = await _redisService.AcquireLockAsync(lockKey, LockExpireTime).ConfigureAwait(false);
-                if (hasLock)
-                    break;
-
-                await Task.Delay(RetryDelayMs).ConfigureAwait(false);
-            }
-
-            // 拿到锁：二次检查缓存，再查数据库
-            if (hasLock)
+            try
             {
                 try
                 {
-                    cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
+                    var cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
+                    if (cacheValue != null)
+                        return cacheValue;
+                }
+                catch (VivConnectionException ex) when (ex.ConnType == VivConnType.Redis)
+                {
+                    _logger.Error($"缓存不可用，回源数据库 Key:{cacheKey}", ex);
+                    return await GetDbAsync(keys).ConfigureAwait(false);
+                }
+
+                for (int i = 0; i < MaxLockRetries; i++)
+                {
+                    hasLock = await _redisService.AcquireLockAsync(lockKey, LockExpireTime).ConfigureAwait(false);
+                    if (hasLock)
+                        break;
+
+                    await Task.Delay(RetryDelayMs).ConfigureAwait(false);
+                }
+
+                if (hasLock)
+                {
+                    var cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
                     if (cacheValue != null)
                         return cacheValue;
 
                     var dbValue = await GetDbAsync(keys).ConfigureAwait(false);
-
-                    if (dbValue != null)
+                    try
                     {
-                        await _redisService.AddAsync(cacheKey, dbValue, bucket.CacheTime).ConfigureAwait(false);
+                        if (dbValue != null)
+                            await _redisService.AddAsync(cacheKey, dbValue, bucket.CacheTime).ConfigureAwait(false);
+                        else
+                            await _redisService.AddAsync(cacheKey, NullPlaceholder, NullValueCacheTime).ConfigureAwait(false);
                     }
-                    else
+                    catch (VivConnectionException ex) when (ex.ConnType == VivConnType.Redis)
                     {
-                        // 缓存空对象，防止穿透
-                        await _redisService.AddAsync(cacheKey, NullPlaceholder, NullValueCacheTime).ConfigureAwait(false);
+                        _logger.Error($"回写缓存失败 Key:{cacheKey}", ex);
                     }
 
                     return dbValue;
                 }
-                finally
+
+                await Task.Delay(RetryDelayMs).ConfigureAwait(false);
+                try
                 {
-                    await _redisService.ReleaseLockAsync(lockKey).ConfigureAwait(false);
+                    var cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
+                    if (cacheValue != null)
+                        return cacheValue;
+                }
+                catch (VivConnectionException ex) when (ex.ConnType == VivConnType.Redis)
+                {
+                    _logger.Error($"缓存不可用，回源数据库 Key:{cacheKey}", ex);
+                }
+
+                return await GetDbAsync(keys).ConfigureAwait(false);
+            }
+            catch (VivConnectionException ex) when (ex.ConnType == VivConnType.Redis)
+            {
+                _logger.Error($"缓存或锁不可用，回源数据库 Key:{cacheKey}", ex);
+                return await GetDbAsync(keys).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (hasLock)
+                {
+                    try
+                    {
+                        await _redisService.ReleaseLockAsync(lockKey).ConfigureAwait(false);
+                    }
+                    catch (Exception relEx)
+                    {
+                        _logger.Error($"释放缓存锁失败 Key:{lockKey}", relEx);
+                    }
                 }
             }
-
-            // 没拿到锁：短暂退避后再试一次缓存
-            await Task.Delay(RetryDelayMs).ConfigureAwait(false);
-            cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
-            if (cacheValue != null)
-                return cacheValue;
-
-            // 兜底：继续查库，保证业务可用
-            // 注意：这里不写缓存，避免无锁并发写入
-            return await GetDbAsync(keys).ConfigureAwait(false);
         }
 
         /// <summary>

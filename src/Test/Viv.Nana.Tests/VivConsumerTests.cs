@@ -1,3 +1,4 @@
+using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Delusion;
@@ -228,17 +229,45 @@ namespace Viv.Nana.Tests
         }
 
         [Fact]
-        public async Task 取锁失败_裁决异常_抛异常重试()
+        public async Task 取锁Redis故障_记Warning并抛DistributedLockException()
         {
             var logger = new StubLogger();
-            var distributedLock = new StubDistributedLock { AcquireResult = false, IsHeldThrows = true };
+            var inner = new VivConnectionException(VivConnType.Redis, "down");
+            var distributedLock = new StubDistributedLock
+            {
+                AcquireException = new DistributedLockException("k", 0, inner)
+            };
             var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), distributedLock));
 
-            await Assert.ThrowsAsync<DistributedLockException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
+            var ex = await Assert.ThrowsAsync<DistributedLockException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
 
             Assert.Equal(0, consumer.Calls);
-            Assert.Equal(1, distributedLock.HeldCalls);
-            Assert.Equal(0, distributedLock.ReleaseCalls);
+            Assert.Same(inner, ex.InnerException);
+            var warning = Assert.Single(logger.Warnings);
+            Assert.Contains("分布式锁服务异常", warning);
+        }
+
+        [Fact]
+        public async Task 延迟重投_传输失败_异常冒泡不丢弃()
+        {
+            VivConfigRegistry.Add(new NanaOptions { RetryCount = 3 });
+            try
+            {
+                var publisher = new StubPublisher
+                {
+                    DelayException = new VivConnectionException(VivConnType.RabbitMQ, "mq down")
+                };
+                var consumer = new RedeliverConsumer(Dep(new StubLogger(), publisher));
+
+                var ex = await Assert.ThrowsAsync<VivConnectionException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
+
+                Assert.Equal(VivConnType.RabbitMQ, ex.ConnType);
+                Assert.False(publisher.PublishDelayCalled);
+            }
+            finally
+            {
+                VivConfigRegistry.Remove<NanaOptions>();
+            }
         }
     }
 }
