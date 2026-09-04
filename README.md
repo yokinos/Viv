@@ -162,8 +162,8 @@ Viv.Aspire.Gateway  ── 只解析不强制：无 token 也放行 ──
 
 1. **客户端** — 携带 `Authorization: Bearer <JWT>`；SignalR 升级请求无法带 Authorization 头，改用 `?access_token=<JWT>`
 2. **网关** — 限流、输出缓存、CORS；JwtBearer 解析（`OnMessageReceived` 支持 `access_token` 查询参数，供 WS/SignalR 场景）
-3. **网关（认证前）** — 剥离客户端可伪造的 `x-viv-appId/subjectId/userId/serviceName`、`x-request-token` 头，以及 query 里的 `tenantId/userId/appId` —— 身份只允许来自验签后的 token claims
-4. **网关（认证后）** — 从 claims 回填 `x-viv-*` 头，HMAC-SHA256 签名写 `x-request-token`（载荷含 unix 时间戳，5 分钟过期）—— 防止绕过网关直连下游伪造头
+3. **网关（认证前）** — 剥离客户端可伪造的 `x-viv-appId/subjectId/userId/serviceName/holder-id`、`x-request-token` 头，以及 query 里的 `tenantId/userId/appId` —— 身份与 holderId 只允许来自验签后的 token claims + 网关当前 `LockHolderContext`
+4. **网关（认证后）** — 从 claims 回填 `x-viv-*` 头（含 `x-viv-holder-id`），HMAC-SHA256 签名写 `x-request-token`（载荷含 unix 时间戳，5 分钟过期）—— 防止绕过网关直连下游伪造头
 5. **下游** — 信任网关透传的 `X-Forwarded-Proto/Host/For`；JwtBearer 验签 JWT（`TokenOption=null` 的匿名服务不注册鉴权）
 6. **下游** — `RequestTokenResolver.GetContextFromHeaders` 用 `EnvOption.InternalToken` 验 `x-request-token` 签名 + 时效；失败 → 视为无身份
 7. **下游** — 参数校验 → 业务 → 统一响应
@@ -176,7 +176,8 @@ x-viv-appId        客户端应用 ID（claims: appId）
 x-viv-subjectId    租户 ID = TenantId（claims: tenantId）
 x-viv-userId       用户 ID（claims: sub）
 x-viv-serviceName  服务名（网关填自己的 EnvOption.ServiceName）
-x-request-token    {unixSeconds}:{base64Sig} — 对上面 4 个头 + 时间戳的 HMAC-SHA256
+x-viv-holder-id    分布式锁持有者 Id（网关填当前 LockHolderContext；验签通过才信任）
+x-request-token    {unixSeconds}:{base64Sig} — 对上面 5 个头 + 时间戳的 HMAC-SHA256
                    （密钥 EnvOption.InternalToken，网关与所有服务同值，不回落 JWT SecretKey）；
                    下游验签 + ≤300s 时效通过才信任头组
 ```

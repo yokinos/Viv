@@ -139,6 +139,8 @@ namespace Viv.ServiceProxy.Tests.Grpc
             Assert.Equal("77", headers.Get(VivHeaderContract.SubjectId)!.Value);
             Assert.Equal("5", headers.Get(VivHeaderContract.UserId)!.Value);
             Assert.Equal(GrpcTestToken.ServiceName, headers.Get(VivHeaderContract.ServiceName)!.Value);
+            var holderId = headers.Get(VivHeaderContract.HolderId)?.Value;
+            Assert.False(string.IsNullOrWhiteSpace(holderId));
             Assert.NotNull(headers.Get(VivHeaderContract.InnerRequestToken));
             Assert.True(VivRequestToken.TryVerify(
                 headers.Get(VivHeaderContract.InnerRequestToken)!.Value,
@@ -146,6 +148,7 @@ namespace Viv.ServiceProxy.Tests.Grpc
                 headers.Get(VivHeaderContract.SubjectId)!.Value,
                 headers.Get(VivHeaderContract.UserId)!.Value,
                 headers.Get(VivHeaderContract.ServiceName)!.Value,
+                holderId!,
                 GrpcTestToken.Secret));
             Assert.Contains(headers, e => e.Key.Equals(VivHeaderContract.AppId, StringComparison.InvariantCultureIgnoreCase));
             Assert.Contains(headers, e => e.Key.Equals(VivHeaderContract.SubjectId, StringComparison.InvariantCultureIgnoreCase));

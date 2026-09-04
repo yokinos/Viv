@@ -17,6 +17,7 @@ namespace Viv.Engine
         public const string SubjectIdHeader = VivHeaderContract.SubjectId; // 租户 ID = TenantId
         public const string UserIdHeader = VivHeaderContract.UserId;
         public const string ServiceNameHeader = VivHeaderContract.ServiceName; // 服务名，如 viv.apex.api
+        public const string HolderIdHeader = VivHeaderContract.HolderId; // 锁持有者 Id，验签通过才信任
         public const string InnerRequestTokenHeader = VivHeaderContract.InnerRequestToken; // 内部请求签名 Token（HMAC）
 
         public const string VivTraceIdHeader = "X-Trace-Id";

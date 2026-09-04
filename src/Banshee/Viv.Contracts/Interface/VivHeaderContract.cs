@@ -29,6 +29,11 @@ namespace Viv.Contracts.Interface
         public const string ServiceName = "x-viv-serviceName";
 
         /// <summary>
+        /// 分布式锁持有者 Id。仅验签通过后才信任，客户端无法伪造。
+        /// </summary>
+        public const string HolderId = "x-viv-holder-id";
+
+        /// <summary>
         /// 内部请求签名 Token（HMAC）
         /// </summary>
         public const string InnerRequestToken = "x-request-token";

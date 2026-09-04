@@ -107,16 +107,24 @@ namespace Viv.Echo.Grpc
                     headers.Get(VivHeaderContract.SubjectId)?.Value ?? "",
                     headers.Get(VivHeaderContract.UserId)?.Value ?? "",
                     serviceName,
+                    headers.Get(VivHeaderContract.HolderId)?.Value ?? "",
                     secret))
             {
                 return null;
+            }
+
+            var holderId = headers.Get(VivHeaderContract.HolderId)?.Value;
+            if (!string.IsNullOrWhiteSpace(holderId))
+            {
+                LockHolderContext.SetHolderId(holderId);
             }
 
             return new VivContextContent
             {
                 AppId = appId,
                 SubjectId = subjectId,
-                UserId = userId
+                UserId = userId,
+                HolderId = string.IsNullOrWhiteSpace(holderId) ? null : holderId
             };
         }
 

@@ -82,9 +82,11 @@ namespace Viv.Nana
                 var holderId = envelope.MessageId.ToString();
                 if (envelope.Context != null)
                 {
-                    _context.SetSnapshot(envelope.Context);
-                    if (!string.IsNullOrEmpty(_context.TraceId))
-                        holderId = _context.TraceId;
+                    if (!envelope.Context.IsEmpty())
+                        _context.SetSnapshot(envelope.Context);
+
+                    if (!string.IsNullOrWhiteSpace(envelope.Context.HolderId))
+                        holderId = envelope.Context.HolderId;
                 }
 
                 LockHolderContext.SetHolderId(holderId);

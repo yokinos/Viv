@@ -1,8 +1,5 @@
-using System.Globalization;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 using Viv.Contracts;
 using Viv.Contracts.Models;
 using Viv.Contracts.Options;
@@ -13,7 +10,7 @@ namespace Viv.Engine.Tests;
 
 /// <summary>
 /// RequestTokenResolver —— 网关与下游间的 x-request-token 共享密钥签名协议（P0 安全路径）。
-/// 纯逻辑：HMAC-SHA256 签名 4 个 x-viv-* 头 + unix 时间戳，下游在 300s 防重放窗口内验签。
+/// 纯逻辑：HMAC-SHA256 签名 5 个 x-viv-* 头（含 holder-id）+ unix 时间戳，下游在 300s 防重放窗口内验签。
 /// 密钥只取 EnvOption.InternalToken，不回落 TokenOptions.SecretKey。全部测试收在一个类里，
 /// 因为 VivEngine.VivOptions / VivConfigRegistry 是静态共享状态，类内顺序执行可避免跨类并行污染。
 /// </summary>
@@ -66,6 +63,17 @@ public class RequestTokenResolverTests
         var headers = ContextHeaders();
         headers[VivRunDefine.InnerRequestTokenHeader] = RequestTokenResolver.SignContextHeaders(headers);
         headers[VivRunDefine.UserIdHeader] = "999"; // 篡改
+
+        Assert.False(RequestTokenResolver.VerifySignature(headers, Secret));
+    }
+
+    [Fact]
+    public void 签名验证_篡改holderId失败()
+    {
+        EngineTestEnv.ForceEnvTokenMode(Secret);
+        var headers = ContextHeaders();
+        headers[VivRunDefine.InnerRequestTokenHeader] = RequestTokenResolver.SignContextHeaders(headers);
+        headers[VivRunDefine.HolderIdHeader] = "forged-holder";
 
         Assert.False(RequestTokenResolver.VerifySignature(headers, Secret));
     }
@@ -148,6 +156,19 @@ public class RequestTokenResolverTests
         Assert.Equal(1, result!.AppId);
         Assert.Equal(3, result.SubjectId);
         Assert.Equal(2, result.UserId);
+        Assert.Null(result.HolderId);
+    }
+
+    [Fact]
+    public void GetContextFromHeaders_无密钥不信任holderId头()
+    {
+        var headers = ContextHeaders();
+        headers[VivRunDefine.HolderIdHeader] = "forged-holder";
+
+        var result = RequestTokenResolver.GetContextFromHeaders(HttpContextFrom(headers));
+
+        Assert.NotNull(result);
+        Assert.Null(result!.HolderId);
     }
 
     [Fact]
@@ -171,6 +192,7 @@ public class RequestTokenResolverTests
         Assert.Equal(1, result!.AppId);
         Assert.Equal(3, result.SubjectId);
         Assert.Equal(2, result.UserId);
+        Assert.Equal("holder-1", result.HolderId);
     }
 
     [Fact]
@@ -276,6 +298,7 @@ public class RequestTokenResolverTests
             [VivRunDefine.SubjectIdHeader] = "3",
             [VivRunDefine.UserIdHeader] = "2",
             [VivRunDefine.ServiceNameHeader] = "viv.apex.api",
+            [VivRunDefine.HolderIdHeader] = "holder-1",
         };
     }
 
@@ -289,19 +312,16 @@ public class RequestTokenResolverTests
         return ctx;
     }
 
-    /// <summary>复刻框架 ComputeSignature（私有），伪造任意时间戳的 token，验证防重放窗口。</summary>
+    /// <summary>与框架 <see cref="VivRequestToken.ComputeSignature"/> 对齐，伪造任意时间戳的 token。</summary>
     private static string ComputeSignature(IHeaderDictionary headers, string secret, long timestamp)
-    {
-        var payload = string.Join('\n',
+        => VivRequestToken.ComputeSignature(
             headers[VivRunDefine.AppIdHeader].ToString(),
             headers[VivRunDefine.SubjectIdHeader].ToString(),
             headers[VivRunDefine.UserIdHeader].ToString(),
             headers[VivRunDefine.ServiceNameHeader].ToString(),
-            timestamp.ToString(CultureInfo.InvariantCulture));
-
-        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
-        return Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload)));
-    }
+            headers[VivRunDefine.HolderIdHeader].ToString(),
+            secret,
+            timestamp);
 
     #endregion
 }

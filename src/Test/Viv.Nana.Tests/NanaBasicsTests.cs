@@ -59,12 +59,13 @@ namespace Viv.Nana.Tests
             var e = new NanaEnvelope<TestApexEvent>
             {
                 Content = new TestApexEvent { Payload = "x" },
-                Context = new VivContextContent { AppId = 1, SubjectId = 3, UserId = 2 }
+                Context = new VivContextContent { AppId = 1, SubjectId = 3, UserId = 2, HolderId = "h-1" }
             };
 
             Assert.Equal("x", e.Content?.Payload);
             Assert.Equal(2, e.Context?.UserId);
             Assert.Equal(3, e.Context?.SubjectId);
+            Assert.Equal("h-1", e.Context?.HolderId);
         }
     }
 

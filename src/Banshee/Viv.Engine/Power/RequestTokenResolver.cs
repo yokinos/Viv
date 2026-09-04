@@ -13,7 +13,8 @@ namespace Viv.Engine.Power
         /// <summary>
         /// 从可信内部请求 Header 中获取上下文。
         /// 安全约束：x-viv-* 上下文头只有网关（或持有共享密钥的对等服务）签名后才可信。
-        /// 密钥只取 EnvOption.InternalToken；未配置时无法验签，按原行为信任头（该场景无租户数据）。
+        /// 密钥只取 EnvOption.InternalToken；未配置时无法验签，按原行为信任身份头（该场景无租户数据）。
+        /// holderId 除外：无密钥不写入快照，避免客户端伪造锁身份。
         /// </summary>
         public static VivContextContent? GetContextFromHeaders(HttpContext context)
         {
@@ -35,11 +36,23 @@ namespace Viv.Engine.Power
 
             TryGetPositiveLong(context, VivRunDefine.SubjectIdHeader, out var subjectId);
 
+            // holderId 只有配了 InternalToken（上面已验签）才写入快照；无密钥场景不信任客户端头。
+            string? holderId = null;
+            if (!string.IsNullOrWhiteSpace(secret))
+            {
+                var raw = context.Request.Headers[VivRunDefine.HolderIdHeader].ToString();
+                if (!string.IsNullOrWhiteSpace(raw))
+                {
+                    holderId = raw;
+                }
+            }
+
             return new VivContextContent
             {
                 AppId = appId,
                 SubjectId = subjectId,
-                UserId = userId
+                UserId = userId,
+                HolderId = holderId
             };
         }
 
@@ -68,6 +81,7 @@ namespace Viv.Engine.Power
                 headers[VivRunDefine.SubjectIdHeader].ToString(),
                 headers[VivRunDefine.UserIdHeader].ToString(),
                 headers[VivRunDefine.ServiceNameHeader].ToString(),
+                headers[VivRunDefine.HolderIdHeader].ToString(),
                 secret);
         }
 
@@ -82,7 +96,30 @@ namespace Viv.Engine.Power
                 headers[VivRunDefine.SubjectIdHeader].ToString(),
                 headers[VivRunDefine.UserIdHeader].ToString(),
                 headers[VivRunDefine.ServiceNameHeader].ToString(),
+                headers[VivRunDefine.HolderIdHeader].ToString(),
                 secret);
+        }
+
+        /// <summary>
+        /// 验签通过且带 x-viv-holder-id 时返回上游 holderId；未配密钥、验签失败或头为空则不信任（避免客户端伪造）。
+        /// </summary>
+        public static bool TryGetTrustedHolderId(IHeaderDictionary headers, out string holderId)
+        {
+            holderId = "";
+            var secret = GetInternalSecret();
+            if (string.IsNullOrWhiteSpace(secret) || !VerifySignature(headers, secret))
+            {
+                return false;
+            }
+
+            var value = headers[VivRunDefine.HolderIdHeader].ToString();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            holderId = value;
+            return true;
         }
 
         /// <summary>
@@ -110,11 +147,13 @@ namespace Viv.Engine.Power
             var subjectIdText = user.FindFirstValue(VivClaimTypes.SubjectId);
             long.TryParse(subjectIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var subjectId);
 
+            var holderId = LockHolderContext.CurrentHolderId;
             return Task.FromResult<VivContextContent?>(new VivContextContent
             {
                 AppId = appId,
                 SubjectId = subjectId,
-                UserId = userId
+                UserId = userId,
+                HolderId = string.IsNullOrWhiteSpace(holderId) ? null : holderId
             });
         }
 

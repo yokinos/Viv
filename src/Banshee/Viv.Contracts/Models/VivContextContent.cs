@@ -30,6 +30,11 @@ namespace Viv.Contracts.Models
         public string? TraceId { get; set; }
 
         /// <summary>
+        /// 分布式锁持有者 Id。跨进程随信封 / 签名头传播，验签通过后才信任。
+        /// </summary>
+        public string? HolderId { get; set; }
+
+        /// <summary>
         /// 克隆一份上下文，用于后台任务传递
         /// </summary>
         public VivContextContent Clone()
@@ -39,7 +44,8 @@ namespace Viv.Contracts.Models
                 AppId = AppId,
                 SubjectId = SubjectId,
                 UserId = UserId,
-                TraceId = TraceId
+                TraceId = TraceId,
+                HolderId = HolderId
             };
         }
 
@@ -50,7 +56,7 @@ namespace Viv.Contracts.Models
 
         public override string ToString()
         {
-            return $"AppId:{AppId},SubjectId:{SubjectId},UserId:{UserId},TraceId:{TraceId}";
+            return $"AppId:{AppId},SubjectId:{SubjectId},UserId:{UserId},TraceId:{TraceId},HolderId:{HolderId}";
         }
     }
 }

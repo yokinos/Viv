@@ -13,12 +13,13 @@ internal static class EngineTestEnv
     public static void ForceFallbackMode()
         => VivEngine.LoadVivConfig(new ConfigurationBuilder().Build());
 
-    /// <summary>写入指定 InternalToken 并加载。</summary>
-    public static void ForceEnvTokenMode(string internalToken)
+    /// <summary>写入指定 InternalToken 并加载。serviceType 默认 WebApi（下游采纳 holder）；Gateway 一律自生成。</summary>
+    public static void ForceEnvTokenMode(string internalToken, int serviceType = 0)
         => VivEngine.LoadVivConfig(new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["VivOptions:EnvOption:InternalToken"] = internalToken
+                ["VivOptions:EnvOption:InternalToken"] = internalToken,
+                ["VivOptions:EnvOption:ServiceType"] = serviceType.ToString()
             })
             .Build());
 }

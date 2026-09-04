@@ -1,6 +1,8 @@
+using Viv.Contracts;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
+using Viv.Contracts.Models;
 using Viv.Log;
 using Wolverine;
 
@@ -27,7 +29,7 @@ namespace Viv.Nana.Core
             var message = new NanaEnvelope<T>
             {
                 Content = content,
-                Context = _context.GetRawSnapshot()?.Clone(),
+                Context = SnapshotWithHolder(_context.GetRawSnapshot()?.Clone()),
             };
 
             try
@@ -54,7 +56,7 @@ namespace Viv.Nana.Core
             var message = new NanaEnvelope<T>
             {
                 Content = content,
-                Context = _context.GetRawSnapshot()?.Clone(),
+                Context = SnapshotWithHolder(_context.GetRawSnapshot()?.Clone()),
                 DelaySecond = delayTTL.TotalSeconds
             };
 
@@ -92,6 +94,17 @@ namespace Viv.Nana.Core
             {
                 throw WrapMqException($"SchedulePublish failed for {typeof(T).Name}", ex);
             }
+        }
+
+        private static VivContextContent SnapshotWithHolder(VivContextContent? snap)
+        {
+            snap ??= new VivContextContent();
+            if (string.IsNullOrWhiteSpace(snap.HolderId))
+            {
+                snap.HolderId = LockHolderContext.CurrentHolderId;
+            }
+
+            return snap;
         }
 
         private VivConnectionException WrapMqException(string message, Exception ex)

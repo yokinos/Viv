@@ -96,6 +96,7 @@ namespace Viv.Nana.Tests
         public int HeldCalls { get; private set; }
         public int ReleaseCalls { get; private set; }
         public string? LastLockKey { get; private set; }
+        public string? LastHolderId { get; private set; }
 
         public Exception? AcquireException { get; set; }
 
@@ -103,6 +104,7 @@ namespace Viv.Nana.Tests
         {
             AcquireCalls++;
             LastLockKey = lockKey;
+            LastHolderId = lockHolderId;
             if (AcquireException is not null)
                 throw AcquireException;
             return Task.FromResult(AcquireResult);

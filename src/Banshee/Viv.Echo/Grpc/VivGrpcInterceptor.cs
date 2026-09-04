@@ -47,7 +47,7 @@ namespace Viv.Echo.Grpc
         }
 
         /// <summary>
-        /// 注入 x-viv-* 契约头，有 InternalToken 时再签 x-request-token。
+        /// 注入 x-viv-* 契约头（含 holder-id），有 InternalToken 时再签 x-request-token。
         /// gRPC metadata 键必须小写写盘。
         /// </summary>
         private ClientInterceptorContext<TRequest, TResponse> WithVivHeaders<TRequest, TResponse>(
@@ -72,6 +72,7 @@ namespace Viv.Echo.Grpc
             AddIfNotExist(headers, VivHeaderContract.SubjectId.ToLowerInvariant(), _vivContext.SubjectId.ToString());
             AddIfNotExist(headers, VivHeaderContract.UserId.ToLowerInvariant(), _vivContext.UserId.ToString());
             AddIfNotExist(headers, VivHeaderContract.ServiceName.ToLowerInvariant(), serviceName);
+            AddIfNotExist(headers, VivHeaderContract.HolderId.ToLowerInvariant(), LockHolderContext.CurrentHolderId);
 
             var secret = tokenOptions?.InternalToken;
             if (string.IsNullOrWhiteSpace(secret)
@@ -85,6 +86,7 @@ namespace Viv.Echo.Grpc
                 headers.Get(VivHeaderContract.SubjectId)?.Value ?? "",
                 headers.Get(VivHeaderContract.UserId)?.Value ?? "",
                 headers.Get(VivHeaderContract.ServiceName)?.Value ?? "",
+                headers.Get(VivHeaderContract.HolderId)?.Value ?? "",
                 secret);
             headers.Add(VivHeaderContract.InnerRequestToken.ToLowerInvariant(), token);
         }

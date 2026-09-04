@@ -1,6 +1,7 @@
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
+using Viv.Contracts.Models;
 using Viv.Delusion;
 using Viv.Nana.Core;
 using Viv.Nana.Options;
@@ -191,7 +192,48 @@ namespace Viv.Nana.Tests
             Assert.Equal(1, distributedLock.AcquireCalls);
             Assert.Equal(1, distributedLock.ReleaseCalls);
             Assert.Equal(NanaRegister.GetConsumerLockKey(nameof(TestApexEvent), 42), distributedLock.LastLockKey);
+            Assert.Equal("42", distributedLock.LastHolderId);
             Assert.Empty(logger.Warnings);
+        }
+
+        [Fact]
+        public async Task 信封带HolderId_取锁用上游持有者()
+        {
+            var distributedLock = new StubDistributedLock { AcquireResult = true };
+            var consumer = new CountingConsumer(Dep(new StubLogger(), new StubPublisher(), distributedLock));
+            var envelope = Envelope();
+            envelope.MessageId = 42;
+            envelope.Context = new VivContextContent
+            {
+                AppId = 1,
+                UserId = 2,
+                TraceId = "client-trace",
+                HolderId = "from-publisher"
+            };
+
+            await consumer.HandleAsync(envelope, CancellationToken.None);
+
+            Assert.Equal(1, consumer.Calls);
+            Assert.Equal("from-publisher", distributedLock.LastHolderId);
+        }
+
+        [Fact]
+        public async Task 信封无HolderId_不回落TraceId()
+        {
+            var distributedLock = new StubDistributedLock { AcquireResult = true };
+            var consumer = new CountingConsumer(Dep(new StubLogger(), new StubPublisher(), distributedLock));
+            var envelope = Envelope();
+            envelope.MessageId = 42;
+            envelope.Context = new VivContextContent
+            {
+                AppId = 1,
+                UserId = 2,
+                TraceId = "client-trace"
+            };
+
+            await consumer.HandleAsync(envelope, CancellationToken.None);
+
+            Assert.Equal("42", distributedLock.LastHolderId);
         }
 
         [Fact]

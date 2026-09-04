@@ -13,6 +13,7 @@ public class VivRunDefineTests
         Assert.Equal("x-viv-subjectId", VivRunDefine.SubjectIdHeader);
         Assert.Equal("x-viv-userId", VivRunDefine.UserIdHeader);
         Assert.Equal("x-viv-serviceName", VivRunDefine.ServiceNameHeader);
+        Assert.Equal("x-viv-holder-id", VivRunDefine.HolderIdHeader);
         Assert.Equal("x-request-token", VivRunDefine.InnerRequestTokenHeader);
     }
 

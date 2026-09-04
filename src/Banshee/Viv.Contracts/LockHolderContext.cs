@@ -41,12 +41,13 @@ namespace Viv.Contracts
         public static void Clear() => _holderId.Value = string.Empty;
 
         /// <summary>
-        /// 生成分布式锁持有者Id
+        /// 生成分布式锁持有者 Id 并写入当前异步流。
         /// </summary>
-        /// <returns></returns>
         public static string GenerateHolderId()
         {
-            return IdMagic.NextId(1023).ToString();
+            var id = IdMagic.NextId(1023).ToString();
+            _holderId.Value = id;
+            return id;
         }
     }
 }
