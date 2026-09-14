@@ -62,14 +62,14 @@ namespace Viv.Engine
         /// </summary>
         private static void SyncInternalTokenRegistry(VivOptions options)
         {
-            if (!string.IsNullOrWhiteSpace(options.EnvOption?.InternalToken)
-                || !string.IsNullOrWhiteSpace(options.EnvOption?.ServiceName))
+            if (!string.IsNullOrWhiteSpace(options.EnvOption?.InternalToken) || !string.IsNullOrWhiteSpace(options.EnvOption?.ServiceName))
             {
                 VivConfigRegistry.Add(new VivInternalTokenOptions
                 {
                     InternalToken = options.EnvOption?.InternalToken,
                     ServiceName = options.EnvOption?.ServiceName
                 });
+
                 return;
             }
 

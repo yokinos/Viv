@@ -1,12 +1,15 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Viv.Contracts;
 using Viv.Contracts.Models;
 using Viv.Entity.Enums;
 using Viv.EventContracts.Herta;
 using Viv.Herta.Core.Entity.Message;
 using Viv.Herta.Link.Consumers;
 using Viv.Herta.Link.Hubs;
+using Viv.Momo.Options;
 using Viv.Nana;
+using Viv.Nana.Options;
 
 namespace Viv.Herta.Tests
 {
@@ -24,7 +27,7 @@ namespace Viv.Herta.Tests
         }
 
         private static SendMessageConsumer CreateConsumer(FakeHubContext hub, StubConnectionPool pool)
-            => new(new VivConsumerDependency(new FakeLogger(), new FakeContext(), new FakeEventPublisher()), hub, pool);
+            => new(new VivConsumerDependency(new FakeLogger(), new FakeContext(), new FakeEventPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions())), hub, pool);
 
         [Fact]
         public async Task ContentNull_ReturnsFailureWithoutSending()

@@ -1,4 +1,5 @@
-﻿using StackExchange.Redis;
+﻿using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,9 +8,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Viv.Aoi;
 using Viv.Delusion;
+using Viv.Delusion.Extension;
 using Viv.Log;
 using Viv.Redis.DbAllocator;
-using Viv.Delusion.Extension;
 
 namespace Viv.Redis
 {
@@ -36,7 +37,7 @@ namespace Viv.Redis
         /// <summary>
         /// Redis配置选项
         /// </summary>
-        public static RedisOptions? CurrentRedisOptions => VivConfigRegistry.Get<RedisOptions>();
+        protected static RedisOptions? _redisOptions;
 
         /// <summary>
         /// Db分配器
@@ -59,18 +60,11 @@ namespace Viv.Redis
         /// </summary>
         private static ILoggerContract? _logger;
 
-        public RedisFactory()
+        public RedisFactory(ILoggerContract logger, IOptions<RedisOptions> options, IDbAllocator dbAllocator)
         {
-            ArgumentNullException.ThrowIfNull(CurrentRedisOptions);
-            _dbAllocator = CurrentRedisOptions.SelectorType switch
-            {
-                DbSelectorType.KeyHash => new KeyHashAllocator(),
-                DbSelectorType.TenantIdHash => new TenantIdAllocator(),
-                DbSelectorType.None => new NoneAllocator(),
-                _ => new NoneAllocator(),
-            };
-
-            _logger = VivLocator.GetAutofaService<ILoggerContract>();
+            _redisOptions = options.Value;
+            _logger = logger;
+            _dbAllocator = dbAllocator;
         }
 
         /// <summary>
@@ -82,18 +76,18 @@ namespace Viv.Redis
         private static async Task<IConnectionMultiplexer> GetConnectionMultiplexerAsync()
         {
             // 前置校验：配置必须已初始化
-            if (!_isConfigInitialized || CurrentRedisOptions == null)
+            if (!_isConfigInitialized || _redisOptions == null)
             {
                 throw new InvalidOperationException("Redis配置未初始化！请先调用RedisFactory.Initialize方法");
             }
 
             // 根据部署模式构建配置
-            var config = CurrentRedisOptions.RedisMode switch
+            var config = _redisOptions.RedisMode switch
             {
-                RedisMode.Standalone => BuildStandaloneConfig(CurrentRedisOptions),
-                RedisMode.Cluster => BuildClusterConfig(CurrentRedisOptions),
-                RedisMode.Sentinel => BuildSentinelConfig(CurrentRedisOptions),
-                _ => throw new NotSupportedException($"不支持的Redis部署模式: {CurrentRedisOptions.RedisMode}"),
+                RedisMode.Standalone => BuildStandaloneConfig(_redisOptions),
+                RedisMode.Cluster => BuildClusterConfig(_redisOptions),
+                RedisMode.Sentinel => BuildSentinelConfig(_redisOptions),
+                _ => throw new NotSupportedException($"不支持的Redis部署模式: {_redisOptions.RedisMode}"),
             };
 
             var connection = await ConnectionMultiplexer.ConnectAsync(config).ConfigureAwait(false);
@@ -191,7 +185,6 @@ namespace Viv.Redis
                     {
                         ArgumentNullException.ThrowIfNull(options, nameof(options));
                         ValidateOptionsByMode(options);
-                        VivConfigRegistry.Add(options);
                         _isConfigInitialized = true;
                         return;
                     }
@@ -309,7 +302,7 @@ namespace Viv.Redis
         /// <returns>指定数据库的操作实例（IDatabase）</returns>
         public async Task<IDatabase> GetDatabaseAsync(string key)
         {
-            var dbIndex = _dbAllocator?.AllocateDbIndex(key, CurrentRedisOptions?.MaxDbIndex);
+            var dbIndex = _dbAllocator?.AllocateDbIndex(key, _redisOptions?.MaxDbIndex);
             return await GetDatabaseAsync(dbIndex).ConfigureAwait(false);
         }
 
@@ -333,14 +326,14 @@ namespace Viv.Redis
         /// <returns>指定数据库的操作实例（IDatabase）</returns>
         public async static Task<IDatabase> GetDatabaseAsync(int? dbNumber = null)
         {
-            if (CurrentRedisOptions?.RedisMode == RedisMode.Cluster)
+            if (_redisOptions?.RedisMode == RedisMode.Cluster)
             {
                 // 集群模式下只能使用0号库
                 dbNumber = 0;
             }
 
             var connection = await GetConnectionAsync().ConfigureAwait(false);
-            return connection.GetDatabase(dbNumber ?? (CurrentRedisOptions?.DefaultDatabase ?? 0));
+            return connection.GetDatabase(dbNumber ?? (_redisOptions?.DefaultDatabase ?? 0));
         }
 
         /// <summary>

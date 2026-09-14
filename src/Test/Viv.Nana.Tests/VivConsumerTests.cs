@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+using Viv.Contracts;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
@@ -66,14 +68,14 @@ namespace Viv.Nana.Tests
         private static NanaEnvelope<TestApexEvent> Envelope(TestApexEvent? content = null)
             => new() { Content = content ?? new TestApexEvent { Payload = "data" } };
 
-        private static VivConsumerDependency Dep(StubLogger logger, StubPublisher publisher, IDistributedLock? distributedLock = null)
-            => new(logger, new FakeContext(), publisher, distributedLock);
+        private static VivConsumerDependency Dep(StubLogger logger, StubPublisher publisher, IOptions<NanaOptions> options, IDistributedLock? distributedLock = null)
+            => new(logger, new FakeContext(), publisher, options, distributedLock);
 
         [Fact]
         public async Task 成功_无异常无日志()
         {
             var logger = new StubLogger();
-            var consumer = new SuccessConsumer(Dep(logger, new StubPublisher()));
+            var consumer = new SuccessConsumer(Dep(logger, new StubPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions())));
 
             await consumer.HandleAsync(Envelope(), CancellationToken.None);
 
@@ -84,7 +86,7 @@ namespace Viv.Nana.Tests
         [Fact]
         public async Task 重投_抛VivRequeueException()
         {
-            var consumer = new RequeueConsumer(Dep(new StubLogger(), new StubPublisher()));
+            var consumer = new RequeueConsumer(Dep(new StubLogger(), new StubPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions())));
 
             var ex = await Assert.ThrowsAsync<VivRequeueException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
 
@@ -95,7 +97,7 @@ namespace Viv.Nana.Tests
         public async Task 失败不回队_记日志不抛异常()
         {
             var logger = new StubLogger();
-            var consumer = new DropConsumer(Dep(logger, new StubPublisher()));
+            var consumer = new DropConsumer(Dep(logger, new StubPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions())));
 
             await consumer.HandleAsync(Envelope(), CancellationToken.None);
 
@@ -109,7 +111,7 @@ namespace Viv.Nana.Tests
         [Fact]
         public async Task 空消息_直接返回不处理()
         {
-            var consumer = new SuccessConsumer(Dep(new StubLogger(), new StubPublisher()));
+            var consumer = new SuccessConsumer(Dep(new StubLogger(), new StubPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions())));
 
             await consumer.HandleAsync(null!, CancellationToken.None);
 
@@ -120,7 +122,7 @@ namespace Viv.Nana.Tests
         public async Task 内容为空_直接返回不处理()
         {
             var logger = new StubLogger();
-            var consumer = new DropConsumer(Dep(logger, new StubPublisher()));
+            var consumer = new DropConsumer(Dep(logger, new StubPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions())));
 
             await consumer.HandleAsync(new NanaEnvelope<TestApexEvent> { Content = null }, CancellationToken.None);
 
@@ -130,51 +132,35 @@ namespace Viv.Nana.Tests
         [Fact]
         public async Task 延迟重投_未超上限_投递并计数()
         {
-            VivConfigRegistry.Add(new NanaOptions { RetryCount = 3 });
-            try
-            {
-                var logger = new StubLogger();
-                var publisher = new StubPublisher();
-                var consumer = new RedeliverConsumer(Dep(logger, publisher));
-                var envelope = Envelope();
+            var logger = new StubLogger();
+            var publisher = new StubPublisher();
+            var consumer = new RedeliverConsumer(Dep(logger, publisher, XUnitTestMagic.CreateOptions(new NanaOptions() { RetryCount = 3 })));
+            var envelope = Envelope();
 
-                await consumer.HandleAsync(envelope, CancellationToken.None);
+            await consumer.HandleAsync(envelope, CancellationToken.None);
 
-                Assert.True(publisher.PublishDelayCalled);
-                var scheduled = Assert.IsType<NanaEnvelope<TestApexEvent>>(publisher.LastEnvelope);
-                Assert.Equal(1, scheduled.ReDeliverCount);          // 原消息 +1，重投副本继承
-                Assert.Equal(5, scheduled.DelaySecond);             // DelaySecond 携带延迟值
-                Assert.Empty(logger.Errors);
-            }
-            finally
-            {
-                VivConfigRegistry.Remove<NanaOptions>();
-            }
+            Assert.True(publisher.PublishDelayCalled);
+            var scheduled = Assert.IsType<NanaEnvelope<TestApexEvent>>(publisher.LastEnvelope);
+            Assert.Equal(1, scheduled.ReDeliverCount);          // 原消息 +1，重投副本继承
+            Assert.Equal(5, scheduled.DelaySecond);             // DelaySecond 携带延迟值
+            Assert.Empty(logger.Errors);
         }
 
         [Fact]
         public async Task 延迟重投_超上限_丢弃不投递()
         {
-            VivConfigRegistry.Add(new NanaOptions { RetryCount = 3 });
-            try
-            {
-                var logger = new StubLogger();
-                var publisher = new StubPublisher();
-                var consumer = new RedeliverConsumer(Dep(logger, publisher));
-                var envelope = Envelope();
-                envelope.ReDeliverCount = 3;                        // 已达上限
+            var logger = new StubLogger();
+            var publisher = new StubPublisher();
+            var consumer = new RedeliverConsumer(Dep(logger, publisher, XUnitTestMagic.CreateOptions(new NanaOptions() { RetryCount = 3 })));
+            var envelope = Envelope();
+            envelope.ReDeliverCount = 3;                        // 已达上限
 
-                await consumer.HandleAsync(envelope, CancellationToken.None);
+            await consumer.HandleAsync(envelope, CancellationToken.None);
 
-                Assert.False(publisher.PublishDelayCalled);
-                Assert.Equal(3, envelope.ReDeliverCount);           // 未再自增
-                var warning = Assert.Single(logger.Warnings);
-                Assert.Contains("上限", warning);
-            }
-            finally
-            {
-                VivConfigRegistry.Remove<NanaOptions>();
-            }
+            Assert.False(publisher.PublishDelayCalled);
+            Assert.Equal(3, envelope.ReDeliverCount);           // 未再自增
+            var warning = Assert.Single(logger.Warnings);
+            Assert.Contains("上限", warning);
         }
 
         [Fact]
@@ -182,7 +168,7 @@ namespace Viv.Nana.Tests
         {
             var logger = new StubLogger();
             var distributedLock = new StubDistributedLock { AcquireResult = true };
-            var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), distributedLock));
+            var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock));
             var envelope = Envelope();
             envelope.MessageId = 42;
 
@@ -200,7 +186,7 @@ namespace Viv.Nana.Tests
         public async Task 信封带HolderId_取锁用上游持有者()
         {
             var distributedLock = new StubDistributedLock { AcquireResult = true };
-            var consumer = new CountingConsumer(Dep(new StubLogger(), new StubPublisher(), distributedLock));
+            var consumer = new CountingConsumer(Dep(new StubLogger(), new StubPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock));
             var envelope = Envelope();
             envelope.MessageId = 42;
             envelope.Context = new VivContextContent
@@ -221,7 +207,7 @@ namespace Viv.Nana.Tests
         public async Task 信封无HolderId_不回落TraceId()
         {
             var distributedLock = new StubDistributedLock { AcquireResult = true };
-            var consumer = new CountingConsumer(Dep(new StubLogger(), new StubPublisher(), distributedLock));
+            var consumer = new CountingConsumer(Dep(new StubLogger(), new StubPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock));
             var envelope = Envelope();
             envelope.MessageId = 42;
             envelope.Context = new VivContextContent
@@ -242,7 +228,7 @@ namespace Viv.Nana.Tests
             var logger = new StubLogger();
             var publisher = new StubPublisher();
             var distributedLock = new StubDistributedLock { AcquireResult = false, IsHeldResult = true };
-            var consumer = new CountingConsumer(Dep(logger, publisher, distributedLock));
+            var consumer = new CountingConsumer(Dep(logger, publisher, XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock));
 
             await consumer.HandleAsync(Envelope(), CancellationToken.None);
 
@@ -260,7 +246,7 @@ namespace Viv.Nana.Tests
         {
             var logger = new StubLogger();
             var distributedLock = new StubDistributedLock { AcquireResult = false, IsHeldResult = false };
-            var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), distributedLock));
+            var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock));
 
             var ex = await Assert.ThrowsAsync<DistributedLockException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
 
@@ -279,7 +265,7 @@ namespace Viv.Nana.Tests
             {
                 AcquireException = new DistributedLockException("k", 0, inner)
             };
-            var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), distributedLock));
+            var consumer = new CountingConsumer(Dep(logger, new StubPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock));
 
             var ex = await Assert.ThrowsAsync<DistributedLockException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
 
@@ -292,24 +278,16 @@ namespace Viv.Nana.Tests
         [Fact]
         public async Task 延迟重投_传输失败_异常冒泡不丢弃()
         {
-            VivConfigRegistry.Add(new NanaOptions { RetryCount = 3 });
-            try
+            var publisher = new StubPublisher
             {
-                var publisher = new StubPublisher
-                {
-                    DelayException = new VivConnectionException(VivConnType.RabbitMQ, "mq down")
-                };
-                var consumer = new RedeliverConsumer(Dep(new StubLogger(), publisher));
+                DelayException = new VivConnectionException(VivConnType.RabbitMQ, "mq down")
+            };
+            var consumer = new RedeliverConsumer(Dep(new StubLogger(), publisher, XUnitTestMagic.CreateOptions(new NanaOptions() { RetryCount = 3 })));
 
-                var ex = await Assert.ThrowsAsync<VivConnectionException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
+            var ex = await Assert.ThrowsAsync<VivConnectionException>(() => consumer.HandleAsync(Envelope(), CancellationToken.None));
 
-                Assert.Equal(VivConnType.RabbitMQ, ex.ConnType);
-                Assert.False(publisher.PublishDelayCalled);
-            }
-            finally
-            {
-                VivConfigRegistry.Remove<NanaOptions>();
-            }
+            Assert.Equal(VivConnType.RabbitMQ, ex.ConnType);
+            Assert.False(publisher.PublishDelayCalled);
         }
     }
 }

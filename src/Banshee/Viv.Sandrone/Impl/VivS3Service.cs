@@ -1,6 +1,7 @@
 ﻿using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
+using Microsoft.Extensions.Options;
 using System;
 using System.IO;
 using System.Net;
@@ -20,10 +21,9 @@ namespace Viv.Sandrone.Impl
         private readonly AmazonS3Client _s3Client;
         private readonly S3Options _options;
 
-        public VivS3Service()
+        public VivS3Service(IOptions<S3Options> options)
         {
-            _options = VivConfigRegistry.Get<S3Options>()
-                        ?? throw new InvalidOperationException("未找到 S3Options 配置，请检查 appsettings.json 的 VivOptions.S3Option 节点。");
+            _options = options.Value;
             var config = CreateS3Config(_options);
             _s3Client = new AmazonS3Client(_options.AccessKey, _options.SecretKey, config);
         }

@@ -267,7 +267,6 @@ public class RequestTokenResolverTests
     {
         try
         {
-            VivConfigRegistry.Add(new TokenOptions { SecretKey = Secret });
             EngineTestEnv.ForceFallbackMode();
 
             Assert.Null(RequestTokenResolver.SignContextHeaders(ContextHeaders()));
@@ -282,7 +281,6 @@ public class RequestTokenResolverTests
         finally
         {
             EngineTestEnv.ForceFallbackMode();
-            VivConfigRegistry.Remove<TokenOptions>();
         }
     }
 

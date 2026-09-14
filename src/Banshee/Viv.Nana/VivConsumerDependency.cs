@@ -1,6 +1,9 @@
-﻿using Viv.Contracts.Attributes;
+﻿using Microsoft.CodeAnalysis;
+using Microsoft.Extensions.Options;
+using Viv.Contracts.Attributes;
 using Viv.Contracts.Interface;
 using Viv.Log;
+using Viv.Nana.Options;
 
 namespace Viv.Nana
 {
@@ -21,15 +24,19 @@ namespace Viv.Nana
         /// </summary>
         public readonly IDistributedLock? _distributedLock;
 
+        public readonly NanaOptions _nanaOptions;
+
         public VivConsumerDependency(
             ILoggerContract logger,
             IVivContext context,
             IVivEventPublisher publisher,
+            IOptions<NanaOptions> options,
             IDistributedLock? distributedLock = null)
         {
             _logger = logger;
             _context = context;
             _publisher = publisher;
+            _nanaOptions = options.Value;
             _distributedLock = distributedLock;
         }
     }

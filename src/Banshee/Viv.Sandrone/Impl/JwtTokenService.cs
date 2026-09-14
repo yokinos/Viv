@@ -1,4 +1,5 @@
-﻿using Microsoft.IdentityModel.Tokens;
+﻿using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
@@ -25,9 +26,9 @@ namespace Viv.Sandrone.Impl
         private readonly SymmetricSecurityKey _securityKey;
         private readonly TokenValidationParameters _validationParameters;
 
-        public JwtTokenService()
+        public JwtTokenService(IOptions<TokenOptions> options)
         {
-            _options = VivConfigRegistry.Get<TokenOptions>() ?? new TokenOptions();
+            _options = options.Value;
             if (string.IsNullOrEmpty(_options.SecretKey))
             {
                 throw new ArgumentNullException(nameof(_options.SecretKey), "JWT签名密钥不能为空！");

@@ -19,6 +19,7 @@ using Viv.Nana;
 using Viv.Nana.Core;
 using Viv.Nana.Saga;
 using Viv.Redis;
+using Viv.Redis.DbAllocator;
 using Viv.Sandrone.Impl;
 
 namespace Viv.Engine
@@ -62,10 +63,15 @@ namespace Viv.Engine
         private static void RegisterLogger(IServiceCollection services, VivOptions options)
         {
             if (options.LogOption == null) return;
-            LoggerRegister.Initialize(options.LogOption);
+
+            if (options.LogOption.IsUseSeq && options.LogOption.SeqUrl.IsNullOrEmpty())
+            {
+                throw new Exception("Seq地址不能为空");
+            }
+
             if (options.LogOption.LogType == LogType.Serilog)
             {
-                SerilogProvider.Initialize();
+                SerilogProvider.Initialize(options.LogOption);
                 services.AddSingleton<ILoggerContract, SerilogLoggerImpl>();
             }
             else
@@ -86,6 +92,19 @@ namespace Viv.Engine
             if (options.CacheOption.CacheProviderType == DistributedCacheType.Redis)
             {
                 RedisFactory.Initialize(options.CacheOption.RedisOptions);
+                switch (options.CacheOption.RedisOptions.SelectorType)
+                {
+                    case DbSelectorType.KeyHash:
+                        services.AddSingleton<IDbAllocator, KeyHashAllocator>();
+                        break;
+                    case DbSelectorType.TenantIdHash:
+                        services.AddSingleton<IDbAllocator, TenantIdAllocator>();
+                        break;
+                    case DbSelectorType.None:
+                        services.AddSingleton<IDbAllocator, NoneAllocator>();
+                        break;
+                }
+
                 services.AddSingleton<IRedisService, RedisService>();
                 services.AddSingleton<IDistributedLock, DistributedLockAccessor>();
 
@@ -108,8 +127,6 @@ namespace Viv.Engine
         private static void RegisterNana(IServiceCollection services, VivOptions options)
         {
             if (options.NanaOption == null) return;
-
-            NanaRegister.Initialize(options.NanaOption);
 
             // 业务 Core 程序集（含 Saga 类型）可能是懒加载，先强制加载传递引用再扫描，
             // 否则 ScanTypes<VivSagaState>() 只看到已加载程序集，Saga 会被静默跳过。
@@ -157,8 +174,7 @@ namespace Viv.Engine
         private static void RegisterDatabase(IServiceCollection services, VivOptions options)
         {
             if (options.DatabaseOption == null) return;
-
-            MomoRegister.Initialize(options.DatabaseOption);
+            
             services.AddScoped<IDatabaseOptionsProvider, DefaultDatabaseOptionsProvider>();
             services.AddScoped<IMomoDbContext, MomoDatabaseContext>();
         }
@@ -173,7 +189,6 @@ namespace Viv.Engine
             {
                 // 注册token实现
                 services.AddScoped<ITokenService, JwtTokenService>();
-                VivConfigRegistry.Add(options.TokenOption);
             }
             else
             {
@@ -211,18 +226,7 @@ namespace Viv.Engine
 
         public static void RegisterOtherServices(IServiceCollection services, VivOptions options)
         {
-            if (options.OpenAIOption != null)
-            {
-                VivConfigRegistry.Add(options.OpenAIOption);
-            }
-
             services.AddScoped<IAiClientFactory, AiClientFactory>();
-
-            if (options.S3Option != null)
-            {
-                VivConfigRegistry.Add(options.S3Option);
-            }
-
             services.AddSingleton<IS3Service, VivS3Service>();
         }
 

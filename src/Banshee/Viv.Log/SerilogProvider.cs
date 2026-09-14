@@ -8,8 +8,9 @@ namespace Viv.Log
         private static bool _initialized;
         private static readonly Lock _lock = new();
 
-        public static void Initialize()
+        public static void Initialize(LogOptions options)
         {
+            ArgumentNullException.ThrowIfNull(options);
             if (_initialized) return;
 
             lock (_lock)
@@ -18,8 +19,6 @@ namespace Viv.Log
 
                 try
                 {
-                    var options = VivConfigRegistry.Get<LogOptions>() ?? new LogOptions();
-
                     var config = new LoggerConfiguration()
                         .MinimumLevel.Debug()
                         .Enrich.FromLogContext()

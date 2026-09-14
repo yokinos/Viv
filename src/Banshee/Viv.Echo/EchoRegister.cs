@@ -9,8 +9,6 @@ namespace Viv.Echo
     {
         public static void Initialize(IServiceCollection services, EchoOptions options)
         {
-            VivConfigRegistry.Add(options);
-
             if (options.EnableHttp)
             {
                 services.AddHttpClient();

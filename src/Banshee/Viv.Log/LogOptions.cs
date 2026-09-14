@@ -29,17 +29,4 @@ namespace Viv.Log
         /// </summary>
         public string SeqApiKey { get; set; } = string.Empty;
     }
-
-    public class LoggerRegister
-    {
-        public static void Initialize(LogOptions options)
-        {
-            if (options.IsUseSeq && options.SeqUrl.IsNullOrEmpty())
-            {
-                throw new Exception("Seq地址不能为空");
-            }
-
-            VivConfigRegistry.Add(options);
-        }
-    }
 }

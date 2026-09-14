@@ -1,8 +1,11 @@
-﻿using StackExchange.Redis;
+﻿using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 using System.Diagnostics.CodeAnalysis;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
 using Viv.Delusion.Extension;
+using Viv.Log;
+using Viv.Redis.DbAllocator;
 
 namespace Viv.Redis
 {
@@ -14,7 +17,10 @@ namespace Viv.Redis
     /// </summary>
     public class VivRedis : RedisFactory
     {
-        public VivRedis() { }
+        public VivRedis(ILoggerContract logger, IOptions<RedisOptions> options, IDbAllocator dbAllocator) : base(logger, options, dbAllocator)
+        {
+
+        }
 
         /// <summary>
         /// 异步执行单个Key的Redis操作（自动路由到对应Db）
@@ -68,7 +74,7 @@ namespace Viv.Redis
             try
             {
                 if (_dbAllocator is null || keyList.IsNullOrEmpty()) return [];
-                var keyDict = _dbAllocator.AllocateGroupDbIndex(keyList, CurrentRedisOptions?.MaxDbIndex);
+                var keyDict = _dbAllocator.AllocateGroupDbIndex(keyList, _redisOptions?.MaxDbIndex);
                 var list = new List<T>();
 
                 foreach (var x in keyDict)
@@ -105,7 +111,7 @@ namespace Viv.Redis
             try
             {
                 if (_dbAllocator is null || keyList.IsNullOrEmpty()) return [];
-                var keyDict = _dbAllocator.AllocateGroupDbIndex(keyList, CurrentRedisOptions?.MaxDbIndex);
+                var keyDict = _dbAllocator.AllocateGroupDbIndex(keyList, _redisOptions?.MaxDbIndex);
                 var list = new List<T>();
 
                 foreach (var x in keyDict)

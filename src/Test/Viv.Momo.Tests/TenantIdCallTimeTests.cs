@@ -1,3 +1,4 @@
+using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Delusion;
@@ -15,43 +16,27 @@ public class TenantIdCallTimeTests
     [Fact]
     public void TenantId_构造后再SetSnapshot_读到新租户()
     {
-        VivConfigRegistry.Add(new DatabaseOptions { Timeout = 30, MasterConnectionString = "x" });
-        try
-        {
-            var ctx = new MutableVivContext();
-            var db = new MomoDatabase(ctx, new NullLogger(), new DefaultDatabaseOptionsProvider());
+        var ctx = new MutableVivContext();
+        var db = new MomoDatabase(ctx, new NullLogger(), new DefaultDatabaseOptionsProvider(XUnitTestMagic.CreateOptions(new DatabaseOptions() { Timeout = 30, MasterConnectionString = "x" })));
 
-            Assert.Equal(0, db.TenantId);
+        Assert.Equal(0, db.TenantId);
 
-            ctx.SetSnapshot(new VivContextContent { SubjectId = 77 });
-            Assert.Equal(77, db.TenantId);
-        }
-        finally
-        {
-            VivConfigRegistry.Remove<DatabaseOptions>();
-        }
+        ctx.SetSnapshot(new VivContextContent { SubjectId = 77 });
+        Assert.Equal(77, db.TenantId);
     }
 
     [Fact]
     public void ChangeTenant_覆盖本实例不影响后续上下文读取()
     {
-        VivConfigRegistry.Add(new DatabaseOptions { Timeout = 30, MasterConnectionString = "x" });
-        try
-        {
-            var ctx = new MutableVivContext();
-            ctx.SetSnapshot(new VivContextContent { SubjectId = 11 });
-            var db = new MomoDatabaseContext(ctx, new NullLogger(), new DefaultDatabaseOptionsProvider());
+        var ctx = new MutableVivContext();
+        ctx.SetSnapshot(new VivContextContent { SubjectId = 11 });
+        var db = new MomoDatabaseContext(ctx, new NullLogger(), new DefaultDatabaseOptionsProvider(XUnitTestMagic.CreateOptions(new DatabaseOptions() { Timeout = 30, MasterConnectionString = "x" })));
 
-            db.ChangeTenant(99);
-            Assert.Equal(99, db.TenantId);
+        db.ChangeTenant(99);
+        Assert.Equal(99, db.TenantId);
 
-            ctx.SetSnapshot(new VivContextContent { SubjectId = 22 });
-            Assert.Equal(99, db.TenantId);
-        }
-        finally
-        {
-            VivConfigRegistry.Remove<DatabaseOptions>();
-        }
+        ctx.SetSnapshot(new VivContextContent { SubjectId = 22 });
+        Assert.Equal(99, db.TenantId);
     }
 
     private sealed class MutableVivContext : IVivContext

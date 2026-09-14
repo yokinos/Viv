@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
 using OpenAI;
 using System;
 using System.ClientModel;
@@ -12,6 +13,13 @@ namespace Viv.Sandrone.Impl
 {
     public class AiClientFactory : IAiClientFactory
     {
+        private readonly OpenAIOptions _openAIOptions;
+
+        public AiClientFactory(IOptions<OpenAIOptions> options)
+        {
+            _openAIOptions = options.Value;
+        }
+
         public IChatClient CreateClient(string apiUrl, string apiKey, string model)
         {
             var options = new OpenAIClientOptions
@@ -27,10 +35,8 @@ namespace Viv.Sandrone.Impl
         [return: MaybeNull]
         public IChatClient GetDefaultClient()
         {
-            var option = Viv.Delusion.VivConfigRegistry.Get<OpenAIOptions>();
-            if (option == null) return default;
-            return CreateClient(option.ApiUrl, option.ApiKey, option.Model);
+            if (_openAIOptions == null) return default;
+            return CreateClient(_openAIOptions.ApiUrl, _openAIOptions.ApiKey, _openAIOptions.Model);
         }
     }
 }
- 

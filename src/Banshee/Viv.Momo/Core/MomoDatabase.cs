@@ -23,13 +23,13 @@ namespace Viv.Momo.Core
     public class MomoDatabase : IDisposable
     {
         protected readonly IVivContext _vivContext;
-        protected DatabaseOptions _options;
+        protected DatabaseOptions _databseOptions;
         protected readonly ILoggerContract _logger;
         protected readonly IDatabaseOptionsProvider _optionsProvider;
         protected EFAppContext? _writeDbContext;
         protected EFAppContext? _readDbContext;
-
         protected IDbTransaction? _transaction;
+
         protected int _timeOut = 30;
         protected static readonly HashSet<string> _primaryKeys = ["Id"];
 
@@ -44,17 +44,14 @@ namespace Viv.Momo.Core
             _vivContext = vivContext;
             _optionsProvider = optionsProvider;
             _logger = logger;
-            SetOptions();
+            SetOptions(_optionsProvider.GetRealOptions());
         }
 
-        protected void SetOptions(DatabaseOptions? options = null)
+        protected void SetOptions(DatabaseOptions? options)
         {
-            var realOptions = options ?? VivConfigRegistry.Get<DatabaseOptions>();
-            ArgumentNullException.ThrowIfNull(realOptions);
-            // 只有"未显式指定"（默认配置路径）才走 provider 可插拔覆盖；
-            // CreateContext 显式传入的 options 是调用方已选定的配置，不再被 provider 二次改
-            _options = options == null ? _optionsProvider.GetOptions(realOptions) : realOptions;
-            _timeOut = _options.Timeout;
+            ArgumentNullException.ThrowIfNull(options);
+            _databseOptions = options;
+            _timeOut = _databseOptions.Timeout;
         }
 
         /// <summary>
@@ -63,7 +60,7 @@ namespace Viv.Momo.Core
         [return: NotNull]
         public EFAppContext GetAppContext(DbReadWriteType dbReadWriteType = DbReadWriteType.Write)
         {
-            return CreateEFAppContext(_options, dbReadWriteType);
+            return CreateEFAppContext(_databseOptions, dbReadWriteType);
         }
 
         /// <summary>
@@ -355,7 +352,7 @@ namespace Viv.Momo.Core
         protected VivConnectionException WrapDatabaseException(string message, Exception ex)
         {
             WriteLog(message, ex);
-            var connType = _options.DatabaseSource == DatabaseSourceType.PostgreSQL
+            var connType = _databseOptions.DatabaseSource == DatabaseSourceType.PostgreSQL
                 ? VivConnType.PostgreSQL
                 : VivConnType.SqlServer;
             return new VivConnectionException(connType, message, ex);

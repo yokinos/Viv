@@ -1,4 +1,5 @@
-﻿using StackExchange.Redis;
+﻿using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -7,6 +8,8 @@ using System.Threading.Tasks;
 using Viv.Contracts;
 using Viv.Contracts.Exceptions;
 using Viv.Delusion.Extension;
+using Viv.Log;
+using Viv.Redis.DbAllocator;
 
 #nullable disable
 namespace Viv.Redis
@@ -28,7 +31,10 @@ namespace Viv.Redis
         /// </summary>
         private const int ReentrantLockTempExpireSeconds = 60;
 
-        public RedisService() { }
+        public RedisService(ILoggerContract logger, IOptions<RedisOptions> options, IDbAllocator dbAllocator) : base(logger, options, dbAllocator)
+        {
+
+        }
 
         /// <summary>
         /// 反序列化 RedisValue → T。

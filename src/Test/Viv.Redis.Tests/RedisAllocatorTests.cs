@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using Viv.Delusion;
 using Viv.Redis;
 using Viv.Redis.DbAllocator;
@@ -84,39 +85,21 @@ public class NoneAllocatorTests
     [Fact]
     public void 无配置_回退0号库()
     {
-        VivConfigRegistry.Remove<RedisOptions>();
-        Assert.Equal(0, new NoneAllocator().AllocateDbIndex("key", 12));
+        Assert.Equal(0, new NoneAllocator(Options.Create(new RedisOptions { DefaultDatabase = 0 })).AllocateDbIndex("key", 12));
     }
 
     [Fact]
     public void 有配置_用DefaultDatabase()
     {
-        try
-        {
-            VivConfigRegistry.Add(new RedisOptions { DefaultDatabase = 5 });
-            Assert.Equal(5, new NoneAllocator().AllocateDbIndex("key", 12));
-        }
-        finally
-        {
-            VivConfigRegistry.Remove<RedisOptions>();
-        }
+        Assert.Equal(5, new NoneAllocator(Options.Create(new RedisOptions { DefaultDatabase = 5 })).AllocateDbIndex("key", 12));
     }
 
     [Fact]
     public void 分组_全落DefaultDatabase()
     {
-        try
-        {
-            VivConfigRegistry.Add(new RedisOptions { DefaultDatabase = 3 });
-            var groups = new NoneAllocator().AllocateGroupDbIndex(["a", "b"], 12);
-
-            Assert.Single(groups);
-            Assert.True(groups.ContainsKey(3));
-            Assert.Equal(2, groups[3].Length);
-        }
-        finally
-        {
-            VivConfigRegistry.Remove<RedisOptions>();
-        }
+        var groups = new NoneAllocator(Options.Create(new RedisOptions { DefaultDatabase = 3 })).AllocateGroupDbIndex(["a", "b"], 12);
+        Assert.Single(groups);
+        Assert.True(groups.ContainsKey(3));
+        Assert.Equal(2, groups[3].Length);
     }
 }

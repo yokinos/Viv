@@ -29,6 +29,7 @@ namespace Viv.Engine
             });
 
             // 基础服务
+            builder.AddVivConfig();
             builder.Services.AddViv(vivOptions);
 
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)

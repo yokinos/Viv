@@ -57,6 +57,8 @@ namespace Viv.Engine
                 builder.Host.UseSerilog();
             }
 
+            builder.AddVivConfig();
+
             // 基础服务
             builder.Services.AddViv(vivOptions);
 

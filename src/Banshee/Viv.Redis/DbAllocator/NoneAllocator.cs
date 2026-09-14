@@ -1,4 +1,5 @@
-﻿using StackExchange.Redis;
+﻿using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -9,10 +10,16 @@ namespace Viv.Redis.DbAllocator
 {
     public class NoneAllocator : IDbAllocator
     {
+        private readonly RedisOptions _redisOptions;
+
+        public NoneAllocator(IOptions<RedisOptions> redisOptions)
+        {
+            _redisOptions = redisOptions.Value;
+        }
+
         public int AllocateDbIndex(string redisKey, int? maxDbIndex)
         {
-            var options = VivConfigRegistry.Get<RedisOptions>();
-            return options?.DefaultDatabase ?? 0;
+            return _redisOptions?.DefaultDatabase ?? 0;
         }
 
         [return: NotNull]

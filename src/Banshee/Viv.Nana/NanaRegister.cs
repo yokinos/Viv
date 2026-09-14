@@ -9,12 +9,6 @@ namespace Viv.Nana
 {
     public static class NanaRegister
     {
-        public static void Initialize(NanaOptions options)
-        {
-            ArgumentNullException.ThrowIfNull(options);
-            VivConfigRegistry.Add(options);
-        }
-
         /// <summary>
         /// 扫描并返回消费者类型清单（供 Wolverine 显式 IncludeType + ListenToRabbitQueue 注册）
         /// </summary>

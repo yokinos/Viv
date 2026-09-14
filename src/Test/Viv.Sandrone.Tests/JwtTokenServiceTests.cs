@@ -1,6 +1,7 @@
+using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
-using Microsoft.IdentityModel.Tokens;
+using Viv.Contracts;
 using Viv.Contracts.Models;
 using Viv.Contracts.Options;
 using Viv.Delusion;
@@ -22,15 +23,13 @@ public class JwtTokenServiceTests
 
     private static JwtTokenService CreateService()
     {
-        VivConfigRegistry.Remove<TokenOptions>();
-        VivConfigRegistry.Add(new TokenOptions
+        return new JwtTokenService(XUnitTestMagic.CreateOptions(new TokenOptions()
         {
             SecretKey = Secret,
             Issuer = Issuer,
             Audience = Audience,
             ExpireMinutes = 60,
-        });
-        return new JwtTokenService();
+        }));
     }
 
     private static string SignToken(string secret, string issuer, string audience, DateTime? expires = null)
@@ -44,8 +43,7 @@ public class JwtTokenServiceTests
     [Fact]
     public void 无密钥构造抛异常()
     {
-        VivConfigRegistry.Remove<TokenOptions>();
-        Assert.Throws<ArgumentNullException>(() => new JwtTokenService());
+        Assert.Throws<ArgumentNullException>(() => new JwtTokenService(XUnitTestMagic.CreateOptions(new TokenOptions())));
     }
 
     [Fact]

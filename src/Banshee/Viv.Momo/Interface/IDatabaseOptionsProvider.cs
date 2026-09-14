@@ -15,6 +15,6 @@ namespace Viv.Momo.Interface
         /// </summary>
         /// <param name="defaultOptions">当前AppSettings中的数据库配置</param>
         /// <returns></returns>
-        DatabaseOptions GetOptions(DatabaseOptions defaultOptions);
+        DatabaseOptions GetRealOptions();
     }
 }

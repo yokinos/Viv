@@ -84,20 +84,5 @@ namespace Viv.Nana.Tests
             Assert.Contains(typeof(SuccessConsumer), types);
             Assert.Contains(typeof(RequeueConsumer), types);
         }
-
-        [Fact]
-        public void Initialize_存储配置到注册表()
-        {
-            var opts = new NanaOptions { Host = "rabbit.test" };
-            NanaRegister.Initialize(opts);
-
-            Assert.Same(opts, VivConfigRegistry.Get<NanaOptions>());
-        }
-
-        [Fact]
-        public void Initialize_null_抛异常()
-        {
-            Assert.Throws<ArgumentNullException>(() => NanaRegister.Initialize(null!));
-        }
     }
 }

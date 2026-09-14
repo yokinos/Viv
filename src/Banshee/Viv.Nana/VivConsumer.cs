@@ -49,7 +49,9 @@ namespace Viv.Nana
 
         protected readonly IVivEventPublisher _publisher;
 
-        private readonly IDistributedLock? _distributedLock;
+        protected readonly IDistributedLock? _distributedLock;
+
+        protected readonly NanaOptions _nanaOptions;
 
         protected VivConsumer(VivConsumerDependency dependency)
         {
@@ -57,6 +59,7 @@ namespace Viv.Nana
             _context = dependency._context;
             _publisher = dependency._publisher;
             _distributedLock = dependency._distributedLock;
+            _nanaOptions = dependency._nanaOptions;
         }
 
         /// <summary>
@@ -148,13 +151,13 @@ namespace Viv.Nana
         /// 延迟重投当前消息：ReDeliverCount+1 并携带 DelaySecond，经 RabbitMQ 延迟交换机在 delay 后
         /// 重新投递到 fanout 交换机（各订阅服务各收一份，谁爱消费谁消费；同服务只执行一次由消费锁保证）。
         /// 返回 Success 时原消息正常确认（ack），重投的新副本才是重试——业务直接返回本方法结果即可。
-        /// 超过重投上限（NanaOptions.RetryCount，经 VivConfigRegistry 静态取，见 NanaRegister.Initialize）
+        /// 超过重投上限（NanaOptions.RetryCount）
         /// 返回 Failed(IsRequeue:false)，消息丢弃不回队。
         /// 传输失败抛连接异常（原消息未 ack，Wolverine 重试）；入参无效才返回 Failed 丢弃。
         /// </summary>
         protected async Task<SubscribeResult> RedeliverAsync(NanaEnvelope<T> envelope, TimeSpan delay, CancellationToken cancellationToken = default)
         {
-            var maxReDeliverCount = (VivConfigRegistry.Get<NanaOptions>() ?? new NanaOptions()).RetryCount;
+            var maxReDeliverCount = _nanaOptions.RetryCount;
 
             if (envelope.ReDeliverCount >= maxReDeliverCount)
             {

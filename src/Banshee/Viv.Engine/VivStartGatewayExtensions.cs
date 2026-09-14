@@ -68,7 +68,7 @@ namespace Viv.Engine
                 container.VivAutofacRegister(vivOptions.DIOption);
             });
 
-            // 完整 Viv 链路（DIOption 等为 null 时各模块 null 守卫安全跳过）
+            builder.AddVivConfig();
             builder.Services.AddViv(vivOptions);
 
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
