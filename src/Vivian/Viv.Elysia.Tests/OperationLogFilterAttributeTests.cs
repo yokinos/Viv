@@ -99,7 +99,6 @@ namespace Viv.Elysia.Tests
             Assert.Equal(EmOperationModule.User, evt.Module);
             Assert.Equal(EmOperationType.Login, evt.Operation);
             Assert.Equal("登录成功", evt.Description);
-            Assert.Equal(99, evt.UserId);
         }
 
         [Fact]
