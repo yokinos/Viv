@@ -62,7 +62,7 @@ namespace Viv.Redis
 
         public RedisFactory(ILoggerContract logger, IOptions<RedisOptions> options, IDbAllocator dbAllocator)
         {
-            _redisOptions = options.Value;
+            Initialize(options.Value);
             _logger = logger;
             _dbAllocator = dbAllocator;
         }
@@ -175,7 +175,7 @@ namespace Viv.Redis
         /// <exception cref="ArgumentNullException">配置为空时抛出</exception>
         /// <exception cref="InvalidOperationException">重复初始化时抛出</exception>
         /// <exception cref="ArgumentException">配置必填项校验失败时抛出</exception>
-        public static void Initialize(RedisOptions options)
+        private static void Initialize(RedisOptions options)
         {
             if (!_isConfigInitialized)
             {
@@ -184,15 +184,13 @@ namespace Viv.Redis
                     if (!_isConfigInitialized)
                     {
                         ArgumentNullException.ThrowIfNull(options, nameof(options));
+                        _redisOptions = options;
                         ValidateOptionsByMode(options);
                         _isConfigInitialized = true;
                         return;
                     }
                 }
             }
-
-            // 重复初始化抛出异常（保证配置唯一性）
-            throw new InvalidOperationException("Redis配置已初始化，禁止重复调用Initialize方法");
         }
 
         /// <summary>

@@ -91,7 +91,6 @@ namespace Viv.Engine
             // Redis 缓存
             if (options.CacheOption.CacheProviderType == DistributedCacheType.Redis)
             {
-                RedisFactory.Initialize(options.CacheOption.RedisOptions);
                 switch (options.CacheOption.RedisOptions.SelectorType)
                 {
                     case DbSelectorType.KeyHash:

@@ -23,7 +23,7 @@ namespace Viv.Momo.Core
     public class MomoDatabase : IDisposable
     {
         protected readonly IVivContext _vivContext;
-        protected DatabaseOptions _databseOptions;
+        protected DatabaseOptions _databaseOptions;
         protected readonly ILoggerContract _logger;
         protected readonly IDatabaseOptionsProvider _optionsProvider;
         protected EFAppContext? _writeDbContext;
@@ -50,8 +50,8 @@ namespace Viv.Momo.Core
         protected void SetOptions(DatabaseOptions? options)
         {
             ArgumentNullException.ThrowIfNull(options);
-            _databseOptions = options;
-            _timeOut = _databseOptions.Timeout;
+            _databaseOptions = options;
+            _timeOut = _databaseOptions.Timeout;
         }
 
         /// <summary>
@@ -60,7 +60,7 @@ namespace Viv.Momo.Core
         [return: NotNull]
         public EFAppContext GetAppContext(DbReadWriteType dbReadWriteType = DbReadWriteType.Write)
         {
-            return CreateEFAppContext(_databseOptions, dbReadWriteType);
+            return CreateEFAppContext(_databaseOptions, dbReadWriteType);
         }
 
         /// <summary>
@@ -352,7 +352,7 @@ namespace Viv.Momo.Core
         protected VivConnectionException WrapDatabaseException(string message, Exception ex)
         {
             WriteLog(message, ex);
-            var connType = _databseOptions.DatabaseSource == DatabaseSourceType.PostgreSQL
+            var connType = _databaseOptions.DatabaseSource == DatabaseSourceType.PostgreSQL
                 ? VivConnType.PostgreSQL
                 : VivConnType.SqlServer;
             return new VivConnectionException(connType, message, ex);
