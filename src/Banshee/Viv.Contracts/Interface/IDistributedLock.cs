@@ -25,7 +25,7 @@ namespace Viv.Contracts.Interface
         /// <param name="lockHolderId">锁持有者唯一标识（不传则自动从上下文获取 TraceId）</param>
         /// <param name="isReentrant">是否启用重入，默认 true</param>
         /// <returns><c>true</c> = 加锁/重入成功；<c>false</c> = 锁已被其他持有者占用</returns>
-        Task<bool> AcquireLockAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true);
+        Task<bool> AcquireLockAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = false);
 
         /// <summary>
         /// 查询锁当前是否被持有（取锁失败后用于区分「真竞争」与「服务瞬时不稳/故障」）
@@ -45,7 +45,7 @@ namespace Viv.Contracts.Interface
         /// <param name="lockHolderId">锁持有者唯一标识（不传则自动从上下文获取 TraceId）</param>
         /// <param name="isReentrant">是否启用重入，需与加锁时保持一致</param>
         /// <returns><c>true</c> = 释放/重入次数减1成功；<c>false</c> = 锁不属于当前持有者 或 锁不存在</returns>
-        Task<bool> ReleaseLockAsync(string lockKey, string? lockHolderId = null, bool isReentrant = true);
+        Task<bool> ReleaseLockAsync(string lockKey, string? lockHolderId = null, bool isReentrant = false);
 
         /// <summary>
         /// 尝试获取分布式锁（带指数退避重试，不执行业务逻辑）
@@ -63,7 +63,7 @@ namespace Viv.Contracts.Interface
         /// 与 <see cref="AcquireLockWithExecuteAsync{T}(object, TimeSpan, Func{Task{T}}, Func{Task{T}}?, string?, bool, int, int, int)"/> 的区别：
         /// 本方法仅负责获取锁，不执行业务逻辑，锁需要调用方手动通过 <see cref="ReleaseLockAsync"/> 释放。
         /// </remarks>
-        Task<bool> AcquireLockWithRetryAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true, int maxRetryCount = 5, int baseDelay = 200, int maxDelay = 5000, CancellationToken cancellationToken = default);
+        Task<bool> AcquireLockWithRetryAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = false, int maxRetryCount = 5, int baseDelay = 200, int maxDelay = 5000, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 获取锁并执行业务委托（取锁成功执行业务，取锁失败执行降级）
@@ -86,7 +86,7 @@ namespace Viv.Contracts.Interface
         /// <remarks>
         /// 重试策略：指数退避 + 随机抖动（30%），避免惊群效应
         /// </remarks>
-        Task<T> AcquireLockWithExecuteAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, Func<Task<T>>? fallbackMethod = null, string? lockHolderId = null, bool isReentrant = true, int maxRetryCount = 5, int baseDelay = 200, int maxDelay = 5000, CancellationToken cancellationToken = default);
+        Task<T> AcquireLockWithExecuteAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, Func<Task<T>>? fallbackMethod = null, string? lockHolderId = null, bool isReentrant = false, int maxRetryCount = 5, int baseDelay = 200, int maxDelay = 5000, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 获取锁并执行业务委托
@@ -96,6 +96,6 @@ namespace Viv.Contracts.Interface
         /// <param name="expire">锁过期时间</param>
         /// <param name="executeMethod">业务委托（取锁成功时执行）</param>
         /// <returns></returns>
-        Task<T> AcquireLockAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, string? lockHolderId = null, bool isReentrant = true, CancellationToken cancellationToken = default) => AcquireLockWithExecuteAsync(key, expire, executeMethod, null, lockHolderId, isReentrant, 5, 200, 5000, cancellationToken);
+        Task<T> AcquireLockAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, string? lockHolderId = null, bool isReentrant = false, CancellationToken cancellationToken = default) => AcquireLockWithExecuteAsync(key, expire, executeMethod, null, lockHolderId, isReentrant, 5, 200, 5000, cancellationToken);
     }
 }
