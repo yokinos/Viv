@@ -49,7 +49,7 @@ namespace Viv.Engine
         public static VivOptions LoadVivConfig(IConfiguration configuration)
         {
             _vivAppStartTime = DateTime.Now;
-            var options = configuration.GetSection("VivOptions").Get<VivOptions>() ?? new VivOptions();
+            var options = configuration.GetSection(nameof(VivOptions)).Get<VivOptions>() ?? new VivOptions();
             _vivOptions = options.DeepCopy();
             return options;
         }
