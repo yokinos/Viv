@@ -28,7 +28,7 @@ namespace Viv.Engine.Middleware
                 var traceId = context.Request.Headers[VivRunDefine.VivTraceIdHeader].FirstOrDefault();
                 if (string.IsNullOrEmpty(traceId))
                 {
-                    traceId = IdMagic.NextId(1024).ToString();
+                    traceId = IdMagic.NextId(1023).ToString();
                 }
 
                 // 网关是 holderId 信任根：先剥离客户端头再回填当前值，此处一律生成。
