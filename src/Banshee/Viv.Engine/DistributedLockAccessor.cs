@@ -27,7 +27,7 @@ namespace Viv.Engine
             _logger = logger;
         }
 
-        public async Task<bool> AcquireLockAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true)
+        public async Task<bool> AcquireLockAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = false)
         {
             try
             {
@@ -55,7 +55,7 @@ namespace Viv.Engine
             }
         }
 
-        public async Task<bool> ReleaseLockAsync(string lockKey, string? lockHolderId = null, bool isReentrant = true)
+        public async Task<bool> ReleaseLockAsync(string lockKey, string? lockHolderId = null, bool isReentrant = false)
         {
             try
             {
@@ -74,7 +74,7 @@ namespace Viv.Engine
             string lockKey,
             TimeSpan expire,
             string? lockHolderId = null,
-            bool isReentrant = true,
+            bool isReentrant = false,
             int maxRetryCount = 5,
             int baseDelay = 200,
             int maxDelay = 5000,
@@ -119,7 +119,7 @@ namespace Viv.Engine
             Func<Task<T>> executeMethod,
             Func<Task<T>>? fallbackMethod = null,
             string? lockHolderId = null,
-            bool isReentrant = true,
+            bool isReentrant = false,
             int maxRetryCount = 5,
             int baseDelay = 200,
             int maxDelay = 5000,
