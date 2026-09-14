@@ -98,14 +98,15 @@ namespace Viv.Engine
             if (options.EnvOption != null)
             {
                 RegisterOption(services, options.EnvOption);
-
-                // VivInternalTokenOptions 由 EnvOption 派生
-                RegisterOption(services, new VivInternalTokenOptions
-                {
-                    InternalToken = options.EnvOption.InternalToken,
-                    ServiceName = options.EnvOption.ServiceName
-                });
             }
+
+            // VivInternalTokenOptions 由 EnvOption 派生，恒注册（EnvOption 缺失时给空对象）：
+            // Echo gRPC 拦截器构造注入它，未注册会直接导致 gRPC 端激活失败
+            RegisterOption(services, new VivInternalTokenOptions
+            {
+                InternalToken = options.EnvOption?.InternalToken,
+                ServiceName = options.EnvOption?.ServiceName
+            });
 
             // DIOption
             if (options.DIOption != null)

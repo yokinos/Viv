@@ -33,7 +33,7 @@ namespace Viv.ServiceProxy.Tests.Grpc
             builder.Services.AddSingleton<IVivContextAccessor, VivContextAccessor>();
             builder.Services.AddScoped<IVivContext, VivContext>();
             builder.Services.AddScoped<TenantGrpcService>();
-            GrpcTestToken.EnsureRegistered();
+            builder.Services.AddSingleton(GrpcTestToken.Options);
 
             _app = builder.Build();
             _app.UseRouting();

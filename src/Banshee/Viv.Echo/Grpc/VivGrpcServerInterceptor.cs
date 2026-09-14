@@ -6,7 +6,6 @@ using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Contracts.Options;
-using Viv.Delusion;
 
 namespace Viv.Echo.Grpc
 {
@@ -18,6 +17,13 @@ namespace Viv.Echo.Grpc
     /// </summary>
     public class VivGrpcServerInterceptor : Interceptor
     {
+        private readonly VivInternalTokenOptions _tokenOptions;
+
+        public VivGrpcServerInterceptor(VivInternalTokenOptions tokenOptions)
+        {
+            _tokenOptions = tokenOptions;
+        }
+
         public override async Task<TResponse> UnaryServerHandler<TRequest, TResponse>(
             TRequest request,
             ServerCallContext context,
@@ -92,7 +98,7 @@ namespace Viv.Echo.Grpc
             }
         }
 
-        private static IDisposable BeginVivContext(ServerCallContext context)
+        private IDisposable BeginVivContext(ServerCallContext context)
         {
             var vivContext = context.GetHttpContext().RequestServices.GetRequiredService<IVivContext>();
             var content = TryBuildContext(context.RequestHeaders);
@@ -107,9 +113,9 @@ namespace Viv.Echo.Grpc
         /// <summary>
         /// AppId + UserId 必须为正才认头；SubjectId 可选。有 InternalToken 时必须 HMAC 通过。
         /// </summary>
-        private static VivContextContent? TryBuildContext(Metadata headers)
+        private VivContextContent? TryBuildContext(Metadata headers)
         {
-            var secret = VivConfigRegistry.Get<VivInternalTokenOptions>()?.InternalToken;
+            var secret = _tokenOptions.InternalToken;
             if (string.IsNullOrWhiteSpace(secret))
             {
                 return null;

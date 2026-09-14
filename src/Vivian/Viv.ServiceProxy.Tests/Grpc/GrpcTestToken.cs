@@ -1,5 +1,4 @@
 using Viv.Contracts.Options;
-using Viv.Delusion;
 
 namespace Viv.ServiceProxy.Tests.Grpc
 {
@@ -8,13 +7,14 @@ namespace Viv.ServiceProxy.Tests.Grpc
         public const string Secret = "test-grpc-internal-token";
         public const string ServiceName = "viv.test.grpc";
 
-        public static void EnsureRegistered()
+        /// <summary>
+        /// 内部密钥配置：客户端拦截器直接构造传入；服务端拦截器由容器注入，
+        /// 需 <c>builder.Services.AddSingleton(GrpcTestToken.Options)</c> 注册。
+        /// </summary>
+        public static VivInternalTokenOptions Options { get; } = new()
         {
-            VivConfigRegistry.Add(new VivInternalTokenOptions
-            {
-                InternalToken = Secret,
-                ServiceName = ServiceName
-            });
-        }
+            InternalToken = Secret,
+            ServiceName = ServiceName
+        };
     }
 }

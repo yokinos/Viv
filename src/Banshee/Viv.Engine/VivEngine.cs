@@ -2,8 +2,6 @@
 using Viv.Aoi;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
-using Viv.Contracts.Options;
-using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Engine.Options;
 using Viv.Sandrone.Conveter;
@@ -53,27 +51,7 @@ namespace Viv.Engine
             _vivAppStartTime = DateTime.Now;
             var options = configuration.GetSection("VivOptions").Get<VivOptions>() ?? new VivOptions();
             _vivOptions = options.DeepCopy();
-            SyncInternalTokenRegistry(options);
             return options;
-        }
-
-        /// <summary>
-        /// 把 EnvOption.InternalToken 放到 Contracts 侧注册表，供 Echo gRPC 拦截器读取（Echo 不能引用 Engine）。
-        /// </summary>
-        private static void SyncInternalTokenRegistry(VivOptions options)
-        {
-            if (!string.IsNullOrWhiteSpace(options.EnvOption?.InternalToken) || !string.IsNullOrWhiteSpace(options.EnvOption?.ServiceName))
-            {
-                VivConfigRegistry.Add(new VivInternalTokenOptions
-                {
-                    InternalToken = options.EnvOption?.InternalToken,
-                    ServiceName = options.EnvOption?.ServiceName
-                });
-
-                return;
-            }
-
-            VivConfigRegistry.Remove<VivInternalTokenOptions>();
         }
     }
 }

@@ -32,7 +32,7 @@ namespace Viv.ServiceProxy.Tests
             });
 
             _client = new TenantGrpcService.TenantGrpcServiceClient(
-                channel.Intercept(new VivGrpcInterceptor(vivContext)));
+                channel.Intercept(new VivGrpcInterceptor(vivContext, GrpcTestToken.Options)));
         }
 
         [Fact]

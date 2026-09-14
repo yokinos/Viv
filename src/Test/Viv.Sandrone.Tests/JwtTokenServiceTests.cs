@@ -11,7 +11,7 @@ namespace Viv.Sandrone.Tests;
 
 /// <summary>
 /// JwtTokenService —— 对称密钥 JWT 签发/验证/解析（安全相关核心路径）。
-/// 密钥经 VivConfigRegistry 静态通道注入（同 Engine RequestTokenResolver 模式），
+/// 密钥经 XUnitTestMagic.CreateOptions 直接构造注入，
 /// 全部测试收在一个类里避免跨类并行污染。TokenOptions 校验：签发/验证参数在构造时
 /// 快照，ClockSkew=0 严格校验过期。
 /// </summary>

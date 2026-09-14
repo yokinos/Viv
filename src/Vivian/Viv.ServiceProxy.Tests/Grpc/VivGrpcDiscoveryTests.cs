@@ -38,7 +38,7 @@ namespace Viv.ServiceProxy.Tests.Grpc
             builder.Services.AddVivGrpcServer();
             builder.Services.AddSingleton<IVivContextAccessor, VivContextAccessor>();
             builder.Services.AddScoped<IVivContext, VivContext>();
-            GrpcTestToken.EnsureRegistered();
+            builder.Services.AddSingleton(GrpcTestToken.Options);
             // 配置驱动接线：自动发现 + 注册，宿主不再手工 AddScoped<TenantGrpcService>()
             VivGrpcDiscovery.RegisterServices(builder.Services);
 
@@ -60,7 +60,7 @@ namespace Viv.ServiceProxy.Tests.Grpc
                     HttpHandler = new SocketsHttpHandler { EnableMultipleHttp2Connections = true }
                 });
                 var client = new TenantGrpcService.TenantGrpcServiceClient(
-                    channel.Intercept(new VivGrpcInterceptor(vivContext)));
+                    channel.Intercept(new VivGrpcInterceptor(vivContext, GrpcTestToken.Options)));
 
                 var response = await client.GetTenantAsync(new GetTenantRequest());
 

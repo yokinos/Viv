@@ -12,7 +12,7 @@ namespace Viv.Engine.Tests;
 /// RequestTokenResolver —— 网关与下游间的 x-request-token 共享密钥签名协议（P0 安全路径）。
 /// 纯逻辑：HMAC-SHA256 签名 5 个 x-viv-* 头（含 holder-id）+ unix 时间戳，下游在 300s 防重放窗口内验签。
 /// 密钥只取 EnvOption.InternalToken，不回落 TokenOptions.SecretKey。全部测试收在一个类里，
-/// 因为 VivEngine.VivOptions / VivConfigRegistry 是静态共享状态，类内顺序执行可避免跨类并行污染。
+/// 因为 VivEngine.VivOptions 是静态共享状态，类内顺序执行可避免跨类并行污染。
 /// </summary>
 [Collection("VivEngineStaticState")]
 public class RequestTokenResolverTests

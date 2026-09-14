@@ -126,11 +126,10 @@ namespace Viv.ServiceProxy.Tests.Grpc
 
         private static VivGrpcInterceptor CreateInterceptor()
         {
-            GrpcTestToken.EnsureRegistered();
             var accessor = new VivContextAccessor();
             var vivContext = new VivContext(accessor);
             vivContext.SetSnapshot(new VivContextContent { AppId = 1001, SubjectId = 77, UserId = 5 });
-            return new VivGrpcInterceptor(vivContext);
+            return new VivGrpcInterceptor(vivContext, GrpcTestToken.Options);
         }
 
         private static void AssertVivHeaders(Metadata headers)

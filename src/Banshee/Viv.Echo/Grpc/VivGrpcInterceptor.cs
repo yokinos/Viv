@@ -3,7 +3,6 @@ using Grpc.Core.Interceptors;
 using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Options;
-using Viv.Delusion;
 
 namespace Viv.Echo.Grpc
 {
@@ -11,9 +10,12 @@ namespace Viv.Echo.Grpc
     {
         private readonly IVivContext _vivContext;
 
-        public VivGrpcInterceptor(IVivContext vivContext)
+        private readonly VivInternalTokenOptions _tokenOptions;
+
+        public VivGrpcInterceptor(IVivContext vivContext, VivInternalTokenOptions tokenOptions)
         {
             _vivContext = vivContext;
+            _tokenOptions = tokenOptions;
         }
 
         public override AsyncUnaryCall<TResponse> AsyncUnaryCall<TRequest, TResponse>(
@@ -65,8 +67,7 @@ namespace Viv.Echo.Grpc
 
         private void AddVivHeaders(Metadata headers)
         {
-            var tokenOptions = VivConfigRegistry.Get<VivInternalTokenOptions>();
-            var serviceName = tokenOptions?.ServiceName ?? "";
+            var serviceName = _tokenOptions.ServiceName ?? "";
 
             AddIfNotExist(headers, VivHeaderContract.AppId.ToLowerInvariant(), _vivContext.AppId.ToString());
             AddIfNotExist(headers, VivHeaderContract.SubjectId.ToLowerInvariant(), _vivContext.SubjectId.ToString());
@@ -74,7 +75,7 @@ namespace Viv.Echo.Grpc
             AddIfNotExist(headers, VivHeaderContract.ServiceName.ToLowerInvariant(), serviceName);
             AddIfNotExist(headers, VivHeaderContract.HolderId.ToLowerInvariant(), LockHolderContext.CurrentHolderId);
 
-            var secret = tokenOptions?.InternalToken;
+            var secret = _tokenOptions.InternalToken;
             if (string.IsNullOrWhiteSpace(secret)
                 || headers.Get(VivHeaderContract.InnerRequestToken) != null)
             {
