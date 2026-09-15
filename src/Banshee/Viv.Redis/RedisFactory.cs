@@ -56,7 +56,7 @@ namespace Viv.Redis
         private static bool _disposed = false;
 
         /// <summary>
-        /// 分布式日志
+        /// 日志
         /// </summary>
         private static ILoggerContract? _logger;
 
