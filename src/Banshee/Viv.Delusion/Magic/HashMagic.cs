@@ -16,7 +16,8 @@ namespace Viv.Delusion.Magic
         Crc32 = 0,
 
         /// <summary>
-        /// CRC-64（ECMA-182 / XZ）。返回 64 位。
+        /// CRC-64/ECMA-182。返回 64 位。
+        /// 非反射实现，低位不携带信息，切勿取低位做取模分桶（分桶请用 <see cref="XxHash64"/>）。
         /// </summary>
         Crc64 = 1,
 
@@ -37,14 +38,23 @@ namespace Viv.Delusion.Magic
         /// xxHash128（128 位）。折叠高低 64 位后返回 64 位。
         /// </summary>
         XxHash128 = 5,
+
+        /// <summary>
+        /// CRC-64/XZ（反射实现，init / xorout 均为全 1）。返回 64 位。
+        /// 与 <see cref="Crc64"/> 多项式相同但参数不同，两者结果不通用。
+        /// System.IO.Hashing 未提供该变体，故此处自行查表实现。
+        /// 注意：反射实现的低位才是有效位，取低位取模分桶不会退化（与 <see cref="Crc64"/> 相反）。
+        /// </summary>
+        Crc64Xz = 6,
     }
 
     /// <summary>
     /// 统一哈希工具类，提供多种非加密哈希算法。
     /// </summary>
     /// <remarks>
-    /// 内部基于 <c>System.IO.Hashing</c> 实现，性能与正确性由官方库保证。
-    /// 字符串输入按 UTF-16 LE 字节流计算，与旧版 <c>Crc64Magic</c> 保持一致。
+    /// 内部基于 <c>System.IO.Hashing</c> 实现，性能与正确性由官方库保证；
+    /// 唯一例外是 <see cref="HashMode.Crc64Xz"/>（官方库未提供该变体），为查表实现，见 <see cref="ComputeCrc64Xz"/>。
+    /// 字符串输入按 UTF-16 LE 字节流计算（注意：旧版 <c>Crc64Magic</c> 为 CRC-64/XZ，结果与本类的 ECMA-182 不一致）。
     /// 空字符串 / null / 空数组一律返回 0，调用方需自行判断 0 是否为合法哈希值。
     /// </remarks>
     public static class HashMagic
@@ -112,6 +122,7 @@ namespace Viv.Delusion.Magic
                 HashMode.XxHash64 => XxHash64.HashToUInt64(keyBytes),
                 HashMode.XxHash3 => XxHash3.HashToUInt64(keyBytes),
                 HashMode.XxHash128 => Fold128(XxHash128.HashToUInt128(keyBytes)),
+                HashMode.Crc64Xz => ComputeCrc64Xz(keyBytes),
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "不支持的哈希算法"),
             };
         }
@@ -123,6 +134,46 @@ namespace Viv.Delusion.Magic
         private static ulong Fold128(UInt128 value)
         {
             return (ulong)value ^ (ulong)(value >> 64);
+        }
+
+        /// <summary>
+        /// CRC-64/XZ 反射多项式，即 ECMA-182 多项式 0x42F0E1EBA9EA3693 的位反转形式。
+        /// </summary>
+        private const ulong Crc64XzPolynomial = 0xC96C5795D7870F42;
+
+        private static readonly ulong[] Crc64XzTable = CreateCrc64XzTable();
+
+        private static ulong[] CreateCrc64XzTable()
+        {
+            var table = new ulong[256];
+            for (ulong i = 0; i < 256; i++)
+            {
+                ulong value = i;
+                for (int bit = 0; bit < 8; bit++)
+                {
+                    value = (value >> 1) ^ ((value & 1) == 1 ? Crc64XzPolynomial : 0);
+                }
+
+                table[i] = value;
+            }
+
+            return table;
+        }
+
+        /// <summary>
+        /// CRC-64/XZ：反射实现，init 与 xorout 均为全 1。
+        /// 已知向量："123456789"（ASCII）→ 0x995DC9BBDF1939FA。
+        /// 调用前已由 <see cref="Compute(HashMode, ReadOnlySpan{byte})"/> 排除空输入。
+        /// </summary>
+        private static ulong ComputeCrc64Xz(ReadOnlySpan<byte> keyBytes)
+        {
+            ulong crc = ulong.MaxValue;
+            foreach (byte b in keyBytes)
+            {
+                crc = (crc >> 8) ^ Crc64XzTable[(crc ^ b) & 0xFF];
+            }
+
+            return ~crc;
         }
     }
 }

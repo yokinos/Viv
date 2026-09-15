@@ -7,7 +7,7 @@ namespace Viv.Redis.Tests;
 
 /// <summary>
 /// Db 分配器 —— 决定 Redis key 落在哪个库，是租户/key 隔离的纯逻辑。
-/// KeyHashAllocator 按 key 的 CRC64 哈希分库（默认分库方式）；NoneAllocator 固定落 DefaultDatabase。
+/// KeyHashAllocator 按 key 的 XxHash64 哈希分库（默认分库方式）；NoneAllocator 固定落 DefaultDatabase。
 /// </summary>
 public class KeyHashAllocatorTests
 {
@@ -29,6 +29,25 @@ public class KeyHashAllocatorTests
             int idx = allocator.AllocateDbIndex($"key:{i}", 12);
             Assert.InRange(idx, 0, 12);
         }
+    }
+
+    [Fact]
+    public void 分库分布均匀_无周期退化()
+    {
+        // 回归：曾用非反射 CRC64 取低位取模，低 4 位只跨 8 个值，16 库退化成周期 8、偏移 110%。
+        // 阈值 50% 对 XxHash64 有充足余量，对退化分布则必然失败。
+        var allocator = new KeyHashAllocator();
+        var keys = Enumerable.Range(0, 50)
+            .SelectMany(t => Enumerable.Range(0, 40).Select(u => $"viv:apex:tenant:{t}:user:{u}:session"))
+            .ToArray();
+
+        var counts = new int[16];
+        foreach (var key in keys)
+            counts[allocator.AllocateDbIndex(key, 15)]++;
+
+        double ideal = keys.Length / 16.0;
+        double maxDeviation = counts.Max(c => Math.Abs(c - ideal) / ideal);
+        Assert.True(maxDeviation < 0.5, $"分库偏移 {maxDeviation:P1}，分布=[{string.Join(", ", counts)}]");
     }
 
     [Fact]

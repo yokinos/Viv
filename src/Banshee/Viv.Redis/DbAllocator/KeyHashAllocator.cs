@@ -16,8 +16,9 @@ namespace Viv.Redis.DbAllocator
 
             if (maxDbIndex == null) return 0;
 
-            ulong crcHash = HashMagic.Compute(HashMode.Crc64, redisKey);
-            int dbIndex = (int)(crcHash % (ulong)(maxDbIndex + 1));
+            // 用 XxHash64 而非 CRC64：非反射 CRC 的低位退化，取模分桶会退化成周期分布（16 库只落到 8 个）
+            ulong hash = HashMagic.Compute(HashMode.XxHash64, redisKey);
+            int dbIndex = (int)(hash % (ulong)(maxDbIndex + 1));
             return Math.Clamp(dbIndex, 0, maxDbIndex.Value);
         }
 
