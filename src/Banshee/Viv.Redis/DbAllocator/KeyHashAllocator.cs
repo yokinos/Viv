@@ -16,7 +16,7 @@ namespace Viv.Redis.DbAllocator
 
             if (maxDbIndex == null) return 0;
 
-            ulong crcHash = Crc64Magic.ComputeCrc64(redisKey);
+            ulong crcHash = HashMagic.Compute(HashMode.Crc64, redisKey);
             int dbIndex = (int)(crcHash % (ulong)(maxDbIndex + 1));
             return Math.Clamp(dbIndex, 0, maxDbIndex.Value);
         }
