@@ -72,7 +72,7 @@ namespace Viv.Delusion.Magic
         /// <returns>64 位哈希值；null 或空字符串返回 0。</returns>
         public static ulong Compute(HashMode mode, string key)
         {
-            if (string.IsNullOrEmpty(key))
+            if (string.IsNullOrWhiteSpace(key))
                 return 0;
 
             return Compute(mode, key.AsSpan());
