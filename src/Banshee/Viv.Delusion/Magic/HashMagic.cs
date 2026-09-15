@@ -1,114 +1,112 @@
 ﻿using System;
 using System.IO.Hashing;
 using System.Runtime.InteropServices;
-
 namespace Viv.Delusion.Magic
 {
     /// <summary>
-    /// 支持的哈希算法类型。
-    /// 所有算法均为非加密哈希，不可用于密码存储、签名或防篡改场景。
+    /// 支持的非加密哈希算法类型。
+    /// 全部为非加密哈希，**禁止用于密码存储、数字签名、防篡改安全校验场景**。
     /// </summary>
     public enum HashMode
     {
         /// <summary>
-        /// CRC-32（IEEE 802.3）。返回 32 位，零扩展为 ulong。
+        /// CRC-32 IEEE 802.3。输出32位，向上扩展为ulong返回。
         /// </summary>
         Crc32 = 0,
 
         /// <summary>
-        /// CRC-64/ECMA-182。返回 64 位。
-        /// 非反射实现，低位不携带信息，切勿取低位做取模分桶（分桶请用 <see cref="XxHash64"/>）。
+        /// CRC-64 ECMA-182。标准非反射实现，64位输出。
+        /// 高位熵密度更高，**不要直接取低位做分片/分桶取模**；分桶优先使用 <see cref="XxHash64"/>。
         /// </summary>
         Crc64 = 1,
 
         /// <summary>
-        /// xxHash32。返回 32 位，零扩展为 ulong。
+        /// xxHash32。输出32位，向上扩展为ulong返回。高速非加密哈希。
         /// </summary>
         XxHash32 = 2,
 
-        /// <summary>xxHash64。返回 64 位。</summary>
+        /// <summary>
+        /// xxHash64。64位高速哈希，熵分布均匀，适合分桶、路由。
+        /// </summary>
         XxHash64 = 3,
 
         /// <summary>
-        /// xxHash3（64 位）。返回 64 位。
+        /// xxHash3 64bit。新一代高速64位哈希。
         /// </summary>
         XxHash3 = 4,
 
         /// <summary>
-        /// xxHash128（128 位）。折叠高低 64 位后返回 64 位。
+        /// xxHash128。原生128位结果，高低64位异或折叠得到64位返回值。
+        /// 相比单纯截断，折叠保留完整熵，降低碰撞概率。
         /// </summary>
         XxHash128 = 5,
 
         /// <summary>
-        /// CRC-64/XZ（反射实现，init / xorout 均为全 1）。返回 64 位。
-        /// 与 <see cref="Crc64"/> 多项式相同但参数不同，两者结果不通用。
-        /// System.IO.Hashing 未提供该变体，故此处自行查表实现。
-        /// 注意：反射实现的低位才是有效位，取低位取模分桶不会退化（与 <see cref="Crc64"/> 相反）。
+        /// CRC-64/XZ。反射实现，初始值与最终异或值均为全1。
+        /// 多项式底层与ECMA-182一致，但参数集合不同，二者哈希结果不可互通。
+        /// System.IO.Hashing 无内置该变体，当前为自研查表实现。
+        /// 低位熵分布均匀，**适合直接取低位做分片取模**，和 <see cref="Crc64"/> 行为相反。
         /// </summary>
         Crc64Xz = 6,
     }
 
     /// <summary>
-    /// 统一哈希工具类，提供多种非加密哈希算法。
+    /// 统一哈希工具，封装多种非加密哈希算法。
     /// </summary>
     /// <remarks>
-    /// 内部基于 <c>System.IO.Hashing</c> 实现，性能与正确性由官方库保证；
-    /// 唯一例外是 <see cref="HashMode.Crc64Xz"/>（官方库未提供该变体），为查表实现，见 <see cref="ComputeCrc64Xz"/>。
-    /// 字符串输入按 UTF-16 LE 字节流计算（注意：旧版 <c>Crc64Magic</c> 为 CRC-64/XZ，结果与本类的 ECMA-182 不一致）。
-    /// 空字符串 / null / 空数组一律返回 0，调用方需自行判断 0 是否为合法哈希值。
+    /// 大部分算法底层依赖 System.IO.Hashing，正确性与性能由.NET官方库保障；
+    /// 仅 <see cref="HashMode.Crc64Xz"/> 为自研查表实现。
+    /// 字符串输入默认直接按 UTF-16 LE 字节流计算（注意：旧版Crc64Magic为CRC-64/XZ，与本类ECMA-182结果不兼容）。
+    /// null、空字符串、空字节跨度统一返回0；调用方业务层需要自行区分0是否属于合法哈希结果。
     /// </remarks>
     public static class HashMagic
     {
         /// <summary>
-        /// 计算哈希值（字符跨度）。
+        /// 计算哈希，字符跨度输入，直接映射为UTF-16 LE字节流。
         /// </summary>
-        /// <param name="mode">哈希算法类型。</param>
-        /// <param name="key">输入字符跨度，按 UTF-16 LE 处理。</param>
-        /// <returns>64 位哈希值；空输入返回 0。</returns>
+        /// <param name="mode">哈希算法</param>
+        /// <param name="key">字符跨度</param>
+        /// <returns>64位哈希；空跨度返回0</returns>
         public static ulong Compute(HashMode mode, ReadOnlySpan<char> key)
         {
             if (key.IsEmpty)
                 return 0;
-
-            // 零拷贝：把 UTF-16 LE 的 char 流直接重解释为 byte 流
             return Compute(mode, MemoryMarshal.AsBytes(key));
         }
 
         /// <summary>
-        /// 计算哈希值（字符串）。
+        /// 计算哈希，字符串输入，按UTF-16 LE编码。
         /// </summary>
-        /// <param name="mode">哈希算法类型。</param>
-        /// <param name="key">输入字符串。</param>
-        /// <returns>64 位哈希值；null 或空字符串返回 0。</returns>
+        /// <param name="mode">哈希算法</param>
+        /// <param name="key">目标字符串</param>
+        /// <returns>64位哈希；null/空白字符串返回0</returns>
         public static ulong Compute(HashMode mode, string key)
         {
             if (string.IsNullOrWhiteSpace(key))
                 return 0;
-
             return Compute(mode, key.AsSpan());
         }
 
         /// <summary>
-        /// 计算哈希值（字节数组）。
+        /// 计算哈希，字节数组输入。
         /// </summary>
-        /// <param name="mode">哈希算法类型。</param>
-        /// <param name="keyBytes">输入字节数组。</param>
-        /// <returns>64 位哈希值；null 或空数组返回 0。</returns>
+        /// <param name="mode">哈希算法</param>
+        /// <param name="keyBytes">字节数组</param>
+        /// <returns>64位哈希；null/空数组返回0</returns>
         public static ulong Compute(HashMode mode, byte[] keyBytes)
         {
             if (keyBytes == null || keyBytes.Length == 0)
                 return 0;
-
             return Compute(mode, keyBytes.AsSpan());
         }
 
         /// <summary>
-        /// 计算哈希值（字节跨度）。
+        /// 计算哈希，字节跨度输入（底层入口）。
         /// </summary>
-        /// <param name="mode">哈希算法类型。</param>
-        /// <param name="keyBytes">输入字节跨度。</param>
-        /// <returns>64 位哈希值；空输入返回 0。</returns>
-        /// <exception cref="ArgumentOutOfRangeException">当 <paramref name="mode"/> 不是已知的算法时抛出。</exception>
+        /// <param name="mode">哈希算法</param>
+        /// <param name="keyBytes">字节跨度</param>
+        /// <returns>64位哈希；空跨度返回0</returns>
+        /// <exception cref="ArgumentOutOfRangeException">传入未定义的HashMode时抛出</exception>
         public static ulong Compute(HashMode mode, ReadOnlySpan<byte> keyBytes)
         {
             if (keyBytes.IsEmpty)
@@ -128,8 +126,8 @@ namespace Viv.Delusion.Magic
         }
 
         /// <summary>
-        /// 把 128 位哈希折叠为 64 位：高 64 位与低 64 位异或。
-        /// 相比直接截断，折叠能保留全部熵，降低碰撞概率。
+        /// 将128位哈希折叠为64位：高低64位异或。
+        /// 相比直接截断，保留全部熵，降低哈希碰撞概率。
         /// </summary>
         private static ulong Fold128(UInt128 value)
         {
@@ -137,12 +135,15 @@ namespace Viv.Delusion.Magic
         }
 
         /// <summary>
-        /// CRC-64/XZ 反射多项式，即 ECMA-182 多项式 0x42F0E1EBA9EA3693 的位反转形式。
+        /// CRC-64/XZ 反射多项式（ECMA-182多项式0x42F0E1EBA9EA3693的位反转形式）。
         /// </summary>
         private const ulong Crc64XzPolynomial = 0xC96C5795D7870F42;
 
         private static readonly ulong[] Crc64XzTable = CreateCrc64XzTable();
 
+        /// <summary>
+        /// 预生成CRC-64/XZ查表。静态构造阶段一次性生成。
+        /// </summary>
         private static ulong[] CreateCrc64XzTable()
         {
             var table = new ulong[256];
@@ -153,17 +154,15 @@ namespace Viv.Delusion.Magic
                 {
                     value = (value >> 1) ^ ((value & 1) == 1 ? Crc64XzPolynomial : 0);
                 }
-
                 table[i] = value;
             }
-
             return table;
         }
 
         /// <summary>
-        /// CRC-64/XZ：反射实现，init 与 xorout 均为全 1。
-        /// 已知向量："123456789"（ASCII）→ 0x995DC9BBDF1939FA。
-        /// 调用前已由 <see cref="Compute(HashMode, ReadOnlySpan{byte})"/> 排除空输入。
+        /// CRC-64/XZ 哈希计算，反射模式，初始值与输出异或均为全1。
+        /// 标准测试向量：ASCII "123456789" → 0x995DC9BBDF1939FA。
+        /// 调用前置：上层Compute已过滤空输入。
         /// </summary>
         private static ulong ComputeCrc64Xz(ReadOnlySpan<byte> keyBytes)
         {
@@ -172,7 +171,6 @@ namespace Viv.Delusion.Magic
             {
                 crc = (crc >> 8) ^ Crc64XzTable[(crc ^ b) & 0xFF];
             }
-
             return ~crc;
         }
     }
