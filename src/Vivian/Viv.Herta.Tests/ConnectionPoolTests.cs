@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Viv.Fakes;
 using Viv.Herta.Link.Hubs;
 
 namespace Viv.Herta.Tests

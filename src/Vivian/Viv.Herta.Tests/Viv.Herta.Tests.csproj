@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Test\Viv.Fakes\Viv.Fakes.csproj" />
     <ProjectReference Include="..\Viv.Herta.Core\Viv.Herta.Core.csproj" />
     <ProjectReference Include="..\Viv.Herta.Link\Viv.Herta.Link.csproj" />
   </ItemGroup>

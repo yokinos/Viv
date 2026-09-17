@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using Viv.Delusion.Extension;
 using Viv.Entity.Enums;
 using Viv.EventContracts.Herta;
+using Viv.Fakes;
 using Viv.Herta.Core.Entity.Dto.Chat;
 using Viv.Herta.Core.Entity.Message;
 using Viv.Herta.Core.Service;
@@ -22,7 +23,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task SendMessage_Text_ReturnsSuccessAndPublishes()
         {
-            var publisher = new FakeEventPublisher();
+            var publisher = new RecordingEventPublisher();
             var service = new ChatService(publisher);
 
             var result = await service.SendMessageAsync(CreateTextRequest());
@@ -36,7 +37,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task SendMessage_UnsupportedType_ReturnsFailedAndDoesNotPublish()
         {
-            var publisher = new FakeEventPublisher();
+            var publisher = new RecordingEventPublisher();
             var service = new ChatService(publisher);
             var request = CreateTextRequest();
             request.MessageType = unchecked((EmChatMessageType)999);
