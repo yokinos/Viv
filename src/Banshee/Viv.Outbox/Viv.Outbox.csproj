@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Viv.Outbox.Tests" />
+    <!-- 共享替身程序集：StubOutboxRepository 要桩 internal 的 IOutboxRepository -->
+    <InternalsVisibleTo Include="Viv.Fakes" />
   </ItemGroup>
 
   <!-- 建表 DDL 随程序集走：投递器启动时按 provider 取对应脚本执行（幂等）。

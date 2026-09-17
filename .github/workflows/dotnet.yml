@@ -49,7 +49,7 @@ jobs:
       - name: Build (Release)
         run: dotnet build Viv.slnx -c Release --verbosity minimal
 
-      - name: Test — 6 套测试 + 覆盖率 + TRX
+      - name: Test — 全部测试套件 + 覆盖率 + TRX
         run: >
           dotnet test Viv.slnx -c Release --no-build --verbosity minimal
           --results-directory TestResults
@@ -61,15 +61,21 @@ jobs:
           dotnet tool install --global dotnet-reportgenerator-globaltool
           reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" \
             -targetdir:"coverage-report" -reporttypes:"HtmlInline;Badges" \
-            -assemblyfilters:"-Viv.*.Tests*"
+            -assemblyfilters:"-Viv.*.Tests*;-Viv.Fakes*"
 
       - name: Coverage summary
         run: |
           python3 - > /tmp/coverage-summary.md <<'PY'
           import glob, xml.etree.ElementTree as ET
+          # 测试脚手架（替身程序集）不计入覆盖率：它被每个测试项目加载，会出现在每一份
+          # cobertura 里，而它的「覆盖率」只是「测试自己调用了自己哪几行」，纯噪音。
+          # 这里显式过滤，不依赖 coverlet 对程序集级 ExcludeFromCodeCoverage 的行为。
+          SKIP_PREFIXES = ('Viv.Fakes',)
           total = covered = 0
           for f in glob.glob('TestResults/**/coverage.cobertura.xml', recursive=True):
               for cls in ET.parse(f).getroot().iter('class'):
+                  if (cls.get('name') or '').startswith(SKIP_PREFIXES):
+                      continue
                   n = int(cls.get('lines') or 0); r = float(cls.get('line-rate') or 0)
                   total += n; covered += int(n * r)
           pct = covered * 100 / total if total else 0.0

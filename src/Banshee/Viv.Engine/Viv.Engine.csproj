@@ -16,6 +16,8 @@
 		<!-- 本地事件总线的状态机是 internal（LocalEventBus / ILocalEventHandlerInvoker / LocalEventRegistration），
 		     单元测试要直接构造它，同 Viv.Redis 的做法 -->
 		<InternalsVisibleTo Include="Viv.Engine.Tests" />
+		<!-- 共享替身程序集：KernelStub 要桩 internal 的 ITransactionKernel -->
+		<InternalsVisibleTo Include="Viv.Fakes" />
 	</ItemGroup>
 
 	<ItemGroup>

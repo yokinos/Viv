@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- 本程序集是测试脚手架，不是测试项目。带 Microsoft.NET.Test.Sdk 会让
+         dotnet test 把它当测试宿主去跑，报「没有可用测试」。 -->
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 双保险：CI 侧还有一道 reportgenerator 的 -Viv.Fakes* 过滤 -->
+    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- IAsyncStreamReader / IServerStreamWriter / IClientStreamWriter 不在 ASP.NET Core
+         共享框架里，只能由 NuGet 提供 -->
+    <PackageReference Include="Grpc.Net.Client" />
+    <!-- 刻意不带：Microsoft.NET.Test.Sdk / coverlet.collector / xunit /
+         xunit.runner.visualstudio —— 这里的替身没有一个用到 xUnit 类型。
+         Autofac 三件套也不带：那是 Viv.Engine.Tests 自己的反射测试在用，不随替身走。 -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- IHostEnvironment / IHubContext<> / IHubClients / IClientProxy / IGroupManager -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Banshee\Viv.Contracts\Viv.Contracts.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Log\Viv.Log.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Momo\Viv.Momo.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Nana\Viv.Nana.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Outbox\Viv.Outbox.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Redis\Viv.Redis.csproj" />
+    <ProjectReference Include="..\..\Vivian\Viv.Elysia\Viv.Elysia.csproj" />
+    <ProjectReference Include="..\..\Vivian\Viv.Herta.Link\Viv.Herta.Link.csproj" />
+  </ItemGroup>
+
+</Project>
