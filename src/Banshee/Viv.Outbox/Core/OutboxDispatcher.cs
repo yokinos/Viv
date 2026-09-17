@@ -9,16 +9,9 @@ namespace Viv.Outbox.Core
     /// <summary>
     /// 发件箱投递器的后台宿主：起一轮、睡一会儿、再来一轮。
     ///
-    /// <para>
-    /// <b>多实例安全靠原子认领，不靠 Redis 锁</b>：同一个服务起 3 个副本 + Worker 一起跑，
-    /// 数据库的 <c>UPDATE ... OUTPUT/RETURNING</c> 保证一行只会被一个实例拿到。
-    /// </para>
-    ///
-    /// <para>
-    /// <b>它是 Singleton（AddHostedService），所以不能构造注入任何 Scoped 服务</b>
-    /// （<c>IVivEventPublisher</c> / <c>IOutboxRepository</c> 都是 Scoped）——
-    /// 每轮由 <see cref="OutboxWorker"/> 自己开作用域去解析。
-    /// </para>
+    /// 多实例安全靠原子认领而不是 Redis 锁，见 <see cref="OutboxSql.ClaimBatch"/>。
+    /// 它是 Singleton（AddHostedService），不能构造注入 Scoped 服务 —— 每轮由
+    /// <see cref="OutboxWorker"/> 自己开作用域解析。
     /// </summary>
     internal sealed class OutboxDispatcher : BackgroundService
     {
@@ -62,8 +55,7 @@ namespace Viv.Outbox.Core
                 }
                 catch (Exception ex)
                 {
-                    // 后台服务里逃出去的异常在 .NET 6+ 会**直接停掉整个宿主**。
-                    // 投递失败绝不能拖垮业务进程：吞掉、记日志、下一轮再来。
+                    // 后台服务里逃出去的异常会直接停掉整个宿主，投递失败不能拖垮业务进程
                     _logger.Error("发件箱投递轮次异常（已吞掉，不影响宿主机）", ex);
                 }
 

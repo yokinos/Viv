@@ -12,18 +12,13 @@ namespace Viv.Outbox.Core
     /// <summary>
     /// <see cref="IOutboxRepository"/> 的手写 SQL 实现。
     ///
-    /// <para>
-    /// 两个执行通道，用法上是有讲究的：
-    /// </para>
-    /// <list type="bullet">
-    /// <item><b>写</b>（入队 / 改状态 / 清理）一律走 <c>IMomoDbContext.ExecuteSqlAsync</c> ——
-    /// 它取的是<b>写库</b>上下文，并且把 <c>_transaction</c> 转发给 Dapper，
-    /// 所以入队会自然并入调用方的业务事务。</item>
-    /// <item><b>认领</b>是唯一的例外：它要用 <c>UPDATE ... OUTPUT/RETURNING</c> 把行拿回来，
-    /// 而 <c>IMomoDbContext</c> 上所有<b>返回行</b>的原生 SQL 方法走的全是读库上下文，
-    /// 拿它们跑认领会打到从库上。所以这里用 <c>GetDbConnection(DbReadWriteType.Write)</c>
-    /// 取主库连接自己跑 Dapper —— 认领是单条语句、自身即原子，不需要事务参数。</item>
-    /// </list>
+    /// 两个执行通道：写操作（入队 / 改状态 / 清理）一律走 <c>IMomoDbContext.ExecuteSqlAsync</c>，
+    /// 它取写库上下文并把 <c>_transaction</c> 转发给 Dapper，入队因此自然并入调用方的业务事务。
+    ///
+    /// 认领是唯一的例外：它要用 <c>UPDATE ... OUTPUT/RETURNING</c> 把行拿回来，而 IMomoDbContext 上
+    /// 所有返回行的原生 SQL 方法走的全是读库上下文，拿来跑认领会打到从库上。所以这里用
+    /// <c>GetDbConnection(DbReadWriteType.Write)</c> 取主库连接自己跑 Dapper ——
+    /// 认领是单条语句、自身即原子，不需要事务参数。
     /// </summary>
     internal sealed class OutboxRepository : IOutboxRepository
     {

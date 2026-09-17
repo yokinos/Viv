@@ -4,15 +4,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
-using Viv.Engine.LocalEvent;
+using Viv.Engine.LocalEvents;
 
 namespace Viv.Engine.Tests;
 
 /// <summary>
 /// 「这次调用算不算失败」的判定 —— 事务回滚与本地事件分发共用同一条规则。
 ///
-/// 信封那段现在只有<b>一份实现</b>（<see cref="FailDetector"/>），本地事件过滤器直接调它，
-/// 所以这里不再需要盯着两份副本不漂移；但仍然从<b>过滤器那一侧</b>再验一遍，
+/// 信封那段现在只有一份实现（<see cref="FailDetector"/>），本地事件过滤器直接调它，
+/// 所以这里不再需要盯着两份副本不漂移；但仍然从过滤器那一侧再验一遍，
 /// 因为过滤器还叠了「异常算不算失败」的判断，那部分只有它自己有。
 /// </summary>
 public class FailDetectorTests
@@ -56,7 +56,7 @@ public class FailDetectorTests
     }
 
     /// <summary>
-    /// 过滤器<b>独有</b>的那部分：异常无论有没有被接住都算失败。
+    /// 过滤器独有的那部分：异常无论有没有被接住都算失败。
     ///
     /// 信封判定已复用 <see cref="FailDetector"/>，但「异常 → 失败」这条只有过滤器能看见
     /// （拦截器那边异常是直接抛出来的，走的是 catch 分支）。

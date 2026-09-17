@@ -4,17 +4,13 @@ using Viv.Momo.Enums;
 namespace Viv.Outbox.Core
 {
     /// <summary>
-    /// 发件箱的全部 SQL —— <b>手写，一次都不经过 EF</b>。
+    /// 发件箱的全部 SQL —— 手写，一次都不经过 EF。
     ///
-    /// <para>
     /// 列名一律不带引号：SqlServer 不区分大小写、PG 折叠成小写，同一句话在两端都成立，
     /// 所以只有真正需要方言的少数几条（建表 / 认领 / 清理）才按 provider 分叉。
-    /// </para>
     ///
-    /// <para>
-    /// ⚠️ 所有时间参数都必须是 <see cref="DateTime.UtcNow"/> 派生（Kind=Utc）：
+    /// 所有时间参数都必须是 <see cref="DateTime.UtcNow"/> 派生（Kind=Utc）：
     /// PG 侧的列是 <c>TIMESTAMPTZ</c>，Npgsql 拒绝写入 Kind=Unspecified 的值。
-    /// </para>
     /// </summary>
     internal static class OutboxSql
     {
@@ -34,8 +30,8 @@ namespace Viv.Outbox.Core
         }
 
         /// <summary>
-        /// 入队。走 <c>ExecuteSqlAsync</c>（写库上下文 + 转发 <c>_transaction</c>）——
-        /// <b>这就是「与业务写同事务」的全部机关</b>，换成任何走读连接的执行方式都会让它失效。
+        /// 入队。走 <c>ExecuteSqlAsync</c>（写库上下文 + 转发 <c>_transaction</c>），
+        /// 「与业务写同事务」全靠这一点，换成任何走读连接的执行方式都会失效。
         /// </summary>
         internal const string Insert =
             """
@@ -78,20 +74,12 @@ namespace Viv.Outbox.Core
             """;
 
         /// <summary>
-        /// 原子认领一批待投递的行，并把它们置为 Processing + 加租约。
+        /// 原子认领一批待投递的行，置为 Processing 并加租约。并发正确性全在这一条：
+        /// 多个实例同时扫同一张表，靠数据库把这批行的所有权原子地判给其中一个，
+        /// 不存在「先查后改」的窗口（那会让同一条消息被两个实例各投一遍）。
         ///
-        /// <para>
-        /// 这是<b>整个投递器的并发正确性所在</b>：多个实例同时扫同一张表，
-        /// 靠数据库把这批行的所有权原子地判给其中一个 —— 不需要 Redis 锁，
-        /// 也不存在「先查后改」的窗口（那会让同一条消息被两个实例各投一遍）。
-        /// </para>
-        ///
-        /// <para>
-        /// 两条都<b>必须打主库</b>：<c>IMomoDbContext</c> 上所有返回行的原生 SQL 方法
-        /// （<c>FindListAsync&lt;T&gt;(sql)</c> 等）走的都是<b>读库</b>上下文，
-        /// 拿它们跑认领在开启读写分离后会打到从库上 —— 所以这里改用
-        /// <c>GetDbConnection(DbReadWriteType.Write)</c> 自己跑 Dapper。
-        /// </para>
+        /// 必须打主库：<c>IMomoDbContext</c> 上所有返回行的原生 SQL 方法走的是读库上下文，
+        /// 开启读写分离后会打到从库上，所以调用方改用 <c>GetDbConnection(DbReadWriteType.Write)</c> 自己跑 Dapper。
         /// </summary>
         internal static string ClaimBatch(DatabaseSourceType source) => source switch
         {

@@ -7,12 +7,11 @@ namespace Viv.Fakes;
 /// <c>ThrowingRedisProxy</c>、<c>CacheMissRedisProxy</c>、<c>ThrowingMessageBus</c>、
 /// <c>CapturingMessageBus</c>）收成一个，用旋钮表达差异。
 ///
-/// 【为什么不干脆为每个接口手写替身】
-/// <c>IMomoDbContext</c> 有 55 个成员、<c>IMessageBus</c> 有 10 个 —— 手写一遍就够劝退的，
-/// 何况要写好几遍。这两个接口上真正的测试只关心其中一两个方法。
+/// 这类替身只用 <c>DispatchProxy</c> 生成而不是手写：<c>IMomoDbContext</c> 有 55 个成员、
+/// <c>IMessageBus</c> 有 10 个，而测试只关心其中一两个方法。
 ///
-/// ⚠️ <b>不能加 sealed</b>：<c>DispatchProxy.Create</c> 要派生一个动态类型出来，
-/// <c>TProxy</c> 必须可跨程序集继承。这个程序集里的其它类都是 sealed，很容易顺手抄岔。
+/// 不能加 sealed：<c>DispatchProxy.Create</c> 要派生一个动态类型出来，<c>TProxy</c>
+/// 必须可跨程序集继承。本程序集里其它类都是 sealed，很容易顺手抄岔。
 /// </summary>
 public class TestProxy : DispatchProxy
 {
@@ -32,7 +31,7 @@ public class TestProxy : DispatchProxy
     public Exception? ThrowException { get; set; }
 
     /// <summary>
-    /// 按<b>声明返回类型</b>指定回值，优先于默认回值 —— 用来表达「这个方法的真值不是 default」，
+    /// 按声明返回类型指定回值，优先于默认回值 —— 用来表达「这个方法的真值不是 default」，
     /// 例如「取锁成功」：<c>Returns[typeof(Task&lt;bool&gt;)] = Task.FromResult(true)</c>。
     /// </summary>
     public Dictionary<Type, object?> Returns { get; } = [];
@@ -65,8 +64,8 @@ public class TestProxy : DispatchProxy
     /// <summary>
     /// 按声明返回类型回一个「完成了的空值」。
     ///
-    /// ★ 这里修掉一个潜伏 NRE：原先 Momo 的 <c>NopProxy</c> 对 <c>Task&lt;T&gt;</c> 落进最后那行
-    /// <c>return null</c>，一 await 就炸 —— 只是那条路径碰巧没被走到。取的是更完备的那个实现
+    /// 原先 Momo 的 <c>NopProxy</c> 对 <c>Task&lt;T&gt;</c> 落进最后那行 <c>return null</c>，
+    /// 一 await 就炸，只是那条路径碰巧没被走到。现在取的是更完备的那个实现
     /// （<c>CacheMissRedisProxy</c> 的 <c>Task.FromResult</c> 分支）。
     /// </summary>
     private static object? Default(Type? returnType)
@@ -101,6 +100,6 @@ public class TestProxy : DispatchProxy
 /// 纯空替身：任何调用都回「完成了的空值」，不抛也不记。
 /// 等价于 <c>TestProxy.Create&lt;T&gt;()</c>，独立成类只为调用点读起来一眼知道「这里不需要它做事」。
 ///
-/// ⚠️ 同样<b>不能 sealed</b>（见 <see cref="TestProxy"/> 的说明）。
+/// 同样不能 sealed（见 <see cref="TestProxy"/> 的说明）。
 /// </summary>
 public class NopProxy : TestProxy;

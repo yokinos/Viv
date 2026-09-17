@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Viv.Contracts.Events;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Magic;
-using Viv.Engine.LocalEvent;
+using Viv.Engine.LocalEvents;
 using Viv.Fakes;
 using Viv.Log;
 using Viv.Nana;
@@ -21,12 +21,12 @@ public class LocalEventTests
 
     #region 测试事件与处理器
 
-    public sealed class OrderCreated : EngineEvent;
-    public sealed class StockChanged : EngineEvent;
-    public sealed class ThrowingEvent : EngineEvent;
-    public sealed class RepublishEvent : EngineEvent;
-    public sealed class RecursiveEvent : EngineEvent;
-    public sealed class NoHandlerEvent : EngineEvent;
+    public sealed class OrderCreated : LocalEvent;
+    public sealed class StockChanged : LocalEvent;
+    public sealed class ThrowingEvent : LocalEvent;
+    public sealed class RepublishEvent : LocalEvent;
+    public sealed class RecursiveEvent : LocalEvent;
+    public sealed class NoHandlerEvent : LocalEvent;
 
     public sealed class OrderCreatedHandler : IVivLocalEventHandler<OrderCreated>
     {
@@ -91,9 +91,9 @@ public class LocalEventTests
 
     #region 扫描目标（DI 注册测试用）
 
-    public sealed class ScannedEvent : EngineEvent;
-    public sealed class EventA : EngineEvent;
-    public sealed class EventB : EngineEvent;
+    public sealed class ScannedEvent : LocalEvent;
+    public sealed class EventA : LocalEvent;
+    public sealed class EventB : LocalEvent;
 
     /// <summary>基类写法</summary>
     public sealed class ScanBaseClassHandler : LocalEventHandler<ScannedEvent>
@@ -139,7 +139,7 @@ public class LocalEventTests
         => new(invokers, logger);
 
     private static LocalEventHandlerInvoker<TEvent> InvokerFor<TEvent>(params IVivLocalEventHandler<TEvent>[] handlers)
-        where TEvent : EngineEvent
+        where TEvent : LocalEvent
         => new(handlers);
 
     private static ServiceProvider BuildProvider()
@@ -318,7 +318,7 @@ public class LocalEventTests
     }
 
     [Fact]
-    public void EngineEvent是空标记基类_且与NanaEvent互不继承()
+    public void LocalEvent是空标记基类_且与NanaEvent互不继承()
     {
         const System.Reflection.BindingFlags declared =
             System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic
@@ -326,15 +326,15 @@ public class LocalEventTests
             | System.Reflection.BindingFlags.DeclaredOnly;
 
         // 纯限制：抽象 + 自身零成员
-        Assert.True(typeof(EngineEvent).IsAbstract);
-        Assert.Equal(typeof(object), typeof(EngineEvent).BaseType);
-        Assert.Empty(typeof(EngineEvent).GetFields(declared));
-        Assert.Empty(typeof(EngineEvent).GetProperties(declared));
-        Assert.Empty(typeof(EngineEvent).GetMethods(declared));
+        Assert.True(typeof(LocalEvent).IsAbstract);
+        Assert.Equal(typeof(object), typeof(LocalEvent).BaseType);
+        Assert.Empty(typeof(LocalEvent).GetFields(declared));
+        Assert.Empty(typeof(LocalEvent).GetProperties(declared));
+        Assert.Empty(typeof(LocalEvent).GetMethods(declared));
 
-        // 关键回归：一旦 EngineEvent 继承 NanaEvent，Wolverine 会给**所有**本地事件注册 RabbitMQ 路由
+        // 关键回归：一旦 LocalEvent 继承 NanaEvent，Wolverine 会给所有本地事件注册 RabbitMQ 路由
         //（VivWolverineConfigurationExtensions 扫 NanaEvent 子类），本地事件就被绑死成跨进程语义了
-        Assert.False(typeof(NanaEvent).IsAssignableFrom(typeof(EngineEvent)));
+        Assert.False(typeof(NanaEvent).IsAssignableFrom(typeof(LocalEvent)));
     }
 
     [Fact]

@@ -2,7 +2,7 @@ namespace Viv.Outbox.Options
 {
     /// <summary>
     /// 发件箱配置。绑定自 appsettings.json 的 <c>VivOptions.OutboxOption</c> 节点。
-    /// <b>为 null = 不启用</b>（不注册投递器、不建表），与其它子系统同姿态。
+    /// 为 null = 不启用（不注册投递器、不建表），与其它子系统同姿态。
     /// </summary>
     public class OutboxOptions
     {
@@ -23,7 +23,7 @@ namespace Viv.Outbox.Options
 
         /// <summary>
         /// 认领租约时长（秒）。投递器崩溃 / 被杀后，超过此时长仍处于 Processing 的行会被重新认领。
-        /// <b>它同时是「同一条消息被投递两次」的窗口来源</b>（at-least-once 的代价）。
+        /// 它同时是「同一条消息被投递两次」的窗口来源（at-least-once 的代价）。
         /// </summary>
         public int LeaseSeconds { get; set; } = 60;
 

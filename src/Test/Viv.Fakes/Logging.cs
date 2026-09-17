@@ -5,14 +5,13 @@ namespace Viv.Fakes;
 /// <summary>
 /// 记录日志的内存替身 —— 全仓 <c>ILoggerContract</c> 桩的唯一实现（原本散在 9 个测试项目里的同名副本）。
 ///
-/// 【记录的是「填好参数的文本」】
-/// 断言匹配的其实是模板里的字面量子串（"降级为回滚" / "回滚失败" / "消息消费失败"），
-/// 填不填参数都不影响它们；但只有填过，测试失败时把 <see cref="Infos"/> 打出来才是句人话。
+/// 记录的是「填好参数的文本」：断言匹配的其实是模板里的字面量子串（"降级为回滚" / "回滚失败" /
+/// "消息消费失败"），填不填参数都不影响它们，但填过之后测试失败时把 <see cref="Infos"/>
+/// 打出来才看得懂。
 ///
-/// 【<c>FormatException</c> 必须吞掉，这不是防御性编程】
-/// <c>VivExceptionFilterAttribute</c> 用的是<b>具名占位符</b>
-/// （<c>"[全局异常] {Method} {Path} | RequestId: {RequestId}"</c>），
-/// <c>string.Format</c> 碰到它必抛。替身不能因为被测代码的模板风格不同就把测试炸掉 ——
+/// <c>FormatException</c> 必须吞掉，这不是防御性编程：<c>VivExceptionFilterAttribute</c>
+/// 用的是具名占位符（<c>"[全局异常] {Method} {Path} | RequestId: {RequestId}"</c>），
+/// <c>string.Format</c> 碰到它必抛。替身不能因为被测代码的模板风格不同就把测试炸掉，
 /// 回落成原文即可，反正那条断言只匹配字面量。
 /// </summary>
 public class RecordingLogger : ILoggerContract

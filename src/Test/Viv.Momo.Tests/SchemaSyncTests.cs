@@ -9,7 +9,7 @@ using Viv.Momo.Sync;
 namespace Viv.Momo.Tests;
 
 #region 测试实体
-// ⚠️ 刻意都不以 "Entity" 结尾 —— 那个后缀会被 TenantFilterTests 的 EF 扫描
+// 刻意都不以 "Entity" 结尾 —— 那个后缀会被 TenantFilterTests 的 EF 扫描
 // （AssemblyName = "Viv.Momo.Tests", ClassNameEndsWith = "Entity"）捞进模型，污染它的断言。
 
 /// <summary>只有 <c>Id</c>，没有任何 <c>[Key]</c> —— 全仓实体的真实形状</summary>
@@ -70,11 +70,9 @@ public class SyncDdlRow : IEntity
 /// <summary>
 /// 实体 → 建表/改表 SQL 的生成（<see cref="SchemaSynchronizer"/>）。
 ///
-/// <para>
-/// 这里测的全是纯反射 + 纯字符串逻辑，<b>不碰数据库</b>（<c>FetchActualSchemaAsync</c> 与
+/// 这里测的全是纯反射 + 纯字符串逻辑，不碰数据库（<c>FetchActualSchemaAsync</c> 与
 /// <c>ScanEntityTypes</c> 需要真库/真配置，不在覆盖范围内）。「实际 Schema」一律手工构造，
 /// 所以这些测试钉的是「给定 diff 会生成什么 DDL」，不是「从真库读回来对不对」。
-/// </para>
 /// </summary>
 public class SchemaSyncTests
 {
@@ -108,8 +106,8 @@ public class SchemaSyncTests
     [Fact]
     public void 主键判定_没标Key时按Id约定认()
     {
-        // 全仓实体一律继承 EntityBase（long Id）且没有一处标 [Key]（EF 靠约定认主键）。
-        // 只认特性的话生成出来的 CREATE TABLE 会一个主键都没有。
+        // SyncConventionRow 不继承 EntityBase、也没标 [Key]，只有个叫 Id 的属性 ——
+        // 只认特性的话这种表生成出来会一个主键都没有。
         var table = CreateSync().BuildExpectedSchema([typeof(SyncConventionRow)])[0];
 
         Assert.True(table.Columns.Single(c => c.Name == "Id").IsPrimaryKey);

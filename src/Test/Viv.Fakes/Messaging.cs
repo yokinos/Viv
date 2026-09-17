@@ -8,15 +8,13 @@ namespace Viv.Fakes;
 /// <summary>
 /// <see cref="IVivEventPublisher"/> 记录替身 —— 原本 Nana / Outbox / Elysia / Herta 各有一个副本。
 ///
-/// 【两个列表为什么不合并】
-/// <see cref="Published"/>（内容版）与 <see cref="Envelopes"/>（信封版）分开记：
+/// 两个列表分开记：<see cref="Published"/>（内容版）与 <see cref="Envelopes"/>（信封版）。
 /// Outbox 断言「库里的消息投出去了」用的是 <c>Envelopes</c>，若内容版也往里塞，
 /// 那种 <c>Assert.Single(...)</c> 会莫名其妙变成 2 条。
 ///
-/// 【异常旋钮也分两个，别合并】
-/// <see cref="PublishException"/> 只在信封版 <c>PublishEnvelopeAsync</c> 上抛 ——
-/// Outbox 用它验「投递失败退回待发」；若扩大到所有重载，走内容版的用例会一起炸。
-/// <see cref="DelayException"/> 同理，只在**信封版**延迟投递上抛。
+/// 异常旋钮同样分两个：<see cref="PublishException"/> 只在信封版 <c>PublishEnvelopeAsync</c>
+/// 上抛（Outbox 用它验「投递失败退回待发」），<see cref="DelayException"/> 只在信封版延迟投递上抛。
+/// 扩大到所有重载，走内容版的用例会一起炸。
 /// </summary>
 public class RecordingEventPublisher : IVivEventPublisher
 {
@@ -30,9 +28,8 @@ public class RecordingEventPublisher : IVivEventPublisher
     public object? LastEnvelope { get; private set; }
 
     /// <summary>
-    /// 信封版延迟投递是否被调用过。
-    /// ⚠️ 只信封版置位 —— 「重投走的是哪条路」正是延迟重投那几条测试要钉的东西
-    /// （<c>VivConsumer.RedeliverAsync</c> 走信封重载，所以那边断言的是 False）。
+    /// 信封版延迟投递是否被调用过。只信封版置位 —— 「重投走的是哪条路」正是延迟重投那几条
+    /// 测试要钉的东西（<c>VivConsumer.RedeliverAsync</c> 走信封重载，所以那边断言的是 False）。
     /// </summary>
     public bool PublishDelayEnvelopeCalled { get; private set; }
 
@@ -87,10 +84,10 @@ public class RecordingEventPublisher : IVivEventPublisher
 /// <summary>
 /// <see cref="IVivLocalEventPublisher"/> 记录替身（进程内本地队列那族）。
 ///
-/// ⚠️ 必须与 <see cref="RecordingEventPublisher"/> 分成两个类，不能合并：
-/// 两个接口都有 <c>ValueTask&lt;bool&gt; PublishAsync&lt;T&gt;(T, CancellationToken)</c>，
-/// **只有泛型约束不同**（<c>where T : NanaEvent</c> vs <c>where T : NanaLocalEvent</c>），
-/// 而约束不参与签名 —— 隐式实现必然 CS0111。
+/// 必须与 <see cref="RecordingEventPublisher"/> 分成两个类、不能合并：两个接口都有
+/// <c>ValueTask&lt;bool&gt; PublishAsync&lt;T&gt;(T, CancellationToken)</c>，只有泛型约束不同
+/// （<c>where T : NanaEvent</c> vs <c>where T : NanaLocalEvent</c>），而约束不参与签名 ——
+/// 同一个类隐式实现两个接口必然 CS0111。
 /// </summary>
 public class RecordingLocalEventPublisher : IVivLocalEventPublisher
 {
@@ -118,7 +115,7 @@ public class RecordingLocalEventPublisher : IVivLocalEventPublisher
 /// <summary>
 /// <see cref="IDistributedLock"/> 替身 —— 记录取锁/释放调用，取锁结果由测试摆布。
 ///
-/// <see cref="AcquireLockWithExecuteAsync{T}"/> <b>是真实实现不是空桩</b>（取锁 → 执行 →
+/// <see cref="AcquireLockWithExecuteAsync{T}"/> 是真实实现不是空桩（取锁 → 执行 →
 /// finally 释放，拿不到锁走 fallback 或抛）：它是行为，简化掉就测不出「拿不到锁时到底走没走业务」。
 /// </summary>
 public class RecordingDistributedLock : IDistributedLock

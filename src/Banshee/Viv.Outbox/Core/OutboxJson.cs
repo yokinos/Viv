@@ -3,14 +3,10 @@ using System.Text.Json;
 namespace Viv.Outbox.Core
 {
     /// <summary>
-    /// 发件箱 payload 的序列化选项 —— <b>自产自销，与 Wolverine 的序列化器无关</b>。
+    /// 发件箱 payload 的序列化选项，自产自销，与 Wolverine 的序列化器无关。
     ///
-    /// <para>
-    /// payload 的 JSON 由本模块 <c>Serialize</c>、也由本模块 <c>Deserialize</c>，
-    /// Wolverine 从头到尾看不到这个字符串（它只看到投递时重新构造出来的那个信封对象）。
-    /// 因此<b>完全不需要知道 Wolverine 用的是哪套 <c>JsonSerializerOptions</c></b>，
-    /// 也就不存在「选项漂移 → 静默反序列化成默认值」这条风险路径。
-    /// </para>
+    /// payload 由本模块序列化、也由本模块反序列化，Wolverine 看不到这个字符串，
+    /// 因此不需要知道它用的是哪套选项，也就不存在「选项漂移 → 静默反序列化成默认值」这条路径。
     /// </summary>
     internal static class OutboxJson
     {

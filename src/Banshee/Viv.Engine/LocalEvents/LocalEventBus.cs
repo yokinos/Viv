@@ -7,12 +7,12 @@ using Viv.Contracts.Events;
 using Viv.Contracts.Interface;
 using Viv.Log;
 
-namespace Viv.Engine.LocalEvent
+namespace Viv.Engine.LocalEvents
 {
     /// <summary>
-    /// 本地事件总线实现 —— 注册为 <b>Scoped</b>（与 IMomoDbContext、IVivContext 同作用域，这是整个设计的支点）。
+    /// 本地事件总线实现，注册为 Scoped —— 与 IMomoDbContext、IVivContext 同作用域是这套设计的支点。
     ///
-    /// 生命周期三态：Pending（可入队）→ Draining（分发中，仍可入队）→ Done（终态，丢弃新事件）。
+    /// 三态：Pending（可入队）→ Draining（分发中，仍可入队）→ Done（终态，丢弃新事件）。
     /// </summary>
     internal sealed class LocalEventBus : IVivLocalEventBus, IDisposable
     {
@@ -26,7 +26,7 @@ namespace Viv.Engine.LocalEvent
         private readonly object _sync = new();
 
         /// <summary>待发事件队列，FIFO —— 分发顺序 = 发布顺序</summary>
-        private readonly Queue<EngineEvent> _pending = new();
+        private readonly Queue<LocalEvent> _pending = new();
 
         private LocalEventBusState _state = LocalEventBusState.Pending;
 
@@ -49,7 +49,7 @@ namespace Viv.Engine.LocalEvent
         }
 
         /// <inheritdoc />
-        public Task PublishAsync<TEvent>(TEvent @event, CancellationToken ct = default) where TEvent : EngineEvent
+        public Task PublishAsync<TEvent>(TEvent @event, CancellationToken ct = default) where TEvent : LocalEvent
         {
             ArgumentNullException.ThrowIfNull(@event);
 
@@ -62,7 +62,7 @@ namespace Viv.Engine.LocalEvent
                     return Task.CompletedTask;
                 }
 
-                // Draining 态**允许**入队：处理器内递归发布是合法用法，新事件进下一轮 drain
+                // Draining 态允许入队：处理器内递归发布是合法用法，新事件进下一轮 drain
                 _pending.Enqueue(@event);
             }
 
@@ -85,14 +85,14 @@ namespace Viv.Engine.LocalEvent
             {
                 for (var round = 0; round < MaxDrainRounds; round++)
                 {
-                    List<EngineEvent> batch;
+                    List<LocalEvent> batch;
                     lock (_sync)
                     {
                         // 快照 + 清空：分发期间新发布的事件进下一轮，不干扰本轮遍历
                         if (_pending.Count == 0)
                             return;
 
-                        batch = new List<EngineEvent>(_pending);
+                        batch = new List<LocalEvent>(_pending);
                         _pending.Clear();
                     }
 

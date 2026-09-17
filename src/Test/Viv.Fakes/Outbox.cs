@@ -6,7 +6,7 @@ namespace Viv.Fakes;
 /// <summary>
 /// 发件箱仓储替身：记录每一次状态变更，认领批次由测试脚本编排。
 ///
-/// ⚠️ 只能是 <c>internal</c>：<see cref="IOutboxRepository"/> 本身是 internal 的，
+/// 只能声明成 internal：<see cref="IOutboxRepository"/> 本身是 internal 的，
 /// public 类实现 internal 接口是 CS0061。故本程序集对 <c>Viv.Outbox.Tests</c> 开了 IVT。
 ///
 /// <see cref="ClaimScript"/> 用队列逐次吐出批次、用完后回空 —— 投递器是「一直认领到认不出为止」的

@@ -13,11 +13,8 @@ namespace Viv.Outbox.Core
     /// <summary>
     /// 按 <c>EventType</c> 字符串解析出事件类型，并给出对应的闭合发送器。
     ///
-    /// <para>
-    /// <b>类型索引与发送器都缓存在静态字段上</b>，整个进程只建一次。理由有两条：
-    /// ① 索引要扫全部程序集，每轮轮询重建一遍是纯浪费；
-    /// ② 发送器不持有任何作用域内的东西（发布器是逐次传进去的），本来就没有理由按 scope 重建。
-    /// </para>
+    /// 类型索引与发送器都缓存在静态字段上，整个进程只建一次：索引要扫全部程序集，
+    /// 每轮轮询重建是纯浪费；发送器不持有任何作用域内的东西（发布器逐次传入），也没理由按 scope 重建。
     /// </summary>
     internal sealed class OutboxEnvelopeSenderFactory : IOutboxEnvelopeSenderFactory
     {
@@ -25,7 +22,7 @@ namespace Viv.Outbox.Core
         private static readonly Lazy<IReadOnlyDictionary<string, Type>> EventTypes =
             new(BuildTypeIndex, LazyThreadSafetyMode.ExecutionAndPublication);
 
-        /// <summary>事件类型名 → 发送器。<b>null 也会被缓存</b> —— 解析不出的类型不会再白扫一遍索引。</summary>
+        /// <summary>事件类型名 → 发送器。null 也会被缓存 —— 解析不出的类型不会再白扫一遍索引。</summary>
         private static readonly ConcurrentDictionary<string, IOutboxEnvelopeSender?> Senders = new(StringComparer.Ordinal);
 
         public IOutboxEnvelopeSender? Resolve(string eventTypeName)

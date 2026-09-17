@@ -41,7 +41,7 @@ public sealed record ProxyCall(string TargetKind, string TargetId, string Method
 /// <summary>
 /// <c>IHubContext&lt;ChatHub&gt;</c> 替身 —— 把每一次「发给谁」记进 <see cref="Calls"/>。
 ///
-/// <see cref="Clients"/> 的各个重载**只实现被测代码真正用到的那几个**
+/// <see cref="Clients"/> 的各个重载只实现被测代码真正用到的那几个
 /// （<c>All</c> / <c>Client</c> / <c>Clients</c> / <c>Group</c> / <c>Groups</c>），
 /// 其余（<c>AllExcept</c> / <c>User</c> / …）保持 <c>NotImplementedException</c> ——
 /// 真被走到说明被测代码换了发送目标，那是需要立刻知道的事，不该静默放过。

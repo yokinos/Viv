@@ -9,16 +9,13 @@ using Viv.Nana;
 namespace Viv.Engine.UnitOfWork
 {
     /// <summary>
-    /// 工作单元的注册期筛选与<b>启动期校验</b>。
+    /// 工作单元的注册期筛选与启动期校验。
     ///
-    /// 【为什么校验这么重】
-    /// Castle 的接口代理失效时<b>完全无声</b>：没代理上就没有事务，业务方法照常执行、数据照常写入，
-    /// 只是不再原子。这类问题不会报错、不会记日志，往往到线上数据对不上才被发现。
-    /// 所以凡是能静态判定的失效原因，一律前移到启动期硬报错。
+    /// 校验做得重是因为代理失效完全无声：没代理上就没有事务，业务照常执行、数据照常写入，
+    /// 只是不再原子，不报错也不记日志，往往到线上数据对不上才发现。凡是能静态判定的失效原因都前移到启动期硬报错。
     ///
-    /// 【拦不住的只有一种：自调用】
-    /// <c>this.OtherMethod()</c> 走的是真实实例、不过代理，标了特性也不生效 ——
-    /// 这要分析 IL 调用点才能判，本版不做，靠注释与文档约束（特性标在最外层公开方法上）。
+    /// 唯一拦不住的是自调用 —— this.OtherMethod() 走真实实例、不过代理，要分析 IL 调用点才能判，
+    /// 本版不做，靠把特性标在最外层公开方法来规避。
     /// </summary>
     internal static class UnitOfWorkRegistration
     {
@@ -125,10 +122,9 @@ namespace Viv.Engine.UnitOfWork
             if (method.IsStatic)
                 throw new InvalidOperationException($"[VivUnitOfWork] 标在静态方法上，代理拦不到：{where}");
 
-            // ★ 只判 !IsVirtual 是错的（实测踩过）：C# 会把「隐式实现接口的 public 方法」
-            //   编译成 virtual + final —— IsVirtual 为 true，但 sealed 重写不了，
-            //   于是这条本来该拦住的检查恰好把最容易写出的那种方法放了过去。
-            //   真正决定「Castle 能不能重写」的是 IsVirtual && !IsFinal。
+            // 只判 !IsVirtual 是错的（实测踩过）：C# 会把隐式实现接口的 public 方法编译成
+            // virtual + final，IsVirtual 为 true 但 sealed 重写不了 —— 那条检查恰好把最容易
+            // 写出的方法放了过去。决定「Castle 能不能重写」的是 IsVirtual && !IsFinal。
             if (!method.IsVirtual || method.IsFinal)
                 throw new InvalidOperationException(
                     $"[VivUnitOfWork] 标在不可重写的方法上（非 virtual，或已 sealed）：{where}。" +
@@ -137,9 +133,9 @@ namespace Viv.Engine.UnitOfWork
             if (method.IsGenericMethodDefinition)
                 throw new InvalidOperationException($"[VivUnitOfWork] 标在泛型方法上，代理拦不到：{where}");
 
-            // ★ 实测：同步方法与【非泛型 ValueTask】都走 AsyncInterceptorBase 不可重写的同步路径
-            //   （InterceptSynchronous）—— 表现是「方法照常执行、事务根本没开」，完全静默。
-            //   泛型版 ValueTask<T> 则正常走异步链。这条差异太反直觉，所以照实测结果拦。
+            // 实测：同步方法与非泛型 ValueTask 都走 AsyncInterceptorBase 不可重写的同步路径
+            // （InterceptSynchronous），表现是「方法照常执行、事务根本没开」，完全静默。
+            // 泛型版 ValueTask<T> 正常走异步链。这条差异反直觉，所以照实测结果拦。
             if (method.ReturnType == typeof(ValueTask))
             {
                 throw new InvalidOperationException(
@@ -157,11 +153,8 @@ namespace Viv.Engine.UnitOfWork
         }
 
         /// <summary>
-        /// 类级特性下，数一遍会被覆盖的异步方法，同时把<b>没覆盖到的公开方法</b>逐个收集起来告警。
-        ///
-        /// 类级特性最容易出事的地方就在这里：它承诺的是「整个类都是事务的」，
-        /// 但接口代理只拦得住可重写的异步方法。剩下的一律要报出来 ——
-        /// 静默漏掉 = 业务以为在事务里、实际裸奔。
+        /// 类级特性下，数一遍会被覆盖的异步方法，同时把没覆盖到的公开方法逐个收集起来告警。
+        /// 类级特性承诺「整个类都是事务的」，但接口代理只拦得住可重写的异步方法，剩下的一律要报出来。
         /// </summary>
         private static int CollectClassLevelAsyncMethods(Type type, List<string> notCovered)
         {
@@ -203,7 +196,7 @@ namespace Viv.Engine.UnitOfWork
 
         /// <summary>
         /// 消费者（<c>VivConsumer&lt;T&gt;</c> / <c>VivLocalConsumer&lt;T&gt;</c>）豁免 ——
-        /// Worker 侧的事务由消费者基类的 <c>HandleAsync</c> 显式读取类级特性来开，不走接口代理。
+        /// Worker 侧事务由消费者基类的 HandleAsync 显式读类级特性来开，不走接口代理。
         /// </summary>
         private static bool IsConsumer(Type type)
         {
@@ -222,8 +215,7 @@ namespace Viv.Engine.UnitOfWork
         }
 
         /// <summary>
-        /// 能被异步拦截链接管、且返回<b>可判信封</b>的返回类型。
-        /// 注意非泛型 <c>ValueTask</c> 不在此列 —— 实测它走同步路径（见 <see cref="ValidateMethod"/>）。
+        /// 能被异步拦截链接管的返回类型。非泛型 <c>ValueTask</c> 不在此列，实测它走同步路径。
         /// </summary>
         private static bool IsAsyncReturn(Type returnType)
         {

@@ -3,17 +3,14 @@ namespace Viv.Outbox.Core
     /// <summary>
     /// 发件箱表的手写 SQL 读写口。
     ///
-    /// <para>
-    /// 抽这一层是为了可测：<c>IMomoDbContext</c> 有 55 个成员，直接桩它来测投递器逻辑
-    /// （认领/退避/租约/清理）不现实。投递器只认这个窄接口。
-    /// </para>
+    /// 抽这一层是为了可测：<c>IMomoDbContext</c> 有 55 个成员，直接桩它来测投递器逻辑不现实。
     /// </summary>
     internal interface IOutboxRepository
     {
         /// <summary>建表（幂等）。<see cref="Options.OutboxOptions.AutoCreateTable"/> 开时由投递器启动跑一次。</summary>
         Task EnsureTableAsync(CancellationToken cancellationToken = default);
 
-        /// <summary>入队。经 <c>ExecuteSqlAsync</c> 执行，因而<b>自动并入调用方当前的业务事务</b>。</summary>
+        /// <summary>入队。经 <c>ExecuteSqlAsync</c> 执行，因而自动并入调用方当前的业务事务。</summary>
         Task<bool> InsertAsync(OutboxMessage message, CancellationToken cancellationToken = default);
 
         /// <summary>把租约过期的 Processing 行退回 Pending（崩溃恢复）。</summary>

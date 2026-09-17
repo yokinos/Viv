@@ -5,18 +5,15 @@ using System.Threading.Tasks;
 using Viv.Contracts.Events;
 using Viv.Contracts.Interface;
 
-namespace Viv.Engine.LocalEvent
+namespace Viv.Engine.LocalEvents
 {
     /// <summary>
-    /// 闭合泛型分发器 —— 由 LocalEventRegistration 在启动期按扫到的事件类型
-    /// <c>MakeGenericType</c> 注册进容器。
-    ///
-    /// 泛型参数在这里被「固化」成 <see cref="EventType"/>，所以 flush 时只需一次字典查表，
-    /// 不需要按运行时类型反射构造。
+    /// 闭合泛型分发器 —— 由 LocalEventRegistration 在启动期按扫到的事件类型 MakeGenericType 注册进容器。
+    /// 泛型参数在这里固化成 <see cref="EventType"/>，flush 时只需一次字典查表，不必按运行时类型反射构造。
     /// </summary>
     /// <typeparam name="TEvent">事件类型</typeparam>
     internal sealed class LocalEventHandlerInvoker<TEvent> : ILocalEventHandlerInvoker
-        where TEvent : EngineEvent
+        where TEvent : LocalEvent
     {
         private readonly IEnumerable<IVivLocalEventHandler<TEvent>> _handlers;
 
@@ -29,7 +26,7 @@ namespace Viv.Engine.LocalEvent
         public Type EventType => typeof(TEvent);
 
         /// <inheritdoc />
-        public async Task InvokeAsync(EngineEvent @event, CancellationToken ct)
+        public async Task InvokeAsync(LocalEvent @event, CancellationToken ct)
         {
             var typed = (TEvent)@event;
 

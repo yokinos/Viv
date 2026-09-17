@@ -9,7 +9,7 @@ using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
 using Viv.Echo;
-using Viv.Engine.LocalEvent;
+using Viv.Engine.LocalEvents;
 using Viv.Engine.Options;
 using Viv.Engine.UnitOfWork;
 using Viv.Log;

@@ -9,30 +9,18 @@ namespace Viv.Engine.UnitOfWork
     /// <summary>
     /// 工作单元实现 —— 把「嵌套调用」和「只有一个事务」这两件事对上。
     ///
-    /// 【作用域铁律】
-    /// 本类是 Scoped，事务状态（<c>_depth</c> / <c>_rollbackOnly</c>）就是<b>请求作用域的状态</b>。
-    /// 一旦被解析到根作用域，并发请求会共用同一个状态机 —— 一个请求提交会把另一个请求的事务也提交掉。
-    /// 已实测 Autofac 的接口代理从<b>当前</b>作用域解析拦截器（不落根），此前提成立。
+    /// 本类是 Scoped，<c>_depth</c> / <c>_rollbackOnly</c> 就是请求作用域的状态。
+    /// 被解析到根作用域的话并发请求会共用一个状态机，一个请求提交会把另一个的也提交掉。
     ///
-    /// 【嵌套语义：只有最外层开 / 提交，没有保存点】
-    /// <code>
-    /// [VivUnitOfWork]                  // ← 最外层：真开事务
-    /// public async Task OuterAsync()
-    /// {
-    ///     await using var tx = await _uow.BeginAsync();   // ← 内层：子句柄，不碰数据库
-    ///     await InnerAsync();                             //   它的 Commit 是空操作
-    ///     await tx.CommitAsync();
-    /// }
-    /// </code>
-    /// 子句柄没提交就结束 → 整个作用域被标记 <b>rollback-only（粘性）</b>，
-    /// 最外层再调 <c>CommitAsync</c> 也会被降级成回滚，并记一条 Warning。
+    /// 嵌套：只有最外层真正开事务和提交，嵌套拿到的是子句柄。
+    /// 子句柄没提交就结束 → 整个作用域被标记 rollback-only（粘性），
+    /// 最外层再提交也会降级成回滚，并记一条 Warning。没有保存点。
     ///
-    /// 【不做并发保护】本类不用锁 —— 一个作用域内的事务本就不该被多个线程同时驱动。
-    /// 全仓已确认无 <c>Task.WhenAll</c> / <c>Parallel.*</c> / <c>new Thread</c> 做数据库操作。
-    /// 若将来出现，并发进入 <c>BeginAsync</c> 会让 <c>_depth</c> 竞争 —— 那时再加锁或改为 AsyncLocal。
+    /// 不用锁 —— 一个作用域内的事务不该被多个线程同时驱动。全仓无 Task.WhenAll / Parallel.* /
+    /// new Thread 做数据库操作；将来若出现，并发进 BeginAsync 会让 _depth 竞争，那时再加锁或改 AsyncLocal。
     ///
-    /// 【单次 vs 复用】一个作用域内可以<b>顺序</b>跑完多个事务（前一个结束了再开下一个）：
-    /// 最外层结束时状态归零，<c>_rollbackOnly</c> 一并清掉，不会把上一个事务的失败带给下一个。
+    /// 一个作用域内可以顺序跑完多个事务：最外层结束时状态归零，_rollbackOnly 一并清掉，
+    /// 不会把上一个事务的失败带给下一个。
     /// </summary>
     internal sealed class UnitOfWorkManager : IVivUnitOfWork
     {
@@ -143,9 +131,9 @@ namespace Viv.Engine.UnitOfWork
                 => CompleteAsync(commitRequested: true, cancellationToken);
 
             /// <summary>
-            /// 回滚。粘性由 <c>EndAsync</c> 在非最外层分支上打标记保证（没有保存点，子句柄回滚会把整个事务拖下水）。
-            /// <b>这里刻意不预先打标记</b>：本方法在已完成的句柄上被调用时应当完全无效，
-            /// 提前打标记会把「已经提交完的事务」的状态泄漏给同作用域里的下一个事务 —— 下一个事务会静默变成回滚。
+            /// 回滚。粘性由 <c>EndAsync</c> 在非最外层分支上打标记保证。
+            /// 这里不预先打标记：本方法在已完成的句柄上应当完全无效，提前打标记会把
+            /// 「已经提交完的事务」的状态泄漏给同作用域里的下一个事务 —— 下一个会静默变成回滚。
             /// </summary>
             public Task RollbackAsync(CancellationToken cancellationToken = default)
                 => CompleteAsync(commitRequested: false, cancellationToken);
@@ -159,10 +147,8 @@ namespace Viv.Engine.UnitOfWork
             }
 
             /// <summary>
-            /// 同步释放路径。正常业务用 <c>await using</c> 走 <see cref="DisposeAsync"/>，
-            /// 这里只在调用方写 <c>using</c>（无 await）时兜底。
-            /// 阻塞等待是刻意的：本方法唯一的工作是一次回滚，ASP.NET Core 无同步上下文，
-            /// 不存在经典的死锁场景。若调用方不在 async 流程里，这是唯一能做完回滚的时机。
+            /// 同步释放路径，只在调用方写 <c>using</c>（无 await）时兜底；正常走 <see cref="DisposeAsync"/>。
+            /// 阻塞等待是刻意的 —— 这里唯一的工作是一次回滚，ASP.NET Core 无同步上下文，不存在死锁场景。
             /// </summary>
             public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 

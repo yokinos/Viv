@@ -86,7 +86,7 @@ public class UnitOfWorkTests
             await tx.RollbackAsync();          // 已结束的句柄，应当彻底无效
         }
 
-        // ★ 回归：回滚若在「已完成」判断之前就把作用域打成 rollback-only，
+        // 回归：回滚若在「已完成」判断之前就把作用域打成 rollback-only，
         //   同作用域里的下一个事务会带着这个标记跑 —— 业务以为提交了、实际静默回滚。
         await using (var second = await uow.BeginAsync())
         {

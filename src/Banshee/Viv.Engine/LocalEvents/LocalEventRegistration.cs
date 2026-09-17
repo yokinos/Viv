@@ -6,16 +6,15 @@ using Viv.Contracts.Events;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Magic;
 
-namespace Viv.Engine.LocalEvent
+namespace Viv.Engine.LocalEvents
 {
     /// <summary>
-    /// 本地事件的扫描注册 —— 由 <see cref="VivRegister.Register"/> 调用。
+    /// 本地事件的扫描注册，由 <see cref="VivRegister.Register"/> 调用。
     ///
     /// 处理器无需打特性、无需实现 IDependency，实现 IVivLocalEventHandler&lt;TEvent&gt;
     /// 或继承 LocalEventHandler&lt;TEvent&gt; 即被扫到（基类实现了接口，两者同一条代码路径）。
     ///
-    /// 【这里 0 个处理器是合法的】服务完全可以没有本地事件，只记日志不报错 ——
-    /// 与业务 Service 注册（扫到 0 个通常意味着配置写错）的情形不同。
+    /// 扫到 0 个处理器是合法的，只记日志不报错 —— 与业务 Service 注册（扫到 0 个通常意味着配置写错）不同。
     /// </summary>
     internal static class LocalEventRegistration
     {
@@ -46,8 +45,8 @@ namespace Viv.Engine.LocalEvent
                 if (handlerType.IsGenericTypeDefinition)
                     continue;
 
-                // ⚠️ 必须遍历**全部**闭合接口：一个处理器订阅多个事件时，
-                // 只取第一个会漏注册其余的（本文件配套的回归测试守着这一点）
+                // 必须遍历全部闭合接口：一个处理器订阅多个事件时，
+                // 只取第一个会漏注册其余的（配套回归测试守着这一点）
                 foreach (var iface in handlerType.GetInterfaces().Where(IsLocalEventHandlerInterface))
                 {
                     var eventType = iface.GetGenericArguments()[0];

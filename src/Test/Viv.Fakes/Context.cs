@@ -6,8 +6,8 @@ namespace Viv.Fakes;
 /// <summary>
 /// <see cref="IVivContext"/> 的内存替身 —— 原本散在 6 个测试项目里的副本合并成一个。
 ///
-/// 取的是<b>快照可写</b>那一版（原来 Outbox 的 <c>StubContext</c> / Momo 的 <c>MutableVivContext</c>
-/// 就是这样），因为另外几版「属性 getter 直接抛 NotImplementedException」只是为了让编译通过 ——
+/// 取的是快照可写那一版（原来 Outbox 的 <c>StubContext</c> / Momo 的 <c>MutableVivContext</c>
+/// 就是这样），因为另外几版「属性 getter 直接抛 NotImplementedException」只是为了让编译通过。
 /// 它们要表达的「被测代码不该读上下文」改成 <see cref="ThrowOnMemberAccess"/> 显式开关：
 /// 需要时打开就是断言，不需要时它就是个能用的上下文，而不是一个碰一下就炸的雷。
 /// </summary>
@@ -16,7 +16,7 @@ public class TestContext : IVivContext
     private VivContextContent? _snapshot;
 
     /// <summary>
-    /// 当前快照。<b>可直接赋值</b>（测试摆初值用，不计数）；
+    /// 当前快照，可直接赋值（测试摆初值用，不计数）；
     /// 被测代码走的是接口方法 <see cref="SetSnapshot"/>，那条路径会记 <see cref="SetSnapshotCalls"/>。
     /// </summary>
     public VivContextContent? Snapshot

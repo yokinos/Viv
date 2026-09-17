@@ -1,7 +1,7 @@
 namespace Viv.Outbox.Core
 {
     /// <summary>
-    /// 发件箱行的状态。<b>数值即库里的值</b>（TINYINT / SMALLINT），改动等于改表数据。
+    /// 发件箱行的状态。数值即库里的值（TINYINT / SMALLINT），改动等于改表数据。
     /// </summary>
     public enum OutboxStatus
     {

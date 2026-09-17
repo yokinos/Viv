@@ -28,10 +28,10 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 
 | Project | Role |
 |---|---|
-| `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums；**本地事件契约** `IVivLocalEventBus` / `EngineEvent`（空标记基类）/ `IVivLocalEventHandler<TEvent>` / `LocalEventHandler<TEvent>`（零 Nana 依赖，业务 Core 直接引它写处理器） |
+| `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums；**本地事件契约** `IVivLocalEventBus` / `LocalEvent`（空标记基类）/ `IVivLocalEventHandler<TEvent>` / `LocalEventHandler<TEvent>`（零 Nana 依赖，业务 Core 直接引它写处理器） |
 | `Viv.Delusion` | Utility library — `TypeScanMagic` (assembly type scanning), `ObjectMapper` (Emit + Expression-based), encryption, common extensions |
 | `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios |
-| `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig(builder.Configuration)` binds the `VivOptions` node from appsettings.json into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup；**本地事件总线实现** `LocalEvent/`（`LocalEventBus` / `LocalEventHandlerInvoker<T>` / `LocalEventRegistration`）+ 两个触发点 `LocalEventFlushFilterAttribute`、`LocalEventFlushMiddleware`（**同目录**，本地事件一个文件夹全包） |
+| `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig(builder.Configuration)` binds the `VivOptions` node from appsettings.json into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup；**本地事件总线实现** `LocalEvents/`（`LocalEventBus` / `LocalEventHandlerInvoker<T>` / `LocalEventRegistration`）+ 两个触发点 `LocalEventFlushFilterAttribute`、`LocalEventFlushMiddleware`（**同目录**，本地事件一个文件夹全包）。⚠️ **目录／命名空间是复数 `LocalEvents`**：事件基类叫 `LocalEvent`，若目录同名，`Viv.Engine.LocalEvent` 这个命名空间会在 `Viv.Engine` 里把类型 `LocalEvent` 遮住，`LocalEvent` 一律解析成命名空间（CS0118，实测踩过） |
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
 | `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server；**实体审计**（`ICreatedAt` / `ICreatedBy` / `IUpdatedAt` / `IUpdatedBy` 四个单字段能力接口，逐个 opt-in，由 `MomoDatabase` 自动盖章，见 `### Entity audit`）；**建表 DDL**（`Sync/SchemaSynchronizer` 按实体生成 CREATE/ALTER，双方言，见 `### Schema sync`） |
 | `Viv.Nana` | Messaging — **两条平行的线**：① 跨进程 `NanaEvent` + `IVivEventPublisher` / `NanaEventPublisher` / `VivConsumer<T>`（Wolverine + RabbitMQ，fanout）② 进程内本地队列 `NanaLocalEvent` + `IVivLocalEventPublisher` / `NanaLocalEventPublisher` / `VivLocalConsumer<T>`（Wolverine local queue，点对点，两族互不引用）；Saga support with EF Core state persistence |
@@ -162,7 +162,7 @@ Every API and Worker project carries a `VivOptions` node in its `appsettings.jso
 | `DIOption` | Type-scanning rules for Service/Repository auto-registration |
 | `LogOption` | Logging backend (Serilog → Seq) |
 | `CacheOption` | Redis connection + memory cache toggle |
-| `DatabaseOption` | Database type, read-write split, entity scan targets |
+| `DatabaseOption` | Database type, read-write split, entity scan targets, `SyncTableOnStartup`（启动时按实体同步表结构，默认关） |
 | `NanaOption` | RabbitMQ host/port/credentials, consumer type list, retry count, Saga DB |
 | `OutboxOption` | 发件箱：投递器开关、轮询间隔、批大小、重试上限、租约、建表、保留期。**为 null = 不启用**（见下） |
 | `TokenOption` | JWT secret/expiry/issuer |
@@ -205,11 +205,11 @@ Business-layer services and repositories are registered via **type scanning** dr
 | `NanaEvent` | RabbitMQ | `IVivEventPublisher` | `VivConsumer<T>` | 跨进程、fanout、每服务各收一份、**当场发** |
 | `NanaEvent` | RabbitMQ | **`IVivOutbox`** | `VivConsumer<T>` | 跨进程、fanout、**与业务写同事务**（可靠版，见 `### Outbox（发件箱）`） |
 | `NanaLocalEvent` | Wolverine 本地队列 | `IVivLocalEventPublisher` | `VivLocalConsumer<T>` | 进程内、**点对点**、异步、**独立 DI 作用域** |
-| `EngineEvent` | 本地总线 | `IVivLocalEventBus` | `LocalEventHandler<T>` | 进程内、fanout、同步、**同 DI 作用域** |
+| `LocalEvent` | 本地总线 | `IVivLocalEventBus` | `LocalEventHandler<T>` | 进程内、fanout、同步、**同 DI 作用域** |
 
 **没有第五个基类** —— Outbox 复用 `NanaEvent`，只是换了投递时机（入队 ≠ 发送）。
 
-**与跨进程那条线完全解耦（自带一整套类型，一个现有文件都不碰）**：`IVivLocalEventPublisher` 是独立接口（不是往 `IVivEventPublisher` 加方法 —— 那会破坏它的全部实现者）；`NanaLocalEventPublisher` / `VivLocalConsumer<T>` / `VivLocalConsumerDependency` 同理。本地这条线不引用 `IVivEventPublisher` / `VivConsumer` / `IDistributedLock`。要「一个事件触发多个反应」用 `EngineEvent` + 本地总线（fanout），本地队列是**一事件一消费者**。
+**与跨进程那条线完全解耦（自带一整套类型，一个现有文件都不碰）**：`IVivLocalEventPublisher` 是独立接口（不是往 `IVivEventPublisher` 加方法 —— 那会破坏它的全部实现者）；`NanaLocalEventPublisher` / `VivLocalConsumer<T>` / `VivLocalConsumerDependency` 同理。本地这条线不引用 `IVivEventPublisher` / `VivConsumer` / `IDistributedLock`。要「一个事件触发多个反应」用 `LocalEvent` + 本地总线（fanout），本地队列是**一事件一消费者**。
 
 - **⚠️ `NanaLocalEvent` 是 `NanaEvent` 的平行根，绝不是子类**：`VivWolverineConfigurationExtensions` 对**每个 `NanaEvent` 子类**都注册 `PublishMessage(env).ToRabbitExchange(...)`，一旦继承，所有本地事件被绑死成跨进程语义、`PublishAsync` **双发**（MQ + 本地队列），编译期毫无提示。名字带 Nana 极易顺手写 `: NanaEvent`，故有防回归测试钉死（`NanaLocalEventTests.NanaLocalEvent是空标记基类_且与NanaEvent互不继承`）。同理 `NanaEnvelope<T>` 约束写死 `where T : NanaEvent`，改不得，本地队列用自己的 `NanaLocalEnvelope<T>`。
 - **拓扑与注册**：`AddVivWolverine` 内扫 `ScanTypes<NanaLocalEvent>()` 逐条 `opts.LocalQueue({EventName}LocalQueue)` + `PublishMessage(NanaLocalEnvelope<T>).ToLocalQueue(queue)`（`NanaRegister.GetLocalQueueName`，与 `GetQueueName`/`GetExchangeName` 共用 `StripEventSuffix`）。**按全部子类扫描而非按消费者反推** —— 与跨进程那段对称，保证「发布必有路由」，否则无消费者的本地事件会落进 Wolverine 约定路由。**消费端循环零改动**：`Discovery.IncludeType` 在 `ExtractMessageType` 之前调用，`VivLocalConsumer<T>` 子类返回 `null` 走 `continue`，Wolverine 已能发现其 `HandleAsync`（与现有消费者同一目录即可）。`AddViv()` 里 `AddScoped<IVivLocalEventPublisher, NanaLocalEventPublisher>()`。**`NanaOptions` 不加任何新配置项** —— 没有本地事件时循环空转，零成本。
@@ -226,7 +226,7 @@ Business-layer services and repositories are registered via **type scanning** dr
 
 - **用途对比**：跨进程走 `IVivEventPublisher`（出网、消费端是另一个进程/另一个 DI 作用域）；本地事件不出网，**handler 与发布方同一 DI 作用域** —— 注入的 `IMomoDbContext` / `IVivContext` 就是发布方那一个。
 - **分发时机**：`PublishAsync` **只入队**，真正分发推迟到请求正常结束时（触发点见下）。保证 handler 看到「最终定格」的数据状态；请求失败 → 整队丢弃，一条事件都不发（不留幽灵事件）。
-- **事件类型约束（硬约束）**：事件**必须继承 `EngineEvent`** —— `Viv.Contracts` 里的空标记抽象基类，纯限制：本地事件的 handler 是业务的一部分，写下来就必须执行，所以事件类型不允许随手写（`PublishAsync(new object())` 编译不过）。**各走各的**：要跨进程继承 `NanaEvent` 走 `IVivEventPublisher`（要原子就换成 `IVivOutbox`，事件类型不变），进程内异步点对点继承 `NanaLocalEvent` 走 `IVivLocalEventPublisher`，进程内同步 fanout 继承 `EngineEvent` 走 `IVivLocalEventBus`。⚠️ **绝不可让 `EngineEvent` 去继承 `NanaEvent`** —— `VivWolverineConfigurationExtensions` 对每个 `NanaEvent` 子类都注册了 `ToRabbitExchange` 路由，继承即把所有本地事件绑死成跨进程语义（有防回归测试守着这两点：空标记 + 与 NanaEvent 无继承关系）。
+- **事件类型约束（硬约束）**：事件**必须继承 `LocalEvent`** —— `Viv.Contracts` 里的空标记抽象基类，纯限制：本地事件的 handler 是业务的一部分，写下来就必须执行，所以事件类型不允许随手写（`PublishAsync(new object())` 编译不过）。**各走各的**：要跨进程继承 `NanaEvent` 走 `IVivEventPublisher`（要原子就换成 `IVivOutbox`，事件类型不变），进程内异步点对点继承 `NanaLocalEvent` 走 `IVivLocalEventPublisher`，进程内同步 fanout 继承 `LocalEvent` 走 `IVivLocalEventBus`。⚠️ **绝不可让 `LocalEvent` 去继承 `NanaEvent`** —— `VivWolverineConfigurationExtensions` 对每个 `NanaEvent` 子类都注册了 `ToRabbitExchange` 路由，继承即把所有本地事件绑死成跨进程语义（有防回归测试守着这两点：空标记 + 与 NanaEvent 无继承关系）。
 - **写法（两种，都无需特性 / 无需 IDependency）**：继承 `LocalEventHandler<TEvent>`（与 `VivConsumer<T>` 同手感；C# 单继承，一个类只能订阅一个事件）**或**直接实现 `IVivLocalEventHandler<TEvent>`（可订阅多个事件）。扫描目标统一是接口，注册逻辑只有一份。
 - **注册**：`AddViv()` → `VivRegister.Register` → `LocalEventRegistration.Register` —— `ForceLoadReferencedAssemblies()` + `ScanTypes(typeof(IVivLocalEventHandler<>))`（`TypeScanMagic.IsMatchType` 已支持开放泛型匹配），遍历处理器的**全部**闭合接口注册（订阅多事件时不漏），再按事件类型注册闭合分发器 `LocalEventHandlerInvoker<T>`，最后 `AddScoped<IVivLocalEventBus, LocalEventBus>()`。**泛型处理器定义会被跳过**（闭合 TEvent 未知，继续注册会抛）。这里**扫到 0 个处理器是合法的**（与业务 Service 注册不同），只记日志不报错。
 - **`LocalEventBus` 是 Scoped**（与 `IMomoDbContext` / `IVivContext` 同作用域，这是整个设计的支点）。三态状态机 `Pending` → `Draining` → `Done`：`Draining` 态**允许入队**（处理器内递归发布合法，进下一轮）；`FlushAsync` 最多 5 轮，超限记 Error「疑似递归发布」；`Discard`/`Flush` 均幂等。处理器抛异常**直接上抛**（本地事件是主业务流的一部分，不静默吞）。
@@ -326,9 +326,11 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outb
 | `CREATE TABLE` / `ADD COLUMN` / `ALTER COLUMN` / `DROP TABLE` / `DROP COLUMN` | `GenerateDdl` |
 | 人读的差异报告（`+` / `-` / `~`） | `GenerateReport` |
 
-入口是 `IMomoDbContext.SyncTableAsync(allowDrop, allowAlterColumn)` —— **两个门都默认关**，所以默认行为只有「建缺失的表、加缺失的列」，不改不删。**目前零调用方**（没有 CLI 命令、没有启动钩子），要用得自己调。
+入口是 `IMomoDbContext.SyncTableAsync(allowDrop, allowAlterColumn)` —— **两个门都默认关**，所以默认行为只有「建缺失的表、加缺失的列」，不改不删。
 
-- **🔴 主键判定必须含 `Id` 约定**（`IsPrimaryKeyProperty`）：全仓实体一律继承 `EntityBase`（`long Id`）且**没有一处标 `[Key]`**（EF 靠约定认主键）。只认特性的话生成出来的 `CREATE TABLE` 会**一个主键都没有**，而 `_primaryKeys = ["Id"]` 那套 Id 定位全靠它。**刻意不实现 EF 的 `{类名}Id` 约定** —— `AtUserRoleRelation.UserId` 这类是外键，按那个约定认会把外键标成主键。
+**启动钩子（配置驱动）**：`DatabaseOptions.SyncTableOnStartup`（默认 `false`）打开时，`RunVivApi` / `RunVivWorker` 在 `VivLocator.Initialize` 之后、开始接请求之前调一次（`VivStartupSchemaSync`）。`RunVivGateway` 不调（网关无库）。**已给 6 个有实体的服务打开**：Apex.Api / Apex.Worker / DeepRed.Api / DeepRed.Worker / Herta.Api / Herta.Link —— 开发期实体是唯一事实来源，DB 跟着走，不必手写 DDL。同步失败只记 Error 不阻塞启动（与 `OutboxDispatcher.StartupAsync` 同取舍）。生产期建议关掉，交给迁移脚本控制变更时机。
+
+- **🔴 主键判定必须含 `Id` 约定**（`IsPrimaryKeyProperty`）：全仓实体一律继承 `EntityBase`，`[Key]` 只标在基类的 `long Id` 上（EF 也靠约定认主键）。**只认特性、或只认约定，都不可取**：约定那条不能省，否则一旦有实体脱离 `EntityBase` 就生成出**一个主键都没有**的表，而 `_primaryKeys = ["Id"]` 那套 Id 定位全靠它；特性那条也不能省，否则显式 `[Key]` 的非 `Id` 主键（如 `SyncAttributedRow`）会漏。**刻意不实现 EF 的 `{类名}Id` 约定** —— `AtUserRoleRelation.UserId` 这类是外键，按那个约定认会把外键标成主键。
 - **🔴 `GenerateDdl` 默认不发 `ALTER COLUMN`**（`DiffType.Modified`，需构造时显式 `allowAlterColumn: true`）：这个判据对现有库**几乎全是误报** —— 预期侧按 `nonPkNullable = true` 认为「除主键外全 NULL」、string 无 `[StringLength]` 就是 `nvarchar(max)`，一比对就把有长度约束的字符串列判成要放宽成 `max`、把 NOT NULL 列判成要去掉。**而 `allowDrop` 那条门管不到这里**（它只清 `Deleted`，不清 `Modified`）。`SyncTableAsync` 会把跳过的 ALTER 逐条记日志（静默跳过 = 被当成「同步成功了」）。
 - **🔴 主键只发一条定义**：原先是「内联 `PRIMARY KEY`」+「表级 `CONSTRAINT PK_...`」两条并出（PG 直接 `multiple primary keys` 报错），现在只留**表级具名**那条 —— 具名的后续可定位可删。
 - **可空列不显式输出 `NULL`**：`GenerateCreateTable`/`GenerateAddColumn` 只在 `!IsNullable` 时加 `NOT NULL`。省略即可空是两种方言的默认值。
@@ -351,7 +353,7 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outb
   - **Apex 24 个 —— 按「实体现有字段」逐个标**：21 个完整四件套；`AtFileRecord` 只有 `CreatedAt` → 仅 `ICreatedAt`；`AtUserRoleRelation` 只有 `CreatedAt` + `CreatedBy` → 仅这两个（**这两个偏门实体正是「拆四个接口」而非一个大 `IAudited` 的理由**）；`AtUserBind` 一个审计字段都没有 → **不标**。
   - **Herta 16 个 `Et*` —— 原先一列都没有，本次整体新增四件套**（属性 + 接口）。它们都实现 `ITenant` / `ISoftDeleted`，是唯一会被 `CopyProtectedValues` 的租户保护照到的实体（Apex 一个都不实现 `ITenant`）。
   - **DeepRed 只有 `VtUser` 一个实体，同样没有审计列，本次未动。**
-- **🔴 Herta 那 16 个实体「加了属性就等于加了列」—— 必须先改表结构再上线**：EF 把公开属性全部映射成列，DB 里没有对应列时**每次读写都直接 `Invalid column name 'CreatedAt'`**（不是降级、不是忽略）。**框架不做迁移**（唯一例外是 Outbox 自己那张独立表的 `AutoCreateTable`），16 张 `Et*` 表各需补 4 列 —— DDL 得自己出。这是本次改动里唯一需要人工跟进的部分。
+- **Herta 那 16 个实体「加了属性就等于加了列」**：EF 把公开属性全部映射成列，DB 里没有对应列时**每次读写都直接 `Invalid column name 'CreatedAt'`**（不是降级、不是忽略）。**Herta 的表还没建过**，`SyncTableOnStartup` 已打开 → 下次启动 16 张 `Et*` 表连那 4 列一起建出来，不用手写 DDL。**Apex 才是真正的风险面**（23 个实体带审计列）：若它的表**已经建过**（建表时还没有这些字段），启动同步会走 `ADD COLUMN` 补上 —— 补列属于默认路径，不需要额外放宽 `allowAlterColumn`。反过来，**表已存在时改实体的列类型 / 可空性**属于 `Modified`，默认被拒。
 - **⚠️ 测试覆盖的边界**：`AutoSetInsertValue` / `AutoSetUpdateValue` / `CopyProtectedValues` 是纯内存逻辑，有单测钉死（`Viv.Momo.Tests/AuditValueTests.cs`，探针 `MomoAuditSut` 在 `Viv.Fakes/Audit.cs`）。但**真正的落库路径（`SetValues` + `SaveChanges`）需要数据库，CI 没有** —— 那一段没有被自动化覆盖，别把这些单测当成端到端验证。
 
 ### Multi-tenancy

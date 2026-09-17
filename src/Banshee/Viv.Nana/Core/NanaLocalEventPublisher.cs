@@ -10,11 +10,10 @@ using Wolverine;
 namespace Viv.Nana.Core
 {
     /// <summary>
-    /// 本地事件发布器 —— 把 <see cref="NanaLocalEvent"/> 包成 <see cref="NanaLocalEnvelope{T}"/>
-    /// 投进 Wolverine 本地队列。
+    /// 本地事件发布器 —— 把 <see cref="NanaLocalEvent"/> 包成 <see cref="NanaLocalEnvelope{T}"/> 投进 Wolverine 本地队列。
     ///
     /// 与 <see cref="NanaEventPublisher"/> 平行且互不引用：那个走 RabbitMQ、要包 <c>VivConnectionException</c>；
-    /// 本类纯内存，没有网络传输，也就没有可包的连接异常 —— 异常原样冒泡。
+    /// 本类纯内存、无网络传输，也就没有可包的连接异常，异常原样冒泡。
     /// </summary>
     public class NanaLocalEventPublisher : IVivLocalEventPublisher
     {
@@ -38,7 +37,7 @@ namespace Viv.Nana.Core
                 _logger.Info("本地队列已就绪：本地事件 {0} 种", NanaRegister.LocalEventTypeCount);
 
                 // 无消费者的本地事件：消息进队列后无人处理（没有 RabbitMQ 那种无绑定队列即丢弃的兜底）。
-                // 一次性全列出来，绝不静默吞 —— 否则表现是「发布成功但什么都没发生」，极难排查。
+                // 一次性全列出来 —— 静默吞掉的话表现是「发布成功但什么都没发生」，极难排查。
                 foreach (var orphan in NanaRegister.OrphanLocalEvents)
                 {
                     _logger.Warning("本地事件无消费者，消息进队列后无人处理：{0}", orphan);
@@ -73,7 +72,7 @@ namespace Viv.Nana.Core
                 Context = SnapshotWithHolder(_context.GetRawSnapshot()?.Clone()),
             };
 
-            // ⚠️ 纯内存调度：无消息存储时未到期的消息在进程重启后丢失（与 NanaEventPublisher.PublishDelayAsync 同一条路径）
+            // 纯内存调度：无消息存储时未到期的消息在进程重启后丢失（与 NanaEventPublisher.PublishDelayAsync 同一条路径）
             await _bus.ScheduleAsync(message, delayTTL);
             return true;
         }

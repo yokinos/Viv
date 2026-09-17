@@ -38,5 +38,11 @@ namespace Viv.Momo.Options
         /// 实体程序集名称(所有的实体都需要继承<see cref="Interface.IEntity"/>)
         /// </summary>
         public List<FilterTypeOptions> EntityTypeOptions { get; set; } = [];
+
+        /// <summary>
+        /// 启动时按实体同步表结构（建缺失的表、加缺失的列）。默认关。
+        /// 只加不改不删，对已有库安全。开发期打开，生产期交给迁移脚本。
+        /// </summary>
+        public bool SyncTableOnStartup { get; set; }
     }
 }

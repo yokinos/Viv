@@ -7,14 +7,11 @@ namespace Viv.Engine.UnitOfWork
     /// <summary>
     /// 工作单元的启动期结论暂存处。
     ///
-    /// 【为什么要有这个静态类】
-    /// Autofac 注册发生在 <c>VivLocator.Initialize()</c> 之前，那会儿拿不到 <see cref="ILoggerContract"/>，
-    /// 扫描结论无处可写。所以先存静态，等 <c>UnitOfWorkManager</c> 首次构造时补一条启动日志。
-    /// 与 Nana 的 <c>NanaRegister.RecordLocalQueueScan</c> + <c>NanaLocalEventPublisher</c> 同一套做法。
+    /// Autofac 注册发生在 <c>VivLocator.Initialize()</c> 之前，那时拿不到 <see cref="ILoggerContract"/>，
+    /// 扫描结论先存静态，等 <c>UnitOfWorkManager</c> 首次构造时补一条启动日志。
+    /// 与 NanaRegister.RecordLocalQueueScan 同一套做法。
     ///
-    /// 【为什么要打这条日志】
-    /// 拦截失效是<b>完全静默</b>的 —— 没代理上就没有事务，业务照跑、数据照写，只是不原子。
-    /// 上线后极难排查，所以启动时必须留下一句「拦截了几处」。
+    /// 这条日志必须打：拦截失效是完全静默的，启动时至少留下一句「拦截了几处」。
     /// </summary>
     internal static class UnitOfWorkDiagnostics
     {
@@ -48,9 +45,8 @@ namespace Viv.Engine.UnitOfWork
                 logger.Info("工作单元已就绪：{0} 个类型、{1} 个方法开启方法级事务", types, methods);
             }
 
-            // 类级特性承诺的是「整个类都是事务的」，但接口代理只拦得住可重写的异步方法。
-            // 剩下的逐个列出来（含原因）—— 静默漏掉 = 业务以为在事务里、实际裸奔，
-            // 是最难查的一类问题。
+            // 类级特性承诺「整个类都是事务的」，但接口代理只拦得住可重写的异步方法。
+            // 剩下的逐个列出来（含原因）—— 静默漏掉就是业务以为在事务里、实际裸奔。
             foreach (var item in _notCovered)
             {
                 logger.Warning("类级 [VivUnitOfWork] 未覆盖该公开方法，它不会开启事务：{0}", item);

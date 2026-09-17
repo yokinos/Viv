@@ -8,12 +8,10 @@ using Viv.Outbox.Options;
 namespace Viv.Outbox.Core
 {
     /// <summary>
-    /// 发件箱投递的<b>一轮工作</b>：起表 → 释放过期租约 → 排空认领并投递 → 清理。
+    /// 发件箱投递的一轮工作：起表 → 释放过期租约 → 排空认领并投递 → 清理。
     ///
-    /// <para>
-    /// 与 <see cref="OutboxDispatcher"/> 分开是为了可测：调度（循环、睡眠、吞异常）没什么可测的，
-    /// 业务语义（认领、退避、置 Failed、清理）全在这一层，可以在没有宿主、没有数据库的情况下直接跑。
-    /// </para>
+    /// 与 <see cref="OutboxDispatcher"/> 分开是为了可测：调度那层（循环、睡眠、吞异常）没什么可测的，
+    /// 认领 / 退避 / 置 Failed / 清理这些语义都在这里，可以脱离宿主和数据库直接跑。
     /// </summary>
     internal sealed class OutboxWorker
     {
@@ -123,7 +121,7 @@ namespace Viv.Outbox.Core
             var sender = _senderFactory.Resolve(message.EventType);
             if (sender is null)
             {
-                // 事件类型解析不出来 = 这条消息永远发不出去。置 Failed 并记 Error，**绝不静默丢**：
+                // 事件类型解析不出来 = 这条消息永远发不出去。置 Failed 并记 Error，绝不静默丢：
                 // 多半是 EventType 写错，或者事件类型所在程序集没被加载。
                 _logger.Error(
                     $"发件箱消息的事件类型解析不出来，置为 Failed：EventType={message.EventType}, " +

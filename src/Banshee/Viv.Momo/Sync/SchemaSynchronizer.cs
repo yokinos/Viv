@@ -49,7 +49,7 @@ namespace Viv.Momo.Sync
         ///   设 false 则按 CLR 类型判断（Nullable&lt;T&gt;、string 无 [Required] 等）。
         /// </param>
         /// <param name="allowAlterColumn">
-        ///   默认 <b>false</b>：只做「加表、加列」，<b>不</b>改已有列。见 <see cref="GenerateDdl"/>。
+        ///   默认 false：只做「加表、加列」，不改已有列。见 <see cref="GenerateDdl"/>。
         /// </param>
         public SchemaSynchronizer(DatabaseOptions dbOptions, bool nonPkNullable = true, bool allowAlterColumn = false)
         {
@@ -222,19 +222,13 @@ namespace Viv.Momo.Sync
         /// DDL 是纯字符串列表，需要自行执行（用 IMomoDbContext.ExecuteSqlListAsync 或直接拿连接执行）。
         /// 执行顺序建议：先 DROP TABLE → CREATE TABLE → ALTER TABLE（先删依赖再建）。
         ///
-        /// <para>
-        /// ⚠️ <b>默认不生成 <c>ALTER COLUMN</c></b>（<see cref="DiffType.Modified"/>，改已有列的类型/可空性），
-        /// 除非构造时显式开了 <c>allowAlterColumn</c>。原因是这个判据<b>对本仓的现有库几乎全是误报</b>：
-        /// 预期侧按 <c>nonPkNullable = true</c> 认为「除主键外全 NULL」，string 无 <c>[StringLength]</c> 就是
-        /// <c>nvarchar(max)</c> —— 于是手写建出来的表一比对，<b>每个有长度约束的字符串列都被判成要放宽成
-        /// <c>max</c>、每个 NOT NULL 列都被判成要去掉 NOT NULL</b>，一次同步就把整张表改写变形。
-        /// </para>
+        /// 默认不生成 <c>ALTER COLUMN</c>（<see cref="DiffType.Modified"/>，改已有列的类型/可空性），
+        /// 除非构造时显式开了 <c>allowAlterColumn</c> —— 这个判据对本仓的现有库几乎全是误报：
+        /// 预期侧按 <c>nonPkNullable = true</c> 认为「除主键外全 NULL」，string 无 <c>[StringLength]</c>
+        /// 就是 <c>nvarchar(max)</c>，于是手写建出来的表一比对，每个有长度约束的字符串列都被判成要放宽成
+        /// max、每个 NOT NULL 列都被判成要去掉 NOT NULL。
         ///
-        /// <para>
-        /// 而 <c>allowDrop</c> 那条门（<see cref="MomoDatabaseContext.SyncTableAsync"/>）<b>管不到这里</b> ——
-        /// 它只清 <c>Deleted</c>，不清 <c>Modified</c>。所以「加列」这种最常见、最安全的场景
-        /// 默认就是安全的，要动已有列必须显式开口。
-        /// </para>
+        /// 注意 <c>allowDrop</c> 那条门管不到这里 —— 它只清 <c>Deleted</c>，不清 <c>Modified</c>。
         /// </summary>
         public List<string> GenerateDdl(SyncDiffResult diff)
         {
@@ -674,17 +668,12 @@ namespace Viv.Momo.Sync
         /// <summary>
         /// 主键判定：显式 <c>[Key]</c>，或名字就叫 <c>Id</c>（<see cref="IEntity.Id"/> 约定）。
         ///
-        /// <para>
-        /// ⚠️ <b>约定那条不能省</b>：全仓实体一律继承 <c>EntityBase</c>（<c>long Id</c>），
-        /// 没有一处标 <c>[Key]</c>（EF 靠约定认主键）。只认特性的话，生成出来的
-        /// <c>CREATE TABLE</c> 会<b>一个主键都没有</b> —— 而 <c>MomoDatabase._primaryKeys = ["Id"]</c>
-        /// 那套按 Id 定位/更新的路径全指着它，静默失去数据库层的唯一性约束。
-        /// </para>
+        /// 约定那条不能省：只认特性的话，不继承 EntityBase、也没标 <c>[Key]</c> 的实体生成出来的
+        /// <c>CREATE TABLE</c> 会一个主键都没有，而 <c>MomoDatabase._primaryKeys = ["Id"]</c>
+        /// 那套按 Id 定位/更新的路径全指着它。
         ///
-        /// <para>
-        /// 刻意<b>不</b>实现 EF 的 <c>{类名}Id</c> 约定：本仓的 <c>AtUserRoleRelation.UserId</c>
+        /// 刻意不实现 EF 的 <c>{类名}Id</c> 约定：本仓的 <c>AtUserRoleRelation.UserId</c>
         /// 这类属性是外键而不是主键，按那个约定认会把外键标成主键。
-        /// </para>
         /// </summary>
         private static bool IsPrimaryKeyProperty(PropertyInfo prop)
             => Attribute.IsDefined(prop, typeof(KeyAttribute))

@@ -5,7 +5,7 @@ using Viv.Momo.Interface;
 namespace Viv.Momo.Tests;
 
 #region 测试行
-// ⚠️ 刻意都不以 "Entity" 结尾 —— 那个后缀会被 TenantFilterTests 的 EF 扫描
+// 刻意都不以 "Entity" 结尾 —— 那个后缀会被 TenantFilterTests 的 EF 扫描
 // （AssemblyName = "Viv.Momo.Tests", ClassNameEndsWith = "Entity"）捞进模型，污染它的断言。
 
 /// <summary>完整四件套 + 租户</summary>
@@ -48,10 +48,8 @@ public class NoAuditRow : IEntity
 /// 审计字段自动填充（<c>MomoDatabase.AutoSetInsertValue</c> / <c>AutoSetUpdateValue</c>）与
 /// 更新路径的不可变列保护（<c>CopyProtectedValues</c>）。
 ///
-/// <para>
-/// ⚠️ 这里测的全是纯内存逻辑。真正的落库路径（<c>Entry(existing).CurrentValues.SetValues</c> +
-/// <c>SaveChanges</c>）需要数据库，CI 没有 —— 那一段没有被这些测试覆盖，别把它们当成端到端验证。
-/// </para>
+/// 这里测的全是纯内存逻辑。真正的落库路径（<c>Entry(existing).CurrentValues.SetValues</c> +
+/// <c>SaveChanges</c>）需要数据库，CI 没有 —— 那一段没被覆盖，别把这些测试当成端到端验证。
 /// </summary>
 public class AuditValueTests
 {

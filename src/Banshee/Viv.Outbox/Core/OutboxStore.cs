@@ -9,14 +9,11 @@ using Viv.Nana;
 namespace Viv.Outbox.Core
 {
     /// <summary>
-    /// <see cref="IVivOutbox"/> 的实现：把事件<b>写进发件箱</b>，不发任何东西。
+    /// <see cref="IVivOutbox"/> 的实现：把事件写进发件箱，不发任何东西。
     ///
-    /// <para>
-    /// <b>Scoped</b> —— 与业务代码拿到的 <c>IMomoDbContext</c> 同一作用域，
-    /// 因而共享同一个事务状态（Momo 的 <c>_transaction</c> 挂在实例字段上）。
-    /// 换成 Singleton 或 Transient，入队就会跑到业务事务外面去，
-    /// 这个模式唯一的产出（原子性）当场归零。
-    /// </para>
+    /// 必须是 Scoped —— 与业务代码拿到的 <c>IMomoDbContext</c> 同一作用域才能共享事务状态
+    /// （Momo 的 <c>_transaction</c> 挂在实例字段上）。换成 Singleton 或 Transient，
+    /// 入队就跑到业务事务外面去了，原子性当场归零。
     /// </summary>
     internal sealed class OutboxStore : IVivOutbox
     {
@@ -74,8 +71,8 @@ namespace Viv.Outbox.Core
         }
 
         /// <summary>
-        /// 与 <c>NanaEventPublisher</c> 同一套盖章逻辑（含 holderId 兜底），刻意<b>只抄不共用</b>：
-        /// 共用的代价是往 Viv.Nana 里塞一个双方都依赖的内部 helper，为了三行代码不值当。
+        /// 与 <c>NanaEventPublisher</c> 同一套盖章逻辑（含 holderId 兜底）。只抄不共用 ——
+        /// 共用得往 Viv.Nana 里塞一个双方都依赖的内部 helper，为三行代码不值当。
         /// </summary>
         private static VivContextContent SnapshotWithHolder(VivContextContent? snapshot)
         {

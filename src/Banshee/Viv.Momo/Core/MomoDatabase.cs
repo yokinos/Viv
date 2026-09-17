@@ -122,15 +122,11 @@ namespace Viv.Momo.Core
         /// <summary>
         /// 当前登录用户，供 <see cref="ICreatedBy"/> / <see cref="IUpdatedBy"/> 盖章。
         ///
-        /// <para>
-        /// 与 <see cref="TenantId"/> 完全同一读法：<b>调用时</b>从 <see cref="IVivContext"/> 读取，
-        /// 不在构造时缓存（Wolverine 先构造 DbContext 再 SetSnapshot，构造时冻结会让整条消息读到 0）。
-        /// </para>
+        /// 与 <see cref="TenantId"/> 同一读法：调用时从 <see cref="IVivContext"/> 读，不在构造时缓存
+        /// （Wolverine 先构造 DbContext 再 SetSnapshot，构造时冻结会让整条消息读到 0）。
         ///
-        /// <para>
-        /// 无登录上下文（Worker / 消息消费 / 后台任务，<c>UserId == 0</c>）返回 <c>null</c> ——
-        /// 审计列是 <c>long?</c>，记 0 会让「没有操作人」跟真实存在的 <c>UserId = 0</c> 混在一起。
-        /// </para>
+        /// 无登录上下文（Worker / 消息消费 / 后台任务，UserId == 0）返回 null —— 审计列是 long?，
+        /// 记 0 会让「没有操作人」跟真实存在的 UserId = 0 混在一起。
         /// </summary>
         protected long? CurrentUserId
         {
@@ -154,17 +150,13 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
-        /// 自动设置<b>新增</b>时的默认值：Id、TenantId + 审计四件套。
+        /// 自动设置新增时的默认值：Id、TenantId + 审计四件套。
         ///
-        /// <para>
-        /// 审计字段按能力逐个 opt-in（<c>entity is ICreatedAt</c> 运行时判断），所以泛型约束仍是
-        /// <see cref="IEntity"/> 不变 —— 全仓四十来个实体里只有一部分有四件套，收紧约束会让其余编译不过。
-        /// </para>
+        /// 审计字段按能力逐个 opt-in（<c>entity is ICreatedAt</c> 运行时判断），泛型约束仍是
+        /// <see cref="IEntity"/> —— 全仓四十来个实体只有一部分有四件套，收紧约束会让其余编译不过。
         ///
-        /// <para>
-        /// 新增时<b>四件套一起盖</b>（创建与更新时间都取新增那一刻）：只盖创建的话，
-        /// 「只插不改」的行更新时间会永远是 <c>null</c>。
-        /// </para>
+        /// 新增时四件套一起盖（创建与更新时间都取新增那一刻）：只盖创建的话，
+        /// 「只插不改」的行更新时间会永远是 null。
         /// </summary>
         protected void AutoSetInsertValue<T>(params T[] entities) where T : IEntity
         {
@@ -185,18 +177,12 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
-        /// 自动设置<b>更新</b>时的默认值：<b>只</b>盖 <see cref="IUpdatedAt"/> / <see cref="IUpdatedBy"/>。
+        /// 自动设置更新时的默认值：只盖 <see cref="IUpdatedAt"/> / <see cref="IUpdatedBy"/>。
         ///
-        /// <para>
-        /// ⚠️ 更新路径<b>绝不</b>碰创建信息 —— 那是只写一次的。更新人/时间则每次都要盖新的
-        /// （<b>无条件覆盖</b>而不是「为 default 才填」：调用方传进来的 <c>UpdatedAt</c> 通常就是 <c>default</c>，
-        /// 靠它判断会把「这次更新」的时间永远写成空）。
-        /// </para>
+        /// 更新路径绝不碰创建信息 —— 那是只写一次的。更新人/时间每次盖新的，且是无条件覆盖而不是
+        /// 「为 default 才填」：调用方传进来的 UpdatedAt 通常就是 default，靠它判断会把时间永远写成空。
         ///
-        /// <para>
-        /// 更新路径<b>不</b>填 Id / TenantId —— 主键决定改哪一行，租户不允许被改（<see cref="TenantId"/> 由
-        /// <see cref="CopyProtectedValues"/> 保护，见那边）。
-        /// </para>
+        /// 也不填 Id / TenantId —— 主键决定改哪一行，租户不允许被改（由 <see cref="CopyProtectedValues"/> 保护）。
         /// </summary>
         protected void AutoSetUpdateValue<T>(params T[] entities) where T : IEntity
         {
@@ -213,21 +199,15 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
-        /// 把<b>入参改不动的那几列</b>从库里加载出来的那一份补回入参上，必须在
-        /// <c>Entry(existing).CurrentValues.SetValues(entity)</c> <b>之前</b>调用。
+        /// 把入参改不动的那几列从库里加载出来的那一份补回入参上，必须在
+        /// <c>Entry(existing).CurrentValues.SetValues(entity)</c> 之前调用。
         ///
-        /// <para>
-        /// <c>SetValues</c> 会把入参实体上的<b>全部</b>映射列无差别覆盖到被跟踪实体上，包括调用方
-        /// 根本不该改的列 —— 而入参上它们是 <c>default</c>，于是每次 Update 都把库里的值冲掉：
-        /// </para>
-        /// <list type="bullet">
-        /// <item><see cref="ICreatedAt"/> / <see cref="ICreatedBy"/> → 创建信息被冲成 <c>NULL</c>（每次更新都丢一次）</item>
-        /// <item><see cref="ITenant"/> → 没填租户的入参把行<b>搬到租户 0 去</b>，且因全局查询过滤器而「消失」</item>
-        /// </list>
+        /// SetValues 会把入参实体上的全部映射列无差别覆盖到被跟踪实体上，包括调用方根本不该改的列 ——
+        /// 而入参上它们是 default，于是每次 Update 都把库里的值冲掉：
+        /// 创建信息被冲成 NULL（每次更新都丢一次）；没填租户的入参把行搬到租户 0 去，
+        /// 且因全局查询过滤器而在业务侧「消失」。
         ///
-        /// <para>
-        /// 这两处在审计字段真正开始写入之前都是<b>潜伏</b>的（没人写过，冲掉了也看不出来）。
-        /// </para>
+        /// 这两处在审计字段真正开始写入之前都是潜伏的（没人写过，冲掉了也看不出来）。
         /// </summary>
         protected static void CopyProtectedValues(IEntity from, IEntity to)
         {
@@ -256,11 +236,10 @@ namespace Viv.Momo.Core
         /// <summary>
         /// 取 EF 事务底层的 ADO 事务（Dapper、原生 <c>DbCommand</c> 要的是它）。
         ///
-        /// <para>
-        /// EF 的 <see cref="IDbContextTransaction"/>（实际是 SqlServerTransaction）<b>不是</b>
-        /// <see cref="IDbTransaction"/>，两者没有继承关系，直接强转必抛 <c>InvalidCastException</c>。
+        /// EF Core 10 没有现成的 <c>GetDbTransaction()</c> 扩展方法，别去找。EF 的
+        /// <see cref="IDbContextTransaction"/>（实际是 SqlServerTransaction）不是
+        /// <see cref="IDbTransaction"/>，两者没有继承关系，直接强转必抛 InvalidCastException，
         /// 底层那个真事务只能经 <see cref="IInfrastructure{T}"/> 取出来。
-        /// </para>
         /// </summary>
         protected static IDbTransaction GetDbTransaction(IDbContextTransaction transaction)
         {

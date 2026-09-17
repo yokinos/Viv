@@ -5,23 +5,19 @@ using System.Threading;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
 
-namespace Viv.Engine.LocalEvent
+namespace Viv.Engine.LocalEvents
 {
     /// <summary>
-    /// [过滤器] 本地事件分发触发点 —— HTTP 主路径。
+    /// 本地事件分发触发点 —— HTTP 主路径，挂在 MVC 全局过滤链上，业务控制器无需标注。
     ///
-    /// 挂在 MVC 全局过滤链上（VivStartApiExtensions 的 AddMvc），业务控制器无需任何标注。
+    /// 这里用 action filter 而不是中间件，是因为两件事：
+    /// 位置对 —— next() 返回时结果尚未执行、响应尚未写出，分发失败还能把响应改成错误信封；
+    /// 看得见业务成败 —— VivExceptionFilterAttribute 在 next() 内部处理异常并置 ExceptionHandled，
+    /// MVC 随之把已处理的异常从 ActionExecutedContext.Exception 上剥离，此时唯一的失败信号只剩
+    /// context.Result 里那个错误 VivApiResult。中间件看不到信封码，只能看 HTTP 状态码，
+    /// 而业务失败恰恰是「HTTP 200 + 信封非 2xx」，会被误判成成功。
     ///
-    /// 【为什么用 action filter，不用中间件】
-    /// 1. <b>位置对</b>：<c>await next()</c> 返回时结果尚未执行、响应尚未写出，
-    ///    此刻分发失败还能把响应改成错误信封
-    /// 2. <b>看得见业务成败</b>：VivExceptionFilterAttribute 是 exception filter，
-    ///    它在 action filter 的 next() **内部**处理异常并把 <c>ExceptionHandled</c> 置 true ——
-    ///    MVC 随之把已处理的异常从 ActionExecutedContext.Exception 上剥离，
-    ///    此时唯一的失败信号只剩 <c>context.Result</c> 里那个错误 VivApiResult。
-    ///    中间件看不到信封码，只能看 HTTP 状态码，而业务失败是「HTTP 200 + 信封非 2xx」，会被误判成成功。
-    ///
-    /// 分发不了的请求一律 Discard —— 绝不出现「库已经写坏了但事件照发」的幽灵事件。
+    /// 分发不了的请求一律 Discard，不出现「库已经写坏了但事件照发」的幽灵事件。
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
     public class LocalEventFlushFilterAttribute : Attribute, IAsyncActionFilter
@@ -54,9 +50,8 @@ namespace Viv.Engine.LocalEvent
         /// <summary>
         /// 本次请求是否算业务失败（失败则整队丢弃，一条事件都不发）。
         ///
-        /// 信封那一段<b>直接复用 <see cref="FailDetector"/></b> —— 它与工作单元的提交/回滚判定
-        /// 是同一条规则。以前这里抄了一份 <c>Code &lt; 200 || Code &gt;= 300</c>，靠一个反射测试
-        /// 盯着两份不漂移；复用之后不需要了。
+        /// 信封那一段直接复用 <see cref="FailDetector"/>，与工作单元的提交/回滚判定同一条规则。
+        /// 以前这里抄了一份 Code&lt;200 || Code&gt;=300，靠反射测试盯着两份不漂移，复用之后不需要了。
         /// </summary>
         private static bool IsFailed(ActionExecutedContext executed)
         {

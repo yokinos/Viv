@@ -15,7 +15,7 @@ using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Echo.Grpc;
 using Viv.Engine.Filter;
-using Viv.Engine.LocalEvent;
+using Viv.Engine.LocalEvents;
 using Viv.Engine.Middleware;
 using Viv.Sandrone.Conveter;
 using Viv.Sandrone.OpenApi;
@@ -156,6 +156,9 @@ namespace Viv.Engine
 
             var app = builder.Build();
             VivLocator.Initialize(app.Services);
+
+            // 尝试同步表结构
+            VivStartupSchemaSync.Run(app.Services);
 
             // 网关代理场景：信任 YARP 默认透传的 X-Forwarded-Proto/Host/For，
             // 否则下游 UseHttpsRedirection 会把 http 请求 302 到自己的 https 地址，浏览器绕开网关直连下游。

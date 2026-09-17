@@ -16,8 +16,8 @@ namespace Viv.Nana.Tests
     /// <summary>
     /// 成功消费，并记录「进入业务那一刻」看到的东西 —— holder 与租户快照。
     ///
-    /// 【为什么必须记在 handler 里，不能事后读上下文】
-    /// ① holder：<c>LockHolderContext</c> 的写入只在该异步流内生效，从外面读**拿不到** handler 里的值；
+    /// 必须记在 handler 里、不能事后读上下文，两个原因：
+    /// ① holder：<c>LockHolderContext</c> 的写入只在该异步流内生效，从外面读拿不到 handler 里的值；
     /// ② 快照：<c>HandleAsync</c> 的 finally 会清上下文，方法返回后快照已经没了 ——
     ///    事后断言只会读到 null，「到底水合没水合」就成了一笔糊涂账。
     /// 两者都只有站在 handler 内部才看得见，而那正是要测的东西。
@@ -74,7 +74,7 @@ namespace Viv.Nana.Tests
     /// 本地队列消费者语义 —— HandleAsync 是 Wolverine handler 入口，负责
     /// 从信封水合租户上下文、盖 holder、映射消费结果、以及无论如何都清理上下文。
     ///
-    /// 与 VivConsumerTests 的对照点：本地队列**没有**消费锁那一段（无取锁、无释放、无锁异常处理）。
+    /// 与 VivConsumerTests 的对照点：本地队列没有消费锁那一段（无取锁、无释放、无锁异常处理）。
     /// </summary>
     public class VivLocalConsumerTests
     {
@@ -154,7 +154,7 @@ namespace Viv.Nana.Tests
             Assert.Equal("7", consumer.HolderIdInsideHandler);
         }
 
-        // 关于 finally 里的 LockHolderContext.Clear()：从测试外部**观察不到**，故不作断言。
+        // 关于 finally 里的 LockHolderContext.Clear()：从测试外部观察不到，故不作断言。
         // 两个原因叠加 ——
         // ① AsyncLocal 的写入只在子异步流内生效，HandleAsync 里 Set/Clear 不会回流到调用方；
         // ② LockHolderContext.CurrentHolderId 的 getter 在值为空时会懒生成一个新 id 并写回，

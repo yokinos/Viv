@@ -9,11 +9,9 @@ namespace Viv.Fakes;
 /// <summary>
 /// 暴露 <see cref="MomoDatabase"/> 受保护成员的探针 —— 审计字段的填充分支全在 <c>protected</c> 方法里。
 ///
-/// <para>
-/// 这些方法<b>不碰数据库</b>（只改实体属性 + 读 <see cref="IVivContext"/>），所以构造一个不需要真库的
-/// 实例就能测；真正的落库路径（<c>SetValues</c> + <c>SaveChanges</c>）在 CI 里没有库可跑，
-/// 那是另一回事 —— 不要用这个探针冒充它。
-/// </para>
+/// 这些方法不碰数据库（只改实体属性 + 读 <see cref="IVivContext"/>），所以构造一个不需要真库的
+/// 实例就能测。真正的落库路径（<c>SetValues</c> + <c>SaveChanges</c>）在 CI 里没有库可跑，
+/// 这个探针覆盖不到，别拿它冒充。
 /// </summary>
 public class MomoAuditSut : MomoDatabase
 {

@@ -10,12 +10,12 @@ using Viv.Log;
 namespace Viv.Engine.Tests;
 
 /// <summary>
-/// <c>[VivUnitOfWork]</c> 拦截器 —— 跑<b>真链路</b>：
+/// <c>[VivUnitOfWork]</c> 拦截器 —— 跑真链路：
 /// Autofac 容器 → Castle 接口代理 → AsyncDeterminationInterceptor → VivUnitOfWorkInterceptor
 /// → UnitOfWorkManager → 内核桩。只把最底下那一层换成桩，上面全是生产代码。
 ///
-/// 【为什么不直接 new 一个拦截器手搓 IInvocation】
-/// 那样验不到「接口代理到底有没有把异步调用送到异步重载上」——
+/// 不直接 new 一个拦截器手搓 IInvocation 的原因：那样验不到「接口代理到底有没有把异步调用
+/// 送到异步重载上」——
 /// 而这恰恰是本特性最容易静默失效的地方（Castle 同步 Proceed 在第一个 await 处就返回）。
 /// 归到 "UnitOfWork" 集合：与另两组共用 <see cref="UnitOfWorkDiagnostics"/> 的进程级一次性静态状态。
 /// </summary>
@@ -39,7 +39,7 @@ public class UnitOfWorkInterceptorTests
 
     public class ProbeService : IProbeService
     {
-        /// <summary>★ 业务体真正跑完时置位 —— 内核在「提交那一刻」读它</summary>
+        /// <summary>业务体真正跑完时置位 —— 内核在「提交那一刻」读它</summary>
         public static bool BodyFinished;
 
         [VivUnitOfWork]
@@ -141,8 +141,8 @@ public class UnitOfWorkInterceptorTests
     }
 
     /// <summary>
-    /// ★ 本次最关键的一条 ★
-    /// 业务方法体内有 await，提交必须发生在方法体<b>真正结束之后</b>。
+    /// 本次最关键的一条
+    /// 业务方法体内有 await，提交必须发生在方法体真正结束之后。
     ///
     /// 这条测的就是裸 <c>IInterceptor</c> 会挂的那个点：<c>invocation.Proceed()</c> 在业务遇到
     /// 第一个 await 时就返回了，天真的 <c>Proceed(); Commit();</c> 会在业务跑完之前提交 ——
@@ -281,7 +281,7 @@ public class UnitOfWorkInterceptorTests
     [Fact]
     public void 两个作用域_拦截器与工作单元实例隔离()
     {
-        // ★ 回归护栏：拦截器一旦被 Autofac 解析到根作用域，IVivUnitOfWork 就成了全局单例 ——
+        // 回归护栏：拦截器一旦被 Autofac 解析到根作用域，IVivUnitOfWork 就成了全局单例 ——
         //   并发请求共用同一个事务状态机，一个请求提交会把另一个请求的事务也提交掉。
         var (container, _, _) = Build();
         using var c1 = container.BeginLifetimeScope();
