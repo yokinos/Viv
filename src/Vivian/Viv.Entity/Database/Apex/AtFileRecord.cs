@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 上传文件记录
     /// </summary>
-    public class AtFileRecord : EntityBase, ISoftDeleted
+    public class AtFileRecord : EntityBase, ISoftDeleted, ICreatedAt
     {
         /// <summary>
         /// 所属客户端AppId
@@ -45,7 +45,7 @@ namespace Viv.Entity.Database.Apex
         public int SourceType { get; set; }
 
         public EmStatus Status { get; set; }
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime? DeletedAt { get; set; }
     }

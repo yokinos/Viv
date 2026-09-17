@@ -76,6 +76,16 @@ namespace Viv.Momo
         void IsAutoSetDefaultValue(bool flag);
         EFAppContext GetEFContext(DbReadWriteType readWriteType = DbReadWriteType.Read);
         IDbConnection GetDbConnection(DbReadWriteType readWriteType = DbReadWriteType.Read);
-        Task SyncTableAsync(bool allowDrop = false, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 按实体同步表结构：建缺失的表、加缺失的列。
+        ///
+        /// <para>
+        /// <paramref name="allowDrop"/> 控制是否允许删表/删列；<paramref name="allowAlterColumn"/> 控制是否允许
+        /// 改<b>已有列</b>的类型/可空性（默认关 —— 这个判据对现有库误报极多，见 <c>SchemaSynchronizer.GenerateDdl</c>）。
+        /// 两者都默认关，所以默认行为只有「加」不会「改/删」。
+        /// </para>
+        /// </summary>
+        Task SyncTableAsync(bool allowDrop = false, bool allowAlterColumn = false, CancellationToken cancellationToken = default);
     }
 }

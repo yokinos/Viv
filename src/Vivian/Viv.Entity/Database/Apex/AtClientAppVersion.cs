@@ -10,7 +10,7 @@ namespace Viv.Entity.Database.Apex
     /// 客户端应用版本表
     /// 一对多关联 AtClientApp，一个应用多条版本记录
     /// </summary>
-    public class AtClientAppVersion : EntityBase, ISoftDeleted
+    public class AtClientAppVersion : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 关联客户端应用主键Id（AtClientApp.Id）
@@ -53,7 +53,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人
@@ -63,7 +63,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
 
         /// <summary>
         /// 更新人

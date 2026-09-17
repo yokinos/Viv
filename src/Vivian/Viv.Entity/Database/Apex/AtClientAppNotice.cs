@@ -11,7 +11,7 @@ namespace Viv.Entity.Database.Apex
     /// 客户端公告广播表
     /// 每条公告绑定单个ClientApp，实现不同App推送不同公告
     /// </summary>
-    public class AtClientAppNotice : EntityBase, ISoftDeleted
+    public class AtClientAppNotice : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 绑定客户端AppId（关联AtClientApp.Id）
@@ -72,9 +72,9 @@ namespace Viv.Entity.Database.Apex
         /// </summary>
         public EmStatus Status { get; set; }
 
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
         public long? CreatedBy { get; set; }
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
         public long? UpdatedBy { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime? DeletedAt { get; set; }

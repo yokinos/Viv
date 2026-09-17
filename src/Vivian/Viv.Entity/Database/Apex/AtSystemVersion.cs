@@ -10,7 +10,7 @@ namespace Viv.Entity.Database.Apex
     /// 系统售卖版本主表
     /// 仅存储套餐基础信息，各App独立权限存放于AtSystemVersionAppRelation
     /// </summary>
-    public class AtSystemVersion : EntityBase, ISoftDeleted
+    public class AtSystemVersion : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 所属组织Id，关联AtOrg.Id
@@ -64,7 +64,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人ID
@@ -74,7 +74,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
 
         /// <summary>
         /// 更新人ID

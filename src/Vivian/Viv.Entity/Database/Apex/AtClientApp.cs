@@ -12,7 +12,7 @@ namespace Viv.Entity.Database.Apex
     /// 同一应用不同平台 = 不同 AppId
     /// 同一应用不同版本 = 共用同一个 AppId（版本管理见 <see cref="AtClientAppVersion"/>）
     /// </summary>
-    public class AtClientApp : EntityBase, ISoftDeleted
+    public class AtClientApp : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 对外唯一鉴权AppId
@@ -78,7 +78,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
 
         /// <summary>
         /// 更新人

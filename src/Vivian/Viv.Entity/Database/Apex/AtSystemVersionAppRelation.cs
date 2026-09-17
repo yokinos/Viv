@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// 套餐与客户端应用关联表
     /// 一套版本可绑定多个App，每个App独立配置一套功能掩码
     /// </summary>
-    public class AtSystemVersionAppRelation : EntityBase, ISoftDeleted
+    public class AtSystemVersionAppRelation : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 套餐主表Id（关联AtSystemVersion.Id）
@@ -44,7 +44,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人ID
@@ -54,7 +54,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
 
         /// <summary>
         /// 更新人ID

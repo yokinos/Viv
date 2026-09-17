@@ -11,7 +11,7 @@ namespace Viv.Entity.Database.Apex
     /// 系统全局配置表
     /// 支持全局/组织/租户范围配置，关联配置分组Id
     /// </summary>
-    public class AtSystemSetting : EntityBase, ISoftDeleted
+    public class AtSystemSetting : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 关联配置分组Id AtConfigGroup.Id
@@ -49,9 +49,9 @@ namespace Viv.Entity.Database.Apex
         public string? Remark { get; set; }
 
         public EmStatus Status { get; set; }
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
         public long? CreatedBy { get; set; }
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
         public long? UpdatedBy { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime? DeletedAt { get; set; }

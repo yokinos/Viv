@@ -33,7 +33,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios |
 | `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig(builder.Configuration)` binds the `VivOptions` node from appsettings.json into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup；**本地事件总线实现** `LocalEvent/`（`LocalEventBus` / `LocalEventHandlerInvoker<T>` / `LocalEventRegistration`）+ 两个触发点 `LocalEventFlushFilterAttribute`、`LocalEventFlushMiddleware`（**同目录**，本地事件一个文件夹全包） |
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
-| `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server |
+| `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server；**实体审计**（`ICreatedAt` / `ICreatedBy` / `IUpdatedAt` / `IUpdatedBy` 四个单字段能力接口，逐个 opt-in，由 `MomoDatabase` 自动盖章，见 `### Entity audit`）；**建表 DDL**（`Sync/SchemaSynchronizer` 按实体生成 CREATE/ALTER，双方言，见 `### Schema sync`） |
 | `Viv.Nana` | Messaging — **两条平行的线**：① 跨进程 `NanaEvent` + `IVivEventPublisher` / `NanaEventPublisher` / `VivConsumer<T>`（Wolverine + RabbitMQ，fanout）② 进程内本地队列 `NanaLocalEvent` + `IVivLocalEventPublisher` / `NanaLocalEventPublisher` / `VivLocalConsumer<T>`（Wolverine local queue，点对点，两族互不引用）；Saga support with EF Core state persistence |
 | `Viv.Outbox` | **发件箱（事务性消息投递）** — `IVivOutbox` / `OutboxStore`（Scoped，入队走 `ExecuteSqlAsync` 并入业务事务）+ `OutboxDispatcher`/`OutboxWorker`（后台投递，原子认领）+ 手写 SQL（**一次都不经过 EF**，表 `VivOutboxMessage`）。解决「写库 + 发消息」不原子：**写和待发消息进同一个本地事务**，投递交给后台。见下 |
 | `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`)。访问失败抛 `VivConnectionException(Redis)`（API 过滤器 `-502`，客户端只回固定文案）；`DataAccessCacheBase` 读路径 catch 后回源数据库。锁 / 写仍抛。锁续期后台任务仍只记日志后停止 |
@@ -87,7 +87,7 @@ Unit test suites, one per framework project — `Viv.Delusion.Tests`、`Viv.Engi
 
 - **不是测试项目**：csproj 写死 `<IsTestProject>false</IsTestProject>` 且**刻意不带** `Microsoft.NET.Test.Sdk` / `xunit` / `coverlet.collector`（替身没有一个用到 xUnit 类型）→ `dotnet test Viv.slnx` 静默跳过它，不会报「没有可用测试」。带测试 SDK 反而会被当测试宿主去跑。
 - **不参与覆盖率**：程序集级 `ExcludeFromCodeCoverage`（实测 coverlet 遵守，cobertura 里 `Viv.Fakes` 类数 = 0）+ CI 侧 reportgenerator `-assemblyfilters:"-Viv.*.Tests*;-Viv.Fakes*"` 双保险，覆盖率汇总脚本里另有 `SKIP_PREFIXES = ('Viv.Fakes',)`。
-- **文件组织按接口族**：`Logging.cs`（`RecordingLogger : ILoggerContract`）、`Context.cs`（`TestContext : IVivContext` + `TestContextAccessor : IVivContextAccessor`）、`Messaging.cs`（`RecordingEventPublisher` / `RecordingLocalEventPublisher` / `RecordingDistributedLock`）、`Caching.cs`（`TestBucket` + `CacheSut : DataAccessCacheBase<TestBucket>` + `CacheDoubles`）、`Transactions.cs`（`KernelStub : ITransactionKernel`）、`Outbox.cs`（`StubOutboxRepository : IOutboxRepository`）、`Hosting.cs`（`StubHost` / `FakeRequest : IApiRequest` / SignalR 四件套 / `StubConnectionPool`）、`Grpc.cs`（三个流替身）、`Proxies.cs`（`TestProxy : DispatchProxy` + `NopProxy`）、`XUnitTestMagic.cs`（`CreateOptions<T>`）。
+- **文件组织按接口族**：`Logging.cs`（`RecordingLogger : ILoggerContract`）、`Context.cs`（`TestContext : IVivContext` + `TestContextAccessor : IVivContextAccessor`）、`Messaging.cs`（`RecordingEventPublisher` / `RecordingLocalEventPublisher` / `RecordingDistributedLock`）、`Caching.cs`（`TestBucket` + `CacheSut : DataAccessCacheBase<TestBucket>` + `CacheDoubles`）、`Audit.cs`（`MomoAuditSut : MomoDatabase`，暴露 `protected` 的审计填充方法）、`Transactions.cs`（`KernelStub : ITransactionKernel`）、`Outbox.cs`（`StubOutboxRepository : IOutboxRepository`）、`Hosting.cs`（`StubHost` / `FakeRequest : IApiRequest` / SignalR 四件套 / `StubConnectionPool`）、`Grpc.cs`（三个流替身）、`Proxies.cs`（`TestProxy : DispatchProxy` + `NopProxy`）、`XUnitTestMagic.cs`（`CreateOptions<T>`）。
 - **只有两个替身是 `internal`**：`KernelStub` / `StubOutboxRepository` 要桩的接口（`ITransactionKernel` / `IOutboxRepository`）本身是 internal，而 **public 类实现 internal 接口是 CS0061**，故替身只能 internal，靠 `InternalsVisibleTo` 放给 `Viv.Engine.Tests` / `Viv.Outbox.Tests`（`Viv.Fakes.csproj` 里那两条 IVT 就是为它俩开的，**不要为了让替身「哪都能用」而全开**）。生产侧 `Viv.Engine` / `Viv.Outbox` 各反向加了一条 `InternalsVisibleTo Include="Viv.Fakes"`。
 - **⚠️ `TestProxy` / `NopProxy` 不能加 `sealed`**：`DispatchProxy.Create<T, TProxy>()` 要**派生**动态类型，`TProxy` 必须可跨程序集继承。这两个类是全仓唯一不能用 `sealed` 的替身。
 - **`XUnitTestMagic.CreateOptions<T>` 原来住在生产程序集 `Viv.Contracts`，已搬进这里** —— 测试设施不该跟着业务代码发布。
@@ -272,7 +272,7 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ... }
 - **Momo 事务内核已修（原先是坏的，且从没人用过）**：`MomoDatabase.BeginTransaction` / `BeginTransactionAsync` 原先写 `(IDbTransaction)context.Database.BeginTransaction()`，而 EF 的 `IDbContextTransaction`（`SqlServerTransaction`）**不是** `IDbTransaction` —— 强转必抛 `InvalidCastException`，**而那时真事务已经开在连接上了**，句柄没存住就成了提不了也滚不掉的**悬挂事务**（`IsInTransaction` 为 false、回滚被 `_transaction == null` 挡成 no-op）。同形状的强转在 `ExecuteSqlList` / `ExecuteSqlListAsync` 里还有 **4 处**（自建事务那条路径；外层已有事务时被 `??` 短路所以一直没暴露）。现统一走 **`MomoDatabase.GetDbTransaction(IDbContextTransaction)`**（`IInfrastructure<DbTransaction>.Instance`）——⚠️ **EF Core 10 没有现成的 `GetDbTransaction()` 扩展方法，别去找**（试过，编译不过，这个 helper 就是为此而写）。字段类型仍是 `IDbTransaction?`（Dapper 要它），判空 / `?.Dispose()` / `= null` 逻辑一字未改。实测：开/提/滚、`IsInTransaction` 全部名副其实，悬挂事务消失。
 - **⚠️ 事务内的 Dapper 读会直接抛异常 —— 框架不管，业务自己规避**：12 处原生 SQL 逃生口（`FindScalar` / `FindList<T>(sql)` / `Page` 等，`MomoDatabaseContext.cs:1055,1098,1125,1146,1179,1212,1278,1295,1311,1334,1363,1367`）把 `null` 硬编码成 Dapper 的事务参数，实测抛 `VivConnectionException`：*「如果分配给命令的连接位于本地挂起事务中，ExecuteReader 要求命令拥有事务。命令的 Transaction 属性尚未初始化。」*—— **是硬失败，不是脏读**（当前所有服务 `IsReadWriteSplit: false`，`CreateEFAppContext` 把读强转成 Write，读写**共用同一条连接**；将来真开读写分离才会退化成脏读）。走 EF 的 `Find<T>` / `Exist` / `Count` / 谓词版 `FindList` **不受影响**。**框架立场：事务只针对主库写，读不开事务 —— 业务先把数据备好，再开事务。这是业务的活，不是框架的活。**（`ExecuteSqlList` 那条路是例外，它自己把 `_transaction` 传给 Dapper，实测事务内可正常用。）
 - **Worker 侧未做**：`VivConsumer<T>` / `VivLocalConsumer<T>.HandleAsync` 读**类级**特性开事务（不走接口代理，消费者子类在注册期豁免校验）。本轮只做了 API 侧。
-- **不做（范围外）**：DataFilter / 审计接口 / 权限。
+- **不做（范围外）**：DataFilter / 权限。（**审计接口已另立一节**，见 `### Entity audit` —— 它由 Momo 数据层做，与事务无关。）
 
 ### Outbox（发件箱）
 
@@ -312,6 +312,47 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outb
 ### Database (Momo)
 
 `MomoDatabaseContext` (implements `IMomoDbContext`) uses EF Core for small operations and Dapper for bulk queries (threshold: `EFMaxCount`). `EFAppContext` is created as either read or write — reads randomly select a slave connection, writes always use the master. Entities are auto-scanned via `DatabaseOption.EntityTypeOptions`。**访问失败抛 `VivConnectionException`**（记日志后包装，API 过滤器映射 `-501 DatabaseError`，客户端 Message 用枚举固定文案「数据库操作异常」，实体 JSON / 底层详情只进日志）；`Insert`/`Update`/`Delete` 的 `false` 只表示语句成功但影响 0 行（或入参为空）。`Exist`/`Count`/`Find` 遇库故障不再返回 false/default/-1。`OperationCanceledException` 原样冒泡。回滚失败只记日志，避免掩盖原始异常。`DataAccessCacheBase` Redis 故障当作 miss 回源数据库。
+
+### Schema sync（按实体生成建表/改表 SQL）
+
+**不要再手写 DDL** —— `Viv.Momo/Sync/SchemaSynchronizer.cs` 是一条既有的完整流水线（反射 → 预期 Schema → 查 `INFORMATION_SCHEMA` → Diff → DDL），SQL Server 与 PostgreSQL 双方言：
+
+| 步骤 | 方法 |
+|---|---|
+| 扫 `EntityTypeOptions` 配置的命名空间里的 `IEntity` 实现 | `ScanEntityTypes` |
+| 反射 `[Table]`/`[Column]`/`[Key]`/`[StringLength]`/`[NotMapped]`/`[DatabaseGenerated]`/`[Precision]`，自动跳过导航属性 | `BuildExpectedSchema` |
+| 查 `INFORMATION_SCHEMA.TABLES` + `COLUMNS` | `FetchActualSchemaAsync` |
+| 表名/列名去下划线 + 忽略大小写匹配；列比类型 + 可空性 | `Diff` |
+| `CREATE TABLE` / `ADD COLUMN` / `ALTER COLUMN` / `DROP TABLE` / `DROP COLUMN` | `GenerateDdl` |
+| 人读的差异报告（`+` / `-` / `~`） | `GenerateReport` |
+
+入口是 `IMomoDbContext.SyncTableAsync(allowDrop, allowAlterColumn)` —— **两个门都默认关**，所以默认行为只有「建缺失的表、加缺失的列」，不改不删。**目前零调用方**（没有 CLI 命令、没有启动钩子），要用得自己调。
+
+- **🔴 主键判定必须含 `Id` 约定**（`IsPrimaryKeyProperty`）：全仓实体一律继承 `EntityBase`（`long Id`）且**没有一处标 `[Key]`**（EF 靠约定认主键）。只认特性的话生成出来的 `CREATE TABLE` 会**一个主键都没有**，而 `_primaryKeys = ["Id"]` 那套 Id 定位全靠它。**刻意不实现 EF 的 `{类名}Id` 约定** —— `AtUserRoleRelation.UserId` 这类是外键，按那个约定认会把外键标成主键。
+- **🔴 `GenerateDdl` 默认不发 `ALTER COLUMN`**（`DiffType.Modified`，需构造时显式 `allowAlterColumn: true`）：这个判据对现有库**几乎全是误报** —— 预期侧按 `nonPkNullable = true` 认为「除主键外全 NULL」、string 无 `[StringLength]` 就是 `nvarchar(max)`，一比对就把有长度约束的字符串列判成要放宽成 `max`、把 NOT NULL 列判成要去掉。**而 `allowDrop` 那条门管不到这里**（它只清 `Deleted`，不清 `Modified`）。`SyncTableAsync` 会把跳过的 ALTER 逐条记日志（静默跳过 = 被当成「同步成功了」）。
+- **🔴 主键只发一条定义**：原先是「内联 `PRIMARY KEY`」+「表级 `CONSTRAINT PK_...`」两条并出（PG 直接 `multiple primary keys` 报错），现在只留**表级具名**那条 —— 具名的后续可定位可删。
+- **可空列不显式输出 `NULL`**：`GenerateCreateTable`/`GenerateAddColumn` 只在 `!IsNullable` 时加 `NOT NULL`。省略即可空是两种方言的默认值。
+- **不做（范围外）**：索引 / 唯一约束 / 外键的生成（`Diff` 只比列）；`SyncTableAsync` 第 1 步的 `EnsureCreatedAsync` 对**非空库是 no-op**（注释「创建数据库中不存在的表」是错的，真正建表的是后面 Diff 出的 `NewTables`），是个误导性的死步骤。
+
+### Entity audit（`ICreatedAt` / `ICreatedBy` / `IUpdatedAt` / `IUpdatedBy`）
+
+**创建 / 更新 的时间与人由框架自动盖章**，业务代码一行都不用写。与租户隔离同族：都是数据层的自动填充。
+
+- **四个单字段能力接口，逐个 opt-in**（`Viv.Momo/Interface/`，与 `ITenant` / `ISoftDeleted` 同族的能力接口、**不是基类**，`EntityBase` 一字未动）：实体**有几个字段就实现几个接口**，没实现的一律不碰。**刻意不是一个大 `IAudited`** —— 不是所有实体都要完整四件套（纯日志表可能只要创建时间，关系表可能只要创建人）。
+- **属性类型必须逐字是 `DateTime?` / `long?`**：C# 要求实现者与接口的属性类型**完全相同**，非空 `DateTime` 直接 **CS0738** 编译不过。可空是**有意的** —— 行可能是手工 SQL / 导入 / DB 默认值造出来的，那时 `null` 比 `0001-01-01` 容易发现得多。本次已把 16 个实体的 30 处 `DateTime` 统一成 `DateTime?`（改之前实测**业务代码零消费者**，所以是纯类型改动）。
+- **填充挂在 `MomoDatabase`**（唯一入口，没新增机制）：`AutoSetInsertValue`（Id + TenantId + **四件套一起盖**，否则「只插不改」的行更新时间永远是空）/ `AutoSetUpdateValue`（**只**盖 `Updated*`）。判据是 `entity is ICreatedAt` 运行时判断 —— 泛型约束仍是 `where T : IEntity`，全仓四十来个实体只有一部分有四件套，收紧约束会让其余编译不过。两者都受 **`IsAutoSetValue`** 门控（该开关的语义就是「别碰我的值」）。
+- **操作人取 `IVivContext.UserId`（人），不是 `SubjectId`（租户/组织/公司主体 —— `MomoDatabase.TenantId` 取的那个）**。`CurrentUserId` 是**属性**、调用时读，**不在构造时缓存** —— 与 `TenantId` 完全同一读法（构造时冻结会让 Wolverine 那条路整条读到 0）。无登录上下文（Worker / 消息消费 / 后台任务，`UserId == 0`）返回 **`null` 而不是 `0`**，否则审计列里混进一堆 0，跟真实存在的 `UserId = 0` 分不开。
+- **🔴 `Update` 的创建信息保护（本次修的既有潜伏 bug）**：4 处 Update 走的都是 `Entry(existing).CurrentValues.SetValues(entity)`，而 `SetValues` 会把入参实体的**全部**映射列无差别覆盖到被跟踪实体上 —— 入参上 `CreatedAt`/`CreatedBy`/`TenantId` 通常是 `default`，于是**每次 Update 都把创建信息冲成 `NULL`、把行搬到租户 0 去**（后者更毒：全局查询过滤器会让行在业务侧直接「消失」）。审计字段真正开始写入之前它俩都是**潜伏**的（没人写过，冲掉了也看不出来）。修法是 **`CopyProtectedValues(existing, entity)` 在 `SetValues` 之前**把库里那份补回入参，之后连同盖章的 `Updated*` 一起 `SetValues`。
+- **⚠️ 批量 Update（> `EFMaxCount`）走的是同一形状的另一个实现，必须单独挡**：`BuildUpdateSqlList` 反射**全部**公开属性拼 `UPDATE ... SET col = CASE Id WHEN ... END`，而且它**根本不加载库里的那一份** —— 没有可补的来源。所以那边改成按 **`IsProtectedColumn`** 直接**跳过**这几列（`ELSE {dbField} END` 自然保留原值）。判据只能问 `typeof(T)` 是否实现了该契约（没有实例可 `is`）。两个机制**共用同一份清单**，改一处要改两处。
+- **`Worker` 侧没有触发点、也没有软删除的份**（明确范围外，不是遗忘）：
+  - **EF `SaveChanges` 拦截器方案不可行** —— 批量 Insert（≥200）、批量 Update、**全部 `SoftDelete`** 都走 Dapper 原生 SQL，压根不经过 `SaveChanges`，覆盖不全。别走这条。
+  - **软删除的 `DeletedAt` 是数据库端填的**（`SqlMagic.GetSoftDeleteSql` 用 `NOW()` / `GETDATE()`），绕开实体；`ISoftDeleted` 里也**没有 `DeletedBy`**。要补是独立改动。
+- **标记现状（`src/Vivian/Viv.Entity/Database/`，41 个实体）**：
+  - **Apex 24 个 —— 按「实体现有字段」逐个标**：21 个完整四件套；`AtFileRecord` 只有 `CreatedAt` → 仅 `ICreatedAt`；`AtUserRoleRelation` 只有 `CreatedAt` + `CreatedBy` → 仅这两个（**这两个偏门实体正是「拆四个接口」而非一个大 `IAudited` 的理由**）；`AtUserBind` 一个审计字段都没有 → **不标**。
+  - **Herta 16 个 `Et*` —— 原先一列都没有，本次整体新增四件套**（属性 + 接口）。它们都实现 `ITenant` / `ISoftDeleted`，是唯一会被 `CopyProtectedValues` 的租户保护照到的实体（Apex 一个都不实现 `ITenant`）。
+  - **DeepRed 只有 `VtUser` 一个实体，同样没有审计列，本次未动。**
+- **🔴 Herta 那 16 个实体「加了属性就等于加了列」—— 必须先改表结构再上线**：EF 把公开属性全部映射成列，DB 里没有对应列时**每次读写都直接 `Invalid column name 'CreatedAt'`**（不是降级、不是忽略）。**框架不做迁移**（唯一例外是 Outbox 自己那张独立表的 `AutoCreateTable`），16 张 `Et*` 表各需补 4 列 —— DDL 得自己出。这是本次改动里唯一需要人工跟进的部分。
+- **⚠️ 测试覆盖的边界**：`AutoSetInsertValue` / `AutoSetUpdateValue` / `CopyProtectedValues` 是纯内存逻辑，有单测钉死（`Viv.Momo.Tests/AuditValueTests.cs`，探针 `MomoAuditSut` 在 `Viv.Fakes/Audit.cs`）。但**真正的落库路径（`SetValues` + `SaveChanges`）需要数据库，CI 没有** —— 那一段没有被自动化覆盖，别把这些单测当成端到端验证。
 
 ### Multi-tenancy
 

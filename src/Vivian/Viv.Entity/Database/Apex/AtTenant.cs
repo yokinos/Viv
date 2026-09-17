@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 租户表
     /// </summary>
-    public class AtTenant : EntityBase, ISoftDeleted
+    public class AtTenant : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 所属组织Id，关联AtOrg.Id

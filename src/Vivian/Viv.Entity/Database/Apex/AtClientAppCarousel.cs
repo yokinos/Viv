@@ -11,7 +11,7 @@ namespace Viv.Entity.Database.Apex
     /// App首页轮播图表
     /// 平台类App首页广告Banner，绑定指定App
     /// </summary>
-    public class AtClientAppCarousel : EntityBase, ISoftDeleted
+    public class AtClientAppCarousel : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 所属客户端AppId
@@ -66,9 +66,9 @@ namespace Viv.Entity.Database.Apex
         [StringLength(500)]
         public string? Remark { get; set; }
 
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
         public long? CreatedBy { get; set; }
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
         public long? UpdatedBy { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime? DeletedAt { get; set; }

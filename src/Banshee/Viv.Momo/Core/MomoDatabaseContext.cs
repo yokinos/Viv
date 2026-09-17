@@ -36,7 +36,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                AutoSetValue(entity);
+                AutoSetInsertValue(entity);
                 var context = GetAppContext();
                 context.Add(entity);
                 var count = context.SaveChanges();
@@ -57,7 +57,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                AutoSetValue(entityList.ToArray());
+                AutoSetInsertValue(entityList.ToArray());
                 var context = GetAppContext();
                 int affected;
 
@@ -88,7 +88,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                AutoSetValue(entity);
+                AutoSetInsertValue(entity);
                 var context = GetAppContext();
                 context.Add(entity);
                 var count = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -109,7 +109,7 @@ namespace Viv.Momo.Core
 
             try
             {
-                AutoSetValue(entityList.ToArray());
+                AutoSetInsertValue(entityList.ToArray());
                 var context = GetAppContext();
                 int affected;
 
@@ -146,12 +146,17 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext();
                 var existingEntity = context.Find(typeof(T), entity.Id);
-                if (existingEntity != null)
+                if (existingEntity is T existing)
                 {
-                    context.Entry(existingEntity).CurrentValues.SetValues(entity);
+                    // 入参上 CreatedAt/CreatedBy/TenantId 通常是 default，直接 SetValues 会把库里的值冲掉 ——
+                    // 先把库里那一份补回入参，再连同盖章后的 Updated* 一起 SetValues
+                    CopyProtectedValues(existing, entity);
+                    AutoSetUpdateValue(entity);
+                    context.Entry(existing).CurrentValues.SetValues(entity);
                 }
                 else
                 {
+                    AutoSetUpdateValue(entity);
                     context.Update(entity);
                 }
 
@@ -175,6 +180,10 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext();
                 int count;
+
+                // 批量路径可能落到 Dapper（>EFMaxCount），那条路不加载库里的那一份、没法补回入参，
+                // 所以 Updated* 在这里统一盖，两个分支都不漏
+                AutoSetUpdateValue(entityList.ToArray());
 
                 if (entityList.Count < EFMaxCount)
                 {
@@ -202,12 +211,16 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext();
                 var existingEntity = await context.FindAsync(typeof(T), [entity.Id], cancellationToken).ConfigureAwait(false);
-                if (existingEntity != null)
+                if (existingEntity is T existing)
                 {
-                    context.Entry(existingEntity).CurrentValues.SetValues(entity);
+                    // 同同步版：先补回不可变列再 SetValues，否则创建信息/租户被入参的 default 冲掉
+                    CopyProtectedValues(existing, entity);
+                    AutoSetUpdateValue(entity);
+                    context.Entry(existing).CurrentValues.SetValues(entity);
                 }
                 else
                 {
+                    AutoSetUpdateValue(entity);
                     context.Update(entity);
                 }
 
@@ -231,6 +244,9 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext();
                 int count;
+
+                // 同同步版：两个分支共用一次盖章
+                AutoSetUpdateValue(entityList.ToArray());
 
                 if (entityList.Count < EFMaxCount)
                 {
@@ -260,6 +276,7 @@ namespace Viv.Momo.Core
                 var existing = existingEntities.FirstOrDefault(e => e.Id == entity.Id);
                 if (existing != null)
                 {
+                    CopyProtectedValues(existing, entity);
                     context.Entry(existing).CurrentValues.SetValues(entity);
                 }
                 else
@@ -282,6 +299,7 @@ namespace Viv.Momo.Core
                 var existing = existingEntities.FirstOrDefault(e => e.Id == entity.Id);
                 if (existing != null)
                 {
+                    CopyProtectedValues(existing, entity);
                     context.Entry(existing).CurrentValues.SetValues(entity);
                 }
                 else
@@ -317,6 +335,43 @@ namespace Viv.Momo.Core
             return count;
         }
 
+        /// <summary>
+        /// 批量 Update 必须<b>跳过</b>的列：创建信息只写一次、租户不允许被改。
+        ///
+        /// <para>
+        /// 单条 Update 能靠 <see cref="CopyProtectedValues"/> 把库里那一份补回入参，但批量路径
+        /// <b>根本不加载库里的那一份</b>（<see cref="BuildUpdateSqlList"/> 直接按入参拼 SQL），
+        /// 没有可补的来源 —— 照常写下去就是把每一行的创建信息冲成 <c>NULL</c>、把行搬到租户 0。
+        /// 所以这里改成不写这几列（<c>ELSE {dbField} END</c> 自然保留库里的原值）。
+        /// </para>
+        ///
+        /// <para>
+        /// 与 <see cref="CopyProtectedValues"/> 是<b>同一份清单</b>，但判据不同：那边按实例的类型判定，
+        /// 这边只有 <c>typeof(T)</c>，所以只能问「T 是否实现了该契约」。没 opt-in 的实体本来也不在这套
+        /// 机制的管辖范围内，框架不替它做决定。
+        /// </para>
+        /// </summary>
+        private static readonly (Type Contract, string Property)[] _protectedColumns =
+        [
+            (typeof(ITenant), nameof(ITenant.TenantId)),
+            (typeof(ICreatedAt), nameof(ICreatedAt.CreatedAt)),
+            (typeof(ICreatedBy), nameof(ICreatedBy.CreatedBy)),
+        ];
+
+        private static bool IsProtectedColumn(Type type, string propertyName)
+        {
+            foreach (var (contract, property) in _protectedColumns)
+            {
+                if (string.Equals(property, propertyName, StringComparison.OrdinalIgnoreCase)
+                    && contract.IsAssignableFrom(type))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private List<KeyValueItem<string, DynamicParameters>> BuildUpdateSqlList<T>(List<T> entities, int pageSize = 200) where T : class, IEntity
         {
             var type = typeof(T);
@@ -340,6 +395,7 @@ namespace Viv.Momo.Core
                 {
                     var propName = prop.Name;
                     if (_primaryKeys.Contains(propName, StringComparer.OrdinalIgnoreCase)) continue;
+                    if (IsProtectedColumn(type, propName)) continue;
 
                     var dbField = SqlMagic.QuoteIdentifier(propName, _databaseOptions.DatabaseSource);
                     var idField = SqlMagic.QuoteIdentifier("Id", _databaseOptions.DatabaseSource);
@@ -1413,7 +1469,7 @@ namespace Viv.Momo.Core
             return GetAppContext(readWriteType).DbConnection;
         }
 
-        public async Task SyncTableAsync(bool allowDrop = false, CancellationToken cancellationToken = default)
+        public async Task SyncTableAsync(bool allowDrop = false, bool allowAlterColumn = false, CancellationToken cancellationToken = default)
         {
             var context = GetAppContext(DbReadWriteType.Write);
 
@@ -1421,7 +1477,7 @@ namespace Viv.Momo.Core
             await context.Database.EnsureCreatedAsync(cancellationToken);
 
             // 2. SchemaSynchronizer：处理列级变更
-            var sync = new SchemaSynchronizer(_databaseOptions);
+            var sync = new SchemaSynchronizer(_databaseOptions, allowAlterColumn: allowAlterColumn);
             var entityTypes = sync.ScanEntityTypes();
             if (entityTypes.Count == 0)
                 return;
@@ -1451,6 +1507,22 @@ namespace Viv.Momo.Core
                     }
                 }
                 diff.ModifiedTables.RemoveAll(t => t.ColumnDiffs.Count == 0);
+            }
+
+            // 同上，ALTER COLUMN 默认也不做（判据对现有库几乎全是误报，见 SchemaSynchronizer.GenerateDdl）。
+            // 这里只负责「说出来」——真正的门开在 GenerateDdl 里那一处，不在这里再删一遍 diff，
+            // 免得同一个开关有两个地方要同步改。
+            if (!allowAlterColumn)
+            {
+                var alters = diff.ModifiedTables
+                    .SelectMany(t => t.ColumnDiffs
+                        .Where(c => c.Type == DiffType.Modified)
+                        .Select(c => $"{t.TableName}.{c.ColumnName}"))
+                    .ToList();
+                if (alters.Count > 0)
+                {
+                    WriteLog($"SyncTable: skip ALTER {alters.Count} column(s): {string.Join(", ", alters)}", null!);
+                }
             }
 
             if (diff.HasChanges)

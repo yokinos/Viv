@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// 租户应用关联表
     /// 在组织允许的App范围内，精细化管控单个租户可用应用
     /// </summary>
-    public class AtTenantAppRelation : EntityBase
+    public class AtTenantAppRelation : EntityBase, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 租户Id（关联AtTenant.Id）
@@ -44,7 +44,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人ID
@@ -54,7 +54,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
 
         /// <summary>
         /// 更新人ID

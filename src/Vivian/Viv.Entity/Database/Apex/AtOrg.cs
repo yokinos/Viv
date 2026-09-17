@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 组织表
     /// </summary>
-    public class AtOrg : EntityBase, ISoftDeleted
+    public class AtOrg : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 父级组织Id，顶级组织为0

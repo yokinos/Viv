@@ -120,6 +120,28 @@ namespace Viv.Momo.Core
         private long? _tenantOverride;
 
         /// <summary>
+        /// 当前登录用户，供 <see cref="ICreatedBy"/> / <see cref="IUpdatedBy"/> 盖章。
+        ///
+        /// <para>
+        /// 与 <see cref="TenantId"/> 完全同一读法：<b>调用时</b>从 <see cref="IVivContext"/> 读取，
+        /// 不在构造时缓存（Wolverine 先构造 DbContext 再 SetSnapshot，构造时冻结会让整条消息读到 0）。
+        /// </para>
+        ///
+        /// <para>
+        /// 无登录上下文（Worker / 消息消费 / 后台任务，<c>UserId == 0</c>）返回 <c>null</c> ——
+        /// 审计列是 <c>long?</c>，记 0 会让「没有操作人」跟真实存在的 <c>UserId = 0</c> 混在一起。
+        /// </para>
+        /// </summary>
+        protected long? CurrentUserId
+        {
+            get
+            {
+                var userId = _vivContext.UserId;
+                return userId == 0 ? null : userId;
+            }
+        }
+
+        /// <summary>
         /// 获取当前写库的数据库连接（用于Dapper混合事务）
         /// </summary>
         public IDbConnection DbConnection
@@ -132,21 +154,102 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
-        /// 自动设置默认值（Id、TenantId）
+        /// 自动设置<b>新增</b>时的默认值：Id、TenantId + 审计四件套。
+        ///
+        /// <para>
+        /// 审计字段按能力逐个 opt-in（<c>entity is ICreatedAt</c> 运行时判断），所以泛型约束仍是
+        /// <see cref="IEntity"/> 不变 —— 全仓四十来个实体里只有一部分有四件套，收紧约束会让其余编译不过。
+        /// </para>
+        ///
+        /// <para>
+        /// 新增时<b>四件套一起盖</b>（创建与更新时间都取新增那一刻）：只盖创建的话，
+        /// 「只插不改」的行更新时间会永远是 <c>null</c>。
+        /// </para>
         /// </summary>
-        protected void AutoSetValue<T>(params T[] entities) where T : IEntity
+        protected void AutoSetInsertValue<T>(params T[] entities) where T : IEntity
         {
             if (entities.IsNullOrEmpty() || !IsAutoSetValue) return;
+
+            var now = DateTime.UtcNow;
+            var userId = CurrentUserId;
+
             foreach (var entity in entities)
             {
-                if (entity.Id == default)
-                    entity.Id = IdMagic.NextId();
+                SetIdentityAndTenant(entity);
 
-                if (entity is ITenant tenant)
-                {
-                    if (tenant.TenantId == default)
-                        tenant.TenantId = TenantId;
-                }
+                if (entity is ICreatedAt createdAt) createdAt.CreatedAt = now;
+                if (entity is ICreatedBy createdBy) createdBy.CreatedBy = userId;
+                if (entity is IUpdatedAt updatedAt) updatedAt.UpdatedAt = now;
+                if (entity is IUpdatedBy updatedBy) updatedBy.UpdatedBy = userId;
+            }
+        }
+
+        /// <summary>
+        /// 自动设置<b>更新</b>时的默认值：<b>只</b>盖 <see cref="IUpdatedAt"/> / <see cref="IUpdatedBy"/>。
+        ///
+        /// <para>
+        /// ⚠️ 更新路径<b>绝不</b>碰创建信息 —— 那是只写一次的。更新人/时间则每次都要盖新的
+        /// （<b>无条件覆盖</b>而不是「为 default 才填」：调用方传进来的 <c>UpdatedAt</c> 通常就是 <c>default</c>，
+        /// 靠它判断会把「这次更新」的时间永远写成空）。
+        /// </para>
+        ///
+        /// <para>
+        /// 更新路径<b>不</b>填 Id / TenantId —— 主键决定改哪一行，租户不允许被改（<see cref="TenantId"/> 由
+        /// <see cref="CopyProtectedValues"/> 保护，见那边）。
+        /// </para>
+        /// </summary>
+        protected void AutoSetUpdateValue<T>(params T[] entities) where T : IEntity
+        {
+            if (entities.IsNullOrEmpty() || !IsAutoSetValue) return;
+
+            var now = DateTime.UtcNow;
+            var userId = CurrentUserId;
+
+            foreach (var entity in entities)
+            {
+                if (entity is IUpdatedAt updatedAt) updatedAt.UpdatedAt = now;
+                if (entity is IUpdatedBy updatedBy) updatedBy.UpdatedBy = userId;
+            }
+        }
+
+        /// <summary>
+        /// 把<b>入参改不动的那几列</b>从库里加载出来的那一份补回入参上，必须在
+        /// <c>Entry(existing).CurrentValues.SetValues(entity)</c> <b>之前</b>调用。
+        ///
+        /// <para>
+        /// <c>SetValues</c> 会把入参实体上的<b>全部</b>映射列无差别覆盖到被跟踪实体上，包括调用方
+        /// 根本不该改的列 —— 而入参上它们是 <c>default</c>，于是每次 Update 都把库里的值冲掉：
+        /// </para>
+        /// <list type="bullet">
+        /// <item><see cref="ICreatedAt"/> / <see cref="ICreatedBy"/> → 创建信息被冲成 <c>NULL</c>（每次更新都丢一次）</item>
+        /// <item><see cref="ITenant"/> → 没填租户的入参把行<b>搬到租户 0 去</b>，且因全局查询过滤器而「消失」</item>
+        /// </list>
+        ///
+        /// <para>
+        /// 这两处在审计字段真正开始写入之前都是<b>潜伏</b>的（没人写过，冲掉了也看不出来）。
+        /// </para>
+        /// </summary>
+        protected static void CopyProtectedValues(IEntity from, IEntity to)
+        {
+            if (from is ITenant fromTenant && to is ITenant toTenant)
+                toTenant.TenantId = fromTenant.TenantId;
+
+            if (from is ICreatedAt fromCreatedAt && to is ICreatedAt toCreatedAt)
+                toCreatedAt.CreatedAt = fromCreatedAt.CreatedAt;
+
+            if (from is ICreatedBy fromCreatedBy && to is ICreatedBy toCreatedBy)
+                toCreatedBy.CreatedBy = fromCreatedBy.CreatedBy;
+        }
+
+        private void SetIdentityAndTenant<T>(T entity) where T : IEntity
+        {
+            if (entity.Id == default)
+                entity.Id = IdMagic.NextId();
+
+            if (entity is ITenant tenant)
+            {
+                if (tenant.TenantId == default)
+                    tenant.TenantId = TenantId;
             }
         }
 

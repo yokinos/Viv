@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 集团公司主体，多个租户机构可归属同一集团
     /// </summary>
-    public class AtCompany : EntityBase, ISoftDeleted
+    public class AtCompany : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 所属售卖平台ID（关联AtOrg.Id）
@@ -64,9 +64,9 @@ namespace Viv.Entity.Database.Apex
         public string? Remark { get; set; }
 
         public EmStatus Status { get; set; }
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
         public long? CreatedBy { get; set; }
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
         public long? UpdatedBy { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime? DeletedAt { get; set; }

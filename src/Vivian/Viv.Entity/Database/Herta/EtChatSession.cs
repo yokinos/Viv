@@ -8,7 +8,7 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 会话表（私聊会话 / 群聊会话共用）
     /// </summary>
-    public class EtChatSession : EntityBase, ITenant, ISoftDeleted
+    public class EtChatSession : EntityBase, ITenant, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 租户ID
@@ -69,5 +69,24 @@ namespace Viv.Entity.Database.Herta
         /// 删除时间
         /// </summary>
         public DateTime? DeletedAt { get; set; }
+        /// <summary>
+        /// 创建时间（UTC）—— 由 MomoDatabase 自动盖章，业务代码不写
+        /// </summary>
+        public DateTime? CreatedAt { get; set; }
+
+        /// <summary>
+        /// 创建人（IVivContext.UserId）—— 无登录上下文（后台任务）时为 null
+        /// </summary>
+        public long? CreatedBy { get; set; }
+
+        /// <summary>
+        /// 更新时间（UTC）—— 每次更新自动盖章，业务代码不写
+        /// </summary>
+        public DateTime? UpdatedAt { get; set; }
+
+        /// <summary>
+        /// 更新人（IVivContext.UserId）—— 无登录上下文（后台任务）时为 null
+        /// </summary>
+        public long? UpdatedBy { get; set; }
     }
 }

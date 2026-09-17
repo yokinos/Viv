@@ -10,7 +10,7 @@ namespace Viv.Entity.Database.Apex
     /// 1. 控制组织可上架/使用哪些客户端App
     /// 2. 配套三组最大功能掩码，限制该OEM组织售卖套餐的功能上限
     /// </summary>
-    public class AtOrgAppRelation : EntityBase, ISoftDeleted
+    public class AtOrgAppRelation : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 组织Id（关联AtOrg.Id）
@@ -45,7 +45,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人ID
@@ -55,7 +55,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
 
         /// <summary>
         /// 更新人ID

@@ -7,7 +7,7 @@ using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
-    public class AtCompanyAppRelation : EntityBase
+    public class AtCompanyAppRelation : EntityBase, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 租户Id（关联AtTenant.Id）
@@ -42,7 +42,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人ID
@@ -52,7 +52,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
 
         /// <summary>
         /// 更新人ID

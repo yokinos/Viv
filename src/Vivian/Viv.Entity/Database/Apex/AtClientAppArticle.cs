@@ -9,7 +9,7 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 资讯文章详情表
     /// </summary>
-    public class AtClientAppArticle : EntityBase, ISoftDeleted
+    public class AtClientAppArticle : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 关联客户端AppId集合，多个Id使用逗号分隔
@@ -36,11 +36,11 @@ namespace Viv.Entity.Database.Apex
 
         public EmStatus Status { get; set; }
 
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
 
         public long? CreatedBy { get; set; }
 
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
 
         public long? UpdatedBy { get; set; }
 

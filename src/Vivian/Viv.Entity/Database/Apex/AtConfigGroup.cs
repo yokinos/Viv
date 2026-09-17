@@ -11,7 +11,7 @@ namespace Viv.Entity.Database.Apex
     /// 配置分组字典表
     /// 区分全局配置分组 / App专属配置分组，统一维护分组编码与名称
     /// </summary>
-    public class AtConfigGroup : EntityBase, ISoftDeleted
+    public class AtConfigGroup : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 分组归属类型：Global全局 / App应用
@@ -37,9 +37,9 @@ namespace Viv.Entity.Database.Apex
 
         public EmStatus Status { get; set; }
 
-        public DateTime CreatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; }
         public long? CreatedBy { get; set; }
-        public DateTime UpdatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
         public long? UpdatedBy { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime? DeletedAt { get; set; }

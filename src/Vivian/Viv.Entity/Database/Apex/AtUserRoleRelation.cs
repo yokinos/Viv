@@ -7,7 +7,7 @@ using Viv.Momo.Interface;
 
 namespace Viv.Entity.Database.Apex
 {
-    public class AtUserRoleRelation : EntityBase
+    public class AtUserRoleRelation : EntityBase, ICreatedAt, ICreatedBy
     {
         /// <summary>
         /// 用户Id AtUser.Id
