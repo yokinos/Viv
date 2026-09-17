@@ -3,13 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
 using Viv.Delusion.Extension;
 using Viv.Engine.Filter;
-using Viv.Log;
+using Viv.Fakes;
 
 namespace Viv.Engine.Tests;
 
@@ -60,30 +58,11 @@ public class VivExceptionFilterTests
         var httpContext = new DefaultHttpContext();
         var actionContext = new ActionContext(httpContext, new RouteData(), new ActionDescriptor());
         var exceptionContext = new ExceptionContext(actionContext, []) { Exception = ex };
-        var filter = new VivExceptionFilterAttribute(new StubFilterLogger(), new StubHost());
+        var filter = new VivExceptionFilterAttribute(new RecordingLogger(), new StubHost());
 
         await filter.OnExceptionAsync(exceptionContext);
 
         Assert.True(exceptionContext.ExceptionHandled);
         return Assert.IsType<VivApiResult>(exceptionContext.Result);
-    }
-
-    private sealed class StubHost : IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = Environments.Development;
-        public string ApplicationName { get; set; } = "test";
-        public string ContentRootPath { get; set; } = ".";
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    }
-
-    private sealed class StubFilterLogger : ILoggerContract
-    {
-        public void Info(string message, params object[] args) { }
-        public void Debug(string message, params object[] args) { }
-        public void Warning(string message, params object[] args) { }
-        public void Error(string message, params object[] args) { }
-        public void Error(string message, Exception ex, params object[] args) { }
-        public void Fatal(string message, params object[] args) { }
-        public void Fatal(string message, Exception ex, params object[] args) { }
     }
 }

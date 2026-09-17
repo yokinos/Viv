@@ -3,6 +3,7 @@ using Viv.Contracts.Events;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Magic;
 using Viv.Engine.LocalEvent;
+using Viv.Fakes;
 using Viv.Log;
 using Viv.Nana;
 
@@ -18,23 +19,7 @@ public class LocalEventTests
     /// <summary>分发记录汇（处理器由 DI 无参构造，只能走静态汇；xUnit 同类内串行，无并发问题）</summary>
     private static readonly List<string> Hits = [];
 
-    #region 桩
-
-    /// <summary>记录日志的桩（ILoggerContract 无 Warning(message, ex) 重载，与框架一致）</summary>
-    public sealed class NullLogger : ILoggerContract
-    {
-        public List<string> Infos { get; } = [];
-        public List<string> Warnings { get; } = [];
-        public List<string> Errors { get; } = [];
-
-        public void Info(string message, params object[] args) => Infos.Add(message);
-        public void Error(string message, Exception ex, params object[] args) => Errors.Add(message);
-        public void Error(string message, params object[] args) => Errors.Add(message);
-        public void Debug(string message, params object[] args) { }
-        public void Warning(string message, params object[] args) => Warnings.Add(message);
-        public void Fatal(string message, params object[] args) => Errors.Add(message);
-        public void Fatal(string message, Exception ex, params object[] args) => Errors.Add(message);
-    }
+    #region 测试事件与处理器
 
     public sealed class OrderCreated : EngineEvent;
     public sealed class StockChanged : EngineEvent;
@@ -160,7 +145,7 @@ public class LocalEventTests
     private static ServiceProvider BuildProvider()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<ILoggerContract, NullLogger>();
+        services.AddSingleton<ILoggerContract, RecordingLogger>();
         LocalEventRegistration.Register(services);
         return services.BuildServiceProvider();
     }
@@ -170,7 +155,7 @@ public class LocalEventTests
     [Fact]
     public async Task 发布只入队_未Flush不执行()
     {
-        var bus = NewBus(new NullLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));
+        var bus = NewBus(new RecordingLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));
 
         await bus.PublishAsync(new OrderCreated());
 
@@ -180,7 +165,7 @@ public class LocalEventTests
     [Fact]
     public async Task Flush后执行全部处理器()
     {
-        var bus = NewBus(new NullLogger(),
+        var bus = NewBus(new RecordingLogger(),
             InvokerFor<OrderCreated>(new OrderCreatedHandler(), new OrderCreatedHandler2()),
             InvokerFor<StockChanged>(new StockChangedHandler()));
 
@@ -195,7 +180,7 @@ public class LocalEventTests
     [Fact]
     public async Task 处理器抛异常_异常上抛()
     {
-        var bus = NewBus(new NullLogger(), InvokerFor<ThrowingEvent>(new ThrowingHandler()));
+        var bus = NewBus(new RecordingLogger(), InvokerFor<ThrowingEvent>(new ThrowingHandler()));
 
         await bus.PublishAsync(new ThrowingEvent());
 
@@ -206,7 +191,7 @@ public class LocalEventTests
     [Fact]
     public async Task Discard后不再执行()
     {
-        var bus = NewBus(new NullLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));
+        var bus = NewBus(new RecordingLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));
 
         await bus.PublishAsync(new OrderCreated());
         bus.Discard();
@@ -218,7 +203,7 @@ public class LocalEventTests
     [Fact]
     public async Task 重复Flush只执行一次()
     {
-        var log = new NullLogger();
+        var log = new RecordingLogger();
         var bus = NewBus(log, InvokerFor<OrderCreated>(new OrderCreatedHandler()));
 
         await bus.PublishAsync(new OrderCreated());
@@ -238,7 +223,7 @@ public class LocalEventTests
     [Fact]
     public async Task 处理器内再发布_同轮分发()
     {
-        var bus = NewBus(new NullLogger(),
+        var bus = NewBus(new RecordingLogger(),
             InvokerFor<RepublishEvent>(new RepublishHandler()),
             InvokerFor<StockChanged>(new StockChangedHandler()));
 
@@ -260,7 +245,7 @@ public class LocalEventTests
     [Fact]
     public async Task 递归发布超过上限_记录错误并停止()
     {
-        var log = new NullLogger();
+        var log = new RecordingLogger();
         var bus = NewBus(log, InvokerFor<RecursiveEvent>(new RecursiveHandler()));
 
         RecursiveHandler.Bus = bus;
@@ -281,7 +266,7 @@ public class LocalEventTests
     [Fact]
     public async Task 无处理器的事件_跳过不抛()
     {
-        var log = new NullLogger();
+        var log = new RecordingLogger();
         var bus = NewBus(log);
 
         await bus.PublishAsync(new NoHandlerEvent());
@@ -293,7 +278,7 @@ public class LocalEventTests
     [Fact]
     public async Task 未Flush作用域结束_Dispose记录警告()
     {
-        var log = new NullLogger();
+        var log = new RecordingLogger();
         var bus = NewBus(log, InvokerFor<OrderCreated>(new OrderCreatedHandler()));
 
         await bus.PublishAsync(new OrderCreated());

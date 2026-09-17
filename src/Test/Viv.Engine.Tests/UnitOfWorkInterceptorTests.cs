@@ -4,6 +4,7 @@ using Castle.DynamicProxy;
 using Viv.Contracts.Attributes;
 using Viv.Contracts.Interface;
 using Viv.Engine.UnitOfWork;
+using Viv.Fakes;
 using Viv.Log;
 
 namespace Viv.Engine.Tests;

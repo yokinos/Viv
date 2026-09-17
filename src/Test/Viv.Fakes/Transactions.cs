@@ -1,41 +1,17 @@
 using Viv.Engine.UnitOfWork;
-using Viv.Log;
 
-namespace Viv.Engine.Tests;
-
-/// <summary>
-/// 工作单元测试的公共桩。
-/// </summary>
-internal sealed class RecordingLogger : ILoggerContract
-{
-    public List<string> Infos { get; } = [];
-    public List<string> Warnings { get; } = [];
-    public List<string> Errors { get; } = [];
-
-    public void Info(string message, params object[] args) => Infos.Add(Render(message, args));
-    public void Error(string message, Exception ex, params object[] args) => Errors.Add(Render(message, args));
-    public void Error(string message, params object[] args) => Errors.Add(Render(message, args));
-    public void Debug(string message, params object[] args) { }
-    public void Warning(string message, params object[] args) => Warnings.Add(Render(message, args));
-    public void Fatal(string message, params object[] args) => Errors.Add(Render(message, args));
-    public void Fatal(string message, Exception ex, params object[] args) => Errors.Add(Render(message, args));
-
-    /// <summary>
-    /// 把 <c>params object[]</c> 填进模板再记下来 —— 只记模板的话，
-    /// 「到底哪个方法没被覆盖」这类关键信息（都在参数里）就丢了，
-    /// 断言只能匹配到半句话。
-    /// </summary>
-    private static string Render(string message, object[] args)
-        => args.Length == 0 ? message : string.Format(message, args);
-}
+namespace Viv.Fakes;
 
 /// <summary>
 /// 事务内核桩 —— 只记调用序列，不碰数据库。
 ///
 /// 这个桩只有 3 个方法，正是 <see cref="ITransactionKernel"/> 存在的理由：
 /// 直连 <c>IMomoDbContext</c> 的话这里要桩 55 个成员。
+///
+/// ⚠️ 只能是 <c>internal</c>：<see cref="ITransactionKernel"/> 本身就是 internal 的，
+/// public 类实现 internal 接口是 CS0061。故本程序集对 <c>Viv.Engine.Tests</c> 开了 IVT。
 /// </summary>
-internal sealed class KernelStub : ITransactionKernel
+internal class KernelStub : ITransactionKernel
 {
     public List<string> Calls { get; } = [];
 

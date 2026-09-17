@@ -16,6 +16,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 少数替身要桩 internal 接口（KernelStub 桩 ITransactionKernel、StubOutboxRepository
+         桩 IOutboxRepository），而 public 类实现 internal 接口是 CS0061，
+         所以这些替身只能 internal，靠 IVT 放给消费它的那个测试项目。
+         只有确实需要的才加，不要为了让替身「哪都能用」而全开。 -->
+    <InternalsVisibleTo Include="Viv.Engine.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- IAsyncStreamReader / IServerStreamWriter / IClientStreamWriter 不在 ASP.NET Core
          共享框架里，只能由 NuGet 提供 -->
     <PackageReference Include="Grpc.Net.Client" />
