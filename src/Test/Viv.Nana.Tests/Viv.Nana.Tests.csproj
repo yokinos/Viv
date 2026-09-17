@@ -16,6 +16,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Banshee\Viv.Nana\Viv.Nana.csproj" />
+    <!-- 替身集中在这个程序集里，测试项目只留「被测对象 + 探针 + 测试数据」 -->
+    <ProjectReference Include="..\Viv.Fakes\Viv.Fakes.csproj" />
   </ItemGroup>
 
   <ItemGroup>

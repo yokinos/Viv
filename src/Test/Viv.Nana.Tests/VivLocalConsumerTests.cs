@@ -1,8 +1,8 @@
 using System.Threading.Tasks;
 using Viv.Contracts;
 using Viv.Contracts.Exceptions;
-using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
+using Viv.Fakes;
 using Viv.Nana.Core;
 
 namespace Viv.Nana.Tests
@@ -14,69 +14,31 @@ namespace Viv.Nana.Tests
     }
 
     /// <summary>
-    /// 记录水合与清理调用的上下文桩。
-    /// 不能复用 TestSupport 的 FakeContext —— 它的 SetSnapshot 是空实现，验证不了「从信封水合租户」这件事，
-    /// 而那正是本地队列唯一的租户隔离防线（消费者跑在后台线程，AsyncLocal 不会跟过去）。
+    /// 成功消费，并记录「进入业务那一刻」看到的东西 —— holder 与租户快照。
+    ///
+    /// 【为什么必须记在 handler 里，不能事后读上下文】
+    /// ① holder：<c>LockHolderContext</c> 的写入只在该异步流内生效，从外面读**拿不到** handler 里的值；
+    /// ② 快照：<c>HandleAsync</c> 的 finally 会清上下文，方法返回后快照已经没了 ——
+    ///    事后断言只会读到 null，「到底水合没水合」就成了一笔糊涂账。
+    /// 两者都只有站在 handler 内部才看得见，而那正是要测的东西。
     /// </summary>
-    public class RecordingContext : IVivContext
-    {
-        public VivContextContent? Snapshot { get; private set; }
-
-        public int ClearCalls { get; private set; }
-
-        /// <summary>handler 执行期间读到的 holder（由 RecordingLocalConsumer 填）</summary>
-        public string? HolderIdInsideHandler { get; set; }
-
-        public long AppId => Snapshot?.AppId ?? 0;
-
-        public long SubjectId => Snapshot?.SubjectId ?? 0;
-
-        public long UserId => Snapshot?.UserId ?? 0;
-
-        public string TraceId => Snapshot?.TraceId ?? string.Empty;
-
-        public void Clear() => ClearCalls++;
-
-        public VivContextContent? GetRawSnapshot() => Snapshot;
-
-        public void SetSnapshot(VivContextContent model) => Snapshot = model;
-    }
-
-    /// <summary>只实现 IVivLocalEventPublisher 的发布器桩（与跨进程的 StubPublisher 互不相干）</summary>
-    public class StubLocalPublisher : IVivLocalEventPublisher
-    {
-        public bool PublishCalled { get; private set; }
-
-        public object? LastContent { get; private set; }
-
-        public bool Result { get; set; } = true;
-
-        public ValueTask<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaLocalEvent
-        {
-            PublishCalled = true;
-            LastContent = content;
-            return ValueTask.FromResult(Result);
-        }
-
-        public ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaLocalEvent
-        {
-            PublishCalled = true;
-            LastContent = content;
-            return ValueTask.FromResult(Result);
-        }
-    }
-
-    /// <summary>成功消费，并记录进入业务时看到的 holder</summary>
     public class RecordingLocalConsumer : VivLocalConsumer<LocalTestEvent>
     {
-        private readonly RecordingContext _recording;
+        private readonly TestContext _context;
 
-        public RecordingLocalConsumer(VivLocalConsumerDependency dependency, RecordingContext recording) : base(dependency)
-            => _recording = recording;
+        public RecordingLocalConsumer(VivLocalConsumerDependency dependency, TestContext context) : base(dependency)
+            => _context = context;
+
+        /// <summary>进入业务时 <c>LockHolderContext</c> 里的 holder</summary>
+        public string? HolderIdInsideHandler { get; private set; }
+
+        /// <summary>进入业务时上下文里的租户快照（信封水合的成果）</summary>
+        public VivContextContent? SnapshotInsideHandler { get; private set; }
 
         public override Task<SubscribeResult> ReceiveMessageAsync(NanaLocalEnvelope<LocalTestEvent> envelope, CancellationToken cancellationToken = default)
         {
-            _recording.HolderIdInsideHandler = LockHolderContext.CurrentHolderId;
+            HolderIdInsideHandler = LockHolderContext.CurrentHolderId;
+            SnapshotInsideHandler = _context.GetRawSnapshot();
             return Task.FromResult(SubscribeResult.Success());
         }
     }
@@ -119,11 +81,11 @@ namespace Viv.Nana.Tests
         private static NanaLocalEnvelope<LocalTestEvent> Envelope(long messageId = 42)
             => new() { MessageId = messageId, Content = new LocalTestEvent { Payload = "data" } };
 
-        private static (VivLocalConsumerDependency Dep, RecordingContext Context, StubLogger Logger) Build()
+        private static (VivLocalConsumerDependency Dep, TestContext Context, RecordingLogger Logger) Build()
         {
-            var logger = new StubLogger();
-            var context = new RecordingContext();
-            var publisher = new StubLocalPublisher();
+            var logger = new RecordingLogger();
+            var context = new TestContext();
+            var publisher = new RecordingLocalEventPublisher();
             return (new VivLocalConsumerDependency(logger, context, publisher), context, logger);
         }
 
@@ -141,12 +103,14 @@ namespace Viv.Nana.Tests
                 HolderId = "from-publisher"
             };
 
-            await new RecordingLocalConsumer(dep, context).HandleAsync(envelope, CancellationToken.None);
+            var consumer = new RecordingLocalConsumer(dep, context);
+            await consumer.HandleAsync(envelope, CancellationToken.None);
 
-            Assert.Equal(1, context.Snapshot?.AppId);
-            Assert.Equal(3, context.Snapshot?.SubjectId);
-            Assert.Equal(2, context.Snapshot?.UserId);
-            Assert.Equal("client-trace", context.Snapshot?.TraceId);
+            var hydrated = Assert.IsType<VivContextContent>(consumer.SnapshotInsideHandler);
+            Assert.Equal(1, hydrated.AppId);
+            Assert.Equal(3, hydrated.SubjectId);
+            Assert.Equal(2, hydrated.UserId);
+            Assert.Equal("client-trace", hydrated.TraceId);
             Assert.Empty(logger.Errors);
             Assert.Empty(logger.Warnings);
         }
@@ -158,9 +122,10 @@ namespace Viv.Nana.Tests
             var envelope = Envelope();
             envelope.Context = new VivContextContent { AppId = 1, HolderId = "from-publisher" };
 
-            await new RecordingLocalConsumer(dep, context).HandleAsync(envelope, CancellationToken.None);
+            var consumer = new RecordingLocalConsumer(dep, context);
+            await consumer.HandleAsync(envelope, CancellationToken.None);
 
-            Assert.Equal("from-publisher", context.HolderIdInsideHandler);
+            Assert.Equal("from-publisher", consumer.HolderIdInsideHandler);
         }
 
         [Fact]
@@ -170,10 +135,11 @@ namespace Viv.Nana.Tests
             var envelope = Envelope(42);
             envelope.Context = new VivContextContent { AppId = 1, TraceId = "client-trace" };
 
-            await new RecordingLocalConsumer(dep, context).HandleAsync(envelope, CancellationToken.None);
+            var consumer = new RecordingLocalConsumer(dep, context);
+            await consumer.HandleAsync(envelope, CancellationToken.None);
 
             // 不回落 TraceId —— 客户端可以伪造 X-Trace-Id 污染锁身份，这条约定与 VivConsumer 一致
-            Assert.Equal("42", context.HolderIdInsideHandler);
+            Assert.Equal("42", consumer.HolderIdInsideHandler);
         }
 
         [Fact]
@@ -181,10 +147,11 @@ namespace Viv.Nana.Tests
         {
             var (dep, context, _) = Build();
 
-            await new RecordingLocalConsumer(dep, context).HandleAsync(Envelope(7), CancellationToken.None);
+            var consumer = new RecordingLocalConsumer(dep, context);
+            await consumer.HandleAsync(Envelope(7), CancellationToken.None);
 
-            Assert.Null(context.Snapshot);
-            Assert.Equal("7", context.HolderIdInsideHandler);
+            Assert.Null(consumer.SnapshotInsideHandler);
+            Assert.Equal("7", consumer.HolderIdInsideHandler);
         }
 
         // 关于 finally 里的 LockHolderContext.Clear()：从测试外部**观察不到**，故不作断言。
@@ -208,9 +175,10 @@ namespace Viv.Nana.Tests
         {
             var (dep, context, _) = Build();
 
-            await new RecordingLocalConsumer(dep, context).HandleAsync(null!, CancellationToken.None);
+            var consumer = new RecordingLocalConsumer(dep, context);
+            await consumer.HandleAsync(null!, CancellationToken.None);
 
-            Assert.Null(context.HolderIdInsideHandler);
+            Assert.Null(consumer.HolderIdInsideHandler);
             Assert.Equal(0, context.ClearCalls);
         }
 
@@ -219,10 +187,10 @@ namespace Viv.Nana.Tests
         {
             var (dep, context, logger) = Build();
 
-            await new RecordingLocalConsumer(dep, context)
-                .HandleAsync(new NanaLocalEnvelope<LocalTestEvent> { Content = null }, CancellationToken.None);
+            var consumer = new RecordingLocalConsumer(dep, context);
+            await consumer.HandleAsync(new NanaLocalEnvelope<LocalTestEvent> { Content = null }, CancellationToken.None);
 
-            Assert.Null(context.HolderIdInsideHandler);
+            Assert.Null(consumer.HolderIdInsideHandler);
             Assert.Empty(logger.Errors);
         }
 

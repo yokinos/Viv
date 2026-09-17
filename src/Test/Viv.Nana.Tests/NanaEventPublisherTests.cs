@@ -1,8 +1,8 @@
-using System.Reflection;
 using Viv.Contracts;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Models;
+using Viv.Fakes;
 using Viv.Nana.Core;
 using Wolverine;
 
@@ -10,16 +10,20 @@ namespace Viv.Nana.Tests
 {
     public class NanaEventPublisherTests
     {
-        private static NanaEventPublisher Publisher(IMessageBus bus, StubLogger? logger = null)
-            => new(new FakeContext(), bus, logger ?? new StubLogger());
+        private static NanaEventPublisher Publisher(IMessageBus bus, RecordingLogger? logger = null)
+            => new(new TestContext(), bus, logger ?? new RecordingLogger());
 
         private static IMessageBus ThrowingBus()
-            => DispatchProxy.Create<IMessageBus, ThrowingMessageBus>();
+            => TestProxy.Create<IMessageBus>(p =>
+            {
+                p.ThrowOnAnyCall = true;
+                p.ThrowException = new InvalidOperationException("broker down");
+            });
 
         [Fact]
         public async Task 内容为null_返回false不调总线()
         {
-            var logger = new StubLogger();
+            var logger = new RecordingLogger();
             var pub = Publisher(ThrowingBus(), logger);
 
             Assert.False(await pub.PublishAsync<TestApexEvent>(null!));
@@ -43,7 +47,7 @@ namespace Viv.Nana.Tests
         [Fact]
         public async Task 总线失败_抛RabbitMQ连接异常()
         {
-            var logger = new StubLogger();
+            var logger = new RecordingLogger();
             var pub = Publisher(ThrowingBus(), logger);
 
             var ex = await Assert.ThrowsAsync<VivConnectionException>(
@@ -89,7 +93,7 @@ namespace Viv.Nana.Tests
         [Fact]
         public async Task 信封为空_返回false不调总线()
         {
-            var logger = new StubLogger();
+            var logger = new RecordingLogger();
             var pub = Publisher(ThrowingBus(), logger);
 
             Assert.False(await pub.PublishEnvelopeAsync<TestApexEvent>(null!));
@@ -118,7 +122,7 @@ namespace Viv.Nana.Tests
 
             Assert.True(await pub.PublishEnvelopeAsync(envelope));
 
-            var sent = Assert.IsType<NanaEnvelope<TestApexEvent>>(proxy.LastMessage);
+            var sent = Assert.IsType<NanaEnvelope<TestApexEvent>>(proxy.LastArg);
             Assert.Equal(originalMessageId, sent.MessageId);          // 消费端去重键，不能变
             Assert.Equal("holder-frozen-in-db", sent.Context!.HolderId);
             Assert.Equal(42, sent.Context!.SubjectId);
@@ -133,7 +137,7 @@ namespace Viv.Nana.Tests
 
             // 内容版：当场盖章 —— 两个信封都从库里反序列化，Context 里没有 holder
             await pub.PublishAsync(new TestApexEvent { Payload = "content" });
-            var fromContent = Assert.IsType<NanaEnvelope<TestApexEvent>>(proxy.LastMessage);
+            var fromContent = Assert.IsType<NanaEnvelope<TestApexEvent>>(proxy.LastArg);
             Assert.Equal("holder-of-this-process", fromContent.Context!.HolderId);
 
             // 信封版：原样透传，不盖章（信封是冻结的，重试不该换身份）
@@ -142,7 +146,7 @@ namespace Viv.Nana.Tests
                 Content = new TestApexEvent { Payload = "envelope" },
                 Context = new VivContextContent()
             });
-            var fromEnvelope = Assert.IsType<NanaEnvelope<TestApexEvent>>(proxy.LastMessage);
+            var fromEnvelope = Assert.IsType<NanaEnvelope<TestApexEvent>>(proxy.LastArg);
             Assert.Null(fromEnvelope.Context!.HolderId);
 
             LockHolderContext.Clear();
@@ -151,7 +155,7 @@ namespace Viv.Nana.Tests
         [Fact]
         public async Task 原样重发_总线失败_抛RabbitMQ连接异常()
         {
-            var logger = new StubLogger();
+            var logger = new RecordingLogger();
             var pub = Publisher(ThrowingBus(), logger);
             var envelope = new NanaEnvelope<TestApexEvent> { Content = new TestApexEvent { Payload = "x" } };
 
@@ -162,38 +166,12 @@ namespace Viv.Nana.Tests
             Assert.NotEmpty(logger.ErrorWithException);
         }
 
-        private static (NanaEventPublisher Publisher, CapturingMessageBus Proxy) CapturingPublisher()
+        /// <summary>记下最近一条被发布的消息（<see cref="TestProxy.LastArg"/>），并按声明返回类型回一个已完成的结果。</summary>
+        private static (NanaEventPublisher Publisher, TestProxy Proxy) CapturingPublisher()
         {
-            var bus = DispatchProxy.Create<IMessageBus, CapturingMessageBus>();
-            var proxy = (CapturingMessageBus)(object)bus;
-            return (Publisher(bus), proxy);
-        }
-
-        private class ThrowingMessageBus : DispatchProxy
-        {
-            protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
-                => throw new InvalidOperationException("broker down");
-        }
-
-        /// <summary>记下最近一条被发布的消息，并按声明返回类型回一个已完成的结果。</summary>
-        private class CapturingMessageBus : DispatchProxy
-        {
-            public object? LastMessage { get; private set; }
-
-            protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
-            {
-                if (targetMethod?.Name == "PublishAsync" && args is { Length: > 0 })
-                    LastMessage = args[0];
-
-                var returnType = targetMethod?.ReturnType;
-                if (returnType == typeof(ValueTask)) return ValueTask.CompletedTask;
-                if (returnType == typeof(Task)) return Task.CompletedTask;
-                if (returnType is not null && returnType.IsGenericType
-                    && returnType.GetGenericTypeDefinition() == typeof(ValueTask<>))
-                    return Activator.CreateInstance(returnType);
-
-                return null;
-            }
+            TestProxy captured = null!;
+            var bus = TestProxy.Create<IMessageBus>(p => captured = p);
+            return (Publisher(bus), captured);
         }
     }
 }
