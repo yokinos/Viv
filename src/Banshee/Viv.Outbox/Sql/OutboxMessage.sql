@@ -7,15 +7,15 @@
 --
 -- 时间列统一 UTC（DATETIME2 不带时区概念，写入前一律 DateTime.UtcNow）。
 
-IF OBJECT_ID(N'OutboxMessage', N'U') IS NULL
+IF OBJECT_ID(N'VivOutboxMessage', N'U') IS NULL
 BEGIN
-    CREATE TABLE OutboxMessage (
+    CREATE TABLE VivOutboxMessage (
         Id          BIGINT         NOT NULL PRIMARY KEY,
         MessageId   BIGINT         NOT NULL,
         EventType   NVARCHAR(500)  NOT NULL,
         Payload     NVARCHAR(MAX)  NOT NULL,
         Status      TINYINT        NOT NULL,
-        RetryCount  INT            NOT NULL CONSTRAINT DF_OutboxMessage_RetryCount DEFAULT 0,
+        RetryCount  INT            NOT NULL CONSTRAINT DF_VivOutboxMessage_RetryCount DEFAULT 0,
         NextRetryAt DATETIME2      NOT NULL,
         LeaseUntil  DATETIME2      NULL,
         OccurredAt  DATETIME2      NOT NULL,
@@ -25,8 +25,8 @@ BEGIN
 
     -- 认领扫描：WHERE Status = 0 AND NextRetryAt <= @Now ORDER BY NextRetryAt, Id
     -- 覆盖列带上 Id，让 TOP (n) 那一支不必回表
-    CREATE INDEX IX_OutboxMessage_Claim ON OutboxMessage (Status, NextRetryAt) INCLUDE (Id);
+    CREATE INDEX IX_VivOutboxMessage_Claim ON VivOutboxMessage (Status, NextRetryAt) INCLUDE (Id);
 
     -- 排查用：按消费端去重键反查
-    CREATE INDEX IX_OutboxMessage_MessageId ON OutboxMessage (MessageId);
+    CREATE INDEX IX_VivOutboxMessage_MessageId ON VivOutboxMessage (MessageId);
 END

@@ -31,7 +31,7 @@ public class OutboxSqlTests
     {
         var ddl = OutboxSql.CreateTable(source);
 
-        Assert.Contains("OutboxMessage", ddl);
+        Assert.Contains("VivOutboxMessage", ddl);
         foreach (var column in Columns)
         {
             Assert.Contains(column, ddl);
@@ -47,9 +47,9 @@ public class OutboxSqlTests
 
             // 带引号的话 PG 会保留大小写、SqlServer 未必 —— 同一份逻辑在两端漂移。
             // 不带引号才有「PG 折叠成小写、SqlServer 不区分」的天然一致。
-            Assert.DoesNotContain("\"OutboxMessage\"", ddl);
-            Assert.DoesNotContain("[OutboxMessage]", ddl);
-            Assert.DoesNotContain("OutboxMessage\"", ddl);
+            Assert.DoesNotContain("\"VivOutboxMessage\"", ddl);
+            Assert.DoesNotContain("[VivOutboxMessage]", ddl);
+            Assert.DoesNotContain("VivOutboxMessage\"", ddl);
         }
     }
 
@@ -68,7 +68,7 @@ public class OutboxSqlTests
         var sql = OutboxSql.Insert;
 
         Assert.Contains("@Id", sql);
-        Assert.StartsWith("INSERT INTO OutboxMessage", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("INSERT INTO VivOutboxMessage", sql, StringComparison.OrdinalIgnoreCase);
 
         // Id 由 IdMagic.NextId() 生成，所以 INSERT 不能漏掉它
         var columns = sql[sql.IndexOf('(')..sql.IndexOf(')')];
@@ -103,7 +103,7 @@ public class OutboxSqlTests
 
         // 单条 UPDATE 把「判给谁」和「占住」做成一件事 —— 先 SELECT 再 UPDATE 会留一个窗口，
         // 两个实例各投一遍同一条消息（而且它编译通过、测试也通过）
-        Assert.StartsWith("UPDATE OutboxMessage", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("UPDATE VivOutboxMessage", sql, StringComparison.OrdinalIgnoreCase);
 
         // 认领的同时就盖上租约，否则崩溃后这批行永远卡在 Processing
         Assert.Contains("LeaseUntil = @LeaseUntil", sql);
@@ -161,7 +161,7 @@ public class OutboxSqlTests
     {
         var sql = OutboxSql.CleanupBatch(source);
 
-        Assert.StartsWith("DELETE FROM OutboxMessage", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("DELETE FROM VivOutboxMessage", sql, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Status = 2", sql);                      // 只删 Sent
         Assert.Contains("SentAt IS NOT NULL", sql);
         Assert.Contains("SentAt < @Cutoff", sql);

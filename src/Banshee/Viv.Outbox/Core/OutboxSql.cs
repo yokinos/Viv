@@ -39,7 +39,7 @@ namespace Viv.Outbox.Core
         /// </summary>
         internal const string Insert =
             """
-            INSERT INTO OutboxMessage
+            INSERT INTO VivOutboxMessage
                 (Id, MessageId, EventType, Payload, Status, RetryCount, NextRetryAt, LeaseUntil, OccurredAt, SentAt, LastError)
             VALUES
                 (@Id, @MessageId, @EventType, @Payload, @Status, @RetryCount, @NextRetryAt, NULL, @OccurredAt, NULL, NULL)
@@ -48,7 +48,7 @@ namespace Viv.Outbox.Core
         /// <summary>投递器崩溃 / 被杀后，卡在 Processing 的行靠这条复活。</summary>
         internal const string ReleaseExpiredLeases =
             """
-            UPDATE OutboxMessage
+            UPDATE VivOutboxMessage
             SET Status = 0, LeaseUntil = NULL
             WHERE Status = 1 AND LeaseUntil IS NOT NULL AND LeaseUntil <= @Now
             """;
@@ -56,7 +56,7 @@ namespace Viv.Outbox.Core
         /// <summary>投递成功。</summary>
         internal const string MarkSent =
             """
-            UPDATE OutboxMessage
+            UPDATE VivOutboxMessage
             SET Status = 2, SentAt = @Now, LeaseUntil = NULL, LastError = NULL
             WHERE Id = @Id
             """;
@@ -64,7 +64,7 @@ namespace Viv.Outbox.Core
         /// <summary>投递失败但要重试：退回 Pending 并把下次可投时刻推后（退避）。</summary>
         internal const string MarkPending =
             """
-            UPDATE OutboxMessage
+            UPDATE VivOutboxMessage
             SET Status = 0, RetryCount = @RetryCount, NextRetryAt = @NextRetryAt, LeaseUntil = NULL, LastError = @LastError
             WHERE Id = @Id
             """;
@@ -72,7 +72,7 @@ namespace Viv.Outbox.Core
         /// <summary>重试耗尽，等人工介入（绝不静默丢）。</summary>
         internal const string MarkFailed =
             """
-            UPDATE OutboxMessage
+            UPDATE VivOutboxMessage
             SET Status = 3, RetryCount = @RetryCount, LeaseUntil = NULL, LastError = @LastError
             WHERE Id = @Id
             """;
@@ -97,9 +97,9 @@ namespace Viv.Outbox.Core
         {
             DatabaseSourceType.PostgreSQL =>
                 """
-                UPDATE OutboxMessage SET Status = 1, LeaseUntil = @LeaseUntil
+                UPDATE VivOutboxMessage SET Status = 1, LeaseUntil = @LeaseUntil
                 WHERE Id IN (
-                    SELECT Id FROM OutboxMessage
+                    SELECT Id FROM VivOutboxMessage
                     WHERE Status = 0 AND NextRetryAt <= @Now
                     ORDER BY NextRetryAt, Id
                     LIMIT @BatchSize
@@ -115,7 +115,7 @@ namespace Viv.Outbox.Core
             // 既不阻塞也不重复认领。
             _ =>
                 """
-                UPDATE OutboxMessage WITH (READPAST)
+                UPDATE VivOutboxMessage WITH (READPAST)
                 SET Status = 1, LeaseUntil = @LeaseUntil
                 OUTPUT inserted.Id AS Id, inserted.MessageId AS MessageId,
                        inserted.EventType AS EventType, inserted.Payload AS Payload,
@@ -124,7 +124,7 @@ namespace Viv.Outbox.Core
                        inserted.OccurredAt AS OccurredAt, inserted.SentAt AS SentAt,
                        inserted.LastError AS LastError
                 WHERE Id IN (
-                    SELECT TOP (@BatchSize) Id FROM OutboxMessage WITH (READPAST)
+                    SELECT TOP (@BatchSize) Id FROM VivOutboxMessage WITH (READPAST)
                     WHERE Status = 0 AND NextRetryAt <= @Now
                     ORDER BY NextRetryAt, Id
                 )
@@ -136,9 +136,9 @@ namespace Viv.Outbox.Core
         {
             DatabaseSourceType.PostgreSQL =>
                 """
-                DELETE FROM OutboxMessage
+                DELETE FROM VivOutboxMessage
                 WHERE Id IN (
-                    SELECT Id FROM OutboxMessage
+                    SELECT Id FROM VivOutboxMessage
                     WHERE Status = 2 AND SentAt IS NOT NULL AND SentAt < @Cutoff
                     LIMIT @BatchSize
                 )
@@ -146,9 +146,9 @@ namespace Viv.Outbox.Core
 
             _ =>
                 """
-                DELETE FROM OutboxMessage
+                DELETE FROM VivOutboxMessage
                 WHERE Id IN (
-                    SELECT TOP (@BatchSize) Id FROM OutboxMessage
+                    SELECT TOP (@BatchSize) Id FROM VivOutboxMessage
                     WHERE Status = 2 AND SentAt IS NOT NULL AND SentAt < @Cutoff
                 )
                 """,

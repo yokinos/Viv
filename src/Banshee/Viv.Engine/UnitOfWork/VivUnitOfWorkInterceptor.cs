@@ -1,10 +1,10 @@
+using Castle.DynamicProxy;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using Castle.DynamicProxy;
 using Viv.Contracts.Attributes;
 using Viv.Contracts.Interface;
 using Viv.Log;
@@ -47,11 +47,10 @@ namespace Viv.Engine.UnitOfWork
             _logger = logger;
         }
 
-        /// <summary>无返回值的 Task 方法 —— 判不了信封，只看有没有抛异常。</summary>
-        protected override async Task InterceptAsync(
-            IInvocation invocation,
-            IInvocationProceedInfo proceedInfo,
-            Func<IInvocation, IInvocationProceedInfo, Task> proceed)
+        /// <summary>
+        /// 无返回值的 Task 方法 —— 判不了信封，只看有没有抛异常。
+        /// </summary>
+        protected override async Task InterceptAsync(IInvocation invocation, IInvocationProceedInfo proceedInfo, Func<IInvocation, IInvocationProceedInfo, Task> proceed)
         {
             if (!ShouldIntercept(invocation))
             {
@@ -77,10 +76,7 @@ namespace Viv.Engine.UnitOfWork
         /// 有返回值的 Task&lt;T&gt; 方法。T 是<b>拆包之后</b>的返回值，
         /// 所以这里能直接判 <c>VivApiResult</c> 的信封码。
         /// </summary>
-        protected override async Task<TResult> InterceptAsync<TResult>(
-            IInvocation invocation,
-            IInvocationProceedInfo proceedInfo,
-            Func<IInvocation, IInvocationProceedInfo, Task<TResult>> proceed)
+        protected override async Task<TResult> InterceptAsync<TResult>(IInvocation invocation, IInvocationProceedInfo proceedInfo, Func<IInvocation, IInvocationProceedInfo, Task<TResult>> proceed)
         {
             if (!ShouldIntercept(invocation))
             {
@@ -131,7 +127,6 @@ namespace Viv.Engine.UnitOfWork
             });
         }
 
-        private static string Describe(IInvocation invocation)
-            => $"{invocation.TargetType?.Name}.{invocation.Method.Name}";
+        private static string Describe(IInvocation invocation) => $"{invocation.TargetType?.Name}.{invocation.Method.Name}";
     }
 }

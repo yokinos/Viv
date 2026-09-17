@@ -1,7 +1,7 @@
 namespace Viv.Outbox.Core
 {
     /// <summary>
-    /// 发件箱表 <c>OutboxMessage</c> 的行。
+    /// 发件箱表 <c>VivOutboxMessage</c> 的行。
     ///
     /// <para>
     /// ⚠️ <b>刻意是普通 POCO —— 不实现 <c>IEntity</c>、不实现 <c>ITenant</c>、不注册进

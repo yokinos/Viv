@@ -9,7 +9,7 @@
 -- 时间列用 TIMESTAMPTZ（存的是瞬时点，不怕服务器时区不同），
 -- 写入前一律 DateTime.UtcNow —— Npgsql 拒绝向 timestamptz 写 Kind=Unspecified 的值。
 
-CREATE TABLE IF NOT EXISTS OutboxMessage (
+CREATE TABLE IF NOT EXISTS VivOutboxMessage (
     Id          BIGINT        NOT NULL PRIMARY KEY,
     MessageId   BIGINT        NOT NULL,
     EventType   VARCHAR(500)  NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS OutboxMessage (
 );
 
 -- 认领扫描：WHERE Status = 0 AND NextRetryAt <= @Now ORDER BY NextRetryAt, Id
-CREATE INDEX IF NOT EXISTS IX_OutboxMessage_Claim ON OutboxMessage (Status, NextRetryAt);
+CREATE INDEX IF NOT EXISTS IX_VivOutboxMessage_Claim ON VivOutboxMessage (Status, NextRetryAt);
 
 -- 排查用：按消费端去重键反查
-CREATE INDEX IF NOT EXISTS IX_OutboxMessage_MessageId ON OutboxMessage (MessageId);
+CREATE INDEX IF NOT EXISTS IX_VivOutboxMessage_MessageId ON VivOutboxMessage (MessageId);

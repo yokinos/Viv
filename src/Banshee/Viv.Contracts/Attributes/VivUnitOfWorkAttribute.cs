@@ -10,7 +10,11 @@ namespace Viv.Contracts.Attributes
     /// - <b>窄事务</b>：拿 <see cref="Interface.IVivUnitOfWork"/> 自己 <c>BeginAsync()</c>，
     ///   <c>await using</c> 自动释放 —— 只想包住几行写操作、或需要在事务里夹非数据库动作时用。
     ///
-    /// 【用法】API 侧标在<b>方法</b>上；Worker 侧（消费者）标在<b>类</b>上，由消费者基类读取。
+    /// 【用法】<b>一律标在实现类上，绝不标接口</b>：
+    /// API 侧标在实现类的 <c>public virtual</c> 方法上；Worker 侧（消费者）标在实现类上，由消费者基类读取。
+    /// ⚠️ 标在接口上完全不生效 —— 类型级标不上去（<c>AttributeTargets.Class</c> 不覆盖 interface，CS0592），
+    /// 方法级能编译但没人读：注册期扫的是<b>实现类型</b>，而接口成员的特性不会被实现方法继承
+    /// （<c>inherit: true</c> 只沿基类链走）。表现是「能编译、能跑、就是不原子」，所以是约定不是可选。
     ///
     /// 【四条硬要求 —— 前三条启动期会硬报错，第四条只能靠自觉】
     /// 1. <b>方法必须返回 <c>Task</c> / <c>Task&lt;T&gt;</c>（或 <c>ValueTask&lt;T&gt;</c>）</b>。同步方法和
