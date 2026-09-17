@@ -24,10 +24,10 @@ namespace Viv.Nana.Tests
     /// </summary>
     public class RecordingLocalConsumer : VivLocalConsumer<LocalTestEvent>
     {
-        private readonly TestContext _context;
+        private readonly TestContext _testContext;
 
         public RecordingLocalConsumer(VivLocalConsumerDependency dependency, TestContext context) : base(dependency)
-            => _context = context;
+            => _testContext = context;
 
         /// <summary>进入业务时 <c>LockHolderContext</c> 里的 holder</summary>
         public string? HolderIdInsideHandler { get; private set; }
@@ -38,7 +38,7 @@ namespace Viv.Nana.Tests
         public override Task<SubscribeResult> ReceiveMessageAsync(NanaLocalEnvelope<LocalTestEvent> envelope, CancellationToken cancellationToken = default)
         {
             HolderIdInsideHandler = LockHolderContext.CurrentHolderId;
-            SnapshotInsideHandler = _context.GetRawSnapshot();
+            SnapshotInsideHandler = _testContext.GetRawSnapshot();
             return Task.FromResult(SubscribeResult.Success());
         }
     }
