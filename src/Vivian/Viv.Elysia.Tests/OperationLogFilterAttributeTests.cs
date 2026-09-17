@@ -7,14 +7,12 @@ using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
-using Viv.Contracts.Interface;
-using Viv.Contracts.Models;
 using Viv.Elysia.Attributes;
 using Viv.Elysia.Filter;
 using Viv.Engine;
 using Viv.Entity.Enums;
 using Viv.EventContracts.Apex.Logging;
-using Viv.Nana;
+using Viv.Fakes;
 
 namespace Viv.Elysia.Tests
 {
@@ -24,37 +22,6 @@ namespace Viv.Elysia.Tests
     /// </summary>
     public class OperationLogFilterAttributeTests
     {
-        private sealed class StubContext : IVivContext
-        {
-            public long AppId => 1;
-            public long SubjectId => 2;
-            public long UserId => 99;
-            public string TraceId => "req-1";
-            public void SetSnapshot(VivContextContent model) { }
-            public void Clear() { }
-            public VivContextContent? GetRawSnapshot() => null;
-        }
-
-        private sealed class StubPublisher : IVivEventPublisher
-        {
-            public List<NanaEvent> Published { get; } = new();
-
-            public ValueTask<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
-            {
-                Published.Add(content);
-                return ValueTask.FromResult(true);
-            }
-
-            public ValueTask<bool> PublishEnvelopeAsync<T>(NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
-                => ValueTask.FromResult(true);
-
-            public ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
-                => ValueTask.FromResult(true);
-
-            public ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
-                => ValueTask.FromResult(true);
-        }
-
         private sealed class SampleController
         {
             [OperationLog(EmOperationModule.User, EmOperationType.Login)]
@@ -69,11 +36,11 @@ namespace Viv.Elysia.Tests
         private static ControllerActionDescriptor DescriptorFor(string methodName)
             => new() { MethodInfo = typeof(SampleController).GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance)! };
 
-        private static (OperationLogFilterAttribute filter, ActionExecutingContext ctx, ActionExecutionDelegate next, StubPublisher publisher)
+        private static (OperationLogFilterAttribute filter, ActionExecutingContext ctx, ActionExecutionDelegate next, RecordingEventPublisher publisher)
             Create(ActionDescriptor descriptor, VivApiResult? result, Action? inAction = null)
         {
-            var publisher = new StubPublisher();
-            var filter = new OperationLogFilterAttribute(publisher, new StubContext());
+            var publisher = new RecordingEventPublisher();
+            var filter = new OperationLogFilterAttribute(publisher, new TestContext());
             var actionContext = new ActionContext(new DefaultHttpContext(), new RouteData(), descriptor);
             var filters = new List<IFilterMetadata>();
             var ctx = new ActionExecutingContext(actionContext, filters, new Dictionary<string, object?>(), null!);

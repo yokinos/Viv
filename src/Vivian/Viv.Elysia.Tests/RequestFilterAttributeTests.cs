@@ -6,19 +6,13 @@ using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Viv.Elysia.Filter;
-using Viv.Elysia.Interface;
 using Viv.Engine;
+using Viv.Fakes;
 
 namespace Viv.Elysia.Tests
 {
     public class RequestFilterAttributeTests
     {
-        private sealed class FakeRequest : IApiRequest
-        {
-            private readonly string _error;
-            public FakeRequest(string error) => _error = error;
-            public string Validate() => _error;
-        }
 
         private sealed class ExecutedFlag
         {
