@@ -5,9 +5,9 @@ using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Echo.Grpc;
+using Viv.Fakes;
 using Viv.Sandrone.Impl;
 using Viv.ServiceProxy.Protos;
-using Viv.ServiceProxy.Tests.TestDoubles;
 
 namespace Viv.ServiceProxy.Tests.Grpc
 {
