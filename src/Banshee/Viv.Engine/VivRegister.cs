@@ -20,6 +20,7 @@ using Viv.Momo.Interface;
 using Viv.Nana;
 using Viv.Nana.Core;
 using Viv.Nana.Saga;
+using Viv.Outbox;
 using Viv.Redis;
 using Viv.Redis.DbAllocator;
 using Viv.Sandrone.Impl;
@@ -52,6 +53,8 @@ namespace Viv.Engine
             RegisterNana(services, options);
             // 注册数据库
             RegisterDatabase(services, options);
+            // 注册发件箱（依赖数据库 + MQ；内部会注册 IHostedService 投递器）
+            RegisterOutbox(services, options);
             // 注册Token
             RegisterToken(services, options);
             // 注册调度
@@ -190,6 +193,30 @@ namespace Viv.Engine
             services.AddScoped<ITransactionKernel>(sp =>
                 new MomoTransactionAdapter(sp.GetRequiredService<IMomoDbContext>()));
             services.AddScoped<IVivUnitOfWork, UnitOfWorkManager>();
+        }
+
+        #endregion
+
+        #region 发件箱 Outbox
+
+        private static void RegisterOutbox(IServiceCollection services, VivOptions options)
+        {
+            if (options.OutboxOption == null) return;
+
+            // 发件箱投的是 NanaEvent（复用跨进程那族的 fanout 拓扑），且待发消息存在业务主库里。
+            // 缺任何一边都不是「降级运行」而是彻底不工作，所以在这里就把话说死 ——
+            // 否则表现成投递时 IVivEventPublisher 解析不到，或者表根本不存在。
+            if (options.NanaOption == null)
+            {
+                throw new Exception("配置了 OutboxOption 却没有 NanaOption：发件箱投递的是跨进程事件，缺少 MQ 配置无法工作");
+            }
+
+            if (options.DatabaseOption == null)
+            {
+                throw new Exception("配置了 OutboxOption 却没有 DatabaseOption：发件箱要靠业务主库原子地存下待发消息");
+            }
+
+            OutboxRegister.Initialize(services, options.OutboxOption);
         }
 
         #endregion

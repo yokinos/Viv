@@ -12,6 +12,7 @@ using Viv.Engine.Options;
 using Viv.Log;
 using Viv.Momo.Options;
 using Viv.Nana.Options;
+using Viv.Outbox.Options;
 using Viv.Redis;
 
 namespace Viv.Engine
@@ -63,6 +64,7 @@ namespace Viv.Engine
             services.Configure<LogOptions>(configuration.GetSection("VivOptions:LogOption"));
             services.Configure<DatabaseOptions>(configuration.GetSection("VivOptions:DatabaseOption"));
             services.Configure<NanaOptions>(configuration.GetSection("VivOptions:NanaOption"));
+            services.Configure<OutboxOptions>(configuration.GetSection("VivOptions:OutboxOption"));
             services.Configure<TokenOptions>(configuration.GetSection("VivOptions:TokenOption"));
             services.Configure<TickOptions>(configuration.GetSection("VivOptions:TickOption"));
             services.Configure<TickerQOptions>(configuration.GetSection("VivOptions:TickOption:TickerQ"));
@@ -132,6 +134,10 @@ namespace Viv.Engine
             // NanaOption
             if (options.NanaOption != null)
                 RegisterOption(services, options.NanaOption);
+
+            // OutboxOption
+            if (options.OutboxOption != null)
+                RegisterOption(services, options.OutboxOption);
 
             // TokenOption
             if (options.TokenOption != null)

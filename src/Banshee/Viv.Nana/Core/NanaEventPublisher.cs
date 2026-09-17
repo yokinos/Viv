@@ -47,6 +47,27 @@ namespace Viv.Nana.Core
             }
         }
 
+        public async ValueTask<bool> PublishEnvelopeAsync<T>(NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
+        {
+            if (envelope?.Content is null) return false;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // 原样重发：不调 SnapshotWithHolder（不重新盖 holderId），投递的就是调用方递进来的那个信封
+            try
+            {
+                await _bus.PublishAsync(envelope);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw WrapMqException($"Publish failed for {typeof(T).Name}", ex);
+            }
+        }
+
         public async ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
         {
             if (content is null) return false;

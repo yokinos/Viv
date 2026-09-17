@@ -45,6 +45,9 @@ namespace Viv.Elysia.Tests
                 return ValueTask.FromResult(true);
             }
 
+            public ValueTask<bool> PublishEnvelopeAsync<T>(NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
+                => ValueTask.FromResult(true);
+
             public ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
                 => ValueTask.FromResult(true);
 

@@ -35,6 +35,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
 | `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server |
 | `Viv.Nana` | Messaging — **两条平行的线**：① 跨进程 `NanaEvent` + `IVivEventPublisher` / `NanaEventPublisher` / `VivConsumer<T>`（Wolverine + RabbitMQ，fanout）② 进程内本地队列 `NanaLocalEvent` + `IVivLocalEventPublisher` / `NanaLocalEventPublisher` / `VivLocalConsumer<T>`（Wolverine local queue，点对点，两族互不引用）；Saga support with EF Core state persistence |
+| `Viv.Outbox` | **发件箱（事务性消息投递）** — `IVivOutbox` / `OutboxStore`（Scoped，入队走 `ExecuteSqlAsync` 并入业务事务）+ `OutboxDispatcher`/`OutboxWorker`（后台投递，原子认领）+ 手写 SQL（**一次都不经过 EF**，表 `OutboxMessage`）。解决「写库 + 发消息」不原子：**写和待发消息进同一个本地事务**，投递交给后台。见下 |
 | `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`)。访问失败抛 `VivConnectionException(Redis)`（API 过滤器 `-502`，客户端只回固定文案）；`DataAccessCacheBase` 读路径 catch 后回源数据库。锁 / 写仍抛。锁续期后台任务仍只记日志后停止 |
 | `Viv.Sandrone` | Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service` |
 | `Viv.Echo` | Service-to-service communication + **框架级 gRPC 宿主**（`Viv.Echo.Grpc`）— HTTP + gRPC 客户端 `VivGrpcInterceptor`/`AddVivGrpcClient`（支持服务发现；注入 x-viv-* 含 holder-id 并纳入签名）、服务端 `VivGrpcServerInterceptor`（验签后水合 `IVivContext` 并 `SetHolderId`）/`AddVivGrpcServer`/`AddVivGrpcKestrel`/`VivGrpcDiscovery`（自动发现 `[BindServiceMethod]` 实现类 + 注册 + 反射映射；REST + gRPC 分端口，见下） |
@@ -78,7 +79,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 
 ### Test (`src/Test/`)
 
-Unit test suites, one per framework project — `Viv.Delusion.Tests`、`Viv.Engine.Tests`、`Viv.Momo.Tests`、`Viv.Nana.Tests`、`Viv.Redis.Tests`、`Viv.Sandrone.Tests`。CI（`.github/workflows/dotnet.yml`）会跑全量测试并上报覆盖率。
+Unit test suites, one per framework project — `Viv.Delusion.Tests`、`Viv.Engine.Tests`、`Viv.Momo.Tests`、`Viv.Nana.Tests`、`Viv.Outbox.Tests`、`Viv.Redis.Tests`、`Viv.Sandrone.Tests`。CI（`.github/workflows/dotnet.yml`）会跑全量测试并上报覆盖率。
 
 ---
 
@@ -144,6 +145,7 @@ Every API and Worker project carries a `VivOptions` node in its `appsettings.jso
 | `CacheOption` | Redis connection + memory cache toggle |
 | `DatabaseOption` | Database type, read-write split, entity scan targets |
 | `NanaOption` | RabbitMQ host/port/credentials, consumer type list, retry count, Saga DB |
+| `OutboxOption` | 发件箱：投递器开关、轮询间隔、批大小、重试上限、租约、建表、保留期。**为 null = 不启用**（见下） |
 | `TokenOption` | JWT secret/expiry/issuer |
 | `EchoOption` | HTTP client enable + gRPC（`GrpcOption { EnableServer, Port }`） |
 | `TickOption` | TickerQ scheduler config |
@@ -177,13 +179,16 @@ Business-layer services and repositories are registered via **type scanning** dr
 
 #### 本地队列（第三种事件通道）
 
-三族事件的取舍 —— 补的就是「**不阻塞调用方 + 不出网 + 自带重试/延迟**」这个中间档（另外两族都给不了）：
+四族事件的总览（另两族见本节的跨进程那条线、`### Outbox（发件箱）` 与 `### Local events (IVivLocalEventBus)`）。本地队列补的就是「**不阻塞调用方 + 不出网 + 自带重试/延迟**」这个中间档（其余三族都给不了）：
 
 | 基类 | 投递 | 发布接口 | 消费端写法 | 语义 |
 |---|---|---|---|---|
-| `NanaEvent` | RabbitMQ | `IVivEventPublisher` | `VivConsumer<T>` | 跨进程、fanout、每服务各收一份 |
+| `NanaEvent` | RabbitMQ | `IVivEventPublisher` | `VivConsumer<T>` | 跨进程、fanout、每服务各收一份、**当场发** |
+| `NanaEvent` | RabbitMQ | **`IVivOutbox`** | `VivConsumer<T>` | 跨进程、fanout、**与业务写同事务**（可靠版，见 `### Outbox（发件箱）`） |
 | `NanaLocalEvent` | Wolverine 本地队列 | `IVivLocalEventPublisher` | `VivLocalConsumer<T>` | 进程内、**点对点**、异步、**独立 DI 作用域** |
 | `EngineEvent` | 本地总线 | `IVivLocalEventBus` | `LocalEventHandler<T>` | 进程内、fanout、同步、**同 DI 作用域** |
+
+**没有第五个基类** —— Outbox 复用 `NanaEvent`，只是换了投递时机（入队 ≠ 发送）。
 
 **与跨进程那条线完全解耦（自带一整套类型，一个现有文件都不碰）**：`IVivLocalEventPublisher` 是独立接口（不是往 `IVivEventPublisher` 加方法 —— 那会破坏它的全部实现者）；`NanaLocalEventPublisher` / `VivLocalConsumer<T>` / `VivLocalConsumerDependency` 同理。本地这条线不引用 `IVivEventPublisher` / `VivConsumer` / `IDistributedLock`。要「一个事件触发多个反应」用 `EngineEvent` + 本地总线（fanout），本地队列是**一事件一消费者**。
 
@@ -198,11 +203,11 @@ Business-layer services and repositories are registered via **type scanning** dr
 
 ### Local events (IVivLocalEventBus)
 
-进程内**解耦的同步调用**，是三族事件里最"没架子"的一族（另两族见 `### Messaging (Nana)`）。这条线与 Nana 完全独立 —— **不 import 任何 `Viv.Nana` 命名空间**，`VivConsumer` / `VivConsumerDependency` / 本地队列那套一行未动。
+进程内**解耦的同步调用**，是四族事件里最"没架子"的一族（其余三族见 `### Messaging (Nana)` 与 `### Outbox（发件箱）`）。这条线与 Nana 完全独立 —— **不 import 任何 `Viv.Nana` 命名空间**，`VivConsumer` / `VivConsumerDependency` / 本地队列那套一行未动。
 
 - **用途对比**：跨进程走 `IVivEventPublisher`（出网、消费端是另一个进程/另一个 DI 作用域）；本地事件不出网，**handler 与发布方同一 DI 作用域** —— 注入的 `IMomoDbContext` / `IVivContext` 就是发布方那一个。
 - **分发时机**：`PublishAsync` **只入队**，真正分发推迟到请求正常结束时（触发点见下）。保证 handler 看到「最终定格」的数据状态；请求失败 → 整队丢弃，一条事件都不发（不留幽灵事件）。
-- **事件类型约束（硬约束）**：事件**必须继承 `EngineEvent`** —— `Viv.Contracts` 里的空标记抽象基类，纯限制：本地事件的 handler 是业务的一部分，写下来就必须执行，所以事件类型不允许随手写（`PublishAsync(new object())` 编译不过）。**三族各走各的**：要跨进程继承 `NanaEvent` 走 `IVivEventPublisher`，进程内异步点对点继承 `NanaLocalEvent` 走 `IVivLocalEventPublisher`，进程内同步 fanout 继承 `EngineEvent` 走 `IVivLocalEventBus`。⚠️ **绝不可让 `EngineEvent` 去继承 `NanaEvent`** —— `VivWolverineConfigurationExtensions` 对每个 `NanaEvent` 子类都注册了 `ToRabbitExchange` 路由，继承即把所有本地事件绑死成跨进程语义（有防回归测试守着这两点：空标记 + 与 NanaEvent 无继承关系）。
+- **事件类型约束（硬约束）**：事件**必须继承 `EngineEvent`** —— `Viv.Contracts` 里的空标记抽象基类，纯限制：本地事件的 handler 是业务的一部分，写下来就必须执行，所以事件类型不允许随手写（`PublishAsync(new object())` 编译不过）。**各走各的**：要跨进程继承 `NanaEvent` 走 `IVivEventPublisher`（要原子就换成 `IVivOutbox`，事件类型不变），进程内异步点对点继承 `NanaLocalEvent` 走 `IVivLocalEventPublisher`，进程内同步 fanout 继承 `EngineEvent` 走 `IVivLocalEventBus`。⚠️ **绝不可让 `EngineEvent` 去继承 `NanaEvent`** —— `VivWolverineConfigurationExtensions` 对每个 `NanaEvent` 子类都注册了 `ToRabbitExchange` 路由，继承即把所有本地事件绑死成跨进程语义（有防回归测试守着这两点：空标记 + 与 NanaEvent 无继承关系）。
 - **写法（两种，都无需特性 / 无需 IDependency）**：继承 `LocalEventHandler<TEvent>`（与 `VivConsumer<T>` 同手感；C# 单继承，一个类只能订阅一个事件）**或**直接实现 `IVivLocalEventHandler<TEvent>`（可订阅多个事件）。扫描目标统一是接口，注册逻辑只有一份。
 - **注册**：`AddViv()` → `VivRegister.Register` → `LocalEventRegistration.Register` —— `ForceLoadReferencedAssemblies()` + `ScanTypes(typeof(IVivLocalEventHandler<>))`（`TypeScanMagic.IsMatchType` 已支持开放泛型匹配），遍历处理器的**全部**闭合接口注册（订阅多事件时不漏），再按事件类型注册闭合分发器 `LocalEventHandlerInvoker<T>`，最后 `AddScoped<IVivLocalEventBus, LocalEventBus>()`。**泛型处理器定义会被跳过**（闭合 TEvent 未知，继续注册会抛）。这里**扫到 0 个处理器是合法的**（与业务 Service 注册不同），只记日志不报错。
 - **`LocalEventBus` 是 Scoped**（与 `IMomoDbContext` / `IVivContext` 同作用域，这是整个设计的支点）。三态状态机 `Pending` → `Draining` → `Done`：`Draining` 态**允许入队**（处理器内递归发布合法，进下一轮）；`FlushAsync` 最多 5 轮，超限记 Error「疑似递归发布」；`Discard`/`Flush` 均幂等。处理器抛异常**直接上抛**（本地事件是主业务流的一部分，不静默吞）。
@@ -248,6 +253,41 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ... }
 - **⚠️ 事务内的 Dapper 读会直接抛异常 —— 框架不管，业务自己规避**：12 处原生 SQL 逃生口（`FindScalar` / `FindList<T>(sql)` / `Page` 等，`MomoDatabaseContext.cs:1055,1098,1125,1146,1179,1212,1278,1295,1311,1334,1363,1367`）把 `null` 硬编码成 Dapper 的事务参数，实测抛 `VivConnectionException`：*「如果分配给命令的连接位于本地挂起事务中，ExecuteReader 要求命令拥有事务。命令的 Transaction 属性尚未初始化。」*—— **是硬失败，不是脏读**（当前所有服务 `IsReadWriteSplit: false`，`CreateEFAppContext` 把读强转成 Write，读写**共用同一条连接**；将来真开读写分离才会退化成脏读）。走 EF 的 `Find<T>` / `Exist` / `Count` / 谓词版 `FindList` **不受影响**。**框架立场：事务只针对主库写，读不开事务 —— 业务先把数据备好，再开事务。这是业务的活，不是框架的活。**（`ExecuteSqlList` 那条路是例外，它自己把 `_transaction` 传给 Dapper，实测事务内可正常用。）
 - **Worker 侧未做**：`VivConsumer<T>` / `VivLocalConsumer<T>.HandleAsync` 读**类级**特性开事务（不走接口代理，消费者子类在注册期豁免校验）。本轮只做了 API 侧。
 - **不做（范围外）**：DataFilter / 审计接口 / 权限。
+
+### Outbox（发件箱）
+
+**解决的是「写库 + 发消息」不原子**：`await _repo.InsertAsync(order); await _publisher.PublishAsync(new OrderCreatedEvent{...});` —— 先写后发则发失败就永久丢消息、先发后写则消息出去了业务回滚，下游拿着不存在的订单干活。**四族事件通道里只有这一族管原子性**，其余三族都只管投递（`NanaEventPublisher.PublishAsync` 是「当场发出去」，与数据库事务没有任何关系）。
+
+**Outbox 是跨进程那族的可靠版本**：事件类型不变（必须继承 `NanaEvent`，复用现成的 `{EventName}Exchange` fanout 拓扑与消费端 `VivConsumer<T>`），**只是换了投递时机** —— 入队 ≠ 发送。原子性是这个模式唯一的产出。
+
+```csharp
+// 窄事务 + 发件箱：订单与待发消息一起成立
+await using var tx = await _unitOfWork.BeginAsync();
+await _orderRepo.InsertAsync(order);
+await _outbox.EnqueueAsync(new OrderCreatedEvent { OrderId = order.Id });
+await tx.CommitAsync();
+
+// 或完整事务（[VivUnitOfWork] 挂在外层公开方法上）
+[VivUnitOfWork]
+public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outbox.EnqueueAsync(...); }
+```
+
+- **⚠️ `src/Banshee/Viv.Momo/**` 一行未动 —— 读写分离是 Momo 最大的价值。** 本模块**完全不碰 EF**：表由手写 SQL 经 `IMomoDbContext` 现成的 Dapper 逃生口读写，`OutboxMessage` 是**普通 POCO，不实现 `IEntity` / 不实现 `ITenant`**、不注册 `EntityTypeOptions`。理由三条：① EF 一接管，表名/列名就由命名约定生成（`outbox_message` vs `OutboxMessage`），而手写 SQL 用的是不带引号的 PascalCase，两套命名对不上是运行期才炸；② `ITenant` 会带来全局查询过滤器，而投递器跑在后台作用域里，「无上下文/无租户」时过滤规则会静默把行读成空；③ 绕开命名机制本身 —— **DDL 与所有 SQL 全部不带引号**，SqlServer 不区分、PG 统一折叠成小写，两端天然一致。有防回归测试钉死（`OutboxContractTests.OutboxMessage既不实现IEntity也不实现ITenant`）。
+- **原子性的唯一机关是 `ExecuteSqlAsync`**：它用**写库**上下文（`CreateEFAppContext(Write)`）并把 `_transaction` 转发给 Dapper（`MomoDatabaseContext.cs:688`），所以入队自动并入调用方当前的事务。**换成任何走读连接的执行方式都会让它静默失效**（有持久性、没有原子性，测试全绿、只是不原子）。`OutboxStore` 因此必须 **Scoped** —— 与业务拿到的 `IMomoDbContext` 同作用域才共享同一个 `_transaction` 字段；改成 Singleton / Transient 就等于把入队挪到事务外面去（`OutboxRegisterTests.入队器与仓储都是Scoped` 钉死）。
+- **认领（`ClaimBatch`）是唯一的例外，它不走 `ExecuteSqlAsync` 也不走 `FindListAsync`**：所有返回行的原生 SQL 方法（`FindListAsync<T>(sql)` 等）走的都是**读库**上下文，开启读写分离后会打到从库上。改为 `_db.GetDbConnection(DbReadWriteType.Write)` + 自己跑 Dapper（`transaction: null` —— 认领是单条自原子语句，不需要事务参数）。这条路**恰好也绕开了「事务内 Dapper 读必抛」那个坑**：投递器自带 `IServiceScope`，作用域里没有环境事务。
+- **多实例安全靠原子认领，不靠 Redis 锁**：SqlServer `UPDATE OutboxMessage WITH (READPAST) ... OUTPUT inserted.*`，PG `UPDATE ... WHERE Id IN (SELECT ... LIMIT @BatchSize FOR UPDATE SKIP LOCKED) ... RETURNING *`。**必须是单条 `UPDATE`** —— 先 `SELECT` 再 `UPDATE` 会留一个窗口，同一条消息被两个实例各投一遍（而且编译通过、测试也通过）。这比 `VivConsumer` 那把 Redis 消费锁更强的地方在于：不需要 Redis、不区分谁持锁。
+- **表 `OutboxMessage`**（业务主库；`Sql/OutboxMessage.sql` + `Sql/OutboxMessage.pg.sql` 作嵌入资源，同一份文件也提交进仓库供 DBA / 迁移脚本用）：`Id`（`IdMagic.NextId()`，**不用 IDENTITY**，手写 INSERT 不依赖回填）、`MessageId`、`EventType`、`Payload`、`Status`、`RetryCount`、`NextRetryAt`、`LeaseUntil`、`OccurredAt`、`SentAt`、`LastError`。`Status`：`0=Pending`、`1=Processing`（已认领、有租约）、`2=Sent`、`3=Failed`（耗尽重试，等人工介入）—— **数值即库里的值**，改一次就等于把所有历史行解读错（有测试钉死）。所有时间列一律 `DateTime.UtcNow` 派生（Kind=Utc）：PG 侧是 `TIMESTAMPTZ`，Npgsql 拒绝写入 Kind=Unspecified。
+- **`EventType` 存 `FullName` 而不是程序集限定名**：AQN 里带着程序集版本号，一次发版就会让库里旧行的类型解析不出来。解析走进程内静态索引（`TypeScanMagic.ScanTypes<NanaEvent>()`，先 `ForceLoadReferencedAssemblies()` —— 业务 Core 常是懒加载，不加载扫出来的事件类型是残缺的，表现成「库里的消息投递不出去」，很难查），`Type.GetType` 兜底。**解析不到 → 置 `Status=3` + Error 日志，绝不静默丢**（多半是 `EventType` 写错或程序集没加载）。
+- **`Payload` 是 `NanaEnvelope<T>` 的 JSON，自产自销**：由 Outbox 自己 `Serialize`、自己 `Deserialize`，**Wolverine 从头到尾看不到这个 Json**（重投时 Wolverine 才用**它自己的**序列化器把重建出的信封发上线）。因此完全不需要知道 Wolverine 的 `JsonSerializerOptions`，也就没有「选项漂移导致静默反序列化成默认值」的风险。选项固定成 `new JsonSerializerOptions(JsonSerializerDefaults.Web)`（camelCase + 大小写不敏感），由 `OutboxContractTests` 的 round-trip 钉住。**投递时 `MessageId` 从数据库列回填、覆盖 payload 里的值** —— 它是消费端 `nana:{ServiceName}:{EventType}:{MessageId}` 那把消费锁的去重键，必须活过重投。
+- **投递走 `IVivEventPublisher.PublishEnvelopeAsync`（新增的信封版，刻意不叫 `PublishAsync` 重载）**：「原样重发」保留 MessageId / Context / ReDeliverCount / CreatedAt，且**不重新盖 holderId**（投递的是冻结的信封）。⚠️ 不能走内容版：内容版每次新建信封、`MessageId` 重新生成，消费端去重键就没了。**为什么不叫 `PublishAsync`**：与内容版同为一个参数时，调用点写 `PublishAsync<T>(null)` 的 `null` 字面量对两个重载都成立且互不更优 → `CS0121` 二义（实测踩过），换个名字彻底躲开。
+- **投递器 `OutboxDispatcher : BackgroundService` 每轮**：① 释放过期租约（`Status=1 AND LeaseUntil <= @Now` → 退回 Pending，崩溃/被杀后卡住的行靠这条复活）② **排空**认领 + 投递（一直认领到认不出为止；只看一批的话积压时投递速度会被轮询间隔卡死）③ 分批清理 `Status=2 AND SentAt < @Cutoff` ④ 睡 `PollIntervalSeconds`（默认 5s，**纯轮询、无「提交后立即试投」的快路径** —— 投递只有一条代码路径）。
+- **`AddHostedService<OutboxDispatcher>()` —— 这是本模块对既有约定唯一的刻意破坏**：框架至今从不自己注册 `IHostedService`。但只有 Apex / DeepRed 有 Worker 进程，而 Herta.Api / SakuMai.Api 也会写 outbox —— 投递器只在 Worker 跑，这些服务的消息就永远发不出去；让每个宿主手工 `AddHostedService` 又违背「一行启动」的姿态。故由配置门控自动注册，凡调 `AddViv` 的宿主（API + Worker）都会跑投递器，与 `AddVivGrpcKestrel` 的配置驱动装配同一姿态。**它是 Singleton，所以不能构造注入任何 Scoped 服务**（`IVivEventPublisher` / `IOutboxRepository` 都是 Scoped），每轮由 `OutboxWorker` 自己 `CreateScope` 去解析。
+- **后台异常一律吞掉**：`BackgroundService` 里逃出去的异常在 .NET 6+ 会**直接停掉整个宿主** —— MQ 抖一下整个业务进程跟着死。`OutboxDispatcher` catch 后记 Error 继续下一轮。**真正干活的一轮逻辑在 `OutboxWorker`（可测：`RunOnceAsync` 返回本轮投递条数），它负责报错、不负责吞**（吞是调度层的职责）。
+- **失败处理**：投递失败一律先重试，**不区分「MQ 挂了」和「序列化/路由问题」**（两类在这里的处理本来就是同一个）。记 `LastError`（截断到列宽）+ 指数退避（5s 起、×2、封顶 60s、+0~30% 抖动，与 `GenerateExponentialBackoff` 同形），`RetryCount >= MaxRetryCount` 才置 `Status=3` + Error。`OperationCanceledException`（停机）**直接上抛、不消耗重试次数**，租约到期后自然被重新认领。
+- **租约兜底**：`LeaseSeconds` 配成 0 或负数一律 `Math.Max(1, ...)` 取 1 秒 —— 租约 0 秒 = 认领的瞬间就过期，多个实例会把同一条消息翻来覆去地投。
+- **at-least-once，不是 exactly-once（有意的）**：崩溃 / 租约过期会导致重复投递，这是模式固有的。**不做 Inbox** —— 消费端幂等由业务代码自己负责。要补是纯增量：一张 `ProcessedMessage(ServiceName, MessageId)` 唯一索引表，在同一个 `IVivTransaction` 里写。
+- **配置**：`VivOptions.OutboxOption` 为 `null` = 不启用。配了 `OutboxOption` 却没有 `NanaOption` / `DatabaseOption` → **启动即抛**（投递的是跨进程事件，缺 MQ 配置根本发不出去；发件箱要靠业务主库原子地存下待发消息）。`AutoCreateTable` 默认 `true`，DDL 本身幂等（`IF OBJECT_ID ... IS NULL` / `CREATE TABLE IF NOT EXISTS`），多实例并发启动安全；关掉走纯手工建表。
+- **不做（范围外）**：Inbox（见上）；**延迟入队**（`EnqueueAsync(TimeSpan, T)` —— 现成的 `PublishDelayAsync` 已覆盖「发出去但不立刻到」）；**Worker 侧类级 `[VivUnitOfWork]`**（上一轮就欠着）。
 
 ### Database (Momo)
 

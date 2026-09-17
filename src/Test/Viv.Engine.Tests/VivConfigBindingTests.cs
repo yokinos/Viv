@@ -37,6 +37,7 @@ public class VivConfigBindingTests
               ]
             },
             "NanaOption": { "Host": "h", "Port": 5672, "UserName": "u", "Password": "p", "VirtualHost": "v", "RetryCount": 3, "ConsumerTypes": [], "SagaDatabaseSource": 0, "SagaConnectionString": "s" },
+            "OutboxOption": { "EnableDispatcher": true, "PollIntervalSeconds": 7, "BatchSize": 50, "MaxRetryCount": 4, "LeaseSeconds": 30, "AutoCreateTable": false, "RetentionDays": 3 },
             "TokenOption": null,
             "TickOption": null,
             "EchoOption": { "EnableHttp": true, "GrpcOption": null },
@@ -87,6 +88,15 @@ public class VivConfigBindingTests
         Assert.Equal(5672, options.NanaOption!.Port);
         Assert.Equal("u", options.NanaOption.UserName);
         Assert.Empty(options.NanaOption.ConsumerTypes);
+
+        // OutboxOption（发件箱：数值 / bool）
+        Assert.True(options.OutboxOption!.EnableDispatcher);
+        Assert.Equal(7, options.OutboxOption.PollIntervalSeconds);
+        Assert.Equal(50, options.OutboxOption.BatchSize);
+        Assert.Equal(4, options.OutboxOption.MaxRetryCount);
+        Assert.Equal(30, options.OutboxOption.LeaseSeconds);
+        Assert.False(options.OutboxOption.AutoCreateTable);
+        Assert.Equal(3, options.OutboxOption.RetentionDays);
 
         // EchoOption（null 子节点）
         Assert.True(options.EchoOption!.EnableHttp);

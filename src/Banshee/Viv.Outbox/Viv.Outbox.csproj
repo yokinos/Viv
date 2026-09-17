@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Viv.Outbox.Tests" />
+  </ItemGroup>
+
+  <!-- 建表 DDL 随程序集走：投递器启动时按 provider 取对应脚本执行（幂等）。
+       同目录的 .sql 也可直接交给 DBA / 迁移脚本，运行时读的就是这两个文件，不存在第二份副本。 -->
+  <ItemGroup>
+    <EmbeddedResource Include="Sql\OutboxMessage.sql" />
+    <EmbeddedResource Include="Sql\OutboxMessage.pg.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 认领 SQL 要拿 UPDATE ... OUTPUT/RETURNING 回吐的行 —— IMomoDbContext 上没有
+         「主库 + 返回行」的原生 SQL 方法（所有查行的方法都走读库），只能自己在那条主库连接上跑 Dapper -->
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
+    <ProjectReference Include="..\Viv.Delusion\Viv.Delusion.csproj" />
+    <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
+    <ProjectReference Include="..\Viv.Momo\Viv.Momo.csproj" />
+    <ProjectReference Include="..\Viv.Nana\Viv.Nana.csproj" />
+  </ItemGroup>
+
+</Project>

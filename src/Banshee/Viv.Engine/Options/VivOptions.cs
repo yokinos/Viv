@@ -9,6 +9,7 @@ using Viv.Echo;
 using Viv.Log;
 using Viv.Momo.Options;
 using Viv.Nana.Options;
+using Viv.Outbox.Options;
 using Viv.Redis;
 
 #nullable disable
@@ -47,6 +48,11 @@ namespace Viv.Engine.Options
         /// MQ设置
         /// </summary>
         public NanaOptions NanaOption { get; set; }
+
+        /// <summary>
+        /// 发件箱（事务性消息投递）。为 null = 不启用。
+        /// </summary>
+        public OutboxOptions OutboxOption { get; set; }
 
         /// <summary>
         /// 令牌设置

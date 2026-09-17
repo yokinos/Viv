@@ -71,6 +71,9 @@ namespace Viv.Nana.Tests
         public ValueTask<bool> PublishAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
             => ValueTask.FromResult(Result);
 
+        public ValueTask<bool> PublishEnvelopeAsync<T>(NanaEnvelope<T> envelope, CancellationToken cancellationToken = default) where T : NanaEvent
+            => ValueTask.FromResult(Result);
+
         public ValueTask<bool> PublishDelayAsync<T>(TimeSpan delayTTL, T content, CancellationToken cancellationToken = default) where T : NanaEvent
             => ValueTask.FromResult(Result);
 

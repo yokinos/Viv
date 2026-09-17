@@ -25,6 +25,7 @@
 		<ProjectReference Include="..\Viv.Delusion\Viv.Delusion.csproj" />
 		<ProjectReference Include="..\Viv.Momo\Viv.Momo.csproj" />
 		<ProjectReference Include="..\Viv.Nana\Viv.Nana.csproj" />
+		<ProjectReference Include="..\Viv.Outbox\Viv.Outbox.csproj" />
 		<ProjectReference Include="..\Viv.Redis\Viv.Redis.csproj" />
 		<ProjectReference Include="..\Viv.Echo\Viv.Echo.csproj" />
 		<ProjectReference Include="..\Viv.Sandrone\Viv.Sandrone.csproj" />
