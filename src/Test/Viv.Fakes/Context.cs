@@ -66,3 +66,13 @@ public class TestContext : IVivContext
         return _snapshot is null ? 0 : selector(_snapshot);
     }
 }
+
+/// <summary>
+/// <see cref="IVivContextAccessor"/> 替身 —— 可直写 <see cref="Current"/> 摆出租户
+/// （<c>EFAppContext.OnModelCreating</c> 的全局查询过滤器捕获的就是这个单例，
+/// 每次查询重求值，所以摆完不用再通知谁）。
+/// </summary>
+public class TestContextAccessor : IVivContextAccessor
+{
+    public VivContextContent? Current { get; set; }
+}

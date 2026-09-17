@@ -1,18 +1,12 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Viv.Contracts.Interface;
-using Viv.Contracts.Models;
 using Viv.Delusion.Magic;
+using Viv.Fakes;
 using Viv.Momo.Core;
 using Viv.Momo.Enums;
 using Viv.Momo.Options;
 
 namespace Viv.Momo.Tests;
-
-/// <summary>单元测试用的租户访问器桩</summary>
-public class StubTenantAccessor : IVivContextAccessor
-{
-    public VivContextContent? Current { get; set; }
-}
 
 /// <summary>
 /// 暴露 EFAppContext.OnModelCreating 的测试子类（不接数据库，只验模型元数据）。
@@ -101,7 +95,7 @@ public class TenantFilterTests
     [Fact]
     public void EfOnModelCreating_ITenant实体加查询过滤()
     {
-        var ctx = new ExposedEfAppContext(EntityScanOptions(), new StubTenantAccessor());
+        var ctx = new ExposedEfAppContext(EntityScanOptions(), new TestContextAccessor());
         var model = ctx.BuildModel();
 
         Assert.NotNull(model.Entity(typeof(TenantUserEntity)).Metadata.GetQueryFilter());
@@ -111,7 +105,7 @@ public class TenantFilterTests
     [Fact]
     public void EfOnModelCreating_非租户实体不加过滤()
     {
-        var ctx = new ExposedEfAppContext(EntityScanOptions(), new StubTenantAccessor());
+        var ctx = new ExposedEfAppContext(EntityScanOptions(), new TestContextAccessor());
         var model = ctx.BuildModel();
 
         Assert.Null(model.Entity(typeof(NonTenantEntity)).Metadata.GetQueryFilter());

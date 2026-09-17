@@ -5,6 +5,7 @@ using Viv.Contracts;
 using Viv.Contracts.Models;
 using Viv.Contracts.Options;
 using Viv.Delusion;
+using Viv.Fakes;
 using Viv.Sandrone.Impl;
 
 namespace Viv.Sandrone.Tests;

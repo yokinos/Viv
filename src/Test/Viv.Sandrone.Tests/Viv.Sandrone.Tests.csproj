@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Banshee\Viv.Sandrone\Viv.Sandrone.csproj" />
+    <!-- 只为 XUnitTestMagic.CreateOptions：替身与测试工具集中在这个程序集里 -->
+    <ProjectReference Include="..\Viv.Fakes\Viv.Fakes.csproj" />
   </ItemGroup>
 
 </Project>

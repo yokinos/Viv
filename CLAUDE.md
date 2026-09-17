@@ -79,7 +79,26 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 
 ### Test (`src/Test/`)
 
-Unit test suites, one per framework project — `Viv.Delusion.Tests`、`Viv.Engine.Tests`、`Viv.Momo.Tests`、`Viv.Nana.Tests`、`Viv.Outbox.Tests`、`Viv.Redis.Tests`、`Viv.Sandrone.Tests`。CI（`.github/workflows/dotnet.yml`）会跑全量测试并上报覆盖率。
+Unit test suites, one per framework project — `Viv.Delusion.Tests`、`Viv.Engine.Tests`、`Viv.Momo.Tests`、`Viv.Nana.Tests`、`Viv.Outbox.Tests`、`Viv.Redis.Tests`、`Viv.Sandrone.Tests`。CI（`.github/workflows/dotnet.yml`）会跑全量测试并上报覆盖率。业务层的测试项目（`Viv.Elysia.Tests`、`Viv.Herta.Tests`、`Viv.ServiceProxy.Tests`）在 `src/Vivian/` 各自项目旁。
+
+#### `Viv.Fakes` —— 测试替身集中在此，**不得散落到各测试项目**
+
+`src/Test/Viv.Fakes/`：全仓**唯一**允许手写替身（mock/fake/stub）的地方。各测试项目 `ProjectReference` 它，项目内只留「**被测对象 + 探针 + 测试数据**」。硬性要求：**实现不能分散在各测试项目** —— 想改一处替身行为，只应该有一个文件要改。
+
+- **不是测试项目**：csproj 写死 `<IsTestProject>false</IsTestProject>` 且**刻意不带** `Microsoft.NET.Test.Sdk` / `xunit` / `coverlet.collector`（替身没有一个用到 xUnit 类型）→ `dotnet test Viv.slnx` 静默跳过它，不会报「没有可用测试」。带测试 SDK 反而会被当测试宿主去跑。
+- **不参与覆盖率**：程序集级 `ExcludeFromCodeCoverage`（实测 coverlet 遵守，cobertura 里 `Viv.Fakes` 类数 = 0）+ CI 侧 reportgenerator `-assemblyfilters:"-Viv.*.Tests*;-Viv.Fakes*"` 双保险，覆盖率汇总脚本里另有 `SKIP_PREFIXES = ('Viv.Fakes',)`。
+- **文件组织按接口族**：`Logging.cs`（`RecordingLogger : ILoggerContract`）、`Context.cs`（`TestContext : IVivContext` + `TestContextAccessor : IVivContextAccessor`）、`Messaging.cs`（`RecordingEventPublisher` / `RecordingLocalEventPublisher` / `RecordingDistributedLock`）、`Caching.cs`（`TestBucket` + `CacheSut : DataAccessCacheBase<TestBucket>` + `CacheDoubles`）、`Transactions.cs`（`KernelStub : ITransactionKernel`）、`Outbox.cs`（`StubOutboxRepository : IOutboxRepository`）、`Hosting.cs`（`StubHost` / `FakeRequest : IApiRequest` / SignalR 四件套 / `StubConnectionPool`）、`Grpc.cs`（三个流替身）、`Proxies.cs`（`TestProxy : DispatchProxy` + `NopProxy`）、`XUnitTestMagic.cs`（`CreateOptions<T>`）。
+- **只有两个替身是 `internal`**：`KernelStub` / `StubOutboxRepository` 要桩的接口（`ITransactionKernel` / `IOutboxRepository`）本身是 internal，而 **public 类实现 internal 接口是 CS0061**，故替身只能 internal，靠 `InternalsVisibleTo` 放给 `Viv.Engine.Tests` / `Viv.Outbox.Tests`（`Viv.Fakes.csproj` 里那两条 IVT 就是为它俩开的，**不要为了让替身「哪都能用」而全开**）。生产侧 `Viv.Engine` / `Viv.Outbox` 各反向加了一条 `InternalsVisibleTo Include="Viv.Fakes"`。
+- **⚠️ `TestProxy` / `NopProxy` 不能加 `sealed`**：`DispatchProxy.Create<T, TProxy>()` 要**派生**动态类型，`TProxy` 必须可跨程序集继承。这两个类是全仓唯一不能用 `sealed` 的替身。
+- **`XUnitTestMagic.CreateOptions<T>` 原来住在生产程序集 `Viv.Contracts`，已搬进这里** —— 测试设施不该跟着业务代码发布。
+- **留在原地的（判据：被测对象的一部分 / 按程序集名被扫描 / 纯测试数据，搬了会静默变红）**：
+  - `EngineTestEnv` + `VivEngineStaticStateCollection`（`Viv.Engine.Tests`）—— 带 `[CollectionDefinition(DisableParallelization = true)]`，是**该项目的并行度策略**。
+  - Nana 的 `VivConsumer<T>` / `VivLocalConsumer<T>` 子类 —— `NanaRegisterTests` 写死 `AssemblyName = "Viv.Nana.Tests"` 并断言扫到它们。
+  - `TestEntities.cs`（`Viv.Momo.Tests`）—— `TenantFilterTests` 写死 `AssemblyName`/`ClassNameEndsWith` 让 EF 扫，搬走 EF 扫不到实体、两条 `EfOnModelCreating_*` 静默变红。`ExposedEfAppContext` 同因。
+  - Engine 的探针服务与 `ConsumerStub` —— 是**扫描算法的输入数据**，搬走会污染扫描范围。
+  - `SampleController`（Elysia，带 `[OperationLog]` 的探针控制器）、各测试事件 POCO、`TestPayload`、`GrpcTestServer`（真 in-process Kestrel 夹具）。
+  - `Viv.Apex.Tests` / `Viv.DeepRed.Tests` 目前是空项目（0 个 `.cs`，`dotnet test` 报「没有可用测试」，属既有状态）。
+- **新增测试项目时**：直接 `ProjectReference ..\..\Test\Viv.Fakes\Viv.Fakes.csproj`（`src/Vivian/` 下的项目多退一级为 `..\..\Test\...`），不要在本项目里另起替身。
 
 ---
 
