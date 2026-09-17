@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Viv.Contracts;
 using Viv.Contracts.Models;
+using Viv.Fakes;
 using Viv.Nana;
 using Viv.Outbox.Core;
 
@@ -12,11 +13,11 @@ namespace Viv.Outbox.Tests;
 /// </summary>
 public class OutboxStoreTests
 {
-    private static (OutboxStore Store, StubOutboxRepository Repo, StubContext Context, StubLogger Logger) Build()
+    private static (OutboxStore Store, StubOutboxRepository Repo, TestContext Context, RecordingLogger Logger) Build()
     {
         var repo = new StubOutboxRepository();
-        var context = new StubContext();
-        var logger = new StubLogger();
+        var context = new TestContext();
+        var logger = new RecordingLogger();
         return (new OutboxStore(repo, context, logger), repo, context, logger);
     }
 

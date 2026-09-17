@@ -21,6 +21,7 @@
          所以这些替身只能 internal，靠 IVT 放给消费它的那个测试项目。
          只有确实需要的才加，不要为了让替身「哪都能用」而全开。 -->
     <InternalsVisibleTo Include="Viv.Engine.Tests" />
+    <InternalsVisibleTo Include="Viv.Outbox.Tests" />
   </ItemGroup>
 
   <ItemGroup>

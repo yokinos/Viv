@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Viv.Contracts;
+using Viv.Fakes;
 using Viv.Nana;
 using Viv.Outbox.Core;
 using Viv.Outbox.Options;
@@ -41,8 +42,8 @@ public class OutboxWorkerTests
 
     private static OutboxWorker Build(
         StubOutboxRepository repo,
-        StubPublisher publisher,
-        StubLogger logger,
+        RecordingEventPublisher publisher,
+        RecordingLogger logger,
         OutboxOptions? options = null)
     {
         var services = new ServiceCollection();
@@ -61,8 +62,8 @@ public class OutboxWorkerTests
     public async Task 投递成功_标记Sent()
     {
         var repo = new StubOutboxRepository();
-        var publisher = new StubPublisher();
-        var logger = new StubLogger();
+        var publisher = new RecordingEventPublisher();
+        var logger = new RecordingLogger();
         repo.ClaimScript.Enqueue(new List<OutboxMessage> { Row(1) });
 
         var delivered = await Build(repo, publisher, logger).RunOnceAsync();
@@ -82,8 +83,8 @@ public class OutboxWorkerTests
     public async Task 投递失败_退回Pending并按退避推后NextRetryAt()
     {
         var repo = new StubOutboxRepository();
-        var publisher = new StubPublisher { PublishException = new Exception("MQ 挂了") };
-        var logger = new StubLogger();
+        var publisher = new RecordingEventPublisher { PublishException = new Exception("MQ 挂了") };
+        var logger = new RecordingLogger();
         repo.ClaimScript.Enqueue(new List<OutboxMessage> { Row(1, retryCount: 0) });
 
         var before = DateTime.UtcNow;
@@ -107,11 +108,11 @@ public class OutboxWorkerTests
     public async Task 重试累加_每条消息各自算自己的次数()
     {
         var repo = new StubOutboxRepository();
-        var publisher = new StubPublisher { PublishException = new Exception("boom") };
+        var publisher = new RecordingEventPublisher { PublishException = new Exception("boom") };
         // MaxRetryCount = 3：两条都还没到顶，本次各 +1
         repo.ClaimScript.Enqueue(new List<OutboxMessage> { Row(1, retryCount: 1), Row(2, retryCount: 0) });
 
-        await Build(repo, publisher, new StubLogger()).RunOnceAsync();
+        await Build(repo, publisher, new RecordingLogger()).RunOnceAsync();
 
         Assert.Equal(2, repo.Pending.Single(x => x.Id == 1).RetryCount);
         Assert.Equal(1, repo.Pending.Single(x => x.Id == 2).RetryCount);
@@ -121,8 +122,8 @@ public class OutboxWorkerTests
     public async Task 重试达上限_置Failed不再回队()
     {
         var repo = new StubOutboxRepository();
-        var publisher = new StubPublisher { PublishException = new Exception("一直失败") };
-        var logger = new StubLogger();
+        var publisher = new RecordingEventPublisher { PublishException = new Exception("一直失败") };
+        var logger = new RecordingLogger();
         // MaxRetryCount = 3，这条已经失败过 2 次 → 本次是第 3 次，到顶
         repo.ClaimScript.Enqueue(new List<OutboxMessage> { Row(1, retryCount: 2) });
 
@@ -141,8 +142,8 @@ public class OutboxWorkerTests
     public async Task 未知事件类型_置Failed并记Error_不静默丢()
     {
         var repo = new StubOutboxRepository();
-        var publisher = new StubPublisher();
-        var logger = new StubLogger();
+        var publisher = new RecordingEventPublisher();
+        var logger = new RecordingLogger();
         repo.ClaimScript.Enqueue(new List<OutboxMessage> { Row(1, eventType: "Viv.Nowhere.NoSuchEvent") });
 
         await Build(repo, publisher, logger).RunOnceAsync();
@@ -165,7 +166,7 @@ public class OutboxWorkerTests
         var repo = new StubOutboxRepository();
         repo.ClaimScript.Enqueue(new List<OutboxMessage> { Row(1, eventType: "Viv.Nowhere.NoSuchEvent", retryCount: 0) });
 
-        await Build(repo, new StubPublisher(), new StubLogger()).RunOnceAsync();
+        await Build(repo, new RecordingEventPublisher(), new RecordingLogger()).RunOnceAsync();
 
         // 原样带过去，不 +1
         Assert.Equal(0, Assert.Single(repo.Failed).RetryCount);
@@ -176,7 +177,7 @@ public class OutboxWorkerTests
     {
         var repo = new StubOutboxRepository();
 
-        await Build(repo, new StubPublisher(), new StubLogger()).RunOnceAsync();
+        await Build(repo, new RecordingEventPublisher(), new RecordingLogger()).RunOnceAsync();
 
         // 顺序不能反：先认领再释放的话，崩溃遗留的行要等下一轮才复活
         Assert.Equal(1, repo.ReleaseExpiredCalls);
@@ -193,7 +194,7 @@ public class OutboxWorkerTests
         repo.ClaimScript.Enqueue(new List<OutboxMessage> { Row(1), Row(2) });
         repo.ClaimScript.Enqueue(new List<OutboxMessage> { Row(3) });
 
-        var delivered = await Build(repo, new StubPublisher(), new StubLogger(), options).RunOnceAsync();
+        var delivered = await Build(repo, new RecordingEventPublisher(), new RecordingLogger(), options).RunOnceAsync();
 
         Assert.Equal(3, delivered);
         Assert.Equal(2, repo.ClaimCalls);
@@ -205,7 +206,7 @@ public class OutboxWorkerTests
     {
         var repo = new StubOutboxRepository();
 
-        var delivered = await Build(repo, new StubPublisher(), new StubLogger()).RunOnceAsync();
+        var delivered = await Build(repo, new RecordingEventPublisher(), new RecordingLogger()).RunOnceAsync();
 
         Assert.Equal(0, delivered);
         Assert.Equal(1, repo.ClaimCalls);
@@ -220,7 +221,7 @@ public class OutboxWorkerTests
         options.BatchSize = 25;
         options.LeaseSeconds = 90;
 
-        await Build(repo, new StubPublisher(), new StubLogger(), options).RunOnceAsync();
+        await Build(repo, new RecordingEventPublisher(), new RecordingLogger(), options).RunOnceAsync();
 
         Assert.Equal(25, repo.LastClaimBatchSize);
         Assert.NotNull(repo.LastClaimNow);
@@ -237,7 +238,7 @@ public class OutboxWorkerTests
         var options = DefaultOptions();
         options.LeaseSeconds = leaseSeconds;
 
-        await Build(repo, new StubPublisher(), new StubLogger(), options).RunOnceAsync();
+        await Build(repo, new RecordingEventPublisher(), new RecordingLogger(), options).RunOnceAsync();
 
         // 租约 0 秒 = 认领的瞬间就过期，多个实例会把同一条消息翻来覆去地投
         Assert.Equal(1, (repo.LastClaimLeaseUntil!.Value - repo.LastClaimNow!.Value).TotalSeconds, 1);
@@ -247,9 +248,9 @@ public class OutboxWorkerTests
     public async Task 启动_建表一次并打启动日志()
     {
         var repo = new StubOutboxRepository();
-        var logger = new StubLogger();
+        var logger = new RecordingLogger();
 
-        Assert.True(await Build(repo, new StubPublisher(), logger).StartupAsync());
+        Assert.True(await Build(repo, new RecordingEventPublisher(), logger).StartupAsync());
 
         Assert.Equal(1, repo.EnsureTableCalls);
         Assert.Single(logger.Infos);
@@ -263,7 +264,7 @@ public class OutboxWorkerTests
         var options = DefaultOptions();
         options.AutoCreateTable = false;
 
-        Assert.True(await Build(repo, new StubPublisher(), new StubLogger(), options).StartupAsync());
+        Assert.True(await Build(repo, new RecordingEventPublisher(), new RecordingLogger(), options).StartupAsync());
 
         Assert.Equal(0, repo.EnsureTableCalls);
     }
@@ -272,10 +273,10 @@ public class OutboxWorkerTests
     public async Task 启动_建表失败返回false_投递器不再空转()
     {
         var repo = new StubOutboxRepository { EnsureTableException = new Exception("表建不出来") };
-        var logger = new StubLogger();
+        var logger = new RecordingLogger();
 
         // 表都建不出来还继续跑，只会每轮刷一条一模一样的错误，把真正的问题埋掉
-        Assert.False(await Build(repo, new StubPublisher(), logger).StartupAsync());
+        Assert.False(await Build(repo, new RecordingEventPublisher(), logger).StartupAsync());
 
         Assert.Single(logger.Errors);
     }
@@ -287,7 +288,7 @@ public class OutboxWorkerTests
         var options = DefaultOptions();
         options.RetentionDays = 0;
 
-        await Build(repo, new StubPublisher(), new StubLogger(), options).RunOnceAsync();
+        await Build(repo, new RecordingEventPublisher(), new RecordingLogger(), options).RunOnceAsync();
 
         Assert.Equal(0, repo.CleanupCalls);
     }
@@ -297,7 +298,7 @@ public class OutboxWorkerTests
     {
         var repo = new StubOutboxRepository { CleanupResult = false };
 
-        await Build(repo, new StubPublisher(), new StubLogger()).RunOnceAsync();
+        await Build(repo, new RecordingEventPublisher(), new RecordingLogger()).RunOnceAsync();
 
         Assert.Equal(1, repo.CleanupCalls);
     }
@@ -306,9 +307,9 @@ public class OutboxWorkerTests
     public async Task 清理_单轮有批数上限_删不完留给下一轮且说出来()
     {
         var repo = new StubOutboxRepository { CleanupResult = true };
-        var logger = new StubLogger();
+        var logger = new RecordingLogger();
 
-        await Build(repo, new StubPublisher(), logger).RunOnceAsync();
+        await Build(repo, new RecordingEventPublisher(), logger).RunOnceAsync();
 
         // 保留期配错时不能把一整轮（乃至整个进程）耗在清理上
         Assert.Equal(50, repo.CleanupCalls);
@@ -324,7 +325,7 @@ public class OutboxWorkerTests
 
         // 这一层负责**报错**，不负责吞 —— 吞异常是 OutboxDispatcher 的职责
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await Build(repo, new StubPublisher(), new StubLogger()).RunOnceAsync());
+            async () => await Build(repo, new RecordingEventPublisher(), new RecordingLogger()).RunOnceAsync());
     }
 
     [Fact]
@@ -353,13 +354,13 @@ public class OutboxWorkerTests
         var repo = new StubOutboxRepository();
         // 停机时发布器抛 OCE —— 这条路径必须走「上抛」而不是「当失败重试」：
         // 停机不消耗重试次数，租约到期后这条自然会被重新认领。
-        var publisher = new StubPublisher { PublishException = new OperationCanceledException() };
+        var publisher = new RecordingEventPublisher { PublishException = new OperationCanceledException() };
 
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            async () => await Build(repo, publisher, new StubLogger()).DeliverAsync(repo, publisher, Row(1), cts.Token));
+            async () => await Build(repo, publisher, new RecordingLogger()).DeliverAsync(repo, publisher, Row(1), cts.Token));
 
         Assert.Empty(repo.Pending);
         Assert.Empty(repo.Failed);
@@ -370,7 +371,7 @@ public class OutboxWorkerTests
     public async Task 投递_信封里的holder原样送达_不被当前holder覆盖()
     {
         var repo = new StubOutboxRepository();
-        var publisher = new StubPublisher();
+        var publisher = new RecordingEventPublisher();
 
         var row = Row(1);
         // 把**发布那一刻**盖章过的 holder 写进 payload（OutboxStore 干的就是这件事）
@@ -383,7 +384,7 @@ public class OutboxWorkerTests
         LockHolderContext.SetHolderId("holder-now");
         try
         {
-            await Build(repo, publisher, new StubLogger()).RunOnceAsync();
+            await Build(repo, publisher, new RecordingLogger()).RunOnceAsync();
         }
         finally
         {

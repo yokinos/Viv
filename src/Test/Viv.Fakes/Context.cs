@@ -15,8 +15,15 @@ public class TestContext : IVivContext
 {
     private VivContextContent? _snapshot;
 
-    /// <summary>当前快照（写入走接口方法 <see cref="SetSnapshot"/>）</summary>
-    public VivContextContent? Snapshot => _snapshot;
+    /// <summary>
+    /// 当前快照。<b>可直接赋值</b>（测试摆初值用，不计数）；
+    /// 被测代码走的是接口方法 <see cref="SetSnapshot"/>，那条路径会记 <see cref="SetSnapshotCalls"/>。
+    /// </summary>
+    public VivContextContent? Snapshot
+    {
+        get => _snapshot;
+        set => _snapshot = value;
+    }
 
     /// <summary>被清了几次 —— 验「作用域结束后确实清理了上下文」</summary>
     public int ClearCalls { get; private set; }

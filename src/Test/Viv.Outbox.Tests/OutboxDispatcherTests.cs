@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Viv.Fakes;
 using Viv.Nana;
 using Viv.Outbox.Core;
 using Viv.Outbox.Options;
@@ -26,7 +27,7 @@ public class OutboxDispatcherTests
     }
 
     private static (OutboxDispatcher Dispatcher, ServiceProvider Provider) Build(
-        StubOutboxRepository repo, StubPublisher publisher, StubLogger logger)
+        StubOutboxRepository repo, RecordingEventPublisher publisher, RecordingLogger logger)
     {
         var services = new ServiceCollection();
         services.AddScoped<IOutboxRepository>(_ => repo);
@@ -47,8 +48,8 @@ public class OutboxDispatcherTests
     public async Task 轮次异常被吞掉_不拖垮宿主机()
     {
         var repo = new StubOutboxRepository { ClaimException = new Exception("认领炸了") };
-        var logger = new StubLogger();
-        var (dispatcher, provider) = Build(repo, new StubPublisher(), logger);
+        var logger = new RecordingLogger();
+        var (dispatcher, provider) = Build(repo, new RecordingEventPublisher(), logger);
 
         try
         {
@@ -75,7 +76,7 @@ public class OutboxDispatcherTests
     public async Task 正常投递_记一条本轮投递数()
     {
         var repo = new StubOutboxRepository();
-        var logger = new StubLogger();
+        var logger = new RecordingLogger();
 
         var message = new OutboxMessage
         {
@@ -89,7 +90,7 @@ public class OutboxDispatcherTests
         };
         repo.ClaimScript.Enqueue(new List<OutboxMessage> { message });
 
-        var (dispatcher, provider) = Build(repo, new StubPublisher(), logger);
+        var (dispatcher, provider) = Build(repo, new RecordingEventPublisher(), logger);
 
         try
         {
@@ -112,8 +113,8 @@ public class OutboxDispatcherTests
     public async Task 启动_先建表再进循环()
     {
         var repo = new StubOutboxRepository();
-        var logger = new StubLogger();
-        var (dispatcher, provider) = Build(repo, new StubPublisher(), logger);
+        var logger = new RecordingLogger();
+        var (dispatcher, provider) = Build(repo, new RecordingEventPublisher(), logger);
 
         try
         {

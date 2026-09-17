@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Viv.Fakes;
 using Viv.Nana;
 using Viv.Outbox.Core;
 
@@ -19,7 +20,7 @@ public class OutboxEnvelopeSenderFactoryTests
 
         Assert.NotNull(sender);
 
-        var publisher = new StubPublisher();
+        var publisher = new RecordingEventPublisher();
         var payload = TestPayload.For(new OutboxTestEvent { Payload = "hello", Number = 3 }, messageId: 12345);
 
         Assert.True(await sender!.SendAsync(publisher, payload, 12345, CancellationToken.None));
@@ -35,7 +36,7 @@ public class OutboxEnvelopeSenderFactoryTests
     public async Task 投递_MessageId以数据库列为准_覆盖payload里的旧值()
     {
         var sender = new OutboxEnvelopeSenderFactory().Resolve(EventTypeName);
-        var publisher = new StubPublisher();
+        var publisher = new RecordingEventPublisher();
 
         // payload 里写一个错的 MessageId：它只是历史快照，真相在列上
         var payload = TestPayload.For(new OutboxTestEvent { Payload = "x" }, messageId: 111);
@@ -53,7 +54,7 @@ public class OutboxEnvelopeSenderFactoryTests
     public async Task 投递_保留payload里的上下文与重投计数()
     {
         var sender = new OutboxEnvelopeSenderFactory().Resolve(EventTypeName);
-        var publisher = new StubPublisher();
+        var publisher = new RecordingEventPublisher();
 
         var payload = TestPayload.For(
             new OutboxTestEvent { Payload = "x" },
@@ -71,7 +72,7 @@ public class OutboxEnvelopeSenderFactoryTests
     public async Task payload内容为null_返回false且不投递()
     {
         var sender = new OutboxEnvelopeSenderFactory().Resolve(EventTypeName);
-        var publisher = new StubPublisher();
+        var publisher = new RecordingEventPublisher();
 
         // 只有元数据、没有 Content 的信封 —— 发出去只会让消费端炸
         var payload = JsonSerializer.Serialize(new NanaEnvelope<OutboxTestEvent>(), TestPayload.JsonOptions);
@@ -84,7 +85,7 @@ public class OutboxEnvelopeSenderFactoryTests
     public async Task payload是坏JSON_上抛异常由投递器去重试()
     {
         var sender = new OutboxEnvelopeSenderFactory().Resolve(EventTypeName);
-        var publisher = new StubPublisher();
+        var publisher = new RecordingEventPublisher();
 
         await Assert.ThrowsAnyAsync<Exception>(
             async () => await sender!.SendAsync(publisher, "{ 这不是 json", 1, CancellationToken.None));
