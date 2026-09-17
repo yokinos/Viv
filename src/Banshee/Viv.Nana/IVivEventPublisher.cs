@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using Viv.Nana.Core;
 
 namespace Viv.Nana
 {

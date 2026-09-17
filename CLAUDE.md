@@ -28,13 +28,13 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 
 | Project | Role |
 |---|---|
-| `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums |
+| `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums；**本地事件契约** `IVivLocalEventBus` / `EngineEvent`（空标记基类）/ `IVivLocalEventHandler<TEvent>` / `LocalEventHandler<TEvent>`（零 Nana 依赖，业务 Core 直接引它写处理器） |
 | `Viv.Delusion` | Utility library — `TypeScanMagic` (assembly type scanning), `ObjectMapper` (Emit + Expression-based), encryption, common extensions |
 | `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios |
-| `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig(builder.Configuration)` binds the `VivOptions` node from appsettings.json into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup |
+| `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig(builder.Configuration)` binds the `VivOptions` node from appsettings.json into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup；**本地事件总线实现** `LocalEvent/`（`LocalEventBus` / `LocalEventHandlerInvoker<T>` / `LocalEventRegistration`）+ 两个触发点 `LocalEventFlushFilterAttribute`、`LocalEventFlushMiddleware`（**同目录**，本地事件一个文件夹全包） |
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
 | `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server |
-| `Viv.Nana` | Messaging — `IVivEventPublisher` / `NanaEventPublisher` (publish + delayed publish); `VivConsumer<T>` base class; built on **Wolverine + RabbitMQ**; Saga support with EF Core state persistence |
+| `Viv.Nana` | Messaging — **两条平行的线**：① 跨进程 `NanaEvent` + `IVivEventPublisher` / `NanaEventPublisher` / `VivConsumer<T>`（Wolverine + RabbitMQ，fanout）② 进程内本地队列 `NanaLocalEvent` + `IVivLocalEventPublisher` / `NanaLocalEventPublisher` / `VivLocalConsumer<T>`（Wolverine local queue，点对点，两族互不引用）；Saga support with EF Core state persistence |
 | `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`)。访问失败抛 `VivConnectionException(Redis)`（API 过滤器 `-502`，客户端只回固定文案）；`DataAccessCacheBase` 读路径 catch 后回源数据库。锁 / 写仍抛。锁续期后台任务仍只记日志后停止 |
 | `Viv.Sandrone` | Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service` |
 | `Viv.Echo` | Service-to-service communication + **框架级 gRPC 宿主**（`Viv.Echo.Grpc`）— HTTP + gRPC 客户端 `VivGrpcInterceptor`/`AddVivGrpcClient`（支持服务发现；注入 x-viv-* 含 holder-id 并纳入签名）、服务端 `VivGrpcServerInterceptor`（验签后水合 `IVivContext` 并 `SetHolderId`）/`AddVivGrpcServer`/`AddVivGrpcKestrel`/`VivGrpcDiscovery`（自动发现 `[BindServiceMethod]` 实现类 + 注册 + 反射映射；REST + gRPC 分端口，见下） |
@@ -174,6 +174,80 @@ Business-layer services and repositories are registered via **type scanning** dr
   - **EF Saga 持久化**：`NanaOption.SagaConnectionString` 已配且扫到 `VivSagaState` 子类（`TypeScanMagic.ScanTypes<VivSagaState>()`，需 `ForceLoadReferencedAssemblies()` 强制加载业务 Core 程序集）时启用：`opts.UseEntityFrameworkCoreTransactions(TransactionMiddlewareMode.Lightweight)`（**内联在 options 里**，规避 JasperFx/wolverine#1140 DI 修改 bug；**Lightweight = 无 durable outbox**，默认 Eager 要求数据库消息持久化会抛 "not using Database backed message persistence"）+ `VivSagaDbContext` 映射 `Saga_{SagaTypeName}` 表。
   - **Saga 实体主键**：`VivSagaDbContext.OnModelCreating` 用 `[SagaIdentity]` 标记的属性（如 `OrderSaga.OrderId`）显式 `HasKey`——EF 无法从 Saga 类型推断主键（`Id`/`Version` 都不是约定名），不配置会抛 "requires a primary key"，Wolverine 进而判定无 EF 持久化提供者（"No known Saga persistence provider"）。saga 表（`Saga_OrderSaga`）需预先建好（`EnsureCreated`/迁移）。
   - `TypeLoadMode.Dynamic`（开发默认）需引用 `WolverineFx.RuntimeCompilation`。
+
+#### 本地队列（第三种事件通道）
+
+三族事件的取舍 —— 补的就是「**不阻塞调用方 + 不出网 + 自带重试/延迟**」这个中间档（另外两族都给不了）：
+
+| 基类 | 投递 | 发布接口 | 消费端写法 | 语义 |
+|---|---|---|---|---|
+| `NanaEvent` | RabbitMQ | `IVivEventPublisher` | `VivConsumer<T>` | 跨进程、fanout、每服务各收一份 |
+| `NanaLocalEvent` | Wolverine 本地队列 | `IVivLocalEventPublisher` | `VivLocalConsumer<T>` | 进程内、**点对点**、异步、**独立 DI 作用域** |
+| `EngineEvent` | 本地总线 | `IVivLocalEventBus` | `LocalEventHandler<T>` | 进程内、fanout、同步、**同 DI 作用域** |
+
+**与跨进程那条线完全解耦（自带一整套类型，一个现有文件都不碰）**：`IVivLocalEventPublisher` 是独立接口（不是往 `IVivEventPublisher` 加方法 —— 那会破坏它的全部实现者）；`NanaLocalEventPublisher` / `VivLocalConsumer<T>` / `VivLocalConsumerDependency` 同理。本地这条线不引用 `IVivEventPublisher` / `VivConsumer` / `IDistributedLock`。要「一个事件触发多个反应」用 `EngineEvent` + 本地总线（fanout），本地队列是**一事件一消费者**。
+
+- **⚠️ `NanaLocalEvent` 是 `NanaEvent` 的平行根，绝不是子类**：`VivWolverineConfigurationExtensions` 对**每个 `NanaEvent` 子类**都注册 `PublishMessage(env).ToRabbitExchange(...)`，一旦继承，所有本地事件被绑死成跨进程语义、`PublishAsync` **双发**（MQ + 本地队列），编译期毫无提示。名字带 Nana 极易顺手写 `: NanaEvent`，故有防回归测试钉死（`NanaLocalEventTests.NanaLocalEvent是空标记基类_且与NanaEvent互不继承`）。同理 `NanaEnvelope<T>` 约束写死 `where T : NanaEvent`，改不得，本地队列用自己的 `NanaLocalEnvelope<T>`。
+- **拓扑与注册**：`AddVivWolverine` 内扫 `ScanTypes<NanaLocalEvent>()` 逐条 `opts.LocalQueue({EventName}LocalQueue)` + `PublishMessage(NanaLocalEnvelope<T>).ToLocalQueue(queue)`（`NanaRegister.GetLocalQueueName`，与 `GetQueueName`/`GetExchangeName` 共用 `StripEventSuffix`）。**按全部子类扫描而非按消费者反推** —— 与跨进程那段对称，保证「发布必有路由」，否则无消费者的本地事件会落进 Wolverine 约定路由。**消费端循环零改动**：`Discovery.IncludeType` 在 `ExtractMessageType` 之前调用，`VivLocalConsumer<T>` 子类返回 `null` 走 `continue`，Wolverine 已能发现其 `HandleAsync`（与现有消费者同一目录即可）。`AddViv()` 里 `AddScoped<IVivLocalEventPublisher, NanaLocalEventPublisher>()`。**`NanaOptions` 不加任何新配置项** —— 没有本地事件时循环空转，零成本。
+- **孤儿告警**：无消费者的本地事件没有 RabbitMQ「无绑定队列即丢弃」那种兜底，就是真堆内存。注册期拿不到 logger（`VivLocator` 未初始化），故扫描结论存 `NanaRegister` 静态（`LocalEventTypeCount` / `OrphanLocalEvents` / `RecordLocalQueueScan`），由 `NanaLocalEventPublisher` 首次构造时打一次启动日志 + 逐个 Warning（照 `LocalEventBus`「未分发」Warning 的先例）。
+- **`HandleAsync` 与 `VivConsumer` 的差异只有两处**：**无 Redis 消费锁段**（进程内点对点、无 fanout，不存在多实例抢锁），故也**无 `catch (DistributedLockException)`**。其余一致：从信封水合 `IVivContext`、盖 `LockHolderContext`（信封 `HolderId` 优先，无则回落 `MessageId`，**不用 TraceId**）、`Success` 确认 / `Requeue` 抛 `VivRequeueException` / 失败记日志丢弃、`finally` 清理上下文。
+- **信封必须带 `Context`**：handler 跑在**后台线程 + 独立 DI 作用域**，`AsyncLocal` 租户上下文不会跟过去；而 `EFAppContext` 全局过滤器在「无上下文」时**不过滤** = 跨租户读。靠 `NanaLocalEnvelope<T>.Context`（发布时快照 + 盖 holder）把租户带过去水合。
+- **延迟消息重启即丢**：`PublishDelayAsync` 走 `InMemoryScheduledJobProcessor`（`NullMessageStore` 路径，**不抛异常**），进程重启后未到期消息消失 —— 与 `IVivEventPublisher.PublishDelayAsync` 当前行为**完全一致**，非本次引入。要持久化需另开 `PersistMessagesWithSqlServer` + 迁移。**不要当「延迟队列」用**。
+- **失败重试**：全局策略（`OnException<Exception>().RetryWithCooldown(...).Then.MoveToErrorQueue()`）对本地队列同样生效。发布器**不包 `VivConnectionException`** —— 本地队列纯内存、无网络传输，包成 RabbitMQ 连接异常是撒谎，异常原样冒泡。
+- **不做（v1 范围外）**：`VivLocalConsumer.RedeliverAsync` 延迟重投（瞬时失败由全局退避重试兜底）；延迟消息跨重启持久化。
+
+### Local events (IVivLocalEventBus)
+
+进程内**解耦的同步调用**，是三族事件里最"没架子"的一族（另两族见 `### Messaging (Nana)`）。这条线与 Nana 完全独立 —— **不 import 任何 `Viv.Nana` 命名空间**，`VivConsumer` / `VivConsumerDependency` / 本地队列那套一行未动。
+
+- **用途对比**：跨进程走 `IVivEventPublisher`（出网、消费端是另一个进程/另一个 DI 作用域）；本地事件不出网，**handler 与发布方同一 DI 作用域** —— 注入的 `IMomoDbContext` / `IVivContext` 就是发布方那一个。
+- **分发时机**：`PublishAsync` **只入队**，真正分发推迟到请求正常结束时（触发点见下）。保证 handler 看到「最终定格」的数据状态；请求失败 → 整队丢弃，一条事件都不发（不留幽灵事件）。
+- **事件类型约束（硬约束）**：事件**必须继承 `EngineEvent`** —— `Viv.Contracts` 里的空标记抽象基类，纯限制：本地事件的 handler 是业务的一部分，写下来就必须执行，所以事件类型不允许随手写（`PublishAsync(new object())` 编译不过）。**三族各走各的**：要跨进程继承 `NanaEvent` 走 `IVivEventPublisher`，进程内异步点对点继承 `NanaLocalEvent` 走 `IVivLocalEventPublisher`，进程内同步 fanout 继承 `EngineEvent` 走 `IVivLocalEventBus`。⚠️ **绝不可让 `EngineEvent` 去继承 `NanaEvent`** —— `VivWolverineConfigurationExtensions` 对每个 `NanaEvent` 子类都注册了 `ToRabbitExchange` 路由，继承即把所有本地事件绑死成跨进程语义（有防回归测试守着这两点：空标记 + 与 NanaEvent 无继承关系）。
+- **写法（两种，都无需特性 / 无需 IDependency）**：继承 `LocalEventHandler<TEvent>`（与 `VivConsumer<T>` 同手感；C# 单继承，一个类只能订阅一个事件）**或**直接实现 `IVivLocalEventHandler<TEvent>`（可订阅多个事件）。扫描目标统一是接口，注册逻辑只有一份。
+- **注册**：`AddViv()` → `VivRegister.Register` → `LocalEventRegistration.Register` —— `ForceLoadReferencedAssemblies()` + `ScanTypes(typeof(IVivLocalEventHandler<>))`（`TypeScanMagic.IsMatchType` 已支持开放泛型匹配），遍历处理器的**全部**闭合接口注册（订阅多事件时不漏），再按事件类型注册闭合分发器 `LocalEventHandlerInvoker<T>`，最后 `AddScoped<IVivLocalEventBus, LocalEventBus>()`。**泛型处理器定义会被跳过**（闭合 TEvent 未知，继续注册会抛）。这里**扫到 0 个处理器是合法的**（与业务 Service 注册不同），只记日志不报错。
+- **`LocalEventBus` 是 Scoped**（与 `IMomoDbContext` / `IVivContext` 同作用域，这是整个设计的支点）。三态状态机 `Pending` → `Draining` → `Done`：`Draining` 态**允许入队**（处理器内递归发布合法，进下一轮）；`FlushAsync` 最多 5 轮，超限记 Error「疑似递归发布」；`Discard`/`Flush` 均幂等。处理器抛异常**直接上抛**（本地事件是主业务流的一部分，不静默吞）。
+- **分发器为什么绕一层**：Autofac 作根容器时注入的 `IServiceProvider` 很可能解析到**根作用域**，会把 Scoped 处理器连其 Scoped 依赖解析到根上 —— 正好摧毁「同作用域」这一支点。改为**启动期注册闭合泛型、运行期构造注入** `IEnumerable<IVivLocalEventHandler<TEvent>>`，由 Autofac 从当前作用域解析；flush 时零反射、零容器查询。
+- **handler 必须跑完**：两个触发点一律传 `CancellationToken.None`，**刻意不用 `HttpContext.RequestAborted`** —— 客户端中途断开不该造成「主业务已提交、通知没发出去」的脱节。真能容忍不执行的逻辑就不该用本地事件，该走 MQ。
+- **触发点**：① HTTP 主路径 `LocalEventFlushFilterAttribute`（`AddVivApi` 的 `AddMvc` 全局过滤器，排在 `VivExceptionFilterAttribute` **之后**）—— 用 action filter 而非中间件，因为位置在结果执行/响应写出**之前**，且**看得见业务成败**：异常过滤器置 `ExceptionHandled=true` 后 MVC 会剥离 `ActionExecutedContext.Exception`，唯一失败信号是 `context.Result` 里的错误 `VivApiResult`（判定用 **2xx 区间**，`Accepted=201` 也算成功）；中间件只能看 HTTP 状态码，会把「HTTP 200 + 信封非 2xx」误判成成功。② 兜底 `LocalEventFlushMiddleware`（覆盖非 MVC 端点 gRPC / SignalR / health），**必须挂在 `VivContextMiddleware` 之内**（分发要跑在它 `finally Clear()` 租户上下文之前，否则处理器拿不到 `IVivContext`、租户过滤失效），按 HTTP 状态码判定，粒度粗于 MVC 路径。
+- **已知缺口（HTTP-only）**：**Worker / 消息消费 / TickerQ 定时任务没有触发点**（按「不耦合 Nana」的约束，`VivConsumer.HandleAsync` 不挂钩）。这些场景 `PublishAsync` 的事件不会自动分发，只由 `LocalEventBus.Dispose` 记一条「未分发」Warning 兜底 —— 绝不静默吞。补触发点需重新打开 Nana 耦合，届时再议。
+- **与 UoW 的衔接（⚠️ 单向，别想反）**：目前 `MomoDatabaseContext` 每次写当场提交，「主业务失败 → 事件不发」**现在就有**（请求失败则整队丢弃）。反过来**做不到**：分发触发点（action filter / middleware）在**服务方法的提交边界之外**，等 handler 跑到时事务早就提交了 —— 此时 handler 失败**无法回滚已提交的写**。所以 handler 里只能做「失败就记日志 / 走补偿」的动作，别指望它还原子；真需要原子就得让 handler 自己开窄事务，或者把这段逻辑收回主业务流。⚠️ **上一版这里写着「届时只需把 flush 触发点上移到事务提交后」—— 那句是错的**，提交后 flush 拿不回已经落库的写。
+
+### Unit of Work（事务）
+
+**两种模式，业务自行取舍** —— 框架不替业务选：
+
+| 模式 | 入口 | 边界 | 适合 |
+|---|---|---|---|
+| **窄事务** | `IVivTransaction`，`await using` 自动释放 | 业务自己划线，写多少包多少 | 只包住几行写；或事务里要夹非数据库动作（发消息、算东西） |
+| **完整事务** | 特性 `[VivUnitOfWork]` + Castle 接口代理 | **整个方法**：进方法开、出方法提交 | 一个应用服务方法就是一次业务操作，不想在业务代码里看见事务 |
+
+```csharp
+// 窄事务
+await using var tx = await _unitOfWork.BeginAsync();
+await _orderRepo.InsertAsync(order);
+await _itemRepo.InsertBatchAsync(items);
+await tx.CommitAsync();          // 不写这行 → 离开作用域自动回滚
+
+// 完整事务（public virtual 是硬要求，见下）
+[VivUnitOfWork]
+public virtual async Task<VivApiResult> CreateOrderAsync(...) { ... }
+```
+
+契约（`VivUnitOfWorkAttribute` / `IVivTransaction` / `IVivUnitOfWork`）在 **`Viv.Contracts`** —— Worker 侧要读同一个特性，放这儿两边都不用新建引用。实现全在 **`Viv.Engine/UnitOfWork/`**（拦截器要判 `VivApiResult` 信封，而 `VivApiResult` 就在 `Viv.Engine`）——**唯一例外是 `FailDetector.cs`，它住在 `Viv.Engine/` 根**（见下）。
+
+- **嵌套语义（没有保存点，不是 `TransactionScope`）**：只有**最外层**那次 `BeginAsync` 真正开事务，嵌套返回**子句柄**、不穿透到数据库。子句柄 `CommitAsync()` 是**空操作**（等最外层）；子句柄**未提交就释放 / 显式 `RollbackAsync` / 抛异常** → 整个作用域打上 **rollback-only（粘性）**，此后最外层再调 `CommitAsync` 也只回滚并记 Warning。**没有保存点** —— 内层回滚不会「只撤销内层的写」，它会拖垮整个事务；要部分回滚就自己用窄事务划线。`CommitAsync`/`RollbackAsync` 均幂等。
+- **异步拦截必须用第三方包**：`Castle.Core.AsyncInterceptor` 的 `AsyncInterceptorBase`。裸 `IInterceptor.Proceed()` **在第一个 `await` 处就返回**，提交会早于业务方法真正结束 —— 事务边界直接错位。`AsyncInterceptorBase` 实现的是 `IAsyncInterceptor`（**不是** `IInterceptor`），所以 `InterceptedBy` 只认 `IInterceptor`，中间必须垫一层 `AsyncDeterminationInterceptor` 适配器（`Autofac.Extras.DynamicProxy` + `Castle.DynamicProxy`）。有测试钉死这点：提交那一刻的回调里断言业务方法体**已经跑完**。
+- **注册期硬校验（把静默失效变成启动失败）**：接口代理失效时**完全无声** —— 没代理上就没有事务，业务照跑、数据照写、只是不原子，往往到线上数据对不上才发现。所以凡是能静态判定的原因一律 `throw`，启动就挂：非 `public` / `static` / 泛型方法 / 同步方法 / 返回**非泛型** `ValueTask` / 不可重写 / 类型没有任何接口 / 类型**没按接口注册**（漏进 `DIOption` 扫描、或标了 `[VivDependency(AsSelf = true)]`）/ 标了特性却没配 `DatabaseOption`。
+  - ★ **不可重写的判据是 `IsVirtual && !IsFinal`，不能只判 `!IsVirtual`**：C# 会把「**隐式实现接口的 public 方法**」编译成 **`virtual final`** —— `IsVirtual` 为 true 但 sealed，Castle 重写不了。只判 `!IsVirtual` 恰好把最容易写出的那种方法放过去，失效还无声。有回归测试钉死这个元数据事实（`UnitOfWorkRegistrationTests`）。
+  - 类级特性只覆盖**可重写的异步**方法，剩下的（同步方法、隐式实现接口的那种）由 `UnitOfWorkDiagnostics` **逐个记 Warning 列出来**，在首次构造 `UnitOfWorkManager` 时打（Autofac 注册期拿不到 logger，照 `NanaRegister.RecordLocalQueueScan` 的先例存静态）。静默漏掉 = 业务以为在事务里、实际裸奔。
+  - **只有带特性的类型才挂代理**，不开全局拦截 —— 没标的零代理开销、零调试干扰。拦截器与适配器都注册成 `InstancePerLifetimeScope`（已实测 Autofac 的接口代理从**当前**作用域解析拦截器，不会落到根作用域 —— 落根作用域会让并发请求共用同一个事务状态机）。
+  - **只剩自调用拦不住**：`this.OtherMethod()` 走真实实例、不过代理，标了也不生效。判它要分析 IL 调用点，本版不做。**特性标在最外层公开方法上。**
+- **成败判定与本地事件同源（同一份实现，不是两份抄得像）**：`FailDetector.IsFailed` 判 `VivApiResult` 的 **2xx 区间**（`Accepted=201` 也算成功）。`LocalEventFlushFilterAttribute.IsFailed` 对信封那一段**直接调它**——以前是抄了一份表达式、靠一个反射测试盯着两份不漂移，现在只有一份，没有可漂移的东西。**`FailDetector` 因此住在 `Viv.Engine/` 根、与它判定的对象 `VivApiResult` 并排**，而不是塞进 `UnitOfWork/`（塞进去就变成「事务的实现细节被过滤器依赖」）。非 `VivApiResult` 返回值（含未拆包的 `Task<T>`，不能 `.Result` 阻塞）一律视为成功；异常一律回滚后**原样上抛**，不吞。
+- **与本地事件的顺序天然正确，不需要钩子**：拦截器在**服务方法**边界提交，flush 触发点是 **MVC action filter**，位置在外层 ⇒ 必然 `提交 → action 返回 → flush`。绝不能反（先 flush 再提交 = handler 看见脏数据 + 回滚后留下幽灵事件）。
+- **Momo 事务内核已修（原先是坏的，且从没人用过）**：`MomoDatabase.BeginTransaction` / `BeginTransactionAsync` 原先写 `(IDbTransaction)context.Database.BeginTransaction()`，而 EF 的 `IDbContextTransaction`（`SqlServerTransaction`）**不是** `IDbTransaction` —— 强转必抛 `InvalidCastException`，**而那时真事务已经开在连接上了**，句柄没存住就成了提不了也滚不掉的**悬挂事务**（`IsInTransaction` 为 false、回滚被 `_transaction == null` 挡成 no-op）。同形状的强转在 `ExecuteSqlList` / `ExecuteSqlListAsync` 里还有 **4 处**（自建事务那条路径；外层已有事务时被 `??` 短路所以一直没暴露）。现统一走 **`MomoDatabase.GetDbTransaction(IDbContextTransaction)`**（`IInfrastructure<DbTransaction>.Instance`）——⚠️ **EF Core 10 没有现成的 `GetDbTransaction()` 扩展方法，别去找**（试过，编译不过，这个 helper 就是为此而写）。字段类型仍是 `IDbTransaction?`（Dapper 要它），判空 / `?.Dispose()` / `= null` 逻辑一字未改。实测：开/提/滚、`IsInTransaction` 全部名副其实，悬挂事务消失。
+- **⚠️ 事务内的 Dapper 读会直接抛异常 —— 框架不管，业务自己规避**：12 处原生 SQL 逃生口（`FindScalar` / `FindList<T>(sql)` / `Page` 等，`MomoDatabaseContext.cs:1055,1098,1125,1146,1179,1212,1278,1295,1311,1334,1363,1367`）把 `null` 硬编码成 Dapper 的事务参数，实测抛 `VivConnectionException`：*「如果分配给命令的连接位于本地挂起事务中，ExecuteReader 要求命令拥有事务。命令的 Transaction 属性尚未初始化。」*—— **是硬失败，不是脏读**（当前所有服务 `IsReadWriteSplit: false`，`CreateEFAppContext` 把读强转成 Write，读写**共用同一条连接**；将来真开读写分离才会退化成脏读）。走 EF 的 `Find<T>` / `Exist` / `Count` / 谓词版 `FindList` **不受影响**。**框架立场：事务只针对主库写，读不开事务 —— 业务先把数据备好，再开事务。这是业务的活，不是框架的活。**（`ExecuteSqlList` 那条路是例外，它自己把 `_transaction` 传给 Dapper，实测事务内可正常用。）
+- **Worker 侧未做**：`VivConsumer<T>` / `VivLocalConsumer<T>.HandleAsync` 读**类级**特性开事务（不走接口代理，消费者子类在注册期豁免校验）。本轮只做了 API 侧。
+- **不做（范围外）**：DataFilter / 审计接口 / 权限。
 
 ### Database (Momo)
 

@@ -65,7 +65,7 @@ namespace Viv.Engine
             builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
             builder.Host.ConfigureContainer<ContainerBuilder>(container =>
             {
-                container.VivAutofacRegister(vivOptions.DIOption);
+                container.VivAutofacRegister(vivOptions);
             });
 
             builder.AddVivConfig();

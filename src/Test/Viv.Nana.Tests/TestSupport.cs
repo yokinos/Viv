@@ -2,7 +2,6 @@ using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Log;
-using Viv.Nana.Core;
 
 namespace Viv.Nana.Tests
 {

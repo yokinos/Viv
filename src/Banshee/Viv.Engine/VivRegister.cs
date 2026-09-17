@@ -9,7 +9,9 @@ using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
 using Viv.Echo;
+using Viv.Engine.LocalEvent;
 using Viv.Engine.Options;
+using Viv.Engine.UnitOfWork;
 using Viv.Log;
 using Viv.Momo;
 using Viv.Momo.Core;
@@ -54,6 +56,8 @@ namespace Viv.Engine
             RegisterToken(services, options);
             // 注册调度
             RegisterScheduler(services, options);
+            // 注册本地事件总线（扫描 IVivLocalEventHandler<> 处理器，与 Nana 完全解耦）
+            LocalEventRegistration.Register(services);
             // 注册其他服务
             RegisterOtherServices(services, options);
         }
@@ -143,6 +147,8 @@ namespace Viv.Engine
             // 注册 Wolverine + RabbitMQ（Saga 类型传进去；VivWolverineConfigurationExtensions 内部含队列路由/失败策略）
             services.AddVivWolverine(options.NanaOption, enableSaga ? sagaTypes : null);
             services.AddScoped<IVivEventPublisher, NanaEventPublisher>();
+            // 本地事件发布器（进程内本地队列），与上面跨进程那条是平行的两条线，互不引用
+            services.AddScoped<IVivLocalEventPublisher, NanaLocalEventPublisher>();
         }
 
         private static void RegisterSagaDbContext(IServiceCollection services, VivOptions options)
@@ -173,9 +179,17 @@ namespace Viv.Engine
         private static void RegisterDatabase(IServiceCollection services, VivOptions options)
         {
             if (options.DatabaseOption == null) return;
-            
+
             services.AddScoped<IDatabaseOptionsProvider, DefaultDatabaseOptionsProvider>();
             services.AddScoped<IMomoDbContext, MomoDatabaseContext>();
+
+            // ── 工作单元（Unit of Work）─────────────────────────────
+            // 内核适配器必须与 IMomoDbContext 同生命周期（都是 Scoped）：Momo 的事务状态
+            // 挂在它自己的 _transaction 字段上、跟着实例走，适配器解析到别的实例就等于
+            // 「开的和提交的是两个不同的事务」。
+            services.AddScoped<ITransactionKernel>(sp =>
+                new MomoTransactionAdapter(sp.GetRequiredService<IMomoDbContext>()));
+            services.AddScoped<IVivUnitOfWork, UnitOfWorkManager>();
         }
 
         #endregion

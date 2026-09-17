@@ -1,9 +1,12 @@
 ﻿using Dapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Viv.Contracts.Enums;
@@ -148,6 +151,27 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
+        /// 取 EF 事务底层的 ADO 事务（Dapper、原生 <c>DbCommand</c> 要的是它）。
+        ///
+        /// <para>
+        /// EF 的 <see cref="IDbContextTransaction"/>（实际是 SqlServerTransaction）<b>不是</b>
+        /// <see cref="IDbTransaction"/>，两者没有继承关系，直接强转必抛 <c>InvalidCastException</c>。
+        /// 底层那个真事务只能经 <see cref="IInfrastructure{T}"/> 取出来。
+        /// </para>
+        /// </summary>
+        protected static IDbTransaction GetDbTransaction(IDbContextTransaction transaction)
+        {
+            if (transaction is IInfrastructure<DbTransaction> infrastructure)
+            {
+                return infrastructure.Instance;
+            }
+
+            throw new NotSupportedException(
+                $"事务类型 {transaction.GetType().FullName} 既不是 IDbTransaction，也取不到底层 DbTransaction，" +
+                "无法交给 Dapper 使用。");
+        }
+
+        /// <summary>
         /// 开启一个数据库事务（使用写库）
         /// </summary>
         public virtual bool BeginTransaction()
@@ -159,7 +183,9 @@ namespace Viv.Momo.Core
                 try
                 {
                     var context = GetAppContext(DbReadWriteType.Write);
-                    _transaction = (IDbTransaction)context.Database.BeginTransaction();
+                    // 原先这里是 (IDbTransaction)context.Database.BeginTransaction() —— 强转必抛，
+                    // 而那时真事务已经开在连接上了、句柄却没存住，就成了没人能提/能滚的悬挂事务
+                    _transaction = GetDbTransaction(context.Database.BeginTransaction());
                     return true;
                 }
                 catch (Exception ex)
@@ -239,7 +265,8 @@ namespace Viv.Momo.Core
                 var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
                 lock (_lock)
                 {
-                    _transaction = (IDbTransaction)transaction;
+                    // 同 BeginTransaction：强转会在事务已经开好的时候抛，留下提不了也滚不掉的悬挂事务
+                    _transaction = GetDbTransaction(transaction);
                 }
                 return true;
             }

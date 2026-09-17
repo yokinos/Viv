@@ -1,4 +1,6 @@
 ﻿using Autofac;
+using Autofac.Extras.DynamicProxy;
+using Castle.DynamicProxy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
@@ -10,6 +12,7 @@ using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
 using Viv.Engine.Options;
+using Viv.Engine.UnitOfWork;
 
 namespace Viv.Engine
 {
@@ -28,8 +31,10 @@ namespace Viv.Engine
             return services;
         }
 
-        public static void VivAutofacRegister(this ContainerBuilder builder, DIOptions diOptions, Action<ContainerBuilder>? customSet = default)
+        public static void VivAutofacRegister(this ContainerBuilder builder, VivOptions vivOptions, Action<ContainerBuilder>? customSet = default)
         {
+            ArgumentNullException.ThrowIfNull(vivOptions);
+
             // 自动依赖注入
             AutoDependencyRegister(builder);
 
@@ -37,41 +42,85 @@ namespace Viv.Engine
             customSet?.Invoke(builder);
 
             // 可能不需要抽象
+            var diOptions = vivOptions.DIOption;
             if (diOptions == null) return;
 
             var serviceImplTypes = TypeScanMagic.Scan(diOptions.ServiceImplementation);
-            if (!serviceImplTypes.IsNullOrEmpty())
-            {
-                var closedTypes = serviceImplTypes.Where(t => !t.IsGenericTypeDefinition).ToArray();
-                var openGenericTypes = serviceImplTypes.Where(t => t.IsGenericTypeDefinition).ToArray();
-
-                if (closedTypes.Length != 0)
-                {
-                    builder.RegisterTypes(closedTypes).AsImplementedInterfaces().InstancePerLifetimeScope();
-                }
-
-                foreach (var openGeneric in openGenericTypes)
-                {
-                    builder.RegisterGeneric(openGeneric).AsImplementedInterfaces().InstancePerLifetimeScope();
-                }
-            }
-
             var repoImplTypes = TypeScanMagic.Scan(diOptions.RepositoryImplementation);
-            if (!repoImplTypes.IsNullOrEmpty())
-            {
-                var closedTypes = repoImplTypes.Where(t => !t.IsGenericTypeDefinition).ToArray();
-                var openGenericTypes = repoImplTypes.Where(t => t.IsGenericTypeDefinition).ToArray();
 
-                if (closedTypes.Length != 0)
+            // 工作单元：先解析出哪些类型要开接口代理，并做启动期校验 ——
+            // 拦不住的情况（非 virtual / 同步方法 / 没按接口注册）一律在此硬报错，
+            // 绝不让「标了特性但没有事务」这种静默失效漏到运行期
+            var intercepted = UnitOfWorkRegistration.Resolve(
+                serviceImplTypes.Concat(repoImplTypes),
+                TypeScanMagic.ScanTypes<IDependency>(),
+                vivOptions.DatabaseOption != null);
+
+            RegisterWorkUnitInterceptors(builder, intercepted);
+
+            RegisterScannedTypes(builder, serviceImplTypes, intercepted);
+            RegisterScannedTypes(builder, repoImplTypes, intercepted);
+        }
+
+        /// <summary>
+        /// 注册扫描到的实现类型。<b>只有带 <c>[VivUnitOfWork]</c> 的类型才开接口代理</b> ——
+        /// 没标的一律走原路，零代理开销、零调试干扰。
+        /// </summary>
+        private static void RegisterScannedTypes(ContainerBuilder builder, List<Type> implTypes, IReadOnlyCollection<Type> intercepted)
+        {
+            if (implTypes.IsNullOrEmpty()) return;
+
+            var closedTypes = implTypes.Where(t => !t.IsGenericTypeDefinition).ToArray();
+            var openGenericTypes = implTypes.Where(t => t.IsGenericTypeDefinition).ToArray();
+
+            if (closedTypes.Length != 0)
+            {
+                var interceptedSet = new HashSet<Type>(intercepted);
+                var plain = closedTypes.Where(t => !interceptedSet.Contains(t)).ToArray();
+                var proxied = closedTypes.Where(interceptedSet.Contains).ToArray();
+
+                if (plain.Length != 0)
                 {
-                    builder.RegisterTypes(closedTypes).AsImplementedInterfaces().InstancePerLifetimeScope();
+                    builder.RegisterTypes(plain).AsImplementedInterfaces().InstancePerLifetimeScope();
                 }
 
-                foreach (var openGeneric in openGenericTypes)
+                if (proxied.Length != 0)
                 {
-                    builder.RegisterGeneric(openGeneric).AsImplementedInterfaces().InstancePerLifetimeScope();
+                    builder.RegisterTypes(proxied)
+                        .AsImplementedInterfaces()
+                        .InstancePerLifetimeScope()
+                        .EnableInterfaceInterceptors()
+                        .InterceptedBy(typeof(AsyncDeterminationInterceptor));
                 }
             }
+
+            foreach (var openGeneric in openGenericTypes)
+            {
+                builder.RegisterGeneric(openGeneric).AsImplementedInterfaces().InstancePerLifetimeScope();
+            }
+        }
+
+        /// <summary>
+        /// 注册工作单元拦截器。
+        ///
+        /// <c>InterceptedBy</c> 只认 <c>IInterceptor</c>，而 <c>VivUnitOfWorkInterceptor</c> 继承的
+        /// <c>AsyncInterceptorBase</c> 实现的是 <c>IAsyncInterceptor</c> —— 中间必须垫一层
+        /// <c>AsyncDeterminationInterceptor</c> 适配器，否则解析代理时抛 <c>InvalidCastException</c>
+        /// （已实测）。
+        ///
+        /// 两者都注册成 <c>InstancePerLifetimeScope</c>：拦截器随作用域走，
+        /// 它注入的 <c>IVivUnitOfWork</c> 才是当前请求那个事务。已实测 Autofac 的接口代理
+        /// 从<b>当前</b>作用域解析拦截器，不会落到根作用域。
+        /// </summary>
+        private static void RegisterWorkUnitInterceptors(ContainerBuilder builder, Type[] intercepted)
+        {
+            if (intercepted.Length == 0) return;
+
+            builder.RegisterType<VivUnitOfWorkInterceptor>().AsSelf().InstancePerLifetimeScope();
+
+            builder.Register(c => new AsyncDeterminationInterceptor(c.Resolve<VivUnitOfWorkInterceptor>()))
+                .AsSelf()
+                .InstancePerLifetimeScope();
         }
 
         /// <summary>

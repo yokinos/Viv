@@ -7,7 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Microsoft.Extensions.Hosting
+namespace Viv.Aspire.ServiceDefaults
 {
     public static class VivServiceDefaultExtensions
     {

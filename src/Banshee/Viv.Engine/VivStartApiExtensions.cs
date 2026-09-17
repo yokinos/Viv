@@ -15,6 +15,7 @@ using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Echo.Grpc;
 using Viv.Engine.Filter;
+using Viv.Engine.LocalEvent;
 using Viv.Engine.Middleware;
 using Viv.Sandrone.Conveter;
 using Viv.Sandrone.OpenApi;
@@ -49,7 +50,7 @@ namespace Viv.Engine
             builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
             builder.Host.ConfigureContainer<ContainerBuilder>(container =>
             {
-                container.VivAutofacRegister(vivOptions.DIOption);
+                container.VivAutofacRegister(vivOptions);
             });
 
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
@@ -92,6 +93,10 @@ namespace Viv.Engine
             {
                 options.Filters.Add<VivExceptionFilterAttribute>();
                 options.Filters.Add<VivApiResultFilterAttribute>();
+                // 本地事件分发触发点（HTTP 主路径）：next() 返回后按业务成败 Flush/Discard。
+                // 必须排在 VivExceptionFilterAttribute 之后 —— 后者是外层，异常经它处理后
+                // 仍会回到本过滤器续段，此时靠 context.Result 里的错误信封判成败。
+                options.Filters.Add<LocalEventFlushFilterAttribute>();
                 configureMvc?.Invoke(options);
             })
             .AddNewtonsoftJson(json =>
@@ -183,6 +188,12 @@ namespace Viv.Engine
             }
 
             app.UseMiddleware<VivContextMiddleware>();
+
+            // 本地事件分发兜底（非 MVC 端点：gRPC 服务 / SignalR hub / health）。
+            // 位置有两个讲究：① 必须在 VivContextMiddleware 之内 —— 分发要跑在它 finally Clear()
+            // 租户上下文之前，否则处理器拿不到 IVivContext（租户过滤会失效）；
+            // ② 必须在 MVC 之外包住它 —— Flush/Discard 幂等，MVC 已处理过的请求到这里是 no-op。
+            app.UseMiddleware<LocalEventFlushMiddleware>();
 
             app.UseHttpsRedirection();
             if (hasAuth)

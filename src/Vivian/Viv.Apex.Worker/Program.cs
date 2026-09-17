@@ -1,3 +1,4 @@
+using Viv.Aspire.ServiceDefaults;
 using Viv.Engine;
 
 namespace Viv.Apex.Worker;

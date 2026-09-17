@@ -14,6 +14,14 @@
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
 
+  <!-- 工作单元拦截器测试跑真链路（Autofac 接口代理 + Castle 异步拦截），直接用到这三个包，
+       显式列出而不是靠 Viv.Engine 的传递引用 -->
+  <ItemGroup>
+    <PackageReference Include="Autofac" />
+    <PackageReference Include="Autofac.Extras.DynamicProxy" />
+    <PackageReference Include="Castle.Core.AsyncInterceptor" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
   </ItemGroup>

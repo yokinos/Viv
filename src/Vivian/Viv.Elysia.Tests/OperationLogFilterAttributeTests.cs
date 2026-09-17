@@ -15,7 +15,6 @@ using Viv.Engine;
 using Viv.Entity.Enums;
 using Viv.EventContracts.Apex.Logging;
 using Viv.Nana;
-using Viv.Nana.Core;
 
 namespace Viv.Elysia.Tests
 {

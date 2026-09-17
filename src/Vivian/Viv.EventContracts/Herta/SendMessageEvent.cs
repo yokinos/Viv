@@ -1,7 +1,7 @@
 using Viv.Entity.Enums;
 using Viv.Entity.Interface;
-using Viv.Nana.Core;
 using Viv.Delusion.Extension;
+using Viv.Nana;
 
 namespace Viv.EventContracts.Herta
 {

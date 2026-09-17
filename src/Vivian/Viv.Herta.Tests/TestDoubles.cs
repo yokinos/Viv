@@ -8,7 +8,6 @@ using Viv.Contracts.Models;
 using Viv.Herta.Link.Hubs;
 using Viv.Log;
 using Viv.Nana;
-using Viv.Nana.Core;
 
 namespace Viv.Herta.Tests
 {

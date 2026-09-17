@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Viv.Entity.Enums;
-using Viv.Nana.Core;
+using Viv.Nana;
 
 namespace Viv.EventContracts.Apex.Logging
 {

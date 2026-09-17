@@ -1,4 +1,4 @@
-namespace Viv.Nana.Core
+namespace Viv.Nana
 {
     [Serializable]
     public abstract class NanaEvent

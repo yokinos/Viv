@@ -710,7 +710,8 @@ namespace Viv.Momo.Core
 
                 if (isTxn)
                 {
-                    transaction = _transaction ?? (IDbTransaction)context.Database.BeginTransaction();
+                    // Dapper 要的是底层 ADO 事务，不能拿 EF 的 IDbContextTransaction 直接强转
+                    transaction = _transaction ?? GetDbTransaction(context.Database.BeginTransaction());
                     isSelfCreatedTxn = _transaction == null;
                 }
 
@@ -774,7 +775,9 @@ namespace Viv.Momo.Core
 
                 if (isTxn)
                 {
-                    transaction = _transaction ?? (IDbTransaction)await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+                    // 同上：Dapper 要的是底层 ADO 事务
+                    transaction = _transaction ?? GetDbTransaction(
+                        await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false));
                     isSelfCreatedTxn = _transaction == null;
                 }
 
@@ -838,7 +841,8 @@ namespace Viv.Momo.Core
 
                 if (isTxn)
                 {
-                    transaction = _transaction ?? (IDbTransaction)context.Database.BeginTransaction();
+                    // Dapper 要的是底层 ADO 事务，不能拿 EF 的 IDbContextTransaction 直接强转
+                    transaction = _transaction ?? GetDbTransaction(context.Database.BeginTransaction());
                     isSelfCreatedTxn = _transaction == null;
                 }
 
@@ -901,7 +905,9 @@ namespace Viv.Momo.Core
 
                 if (isTxn)
                 {
-                    transaction = _transaction ?? (IDbTransaction)await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+                    // 同上：Dapper 要的是底层 ADO 事务
+                    transaction = _transaction ?? GetDbTransaction(
+                        await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false));
                     isSelfCreatedTxn = _transaction == null;
                 }
 

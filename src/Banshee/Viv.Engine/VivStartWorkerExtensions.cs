@@ -25,7 +25,7 @@ namespace Viv.Engine
             // Autofac 容器
             builder.ConfigureContainer(new AutofacServiceProviderFactory(), container =>
             {
-                container.VivAutofacRegister(vivOptions.DIOption);
+                container.VivAutofacRegister(vivOptions);
             });
 
             // 基础服务

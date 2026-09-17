@@ -13,6 +13,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- 本地事件总线的状态机是 internal（LocalEventBus / ILocalEventHandlerInvoker / LocalEventRegistration），
+		     单元测试要直接构造它，同 Viv.Redis 的做法 -->
+		<InternalsVisibleTo Include="Viv.Engine.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\Viv.Aoi\Viv.Aoi.csproj" />
 		<ProjectReference Include="..\Viv.Clockwork\Viv.Clockwork.csproj" />
 		<ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
@@ -25,6 +31,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- 工作单元（UnitOfWork）的接口代理拦截。Viv.Contracts 虽然也挂着这两个包，
+		     但拦截器与注册代码在本项目，直接依赖比吃传递引用稳。 -->
+		<PackageReference Include="Autofac.Extras.DynamicProxy" />
+		<PackageReference Include="Castle.Core.AsyncInterceptor" />
 		<!-- .NET 10 已从共享框架移除 JwtBearer，需显式引用 -->
 		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
 		<!-- 与服务端 JwtTokenService（Viv.Contracts 引 System.IdentityModel.Tokens.Jwt 8.22.0）对齐 IdentityModel 版本：

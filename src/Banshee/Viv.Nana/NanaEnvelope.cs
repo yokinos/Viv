@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Text;
 using Viv.Contracts.Models;
 using Viv.Delusion.Magic;
-using Viv.Nana.Core;
 
 namespace Viv.Nana
 {
