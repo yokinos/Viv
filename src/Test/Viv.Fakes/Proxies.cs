@@ -32,10 +32,10 @@ public class TestProxy : DispatchProxy
     public Exception? ThrowException { get; set; }
 
     /// <summary>
-    /// 逐调用脚本。设了它就不再走 <see cref="Default"/> —— 返回值原样当结果用，
-    /// 需要什么（<c>Task.FromResult(true)</c> 之类）由脚本自己回。
+    /// 按<b>声明返回类型</b>指定回值，优先于默认回值 —— 用来表达「这个方法的真值不是 default」，
+    /// 例如「取锁成功」：<c>Returns[typeof(Task&lt;bool&gt;)] = Task.FromResult(true)</c>。
     /// </summary>
-    public Func<MethodInfo, object?[], object?>? OnInvoke { get; set; }
+    public Dictionary<Type, object?> Returns { get; } = [];
 
     /// <summary>建一个替身；<paramref name="configure"/> 里配旋钮（动态类型没法构造注入，只能事后配）。</summary>
     public static T Create<T>(Action<TestProxy>? configure = null) where T : class
@@ -55,9 +55,11 @@ public class TestProxy : DispatchProxy
         if (ThrowOnAnyCall)
             throw ThrowException ?? new InvalidOperationException("替身按配置抛出");
 
-        return OnInvoke is not null
-            ? OnInvoke(targetMethod!, args ?? [])
-            : Default(targetMethod?.ReturnType);
+        var returnType = targetMethod?.ReturnType;
+
+        return returnType is not null && Returns.TryGetValue(returnType, out var scripted)
+            ? scripted
+            : Default(returnType);
     }
 
     /// <summary>
