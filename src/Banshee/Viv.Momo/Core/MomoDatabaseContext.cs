@@ -761,7 +761,6 @@ namespace Viv.Momo.Core
 
                 if (isTxn)
                 {
-                    // Dapper 要的是底层 ADO 事务，不能拿 EF 的 IDbContextTransaction 直接强转
                     transaction = _transaction ?? GetDbTransaction(context.Database.BeginTransaction());
                     isSelfCreatedTxn = _transaction == null;
                 }
@@ -826,9 +825,8 @@ namespace Viv.Momo.Core
 
                 if (isTxn)
                 {
-                    // 同上：Dapper 要的是底层 ADO 事务
-                    transaction = _transaction ?? GetDbTransaction(
-                        await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false));
+                    // 获取底层 ADO 事务
+                    transaction = _transaction ?? GetDbTransaction(await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false));
                     isSelfCreatedTxn = _transaction == null;
                 }
 
@@ -838,7 +836,8 @@ namespace Viv.Momo.Core
                 {
                     var batch = sqlList.Skip((page - 1) * batchSize).Take(batchSize).ToList();
                     var batchSql = string.Join(";", batch) + ";";
-                    await connection.ExecuteAsync(batchSql, parameters, transaction, _timeOut);
+                    var command = new CommandDefinition(batchSql, parameters, transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                    await connection.ExecuteAsync(command).ConfigureAwait(false);
                 }
 
                 if (isSelfCreatedTxn && transaction != null)
@@ -892,7 +891,6 @@ namespace Viv.Momo.Core
 
                 if (isTxn)
                 {
-                    // Dapper 要的是底层 ADO 事务，不能拿 EF 的 IDbContextTransaction 直接强转
                     transaction = _transaction ?? GetDbTransaction(context.Database.BeginTransaction());
                     isSelfCreatedTxn = _transaction == null;
                 }
@@ -956,9 +954,7 @@ namespace Viv.Momo.Core
 
                 if (isTxn)
                 {
-                    // 同上：Dapper 要的是底层 ADO 事务
-                    transaction = _transaction ?? GetDbTransaction(
-                        await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false));
+                    transaction = _transaction ?? GetDbTransaction(await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false));
                     isSelfCreatedTxn = _transaction == null;
                 }
 
@@ -966,7 +962,8 @@ namespace Viv.Momo.Core
                 {
                     if (!string.IsNullOrEmpty(item.Key))
                     {
-                        await connection.ExecuteAsync(item.Key, item.Value, transaction, _timeOut).ConfigureAwait(false);
+                        var command = new CommandDefinition(item.Key, item.Value, transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                        await connection.ExecuteAsync(command).ConfigureAwait(false);
                     }
                 }
 
@@ -1464,6 +1461,13 @@ namespace Viv.Momo.Core
             return GetAppContext(readWriteType).DbConnection;
         }
 
+        /// <summary>
+        /// 按实体同步表结构：建缺失的表、加缺失的列。
+        ///
+        /// <paramref name="allowDrop"/> 控制是否允许删表/删列；<paramref name="allowAlterColumn"/> 控制
+        /// 是否允许改已有列的类型/可空性（默认关 —— 这个判据对现有库误报极多，
+        /// 见 <c>SchemaSynchronizer.GenerateDdl</c>）。两者都默认关，所以默认只会「加」，不会「改/删」。
+        /// </summary>
         public async Task SyncTableAsync(bool allowDrop = false, bool allowAlterColumn = false, CancellationToken cancellationToken = default)
         {
             var context = GetAppContext(DbReadWriteType.Write);
