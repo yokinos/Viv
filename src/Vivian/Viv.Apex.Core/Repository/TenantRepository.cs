@@ -17,8 +17,8 @@ namespace Viv.Apex.Core.Repository
 {
     public class TenantRepository : DataAccessCacheBase<EntityListBucket<AtTenant, AtTenantAppRelation>>, ITenantRepository
     {
-        public TenantRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, ILoggerContract logger)
-            : base(context, dbContext, redisService, logger)
+        public TenantRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, IDistributedLock distributedLock, ILoggerContract logger)
+            : base(context, dbContext, redisService, distributedLock, logger)
         {
 
         }

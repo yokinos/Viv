@@ -19,8 +19,8 @@ namespace Viv.Apex.Core.Repository
 {
     public class UserRoleRepository : DataAccessCacheBase<EntityBucket<AtUserRole>>, IUserRoleRepository
     {
-        public UserRoleRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, ILoggerContract logger)
-            : base(context, dbContext, redisService, logger)
+        public UserRoleRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, IDistributedLock distributedLock, ILoggerContract logger)
+            : base(context, dbContext, redisService, distributedLock, logger)
         { }
 
         public async Task<bool> AddAsync(AtUserRole entity)

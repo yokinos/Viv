@@ -16,8 +16,8 @@ namespace Viv.Apex.Core.Repository
 {
     public class UserRepository : DataAccessCacheBase<UserBucket>, IUserRepository
     {
-        public UserRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, ILoggerContract logger)
-            : base(context, dbContext, redisService, logger)
+        public UserRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, IDistributedLock distributedLock, ILoggerContract logger)
+            : base(context, dbContext, redisService, distributedLock, logger)
         {
         }
 

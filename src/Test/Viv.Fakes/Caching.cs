@@ -34,8 +34,8 @@ public class CacheSut : DataAccessCacheBase<TestBucket>
 
     public int DbCalls { get; private set; }
 
-    public CacheSut(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, ILoggerContract logger)
-        : base(context, dbContext, redisService, logger)
+    public CacheSut(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, IDistributedLock distributedLock, ILoggerContract logger)
+        : base(context, dbContext, redisService, distributedLock, logger)
     {
     }
 
@@ -68,4 +68,17 @@ public static class CacheDoubles
             p.Returns[typeof(bool)] = true;
             p.Returns[typeof(Task<bool>)] = Task.FromResult(true);
         });
+
+    /// <summary>取锁恒成功 —— 缓存 miss 后能走到子类的 GetDbAsync</summary>
+    public static IDistributedLock AcquiringLock() => new RecordingDistributedLock();
+
+    /// <summary>
+    /// 取锁时 Redis 挂了。包法与 <c>DistributedLockAccessor</c> 一致：
+    /// <see cref="DistributedLockException"/> 的 Inner 是原 <see cref="VivConnectionException"/>。
+    /// </summary>
+    public static IDistributedLock ThrowingLock()
+        => new RecordingDistributedLock
+        {
+            AcquireException = new DistributedLockException("lock:test", 0, new VivConnectionException(VivConnType.Redis, "down"))
+        };
 }

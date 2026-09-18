@@ -23,11 +23,11 @@ namespace Viv.Momo.Base
     /// <typeparam name="T">缓存 Bucket 类型，必须实现 <see cref="ICacheBucket"/></typeparam>
     public abstract class DataAccessCacheBase<T> where T : ICacheBucket, new()
     {
-        private readonly IRedisService _redisService;
+        protected readonly IRedisService _redisService;
+        protected readonly IDistributedLock _distributedLock;
         protected readonly IVivContext _context;
         protected readonly IMomoDbContext _dbContext;
         protected readonly ILoggerContract _logger;
-
         private const int MaxLockRetries = 3;
         private const int RetryDelayMs = 20;
         private static readonly TimeSpan NullValueCacheTime = TimeSpan.FromMinutes(2);
@@ -35,9 +35,10 @@ namespace Viv.Momo.Base
 
         private static readonly T NullPlaceholder = new();
 
-        protected DataAccessCacheBase(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, ILoggerContract logger)
+        protected DataAccessCacheBase(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, IDistributedLock distributedLock, ILoggerContract logger)
         {
             _redisService = redisService;
+            _distributedLock = distributedLock;
             _context = context;
             _dbContext = dbContext;
             _logger = logger;
@@ -74,14 +75,12 @@ namespace Viv.Momo.Base
                     return await GetDbAsync(keys).ConfigureAwait(false);
                 }
 
-                for (int i = 0; i < MaxLockRetries; i++)
-                {
-                    hasLock = await _redisService.AcquireLockAsync(lockKey, LockExpireTime).ConfigureAwait(false);
-                    if (hasLock)
-                        break;
-
-                    await Task.Delay(RetryDelayMs).ConfigureAwait(false);
-                }
+                hasLock = await _distributedLock.AcquireLockWithRetryAsync(
+                    lockKey,
+                    LockExpireTime,
+                    maxRetryCount: MaxLockRetries,
+                    baseDelay: RetryDelayMs,
+                    maxDelay: RetryDelayMs).ConfigureAwait(false);
 
                 if (hasLock)
                 {
@@ -124,13 +123,18 @@ namespace Viv.Momo.Base
                 _logger.Error($"缓存或锁不可用，回源数据库 Key:{cacheKey}", ex);
                 return await GetDbAsync(keys).ConfigureAwait(false);
             }
+            catch (DistributedLockException ex) when (ex.InnerException is VivConnectionException { ConnType: VivConnType.Redis })
+            {
+                _logger.Error($"锁不可用，回源数据库 Key:{cacheKey}", ex);
+                return await GetDbAsync(keys).ConfigureAwait(false);
+            }
             finally
             {
                 if (hasLock)
                 {
                     try
                     {
-                        await _redisService.ReleaseLockAsync(lockKey).ConfigureAwait(false);
+                        await _distributedLock.ReleaseLockAsync(lockKey).ConfigureAwait(false);
                     }
                     catch (Exception relEx)
                     {

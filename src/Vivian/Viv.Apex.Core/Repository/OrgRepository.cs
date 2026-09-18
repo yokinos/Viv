@@ -14,8 +14,8 @@ namespace Viv.Apex.Core.Repository
 {
     public class OrgRepository : DataAccessCacheBase<EntityListBucket<AtOrg, AtOrgAppRelation>>, IOrgRepository
     {
-        public OrgRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, ILoggerContract logger)
-            : base(context, dbContext, redisService, logger)
+        public OrgRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, IDistributedLock distributedLock, ILoggerContract logger)
+            : base(context, dbContext, redisService, distributedLock, logger)
         {
         }
 

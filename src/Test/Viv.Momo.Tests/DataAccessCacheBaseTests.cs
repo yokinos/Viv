@@ -15,6 +15,7 @@ public class DataAccessCacheBaseTests
             TestProxy.Create<IVivContext>(),
             TestProxy.Create<IMomoDbContext>(),
             CacheDoubles.ThrowingRedis(),
+            CacheDoubles.ThrowingLock(),
             new RecordingLogger());
         sut.DbValue = new TestBucket { Name = "from-db" };
 
@@ -31,6 +32,7 @@ public class DataAccessCacheBaseTests
             TestProxy.Create<IVivContext>(),
             TestProxy.Create<IMomoDbContext>(),
             CacheDoubles.CacheMissRedis(),
+            CacheDoubles.AcquiringLock(),
             new RecordingLogger())
         {
             DbException = new VivConnectionException(VivConnType.SqlServer, "db down")
@@ -39,6 +41,27 @@ public class DataAccessCacheBaseTests
         var ex = await Assert.ThrowsAsync<VivConnectionException>(() => sut.GetCacheAsync(1));
 
         Assert.Equal(VivConnType.SqlServer, ex.ConnType);
+        Assert.Equal(1, sut.DbCalls);
+    }
+
+    /// <summary>
+    /// 缓存读得通（miss）但取锁时 Redis 挂了。取锁走 IDistributedLock，故障被包成
+    /// DistributedLockException，外层那条 VivConnectionException 分支抓不到 —— 这条钉住「照样回源」。
+    /// </summary>
+    [Fact]
+    public async Task GetCacheAsync_取锁时Redis挂_回源数据库不抛DistributedLockException()
+    {
+        var sut = new CacheSut(
+            TestProxy.Create<IVivContext>(),
+            TestProxy.Create<IMomoDbContext>(),
+            CacheDoubles.CacheMissRedis(),
+            CacheDoubles.ThrowingLock(),
+            new RecordingLogger());
+        sut.DbValue = new TestBucket { Name = "from-db" };
+
+        var result = await sut.GetCacheAsync(1);
+
+        Assert.Equal("from-db", result?.Name);
         Assert.Equal(1, sut.DbCalls);
     }
 }

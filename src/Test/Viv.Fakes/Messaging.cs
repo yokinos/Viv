@@ -183,32 +183,32 @@ public class RecordingDistributedLock : IDistributedLock
 
     public Exception? AcquireException { get; set; }
 
-    public Task<bool> AcquireLockAsync(string lockKey, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true)
+    public Task<bool> AcquireLockAsync(object key, TimeSpan expire, string? lockHolderId = null, bool isReentrant = true)
     {
         AcquireCalls++;
-        LastLockKey = lockKey;
+        LastLockKey = Key(key);
         LastHolderId = lockHolderId;
         if (AcquireException is not null)
             throw AcquireException;
         return Task.FromResult(AcquireResult);
     }
 
-    public Task<bool> IsLockHeldAsync(string lockKey)
+    public Task<bool> IsLockHeldAsync(object key)
     {
         HeldCalls++;
         if (IsHeldThrows)
-            throw new DistributedLockException(lockKey, 0);
+            throw new DistributedLockException(Key(key), 0);
         return Task.FromResult(IsHeldResult);
     }
 
-    public Task<bool> ReleaseLockAsync(string lockKey, string? lockHolderId = null, bool isReentrant = true)
+    public Task<bool> ReleaseLockAsync(object key, string? lockHolderId = null, bool isReentrant = true)
     {
         ReleaseCalls++;
         return Task.FromResult(true);
     }
 
     public Task<bool> AcquireLockWithRetryAsync(
-        string lockKey,
+        object key,
         TimeSpan expire,
         string? lockHolderId = null,
         bool isReentrant = true,
@@ -216,10 +216,10 @@ public class RecordingDistributedLock : IDistributedLock
         int baseDelay = 200,
         int maxDelay = 5000,
         CancellationToken cancellationToken = default)
-        => AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
+        => AcquireLockAsync(key, expire, lockHolderId, isReentrant);
 
     public async Task<T> AcquireLockWithExecuteAsync<T>(
-        string lockKey,
+        object key,
         TimeSpan expire,
         Func<Task<T>> executeMethod,
         Func<Task<T>>? fallbackMethod = null,
@@ -230,11 +230,11 @@ public class RecordingDistributedLock : IDistributedLock
         int maxDelay = 5000,
         CancellationToken cancellationToken = default)
     {
-        if (!await AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant))
+        if (!await AcquireLockAsync(key, expire, lockHolderId, isReentrant))
         {
             if (fallbackMethod is not null)
                 return await fallbackMethod();
-            throw new DistributedLockException(lockKey, maxRetryCount);
+            throw new DistributedLockException(Key(key), maxRetryCount);
         }
 
         try
@@ -243,7 +243,13 @@ public class RecordingDistributedLock : IDistributedLock
         }
         finally
         {
-            await ReleaseLockAsync(lockKey, lockHolderId, isReentrant);
+            await ReleaseLockAsync(key, lockHolderId, isReentrant);
         }
     }
+
+    /// <summary>
+    /// 替身不做归一化（真实实现在 <c>DistributedLockAccessor.GenerateLockKey</c>），string 直接落原文，
+    /// 其余类型 ToString —— 断言 <see cref="LastLockKey"/> 的用例都是传 string 的路径。
+    /// </summary>
+    private static string Key(object key) => key?.ToString() ?? "null";
 }
