@@ -28,7 +28,15 @@ namespace Viv.Herta.Tests
         }
 
         private static SendMessageConsumer CreateConsumer(FakeHubContext hub, StubConnectionPool pool)
-            => new(new VivConsumerDependency(new RecordingLogger(), new TestContext(), new RecordingEventPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions())), hub, pool);
+            => new(
+                new VivConsumerDependency(
+                    new RecordingLogger(),
+                    new TestContext(),
+                    new RecordingEventPublisher(),
+                    XUnitTestMagic.CreateOptions(new NanaOptions()),
+                    new RecordingLocalEventBus()),
+                hub,
+                pool);
 
         [Fact]
         public async Task ContentNull_ReturnsFailureWithoutSending()

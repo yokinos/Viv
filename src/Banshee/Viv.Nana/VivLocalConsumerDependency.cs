@@ -23,14 +23,22 @@ namespace Viv.Nana
 
         public readonly IVivLocalEventPublisher _publisher;
 
+        /// <summary>
+        /// 本地事件总线。消费成功时由 <see cref="VivLocalConsumer{T}.HandleAsync"/> 分发本次消费入队的事件，
+        /// 失败则整队丢弃。必填不给默认值 —— 它总是注册的，「忘了传」若静默通过就成了事件不发。
+        /// </summary>
+        public readonly IVivLocalEventBus _localEventBus;
+
         public VivLocalConsumerDependency(
             ILoggerContract logger,
             IVivContext context,
-            IVivLocalEventPublisher publisher)
+            IVivLocalEventPublisher publisher,
+            IVivLocalEventBus localEventBus)
         {
             _logger = logger;
             _context = context;
             _publisher = publisher;
+            _localEventBus = localEventBus;
         }
     }
 }

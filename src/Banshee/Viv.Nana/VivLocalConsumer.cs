@@ -28,6 +28,10 @@ namespace Viv.Nana
     /// 点对点：一个本地事件只有一个消费者（Wolverine 对同一消息类型只认一条 handler chain）。
     /// 要一个事件触发多个反应用本地总线。
     ///
+    /// 本地事件分发：子类里经 IVivLocalEventBus 入队的本地事件由基类 finally 统一分发，
+    /// 消费成功才 Flush，其余路径（Requeue / 丢弃 / 抛异常）整队 Discard。
+    /// 顺序天然正确 —— 消费者每次写当场提交，分发排在 ReceiveMessageAsync 返回之后，即「提交 → 分发」。
+    ///
     /// 本版没有 RedeliverAsync，需要延迟再试请先 Failed(true, ...) 交给退避重试。
     /// </summary>
     /// <typeparam name="T">本地事件类型</typeparam>
@@ -39,11 +43,14 @@ namespace Viv.Nana
 
         protected readonly IVivLocalEventPublisher _publisher;
 
+        protected readonly IVivLocalEventBus _localEventBus;
+
         protected VivLocalConsumer(VivLocalConsumerDependency dependency)
         {
             _logger = dependency._logger;
             _context = dependency._context;
             _publisher = dependency._publisher;
+            _localEventBus = dependency._localEventBus;
         }
 
         /// <summary>
@@ -64,6 +71,8 @@ namespace Viv.Nana
             if (envelope == null || envelope.Content == null)
                 return;
 
+            var succeeded = false;
+
             try
             {
                 var holderId = envelope.MessageId.ToString();
@@ -81,7 +90,10 @@ namespace Viv.Nana
                 var result = await ReceiveMessageAsync(envelope, cancellationToken).ConfigureAwait(false);
 
                 if (result.IsSuccess)
+                {
+                    succeeded = true;
                     return;
+                }
 
                 if (result.IsRequeue)
                 {
@@ -93,6 +105,17 @@ namespace Viv.Nana
             }
             finally
             {
+                // 本地事件分发：消费成功才发，其余路径（重投 / 丢弃 / 异常）整队丢弃 —— 与 HTTP 侧语义一致。
+                // 必须排在 _context?.Clear() 之前：handler 与发布方同作用域，要靠 IVivContext 做租户过滤。
+                // 传 CancellationToken.None：handler 是主业务的一部分，不因停机而跳过。
+                //
+                // 失败走 Discard 而非 Flush：Discard 不抛异常，而 FlushAsync 会。
+                // finally 里抛出的异常会顶掉在途的 VivRequeueException，把重投语义换成一个不相干的异常。
+                if (succeeded)
+                    await _localEventBus.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                else
+                    _localEventBus.Discard();
+
                 // 正常返回 / 抛出异常 / 重投三条路径统一清理，避免消息上下文残留在后台线程上串到下一条消息
                 _context?.Clear();
                 LockHolderContext.Clear();

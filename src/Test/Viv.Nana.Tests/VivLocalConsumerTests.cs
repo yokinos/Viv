@@ -81,12 +81,12 @@ namespace Viv.Nana.Tests
         private static NanaLocalEnvelope<LocalTestEvent> Envelope(long messageId = 42)
             => new() { MessageId = messageId, Content = new LocalTestEvent { Payload = "data" } };
 
-        private static (VivLocalConsumerDependency Dep, TestContext Context, RecordingLogger Logger) Build()
+        private static (VivLocalConsumerDependency Dep, TestContext Context, RecordingLogger Logger) Build(RecordingLocalEventBus? bus = null)
         {
             var logger = new RecordingLogger();
             var context = new TestContext();
             var publisher = new RecordingLocalEventPublisher();
-            return (new VivLocalConsumerDependency(logger, context, publisher), context, logger);
+            return (new VivLocalConsumerDependency(logger, context, publisher, bus ?? new RecordingLocalEventBus()), context, logger);
         }
 
         [Fact]

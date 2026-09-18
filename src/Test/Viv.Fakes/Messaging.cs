@@ -1,3 +1,4 @@
+using Viv.Contracts.Events;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Nana;
@@ -110,6 +111,50 @@ public class RecordingLocalEventPublisher : IVivLocalEventPublisher
         LastContent = content;
         return ValueTask.FromResult(Result);
     }
+}
+
+/// <summary>
+/// <see cref="IVivLocalEventBus"/> 记录替身 —— 只记「分发/丢弃被调了几次、按什么顺序」，
+/// 不重放真实事件（真实总线是 internal，测试也拿不到它的队列）。
+///
+/// 记顺序而不只记次数：消费者基类要求「Flush 排在 Discard 之前」这类断言用得上，
+/// 而且真出现「同一次消费又 Flush 又 Discard」时，只有顺序能说清哪一步出的问题。
+/// </summary>
+public class RecordingLocalEventBus : IVivLocalEventBus
+{
+    /// <summary>按调用先后记下的动作，取值 <c>"flush"</c> / <c>"discard"</c></summary>
+    public List<string> Calls { get; } = [];
+
+    public int FlushCalls => Calls.Count(c => c == "flush");
+
+    public int DiscardCalls => Calls.Count(c => c == "discard");
+
+    /// <summary>Flush 时收到的取消令牌 —— 用来钉「触发点一律传 None，不跟 HttpContext/停机走」</summary>
+    public List<CancellationToken> FlushTokens { get; } = [];
+
+    /// <summary>Flush 抛这个异常（验「handler 抛异常会上抛、不被吞」）</summary>
+    public Exception? FlushException { get; set; }
+
+    /// <summary>入队的事件（只记引用，不重放）</summary>
+    public List<LocalEvent> Published { get; } = [];
+
+    public Task PublishAsync<TEvent>(TEvent @event, CancellationToken ct = default) where TEvent : LocalEvent
+    {
+        Published.Add(@event);
+        return Task.CompletedTask;
+    }
+
+    public Task FlushAsync(CancellationToken ct = default)
+    {
+        if (FlushException is not null)
+            throw FlushException;
+
+        Calls.Add("flush");
+        FlushTokens.Add(ct);
+        return Task.CompletedTask;
+    }
+
+    public void Discard() => Calls.Add("discard");
 }
 
 /// <summary>

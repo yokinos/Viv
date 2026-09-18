@@ -69,8 +69,13 @@ namespace Viv.Nana.Tests
         private static NanaEnvelope<TestApexEvent> Envelope(TestApexEvent? content = null)
             => new() { Content = content ?? new TestApexEvent { Payload = "data" } };
 
-        private static VivConsumerDependency Dep(RecordingLogger logger, RecordingEventPublisher publisher, IOptions<NanaOptions> options, IDistributedLock? distributedLock = null)
-            => new(logger, new TestContext(), publisher, options, distributedLock);
+        private static VivConsumerDependency Dep(
+            RecordingLogger logger,
+            RecordingEventPublisher publisher,
+            IOptions<NanaOptions> options,
+            IDistributedLock? distributedLock = null,
+            RecordingLocalEventBus? localEventBus = null)
+            => new(logger, new TestContext(), publisher, options, localEventBus ?? new RecordingLocalEventBus(), distributedLock);
 
         [Fact]
         public async Task 成功_无异常无日志()

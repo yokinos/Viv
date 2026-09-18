@@ -39,6 +39,11 @@ namespace Viv.Nana
     ///
     /// 注意：锁服务异常（DistributedLockException）会重新抛出给 Wolverine，由全局重试 + 死信策略兜底；
     /// 锁竞争（IsLockHeldAsync 确认被持有）直接 ACK 丢弃，不会触发重试。
+    ///
+    /// 【本地事件分发】
+    /// 子类里经 IVivLocalEventBus 入队的本地事件，由基类 finally 统一分发：消费成功才 Flush，
+    /// 其余路径（抢锁失败 / Requeue / 丢弃 / 抛异常）整队 Discard。放在 finally 是因为
+    /// HandleAsync 有四个出口，单点插入会漏；用 else 分支而非一并 Flush 是为了不顶掉在途的重投异常。
     /// </summary>
 
     public abstract class VivConsumer<T> where T : NanaEvent
@@ -53,6 +58,8 @@ namespace Viv.Nana
 
         protected readonly NanaOptions _nanaOptions;
 
+        protected readonly IVivLocalEventBus _localEventBus;
+
         protected VivConsumer(VivConsumerDependency dependency)
         {
             _logger = dependency._logger;
@@ -60,6 +67,7 @@ namespace Viv.Nana
             _publisher = dependency._publisher;
             _distributedLock = dependency._distributedLock;
             _nanaOptions = dependency._nanaOptions;
+            _localEventBus = dependency._localEventBus;
         }
 
         /// <summary>
@@ -79,6 +87,7 @@ namespace Viv.Nana
 
             var lockKey = NanaRegister.GetConsumerLockKey(typeof(T).Name, envelope.MessageId);
             var acquired = false;
+            var succeeded = false;
 
             try
             {
@@ -111,7 +120,10 @@ namespace Viv.Nana
                 var result = await ReceiveMessageAsync(envelope, cancellationToken).ConfigureAwait(false);
 
                 if (result.IsSuccess)
+                {
+                    succeeded = true;
                     return;
+                }
 
                 if (result.IsRequeue)
                 {
@@ -141,6 +153,19 @@ namespace Viv.Nana
                         _logger.Error($"释放消费锁失败 Key: {lockKey}", relEx);
                     }
                 }
+
+                // 本地事件分发：消费成功才发，其余路径（重投 / 丢弃 / 异常）整队丢弃 —— 与 HTTP 侧语义一致。
+                // 必须排在 _context?.Clear() 之前：handler 与发布方同作用域，要靠 IVivContext 做租户过滤
+                // （HTTP 侧 LocalEventFlushMiddleware 必须挂在 VivContextMiddleware 之内是同一个坑）。
+                // 传 CancellationToken.None：handler 是主业务的一部分，不因停机而跳过。
+                //
+                // 失败走 Discard 而非 Flush：Discard 不抛异常，而 FlushAsync 会。
+                // finally 里抛出的异常会顶掉在途的 VivRequeueException，把重投语义换成一个不相干的异常 ——
+                // 让 flush 只发生在「没有异常在途」的那条路径上，这个坑就不存在。
+                if (succeeded)
+                    await _localEventBus.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                else
+                    _localEventBus.Discard();
 
                 _context?.Clear();
                 LockHolderContext.Clear();

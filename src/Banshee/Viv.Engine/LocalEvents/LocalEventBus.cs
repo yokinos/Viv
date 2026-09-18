@@ -16,21 +16,29 @@ namespace Viv.Engine.LocalEvents
     /// </summary>
     internal sealed class LocalEventBus : IVivLocalEventBus, IDisposable
     {
-        /// <summary>单次 Flush 最多分发多少轮 —— 处理器内可再发布，轮数上限防递归死循环</summary>
+        /// <summary>
+        /// 单次 Flush 最多分发多少轮 —— 处理器内可再发布，轮数上限防递归死循环
+        /// </summary>
         private const int MaxDrainRounds = 5;
 
         private readonly ILoggerContract _logger;
         private readonly Dictionary<Type, ILocalEventHandlerInvoker> _invokers;
 
-        /// <summary>入队/清空/状态迁移的统一锁</summary>
+        /// <summary>
+        /// 入队/清空/状态迁移的统一锁
+        /// </summary>
         private readonly object _sync = new();
 
-        /// <summary>待发事件队列，FIFO —— 分发顺序 = 发布顺序</summary>
+        /// <summary>
+        /// 待发事件队列，FIFO —— 分发顺序 = 发布顺序
+        /// </summary>
         private readonly Queue<LocalEvent> _pending = new();
 
         private LocalEventBusState _state = LocalEventBusState.Pending;
 
-        /// <summary>进程内只打一次启动信息（每个作用域都会构造一个总线实例）</summary>
+        /// <summary>
+        /// 进程内只打一次启动信息（每个作用域都会构造一个总线实例）
+        /// </summary>
         private static int _scanLogged;
 
         public LocalEventBus(IEnumerable<ILocalEventHandlerInvoker> invokers, ILoggerContract logger)
@@ -38,13 +46,11 @@ namespace Viv.Engine.LocalEvents
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             // 一个事件类型只注册一个分发器，ToDictionary 在此处顺带做重复注册的兜底断言
-            _invokers = (invokers ?? throw new ArgumentNullException(nameof(invokers)))
-                .ToDictionary(x => x.EventType);
+            _invokers = (invokers ?? throw new ArgumentNullException(nameof(invokers))).ToDictionary(x => x.EventType);
 
             if (Interlocked.Exchange(ref _scanLogged, 1) == 0)
             {
-                _logger.Info("本地事件总线已就绪：事件类型 {0} 种，处理器 {1} 个",
-                    LocalEventRegistration.EventTypeCount, LocalEventRegistration.HandlerCount);
+                _logger.Info("本地事件总线已就绪：事件类型 {0} 种，处理器 {1} 个", LocalEventRegistration.EventTypeCount, LocalEventRegistration.HandlerCount);
             }
         }
 
@@ -92,7 +98,7 @@ namespace Viv.Engine.LocalEvents
                         if (_pending.Count == 0)
                             return;
 
-                        batch = new List<LocalEvent>(_pending);
+                        batch = [.. _pending];
                         _pending.Clear();
                     }
 
@@ -168,16 +174,24 @@ namespace Viv.Engine.LocalEvents
             }
         }
 
-        /// <summary>总线生命周期状态</summary>
+        /// <summary>
+        /// 总线生命周期状态
+        /// </summary>
         private enum LocalEventBusState
         {
-            /// <summary>可入队，尚未开始分发</summary>
+            /// <summary>
+            /// 可入队，尚未开始分发
+            /// </summary>
             Pending = 0,
 
-            /// <summary>分发中，仍可入队（处理器内递归发布）</summary>
+            /// <summary>
+            /// 分发中，仍可入队（处理器内递归发布）
+            /// </summary>
             Draining = 1,
 
-            /// <summary>终态：已分发完 / 已丢弃，新事件一律丢弃</summary>
+            /// <summary>
+            /// 终态：已分发完 / 已丢弃，新事件一律丢弃
+            /// </summary>
             Done = 2,
         }
     }
