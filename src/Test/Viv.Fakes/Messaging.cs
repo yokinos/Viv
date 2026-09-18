@@ -219,7 +219,7 @@ public class RecordingDistributedLock : IDistributedLock
         => AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
 
     public async Task<T> AcquireLockWithExecuteAsync<T>(
-        object key,
+        string lockKey,
         TimeSpan expire,
         Func<Task<T>> executeMethod,
         Func<Task<T>>? fallbackMethod = null,
@@ -230,7 +230,6 @@ public class RecordingDistributedLock : IDistributedLock
         int maxDelay = 5000,
         CancellationToken cancellationToken = default)
     {
-        var lockKey = key?.ToString() ?? "null";
         if (!await AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant))
         {
             if (fallbackMethod is not null)

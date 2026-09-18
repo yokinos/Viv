@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Reflection;
 using System.Threading.Tasks;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
@@ -18,8 +16,6 @@ namespace Viv.Engine
         private readonly IRedisService _redisService;
 
         private readonly ILoggerContract _logger;
-
-        private static readonly ConcurrentDictionary<Type, PropertyInfo[]> _lockKeyPropCache = new();
 
         public DistributedLockAccessor(IRedisService redisService, ILoggerContract logger)
         {
@@ -114,7 +110,7 @@ namespace Viv.Engine
         /// 获取锁并执行业务委托（取锁成功执行业务，取锁失败执行降级）
         /// </summary>
         public async Task<T> AcquireLockWithExecuteAsync<T>(
-            object key,
+            string lockKey,
             TimeSpan expire,
             Func<Task<T>> executeMethod,
             Func<Task<T>>? fallbackMethod = null,
@@ -125,8 +121,6 @@ namespace Viv.Engine
             int maxDelay = 5000,
             CancellationToken cancellationToken = default)
         {
-            var lockKey = GenerateLockKey(key);
-
             for (int attempt = 1; attempt <= maxRetryCount; attempt++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -196,39 +190,5 @@ namespace Viv.Engine
             return delay + jitter;
         }
 
-        //private static string GenerateLockKey(object key)
-        //{
-        //    if (key is string strKey)
-        //        return $"lock:{strKey}";
-
-        //    return $"lock:{System.Text.Json.JsonSerializer.Serialize(key)}";
-        //}
-
-        private static string GenerateLockKey(object key)
-        {
-            if (key == null)
-                return "lock:null";
-
-            if (key is string str)
-                return $"lock:{str}";
-
-            var type = key.GetType();
-
-            if (type.IsPrimitive || type.IsValueType || type == typeof(decimal) || type == typeof(DateTime) ||
-                type == typeof(DateTimeOffset) || type == typeof(TimeSpan) || type == typeof(Guid) ||
-                type.IsEnum)
-            {
-                return $"lock:{key}";
-            }
-
-            var props = _lockKeyPropCache.GetOrAdd(type, t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.CanRead).OrderBy(p => p.Name).ToArray());
-            if (props.Length == 0)
-            {
-                return $"lock:{key}";
-            }
-
-            var parts = props.Select(p => p.GetValue(key)?.ToString() ?? "null");
-            return $"lock:{string.Join("_", parts)}";
-        }
     }
 }

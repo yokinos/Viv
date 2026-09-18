@@ -7,6 +7,10 @@ namespace Viv.Contracts.Interface
     /// 分布式锁服务接口
     /// </summary>
     /// <remarks>
+    /// 锁标识一律是调用方拼好的 <c>string</c>，本接口原样下发给 Redis，不做任何加工 ——
+    /// 怎么拼、用什么前缀由调用方决定（框架内部沿用的两种：消费锁 <c>nana:{ServiceName}:{EventType}:{MessageId}</c>
+    /// 见 <c>NanaRegister.GetConsumerLockKey</c>，缓存锁 <c>lock:{cacheKey}</c> 见 <c>DataAccessCacheBase</c>）。
+    ///
     /// 提供基于 Redis 的分布式锁能力，支持：
     /// <list type="bullet">
     /// <item><description>可重入锁</description></item>
@@ -69,7 +73,7 @@ namespace Viv.Contracts.Interface
         /// 获取锁并执行业务委托（取锁成功执行业务，取锁失败执行降级）
         /// </summary>
         /// <typeparam name="T">返回值类型</typeparam>
-        /// <param name="key">锁标识（字符串或对象，对象会自动序列化为 JSON 作为 Key）</param>
+        /// <param name="lockKey">锁的唯一标识。与其余方法同一个类型、同一个含义：调用方自己拼，本方法原样下发，不做任何加工</param>
         /// <param name="expire">锁过期时间</param>
         /// <param name="executeMethod">业务委托（取锁成功时执行）</param>
         /// <param name="fallbackMethod">降级委托（取锁失败时执行）。为 null 时取锁失败抛出 <see cref="DistributedLockException"/></param>
@@ -86,16 +90,16 @@ namespace Viv.Contracts.Interface
         /// <remarks>
         /// 重试策略：指数退避 + 随机抖动（30%），避免惊群效应
         /// </remarks>
-        Task<T> AcquireLockWithExecuteAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, Func<Task<T>>? fallbackMethod = null, string? lockHolderId = null, bool isReentrant = false, int maxRetryCount = 5, int baseDelay = 200, int maxDelay = 5000, CancellationToken cancellationToken = default);
+        Task<T> AcquireLockWithExecuteAsync<T>(string lockKey, TimeSpan expire, Func<Task<T>> executeMethod, Func<Task<T>>? fallbackMethod = null, string? lockHolderId = null, bool isReentrant = false, int maxRetryCount = 5, int baseDelay = 200, int maxDelay = 5000, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 获取锁并执行业务委托
         /// </summary>
         /// <typeparam name="T">返回值类型</typeparam>
-        /// <param name="key">锁标识（字符串或对象，对象会自动序列化为 JSON 作为 Key）</param>
+        /// <param name="lockKey">锁的唯一标识</param>
         /// <param name="expire">锁过期时间</param>
         /// <param name="executeMethod">业务委托（取锁成功时执行）</param>
         /// <returns></returns>
-        Task<T> AcquireLockAsync<T>(object key, TimeSpan expire, Func<Task<T>> executeMethod, string? lockHolderId = null, bool isReentrant = false, CancellationToken cancellationToken = default) => AcquireLockWithExecuteAsync(key, expire, executeMethod, null, lockHolderId, isReentrant, 5, 200, 5000, cancellationToken);
+        Task<T> AcquireLockAsync<T>(string lockKey, TimeSpan expire, Func<Task<T>> executeMethod, string? lockHolderId = null, bool isReentrant = false, CancellationToken cancellationToken = default) => AcquireLockWithExecuteAsync(lockKey, expire, executeMethod, null, lockHolderId, isReentrant, 5, 200, 5000, cancellationToken);
     }
 }

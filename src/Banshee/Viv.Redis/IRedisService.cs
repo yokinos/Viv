@@ -364,7 +364,7 @@ namespace Viv.Redis
         /// <summary>
         /// 获取分布式锁
         /// </summary>
-        /// <param name="lockKey">锁的唯一标识（如：stock_lock_1001）</param>
+        /// <param name="lockKey">锁的唯一标识，原样作为 Redis Key（如：lock:stock:1001）</param>
         /// <param name="lockHolderId">锁持有者唯一标识</param>
         /// <param name="expire">锁过期时间（必须>0，防止死锁）</param>
         /// <param name="isReentrant">是否启用重入，默认true</param>
