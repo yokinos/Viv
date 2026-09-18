@@ -248,9 +248,7 @@ namespace Viv.Momo.Core
                 return infrastructure.Instance;
             }
 
-            throw new NotSupportedException(
-                $"事务类型 {transaction.GetType().FullName} 既不是 IDbTransaction，也取不到底层 DbTransaction，" +
-                "无法交给 Dapper 使用。");
+            throw new NotSupportedException($"事务类型 {transaction.GetType().FullName} 既不是 IDbTransaction，也取不到底层 DbTransaction，无法交给 Dapper 使用。");
         }
 
         /// <summary>
