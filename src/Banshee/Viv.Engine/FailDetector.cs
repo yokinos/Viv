@@ -1,3 +1,5 @@
+using Viv.Delusion;
+
 namespace Viv.Engine
 {
     /// <summary>
@@ -11,11 +13,25 @@ namespace Viv.Engine
     /// </summary>
     internal static class FailDetector
     {
-        /// <summary>业务是否失败。非 <see cref="VivApiResult"/> 的返回值（含 null）一律视为成功。</summary>
+        /// <summary>
+        /// 业务是否失败。判据三条：
+        /// <see cref="VivApiResult"/> 看信封码是否落在 2xx 区间；
+        /// <see cref="IBooleanResult"/> 取反 <c>IsSuccess</c>
+        /// 其余返回值（含 null、未拆包的 <c>Task</c>）一律视为成功。
+        /// </summary>
         public static bool IsFailed(object? result)
         {
-            return result is VivApiResult apiResult
-                && (apiResult.Code < 200 || apiResult.Code >= 300);
+            if (result is VivApiResult apiResult)
+            {
+                return apiResult.Code < 200 || apiResult.Code >= 300;
+            }
+
+            if (result is IBooleanResult booleanResult)
+            {
+                return !booleanResult.IsSuccess;
+            }
+
+            return false;
         }
     }
 }

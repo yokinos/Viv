@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
+using Viv.Delusion;
 using Viv.Engine.LocalEvents;
 
 namespace Viv.Engine.Tests;
@@ -53,6 +54,21 @@ public class FailDetectorTests
         Assert.False(FailDetector.IsFailed(Task.CompletedTask));
         Assert.False(FailDetector.IsFailed("不是信封"));
         Assert.False(FailDetector.IsFailed(new object()));
+    }
+
+    /// <summary>
+    /// <see cref="IBooleanResult"/>（如 <see cref="FuncResult"/>）取反 IsSuccess ——
+    /// 判的是「是否失败」，顺着写成 IsSuccess 就把成败整个倒过来了。
+    /// </summary>
+    [Fact]
+    public void IBooleanResult_按IsSuccess取反判成败()
+    {
+        Assert.False(FailDetector.IsFailed(FuncResult.Success()));
+        Assert.True(FailDetector.IsFailed(FuncResult.Failed("业务失败")));
+
+        // 泛型版继承自 FuncResult，走同一条路径
+        Assert.False(FailDetector.IsFailed(FuncResult<int>.Success(1)));
+        Assert.True(FailDetector.IsFailed(FuncResult<int>.Failed("业务失败")));
     }
 
     /// <summary>

@@ -1,10 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Delusion;
 
 namespace Viv.Nana
 {
-    public class SubscribeResult
+    /// <summary>
+    /// 事件订阅处理结果
+    /// </summary>
+    public class SubscribeResult : IBooleanResult
     {
         /// <summary>
         /// 消费是否成功

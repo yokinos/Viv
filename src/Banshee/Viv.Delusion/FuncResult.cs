@@ -7,7 +7,7 @@ namespace Viv.Delusion
     /// <summary>
     /// 函数返回结果
     /// </summary>
-    public class FuncResult
+    public class FuncResult : IBooleanResult
     {
         /// <summary>
         /// 是否成功
