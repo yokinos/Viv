@@ -563,7 +563,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> DeleteAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity
+        public async Task<bool> DeleteAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default) where T : class, IEntity
         {
             if (predicate == null) return false;
 
@@ -574,7 +574,8 @@ namespace Viv.Momo.Core
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
-                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
+                var command = new CommandDefinition(sql, parameters, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                var count = await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false);
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -603,7 +604,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> DeleteAsync<T>(long id) where T : class, IEntity
+        public async Task<bool> DeleteAsync<T>(long id, CancellationToken cancellationToken = default) where T : class, IEntity
         {
             if (id <= 0) return false;
 
@@ -612,7 +613,8 @@ namespace Viv.Momo.Core
                 var context = GetAppContext();
                 var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
                 var (sql, parameter) = SqlMagic.GetDeleteSql<T>(tableName, x => x.Id == id, _databaseOptions.DatabaseSource, TenantId);
-                var count = await context.DbConnection.ExecuteAsync(sql, parameter, _transaction, _timeOut).ConfigureAwait(false);
+                var command = new CommandDefinition(sql, parameter, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                var count = await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false);
                 return (count > 0);
             }
             catch (OperationCanceledException) { throw; }
@@ -647,7 +649,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> SoftDeleteAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity, ISoftDeleted
+        public async Task<bool> SoftDeleteAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default) where T : class, IEntity, ISoftDeleted
         {
             if (predicate == null) return false;
 
@@ -658,7 +660,8 @@ namespace Viv.Momo.Core
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
-                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
+                var command = new CommandDefinition(sql, parameters, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                var count = await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false);
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -688,7 +691,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> SoftDeleteAsync<T>(long id) where T : class, IEntity, ISoftDeleted
+        public async Task<bool> SoftDeleteAsync<T>(long id, CancellationToken cancellationToken = default) where T : class, IEntity, ISoftDeleted
         {
             if (id <= 0) return false;
 
@@ -698,7 +701,8 @@ namespace Viv.Momo.Core
                 var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
                 var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _databaseOptions.DatabaseSource, TenantId);
                 var context = GetAppContext(DbReadWriteType.Write);
-                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
+                var command = new CommandDefinition(sql, parameters, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                var count = await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false);
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -729,14 +733,15 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> ExecuteSqlAsync(string sql, object? parameters = null)
+        public async Task<bool> ExecuteSqlAsync(string sql, object? parameters = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(sql)) return false;
 
             try
             {
                 var context = GetAppContext();
-                var count = await context.DbConnection.ExecuteAsync(sql, parameters, _transaction, _timeOut).ConfigureAwait(false);
+                var command = new CommandDefinition(sql, parameters, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                var count = await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false);
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -1023,14 +1028,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<bool> ExistAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity
+        public async Task<bool> ExistAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default) where T : class, IEntity
         {
             if (predicate == null) return false;
 
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
-                return await context.Set<T>().AnyAsync(predicate).ConfigureAwait(false);
+                return await context.Set<T>().AnyAsync(predicate, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1055,14 +1060,14 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<int> CountAsync<T>(Expression<Func<T, bool>> predicate) where T : class, IEntity
+        public async Task<int> CountAsync<T>(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default) where T : class, IEntity
         {
             if (predicate == null) return -1;
 
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
-                return await context.Set<T>().CountAsync(predicate).ConfigureAwait(false);
+                return await context.Set<T>().CountAsync(predicate, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1135,7 +1140,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<T?> SingleOrDefaultAsync<T>(string sql, object? parameters = null) where T : class
+        public async Task<T?> SingleOrDefaultAsync<T>(string sql, object? parameters = null, CancellationToken cancellationToken = default) where T : class
         {
             if (string.IsNullOrEmpty(sql)) return default;
 
@@ -1143,7 +1148,8 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
-                return await connection.QuerySingleOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
+                var command = new CommandDefinition(sql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                return await connection.QuerySingleOrDefaultAsync<T>(command).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
             {
@@ -1179,7 +1185,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<T?> FindAsync<T>(long id) where T : class, IEntity
+        public async Task<T?> FindAsync<T>(long id, CancellationToken cancellationToken = default) where T : class, IEntity
         {
             if (id <= 0) return default;
             var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
@@ -1191,7 +1197,8 @@ namespace Viv.Momo.Core
                 var connection = context.DbConnection;
                 var sql = SqlMagic.GetFindSqlTemplate(tableName, _databaseOptions.DatabaseSource, isTenantEntity);
                 object parameters = isTenantEntity ? new { Id = id, TenantId } : new { Id = id };
-                return await connection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
+                var command = new CommandDefinition(sql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                return await connection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1249,7 +1256,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<T?> FirstOrDefaultAsync<T>(string sql, object? parameters = null) where T : class
+        public async Task<T?> FirstOrDefaultAsync<T>(string sql, object? parameters = null, CancellationToken cancellationToken = default) where T : class
         {
             if (string.IsNullOrEmpty(sql)) return default;
 
@@ -1257,7 +1264,8 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
-                return await connection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
+                var command = new CommandDefinition(sql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                return await connection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1316,14 +1324,15 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<List<T>> FindListAsync<T>(string sql, object? parameters = null) where T : class
+        public async Task<List<T>> FindListAsync<T>(string sql, object? parameters = null, CancellationToken cancellationToken = default) where T : class
         {
             if (string.IsNullOrEmpty(sql)) return [];
 
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
-                var result = await context.DbConnection.QueryAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
+                var command = new CommandDefinition(sql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                var result = await context.DbConnection.QueryAsync<T>(command).ConfigureAwait(false);
                 return result.ToList();
             }
             catch (OperationCanceledException) { throw; }
@@ -1349,14 +1358,15 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<T?> FindScalarAsync<T>(string sql, object? parameters = null)
+        public async Task<T?> FindScalarAsync<T>(string sql, object? parameters = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(sql)) return default;
 
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
-                var result = await context.DbConnection.QueryFirstOrDefaultAsync<T>(sql, parameters, null, _timeOut).ConfigureAwait(false);
+                var command = new CommandDefinition(sql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                var result = await context.DbConnection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false);
                 return result;
             }
             catch (OperationCanceledException) { throw; }
@@ -1399,7 +1409,7 @@ namespace Viv.Momo.Core
             }
         }
 
-        public async Task<PagedList<T>> PageAsync<T>(string sql, int pageIndex, int pageSize, object? parameters = null)
+        public async Task<PagedList<T>> PageAsync<T>(string sql, int pageIndex, int pageSize, object? parameters = null, CancellationToken cancellationToken = default)
         {
             var result = new PagedList<T>(pageIndex, pageSize);
             if (string.IsNullOrEmpty(sql)) return result;
@@ -1408,11 +1418,13 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext(DbReadWriteType.Read);
                 var (pageSql, countSql) = SqlMagic.GetPageSqlTemplate(sql, pageIndex, pageSize, _databaseOptions.DatabaseSource);
-                var totalCount = await context.DbConnection.ExecuteScalarAsync<int>(countSql, parameters, null, _timeOut).ConfigureAwait(false);
+                var countCommand = new CommandDefinition(countSql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                var totalCount = await context.DbConnection.ExecuteScalarAsync<int>(countCommand).ConfigureAwait(false);
                 if (totalCount > 0)
                 {
                     var totalPages = CalculateTotalPages(totalCount, pageSize);
-                    var list = await context.DbConnection.QueryAsync<T>(pageSql, parameters, null, _timeOut).ConfigureAwait(false);
+                    var pageCommand = new CommandDefinition(pageSql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                    var list = await context.DbConnection.QueryAsync<T>(pageCommand).ConfigureAwait(false);
                     result.TotalCount = totalCount;
                     result.Items = list;
                     result.IsHaveFrontPage = pageIndex > 1;
