@@ -63,17 +63,9 @@ namespace Viv.Momo.Base
 
             try
             {
-                try
-                {
-                    var cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
-                    if (cacheValue != null)
-                        return cacheValue;
-                }
-                catch (VivConnectionException ex) when (ex.ConnType == VivConnType.Redis)
-                {
-                    _logger.Error($"缓存不可用，回源数据库 Key:{cacheKey}", ex);
-                    return await GetDbAsync(keys).ConfigureAwait(false);
-                }
+                var cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
+                if (cacheValue != null)
+                    return cacheValue;
 
                 hasLock = await _distributedLock.AcquireLockWithRetryAsync(
                     lockKey,
@@ -84,7 +76,8 @@ namespace Viv.Momo.Base
 
                 if (hasLock)
                 {
-                    var cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
+                    // 再次检查下是否有其他线程已写入
+                    cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
                     if (cacheValue != null)
                         return cacheValue;
 
@@ -104,18 +97,13 @@ namespace Viv.Momo.Base
                     return dbValue;
                 }
 
+                // 如果没抢到锁 略微等待后再次从缓存尝试获取数据
                 await Task.Delay(RetryDelayMs).ConfigureAwait(false);
-                try
-                {
-                    var cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
-                    if (cacheValue != null)
-                        return cacheValue;
-                }
-                catch (VivConnectionException ex) when (ex.ConnType == VivConnType.Redis)
-                {
-                    _logger.Error($"缓存不可用，回源数据库 Key:{cacheKey}", ex);
-                }
+                cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
+                if (cacheValue != null)
+                    return cacheValue;
 
+                // 行吧 从数据库读
                 return await GetDbAsync(keys).ConfigureAwait(false);
             }
             catch (VivConnectionException ex) when (ex.ConnType == VivConnType.Redis)
