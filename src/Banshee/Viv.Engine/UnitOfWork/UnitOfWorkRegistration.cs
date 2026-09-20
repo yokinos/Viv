@@ -79,7 +79,10 @@ namespace Viv.Engine.UnitOfWork
                         "接口代理生成不出来，事务不会生效。请为它定义接口，或改用窄事务 IVivUnitOfWork。");
                 }
 
-                var classLevel = type.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: false);
+                // inherit: true —— 派生类会继承基类上的类级特性，运行时的 ShouldIntercept 同样沿基类链找，
+                // 注册期只看自身（inherit: false）的话，派生类进了 intercepted 却不做类级校验，
+                // 里面新写的非虚方法就静默没有事务。
+                var classLevel = type.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: true);
 
                 // ② 方法级特性：逐条严查（这是 API 侧的主路径，必须能拦到）
                 //    必须带上 Static —— 漏了它静态方法根本不在枚举结果里，
@@ -97,8 +100,9 @@ namespace Viv.Engine.UnitOfWork
                 }
 
                 // ③ 类级特性：与方法级同一把尺子。标了就必须能拦到，否则启动失败。
-                //    [VivUnitOfWork(Enabled = false)] 是明确豁免，跳过。
-                if (classLevel != null)
+                //    Enabled = false 是明确的「这个类不要事务」—— 派生类去掉基类继承来的特性只有这一个办法
+                //    （AttributeUsage 是 Inherited = true），所以它必须真的豁免，不能标了反而启动失败。
+                if (classLevel is { Enabled: true })
                 {
                     methodCount += CollectClassLevelAsyncMethods(type);
                 }

@@ -38,6 +38,7 @@ public class UnitOfWorkInterceptorTests
         Task VoidAsync();
         Task<VivApiResult> StickySuccessAsync();
         Task<VivApiResult> CreateWithTokenAsync(CancellationToken cancellationToken);
+        Task<VivApiResult> ThrowingWithTokenAsync(CancellationToken cancellationToken);
     }
 
     public class ProbeService : IProbeService
@@ -106,6 +107,10 @@ public class UnitOfWorkInterceptorTests
         [VivUnitOfWork]
         public virtual Task<VivApiResult> CreateWithTokenAsync(CancellationToken cancellationToken)
             => Task.FromResult(VivApiResult.Success("带令牌"));
+
+        [VivUnitOfWork]
+        public virtual Task<VivApiResult> ThrowingWithTokenAsync(CancellationToken cancellationToken)
+            => throw new InvalidOperationException("带令牌的业务炸了");
     }
 
     public interface IClassLevelService
@@ -329,8 +334,10 @@ public class UnitOfWorkInterceptorTests
     }
 
     [Fact]
-    public async Task 被拦方法带CancellationToken_开提交都传入()
+    public async Task 被拦方法带CancellationToken_只传给Begin_提交不吃调用方令牌()
     {
+        // 提交必须跑完，不能被断线取消 —— MVC action 拿到的令牌是 HttpContext.RequestAborted，
+        // 提交被取消的后果是「业务成功返回、写却没落库」。回滚同理，见下一条。
         var (container, kernel, _) = Build();
         using var scope = container.BeginLifetimeScope();
         using var cts = new CancellationTokenSource();
@@ -339,6 +346,21 @@ public class UnitOfWorkInterceptorTests
 
         Assert.Equal("begin|commit", kernel.Trace());
         Assert.Equal(cts.Token, Assert.Single(kernel.BeginTokens));
-        Assert.Equal(cts.Token, Assert.Single(kernel.CommitTokens));
+        Assert.Equal(CancellationToken.None, Assert.Single(kernel.CommitTokens));
+    }
+
+    [Fact]
+    public async Task 被拦方法带CancellationToken_回滚也不吃调用方令牌()
+    {
+        var (container, kernel, _) = Build();
+        using var scope = container.BeginLifetimeScope();
+        using var cts = new CancellationTokenSource();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => scope.Resolve<IProbeService>().ThrowingWithTokenAsync(cts.Token));
+
+        Assert.Equal("begin|rollback", kernel.Trace());
+        Assert.Equal(cts.Token, Assert.Single(kernel.BeginTokens));
+        Assert.Equal(CancellationToken.None, Assert.Single(kernel.RollbackTokens));
     }
 }

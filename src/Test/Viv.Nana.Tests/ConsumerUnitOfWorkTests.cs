@@ -83,6 +83,10 @@ public class ConsumerUnitOfWorkTests
         var uow = new RecordingUnitOfWork();
         var consumer = new UowPublishingConsumer(Dep(bus, uow), SubscribeResult.Success());
 
+        // 两个替身各记各的，光比对各自的序列证明不了先后。
+        // 在提交那一刻回看总线，此刻还没 Flush 才算真的「提交先于分发」。
+        uow.OnCommit = () => Assert.Empty(bus.Calls);
+
         await consumer.HandleAsync(Envelope(), CancellationToken.None);
 
         Assert.Equal("begin|commit", uow.Trace());
@@ -92,7 +96,7 @@ public class ConsumerUnitOfWorkTests
     }
 
     [Fact]
-    public async Task 成功_传入的CancellationToken交给工作单元()
+    public async Task 成功_令牌只给Begin_提交不吃调用方令牌()
     {
         var bus = new RecordingLocalEventBus();
         var uow = new RecordingUnitOfWork();
@@ -102,7 +106,28 @@ public class ConsumerUnitOfWorkTests
         await consumer.HandleAsync(Envelope(), cts.Token);
 
         Assert.Equal(cts.Token, Assert.Single(uow.BeginTokens));
-        Assert.Equal(cts.Token, Assert.Single(uow.CommitTokens));
+        Assert.Equal(CancellationToken.None, Assert.Single(uow.CommitTokens));
+    }
+
+    [Fact]
+    public async Task 粘性提交被拒_消费不算成功_整队Discard()
+    {
+        // 真工作在 rollback-only 时是「先回滚、再抛 VivUnitOfWorkException」，
+        // 异常从 ExecuteAsync 冒过 HandleAsync 的 finally —— 那里必须按「没成功」处理，
+        // 否则成功信封会把一个已经回滚掉的事务对应的本地事件发出去。
+        var bus = new RecordingLocalEventBus();
+        var uow = new RecordingUnitOfWork
+        {
+            CommitException = new VivUnitOfWorkException("嵌套事务已标记回滚，最外层提交被拒绝。数据库已回滚。"),
+        };
+
+        await Assert.ThrowsAsync<VivUnitOfWorkException>(
+            () => new UowPublishingConsumer(Dep(bus, uow), SubscribeResult.Success())
+                .HandleAsync(Envelope(), CancellationToken.None));
+
+        Assert.Equal("begin|commit", uow.Trace());
+        Assert.Equal(0, bus.FlushCalls);
+        Assert.Equal(1, bus.DiscardCalls);
     }
 
     [Fact]
@@ -140,6 +165,7 @@ public class ConsumerUnitOfWorkTests
     {
         var bus = new RecordingLocalEventBus();
         var uow = new RecordingUnitOfWork();
+        uow.OnCommit = () => Assert.Empty(bus.Calls);
 
         await new UowPublishingLocalConsumer(LocalDep(bus, uow), SubscribeResult.Success())
             .HandleAsync(LocalEnvelope(), CancellationToken.None);

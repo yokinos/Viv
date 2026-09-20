@@ -9,7 +9,8 @@ namespace Viv.Contracts.Attributes
     /// 标在实现类的 public virtual 方法上，不要标接口（接口上标了不生效，且类型级根本标不上）。
     /// 方法须返回 Task / Task&lt;T&gt; / ValueTask&lt;T&gt;，非泛型 ValueTask 与同步方法都拦不到。
     /// 类级特性与方法级同一把尺子：不可重写（含隐式接口实现的 virtual+final）或同步方法会让启动失败；
-    /// 开放泛型类型上标了同样启动失败。想让个别方法豁免，标 <c>Enabled = false</c>。
+    /// 开放泛型类型上标了同样启动失败。想让个别方法豁免，在那个方法上标 <c>Enabled = false</c>；
+    /// 想让整个类豁免，标在类上 —— 派生类去掉继承来的特性也只有这一个办法。
     /// 所在类型须由 DIOption 按接口注册（AsSelf 注册的没有接口，生成不出代理）。
     /// 消费者（VivConsumer / VivLocalConsumer）不走接口代理：HandleAsync 按本特性显式开合事务。
     /// 自调用 this.OtherMethod() 不过代理，特性标在最外层公开方法上。
@@ -20,7 +21,7 @@ namespace Viv.Contracts.Attributes
         public VivUnitOfWorkAttribute() { }
 
         /// <summary>
-        /// 是否启用。类上标了想让个别方法豁免时置 false。
+        /// 是否启用。标在方法上是豁免那一个方法，标在类上是豁免整个类。
         /// </summary>
         public bool Enabled { get; set; } = true;
     }

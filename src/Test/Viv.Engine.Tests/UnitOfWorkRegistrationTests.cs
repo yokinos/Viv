@@ -129,6 +129,35 @@ public class UnitOfWorkRegistrationTests
         public virtual VivApiResult SyncVirtual() => VivApiResult.Success();
     }
 
+    /// <summary>类级 Enabled = false：整个类豁免，与方法级 opt-out 同一待遇</summary>
+    [VivUnitOfWork(Enabled = false)]
+    public class ClassLevelOptOutService : IGoodService
+    {
+        public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+
+        public virtual VivApiResult SyncVirtual() => VivApiResult.Success();
+    }
+
+    /// <summary>基类标类级特性，供派生类的用例继承（AttributeUsage 是 Inherited = true）</summary>
+    [VivUnitOfWork]
+    public class ClassLevelBaseService : IGoodService
+    {
+        public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>派生类继承了基类的类级特性，自己又加了个同步方法 —— 同样该失败</summary>
+    public class ClassLevelDerivedService : ClassLevelBaseService
+    {
+        public virtual VivApiResult SyncVirtual() => VivApiResult.Success();
+    }
+
+    /// <summary>派生类去掉继承来的类级特性只有标 Enabled = false 这一条路，必须真的豁免</summary>
+    [VivUnitOfWork(Enabled = false)]
+    public class ClassLevelDerivedOptOutService : ClassLevelBaseService
+    {
+        public virtual VivApiResult SyncVirtual() => VivApiResult.Success();
+    }
+
     [VivUnitOfWork]
     public class OpenGenericAttributedService<T> : IOpenGenericService<T>
     {
@@ -303,6 +332,30 @@ public class UnitOfWorkRegistrationTests
     public void 类级特性_方法级Enabled为false的同步方法_跳过校验()
     {
         Assert.Single(Resolve([typeof(ClassLevelOptOutSyncService)]));
+    }
+
+    [Fact]
+    public void 类级特性_Enabled为false_整个类豁免校验()
+    {
+        Assert.Single(Resolve([typeof(ClassLevelOptOutService)]));
+    }
+
+    [Fact]
+    public void 类级特性_派生类继承了基类特性_自己的同步方法同样启动失败()
+    {
+        // 派生类拿到的类是基类标的那条特性（AttributeUsage Inherited = true），
+        // 运行时的 ShouldIntercept 也沿基类链找 —— 注册期只看自身的话这里会静默无事务
+        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(ClassLevelDerivedService)]));
+
+        Assert.Contains(nameof(ClassLevelDerivedService.SyncVirtual), ex.Message);
+        Assert.Contains("同步方法", ex.Message);
+    }
+
+    [Fact]
+    public void 类级特性_派生类标Enabled为false_去掉继承来的特性()
+    {
+        // 派生类没有别的办法去掉基类继承下来的特性，这条豁免不生效的话「显式关掉反而起不来」
+        Assert.Single(Resolve([typeof(ClassLevelDerivedOptOutService)]));
     }
 
     [Fact]

@@ -75,6 +75,15 @@ public sealed class RecordingUnitOfWork : IVivUnitOfWork
 
     public List<CancellationToken> RollbackTokens { get; } = [];
 
+    /// <summary>提交那一刻的回调 —— 与 <see cref="KernelStub.OnCommit"/> 同款，验时序用</summary>
+    public Action? OnCommit { get; set; }
+
+    /// <summary>提交时抛出的异常 —— 真工作在 rollback-only 时就是这样先回滚再抛 VivUnitOfWorkException</summary>
+    public Exception? CommitException { get; set; }
+
+    /// <summary>回滚时抛出的异常</summary>
+    public Exception? RollbackException { get; set; }
+
     public string Trace() => string.Join("|", Calls);
 
     public Task<IVivTransaction> BeginAsync(CancellationToken cancellationToken = default)
@@ -97,7 +106,10 @@ public sealed class RecordingUnitOfWork : IVivUnitOfWork
             _completed = true;
             _owner.Calls.Add("commit");
             _owner.CommitTokens.Add(cancellationToken);
-            return Task.CompletedTask;
+            _owner.OnCommit?.Invoke();
+            return _owner.CommitException is null
+                ? Task.CompletedTask
+                : Task.FromException(_owner.CommitException);
         }
 
         public Task RollbackAsync(CancellationToken cancellationToken = default)
@@ -106,7 +118,9 @@ public sealed class RecordingUnitOfWork : IVivUnitOfWork
             _completed = true;
             _owner.Calls.Add("rollback");
             _owner.RollbackTokens.Add(cancellationToken);
-            return Task.CompletedTask;
+            return _owner.RollbackException is null
+                ? Task.CompletedTask
+                : Task.FromException(_owner.RollbackException);
         }
 
         public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();

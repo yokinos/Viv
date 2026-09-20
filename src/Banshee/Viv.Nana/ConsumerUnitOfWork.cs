@@ -40,6 +40,10 @@ namespace Viv.Nana
 
         /// <summary>
         /// 需要事务时包住 <paramref name="work"/>：成功提交，失败回滚。不需要则原样执行。
+        ///
+        /// 令牌只给 <c>BeginAsync</c>；Commit / Rollback 一律 <see cref="CancellationToken.None"/>。
+        /// 停机（Wolverine 取消令牌）时正把业务跑完的这一条不该卡在提交那一步 —— 半提交半丢比慢一下糟得多。
+        /// 与拦截器 <c>VivUnitOfWorkInterceptor</c> 同一取舍。
         /// </summary>
         public static async Task<SubscribeResult> ExecuteAsync(
             IVivUnitOfWork? unitOfWork,
@@ -60,16 +64,16 @@ namespace Viv.Nana
                 var result = await work(cancellationToken).ConfigureAwait(false);
                 if (result.IsSuccess)
                 {
-                    await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
+                    await tx.CommitAsync(CancellationToken.None).ConfigureAwait(false);
                     return result;
                 }
 
-                await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                await tx.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 return result;
             }
             catch
             {
-                await tx.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                await tx.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 throw;
             }
         }

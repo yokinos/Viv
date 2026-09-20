@@ -198,7 +198,10 @@ public class LocalEventFlushHostTests
     public async Task 作用域_Flush失败_记日志并丢弃剩余()
     {
         var logger = new RecordingLogger();
-        var bus = RealBus(new ThrowingHostHandler());
+
+        // 抛异常的排在前面，后面那个是会记 Hits 的 —— 两个一起进总线，
+        // Assert.Empty(Hits) 才能证明「剩余事件被丢弃」，只放一个不记 Hits 的 handler 是恒真断言
+        var bus = RealBus(new ThrowingHostHandler(), new HostHandler());
         var scope = new LocalEventScope(bus, logger);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
