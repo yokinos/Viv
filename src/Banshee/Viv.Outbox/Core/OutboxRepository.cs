@@ -10,15 +10,11 @@ using Viv.Momo.Interface;
 namespace Viv.Outbox.Core
 {
     /// <summary>
-    /// <see cref="IOutboxRepository"/> 的手写 SQL 实现。
-    ///
-    /// 两个执行通道：写操作（入队 / 改状态 / 清理）一律走 <c>IMomoDbContext.ExecuteSqlAsync</c>，
-    /// 它取写库上下文并把 <c>_transaction</c> 转发给 Dapper，入队因此自然并入调用方的业务事务。
-    ///
-    /// 认领是唯一的例外：它要用 <c>UPDATE ... OUTPUT/RETURNING</c> 把行拿回来，而 IMomoDbContext 上
-    /// 所有返回行的原生 SQL 方法走的全是读库上下文，拿来跑认领会打到从库上。所以这里用
-    /// <c>GetDbConnection(DbReadWriteType.Write)</c> 取主库连接自己跑 Dapper ——
-    /// 认领是单条语句、自身即原子，不需要事务参数。
+    /// <see cref="IOutboxRepository"/> 的手写SQL实现。
+    /// <list type="bullet">
+    /// <item><description>写操作通道：入队、状态更新、清理均使用 <c>IMomoDbContext.ExecuteSqlAsync</c>，内部使用写库上下文并转发 <c>_transaction</c> 至Dapper，消息入队自动并入调用方业务事务。</description></item>
+    /// <item><description>认领逻辑特例：认领需要执行 UPDATE ... OUTPUT/RETURNING 获取记录；IMomoDbContext 所有返回数据的原生SQL方法默认走读库，无法满足要求。因此通过 <c>GetDbConnection(DbReadWriteType.Write)</c> 获取主库连接直接使用Dapper执行。认领为单条原子语句，无需传入事务。</description></item>
+    /// </list>
     /// </summary>
     internal sealed class OutboxRepository : IOutboxRepository
     {

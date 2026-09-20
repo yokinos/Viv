@@ -27,7 +27,6 @@ namespace Viv.Nana
         /// <summary>
         /// Viv的上下文信息。不是可选项：消费者跑在后台线程 + 独立 DI 作用域上，AsyncLocal 里的租户上下文
         /// 不会跟过去，而 EFAppContext 的全局查询过滤器在「无上下文」时不过滤，等于跨租户读。
-        /// 必须靠这个快照在消费端水合。
         /// </summary>
         public VivContextContent? Context { get; set; }
 

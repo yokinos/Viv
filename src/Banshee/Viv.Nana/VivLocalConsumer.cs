@@ -11,28 +11,14 @@ namespace Viv.Nana
 {
     /// <summary>
     /// Viv 本地队列消费者基类 — 封装消息上下文、异常与重试编排。
-    ///
-    /// 与 <see cref="VivConsumer{T}"/> 平行、互不继承，差异只有两处，都在消费锁上：
-    /// 不取 Redis 分布式锁（那条锁是为 fanout 下「各订阅服务各收一份、同服务只进一次业务」设计的，
-    /// 而本地队列就在本进程，一条队列一个消费者，不存在多实例竞争），
-    /// 也就不 catch DistributedLockException。依赖由 <see cref="VivLocalConsumerDependency"/> 提供。
-    ///
-    /// 上下文：HandleAsync 自动 SetSnapshot / 清空，处理完强制清理。
-    /// 禁止把 _context 捕获进 Task.Run 或后台即忘任务 —— ExecutionContext 会流动，造成多消息上下文串扰；
-    /// 这条对本地队列尤其要紧，消费者本来就跑在后台线程上，再往外 fork 线程租户上下文就守不住了。
-    ///
-    /// 重试：返回 Fail(IsRequeue:true) 抛 <see cref="VivRequeueException"/>，由 AddVivWolverine 的全局策略
-    /// 按 NanaOptions.RetryCount 指数退避重试（5s 起、上限 60s），耗尽转入死信队列；
-    /// 返回 Fail(IsRequeue:false) 只记错误日志、消息 ACK 丢弃。
-    ///
-    /// 点对点：一个本地事件只有一个消费者（Wolverine 对同一消息类型只认一条 handler chain）。
-    /// 要一个事件触发多个反应用本地总线。
-    ///
-    /// 本地事件分发：子类里经 IVivLocalEventBus 入队的本地事件由基类 finally 统一分发，
-    /// 消费成功才 Flush，其余路径（Requeue / 丢弃 / 抛异常）整队 Discard。
-    /// 顺序天然正确 —— 消费者每次写当场提交，分发排在 ReceiveMessageAsync 返回之后，即「提交 → 分发」。
-    ///
-    /// 本版没有 RedeliverAsync，需要延迟再试请先 Failed(true, ...) 交给退避重试。
+    /// <list type="bullet">
+    /// <item><description>与 <see cref="VivConsumer{T}"/> 平行独立，不继承；差异仅在消费锁：不使用Redis分布式锁。Redis锁用于Fanout广播场景，实现多服务订阅、同服务防重复执行；本地队列运行于当前进程，单队列单消费者，不存在多实例竞争，也不捕获 DistributedLockException。依赖由 <see cref="VivLocalConsumerDependency"/> 注入。</description></item>
+    /// <item><description>上下文管理：HandleAsync 自动执行 SetSnapshot / 清空，消息处理完毕强制清理。禁止将 _context 捕获传入 Task.Run 或后台即忘任务；ExecutionContext 会发生流动，引发多消息上下文串扰。本地队列消费者本身运行在后台线程，该约束尤为重要，防止租户上下文丢失。</description></item>
+    /// <item><description>重试机制：返回 Fail(IsRequeue:true) 抛出 <see cref="VivRequeueException"/>，由 AddVivWolverine 全局策略按 NanaOptions.RetryCount 指数退避重试（起始5s，上限60s），重试耗尽转入死信队列；返回 Fail(IsRequeue:false)，仅记录错误日志，消息ACK直接丢弃。</description></item>
+    /// <item><description>点对点约束：一个本地事件仅绑定一条消费者链路，Wolverine针对同一消息类型只识别一套handler chain。如需一个事件触发多个业务响应，请使用本地事件总线。</description></item>
+    /// <item><description>本地事件分发：子类通过 <see cref="IVivLocalEventBus"/> 入队的本地事件，由基类 finally 统一分发；消费成功才执行 Flush，其余场景（Requeue / 丢弃 / 抛出异常）全部 Discard。天然保证顺序：消息业务提交在前，事件分发在后，即「提交 → 分发」。</description></item>
+    /// <item><description>能力说明：本基类不提供 RedeliverAsync；如需延迟重试，返回 Failed(true, ...) 交由框架退避重试处理。</description></item>
+    /// </list>
     /// </summary>
     /// <typeparam name="T">本地事件类型</typeparam>
     public abstract class VivLocalConsumer<T> where T : NanaLocalEvent

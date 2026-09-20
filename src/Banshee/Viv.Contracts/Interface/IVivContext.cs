@@ -4,15 +4,12 @@ namespace Viv.Contracts.Interface
 {
     /// <summary>
     /// Viv 请求上下文 — 贯穿整个请求生命周期的核心标识。
-    ///
-    /// 数据来源：
-    /// VivContextMiddleware 解析Token之后组装 <see cref="VivContextContent"/>，
-    /// 通过 <see cref="IVivContextAccessor"/> 存入当前请求异步上下文。
-    ///
-    /// 使用场景：
-    /// - 数据库操作：自动按主体ID实现数据隔离
-    /// - 消息发布：事件信封携带身份信息
-    /// - 业务判断：区分 AppId / SubjectId / UserId
+    /// <list type="bullet">
+    /// <item><description>数据来源：VivContextMiddleware 经 <see cref="IVivContextProvider"/> 组装 <see cref="VivContextContent"/>，通过 <see cref="IVivContextAccessor"/> 存入当前请求异步上下文。默认实现先读身份头（网关签发），没有才回落 JWT Token。</description></item>
+    /// <item><description>数据库操作：自动基于主体 ID 完成数据隔离。</description></item>
+    /// <item><description>消息发布：事件信封自动携带身份信息。</description></item>
+    /// <item><description>业务判断：提供 AppId / SubjectId / UserId 用于业务分支判定。</description></item>
+    /// </list>
     /// </summary>
     public interface IVivContext
     {
@@ -43,7 +40,7 @@ namespace Viv.Contracts.Interface
 
         /// <summary>
         /// 清空上下文
-        /// 请求结束中间件调用，业务代码禁止调用
+        /// 只由框架触发点调用（VivContextMiddleware 的 finally、VivConsumer / VivLocalConsumer 消息消费结束时），业务代码不要调
         /// </summary>
         void Clear();
 

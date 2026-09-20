@@ -6,8 +6,10 @@ namespace Viv.Outbox.Core
     /// <summary>
     /// 发件箱的全部 SQL —— 手写，一次都不经过 EF。
     ///
-    /// 列名一律不带引号：SqlServer 不区分大小写、PG 折叠成小写，同一句话在两端都成立，
-    /// 所以只有真正需要方言的少数几条（建表 / 认领 / 清理）才按 provider 分叉。
+    /// 输入侧列名一律不带引号（INSERT 列名 / WHERE / SET）：SqlServer 不区分大小写、PG 折叠成小写，
+    /// 同一句话在两端都成立，所以只有真正需要方言的少数几条（建表 / 认领 / 清理）才按 provider 分叉。
+    /// 例外是 RETURNING / OUTPUT 的输出列别名 —— PG 侧必须带引号（<c>AS "Id"</c>），
+    /// 否则折叠成小写后 Dapper 映射不回 POCO 的 PascalCase 属性。
     ///
     /// 所有时间参数都必须是 <see cref="DateTime.UtcNow"/> 派生（Kind=Utc）：
     /// PG 侧的列是 <c>TIMESTAMPTZ</c>，Npgsql 拒绝写入 Kind=Unspecified 的值。

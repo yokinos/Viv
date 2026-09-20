@@ -1,14 +1,12 @@
 namespace Viv.Outbox.Core
 {
     /// <summary>
-    /// 发件箱表 <c>VivOutboxMessage</c> 的行。
-    ///
-    /// 刻意是普通 POCO：不实现 <c>IEntity</c>、不实现 <c>ITenant</c>、不注册进 <c>EntityTypeOptions</c>。
-    /// 这张表全走手写 SQL，一次都不经过 EF —— 继承 IEntity 会被 EF 扫到并套用命名约定，
-    /// 跟手写 DDL 的表名列名对不上；继承 ITenant 会被全局查询过滤器接管，
-    /// 而投递器跑在无租户的后台作用域里。
-    ///
-    /// 属性名与列名逐字对应（PascalCase），SQL 里一律不加引号。
+    /// 发件箱表 <c>VivOutboxMessage</c> 的实体行。
+    /// <list type="bullet">
+    /// <item><description>实体设计：纯普通POCO类型，不实现 <c>IEntity</c>、<c>ITenant</c>，不注册到 <c>EntityTypeOptions</c>。</description></item>
+    /// <item><description>数据访问：本表全部采用手写SQL，完全不经过EF Core。若继承IEntity会被EF扫描并自动套用字段命名规则，与手写DDL的表结构冲突；若继承ITenant，会被全局查询过滤器拦截，而投递后台运行在无租户作用域。</description></item>
+    /// <item><description>字段约定：属性名与数据库列名完全一致（PascalCase）。SQL 输入侧（INSERT 列名 / WHERE / SET）无需加标识符引号 —— SqlServer 不区分大小写、PG 折叠成小写；输出列别名则必须加引号（PG 的 <c>RETURNING Id AS "Id"</c>），否则折叠成小写后 Dapper 映射不回 PascalCase 属性。</description></item>
+    /// </list>
     /// </summary>
     public class OutboxMessage
     {

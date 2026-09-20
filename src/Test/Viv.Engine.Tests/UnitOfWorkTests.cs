@@ -1,5 +1,8 @@
+using Microsoft.Extensions.DependencyInjection;
+using Viv.Contracts.Interface;
 using Viv.Engine.UnitOfWork;
 using Viv.Fakes;
+using Viv.Log;
 
 namespace Viv.Engine.Tests;
 
@@ -249,4 +252,96 @@ public class UnitOfWorkTests
         Assert.Equal("begin|commit", kernel.Trace());
         Assert.Equal(0, kernel.Count("rollback"));   // 提交失败不自动补回滚，让异常原样冒到上层
     }
+
+    #region 独立事务（换作用域）
+
+    /// <summary>
+    /// 按 <c>VivRegister.RegisterDatabase</c> 的形状搭一个真容器：内核与工作单元都是 Scoped。
+    /// 每个作用域新建的内核收进 <paramref name="kernels"/>，便于断言「两个作用域确实是两个内核」。
+    ///
+    /// ⚠️ 钉的是 <c>UnitOfWorkManager</c> 的状态跟着作用域走，**不是** VivRegister 那边真实的
+    /// 生命周期 —— 那个方法要整套 <c>VivOptions</c> 才跑得起来，本测试没走那条路。
+    /// 有人把 <c>RegisterDatabase</c> 里的 AddScoped 改成 AddSingleton，这两条测试不会红。
+    /// </summary>
+    private static ServiceProvider ScopedProvider(out List<KernelStub> kernels)
+    {
+        var created = new List<KernelStub>();
+        kernels = created;
+
+        var services = new ServiceCollection();
+        services.AddScoped<ITransactionKernel>(_ =>
+        {
+            var kernel = new KernelStub();
+            created.Add(kernel);
+            return kernel;
+        });
+        services.AddScoped<IVivUnitOfWork, UnitOfWorkManager>();
+        services.AddSingleton<ILoggerContract, RecordingLogger>();
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// 换作用域 = 换 <c>IMomoDbContext</c> = 换连接 = 换事务状态机，内层那个是真独立事务。
+    ///
+    /// 对照组在同一个作用域里：内层回滚会把外层提交一起降级掉
+    /// （见 <see cref="嵌套_内层显式回滚_外层提交被降级为回滚"/>）。差的就是一个作用域。
+    /// </summary>
+    [Fact]
+    public async Task 换作用域_内层提交与外层回滚互不影响()
+    {
+        using var provider = ScopedProvider(out var kernels);
+
+        using var outerScope = provider.CreateScope();
+        var outerUow = outerScope.ServiceProvider.GetRequiredService<IVivUnitOfWork>();
+
+        await using (var outerTx = await outerUow.BeginAsync())
+        {
+            using (var innerScope = provider.CreateScope())
+            {
+                var innerUow = innerScope.ServiceProvider.GetRequiredService<IVivUnitOfWork>();
+
+                await using var innerTx = await innerUow.BeginAsync();
+                await innerTx.CommitAsync();       // 真提交，提交的是内层那条连接
+            }
+
+            // 外层刻意不提交 —— 走自动回滚
+        }
+
+        Assert.Equal(2, kernels.Count);            // 两个作用域两个内核，没有共用
+        Assert.NotSame(kernels[0], kernels[1]);
+        Assert.Equal("begin|commit", kernels[1].Trace());     // 内层提交了
+        Assert.Equal("begin|rollback", kernels[0].Trace());   // 外层照样回滚，不受内层影响
+    }
+
+    /// <summary>
+    /// 反过来：内层失败也带不走外层。这是「独立事务」真正的用处 ——
+    /// 同一个作用域里做不到（内层一旦回滚，外层提交必被降级）。
+    /// </summary>
+    [Fact]
+    public async Task 换作用域_内层回滚不拖垮外层提交()
+    {
+        using var provider = ScopedProvider(out var kernels);
+
+        using var outerScope = provider.CreateScope();
+        var outerUow = outerScope.ServiceProvider.GetRequiredService<IVivUnitOfWork>();
+
+        await using (var outerTx = await outerUow.BeginAsync())
+        {
+            using (var innerScope = provider.CreateScope())
+            {
+                var innerUow = innerScope.ServiceProvider.GetRequiredService<IVivUnitOfWork>();
+
+                await using var innerTx = await innerUow.BeginAsync();
+                await innerTx.RollbackAsync();     // 内层炸了
+            }
+
+            await outerTx.CommitAsync();           // 外层照样提交
+        }
+
+        Assert.Equal("begin|rollback", kernels[1].Trace());
+        Assert.Equal("begin|commit", kernels[0].Trace());
+        Assert.Equal(0, kernels[0].Count("rollback"));   // 外层没有被连累着回滚
+    }
+
+    #endregion
 }

@@ -7,30 +7,28 @@ using Viv.Log;
 namespace Viv.Engine.UnitOfWork
 {
     /// <summary>
-    /// 工作单元实现 —— 把「嵌套调用」和「只有一个事务」这两件事对上。
-    ///
-    /// 本类是 Scoped，<c>_depth</c> / <c>_rollbackOnly</c> 就是请求作用域的状态。
-    /// 被解析到根作用域的话并发请求会共用一个状态机，一个请求提交会把另一个的也提交掉。
-    ///
-    /// 嵌套：只有最外层真正开事务和提交，嵌套拿到的是子句柄。
-    /// 子句柄没提交就结束 → 整个作用域被标记 rollback-only（粘性），
-    /// 最外层再提交也会降级成回滚，并记一条 Warning。没有保存点。
-    ///
-    /// 不用锁 —— 一个作用域内的事务不该被多个线程同时驱动。全仓无 Task.WhenAll / Parallel.* /
-    /// new Thread 做数据库操作；将来若出现，并发进 BeginAsync 会让 _depth 竞争，那时再加锁或改 AsyncLocal。
-    ///
-    /// 一个作用域内可以顺序跑完多个事务：最外层结束时状态归零，_rollbackOnly 一并清掉，
-    /// 不会把上一个事务的失败带给下一个。
+    /// 工作单元实现，用于嵌套调用场景，同一作用域内全程仅持有单个数据库事务。
+    /// <list type="bullet">
+    /// <item><description>生命周期：Scoped 注册。_depth、_rollbackOnly 为请求作用域内状态；若注册为根作用域，多请求会共享状态机 —— 一个请求提交会把另一个请求的事务也提交掉。</description></item>
+    /// <item><description>嵌套规则：仅最外层句柄创建与提交真实事务；嵌套层拿到虚拟子句柄。</description></item>
+    /// <item><description>粘性回滚：任意子句柄未正常提交释放，整个作用域标记 rollback-only；即使外层执行提交，最终仍回滚并记录警告，不使用数据库保存点。</description></item>
+    /// <item><description>并发约定：无内置锁。同一作用域禁止多线程并发操作事务，不允许 Task.WhenAll / Parallel.* / 新建线程执行数据库操作；如需多线程支持，需增加锁或改用 AsyncLocal 存储状态。</description></item>
+    /// <item><description>状态重置：作用域内可顺序执行多组事务；最外层事务完成后，深度、回滚标记全部清零，上一轮失败状态不会污染后续事务。</description></item>
+    /// </list>
     /// </summary>
     internal sealed class UnitOfWorkManager : IVivUnitOfWork
     {
         private readonly ITransactionKernel _kernel;
         private readonly ILoggerContract _logger;
 
-        /// <summary>当前未结束的句柄数。0 = 没有进行中的事务</summary>
+        /// <summary>
+        /// 当前未结束的句柄数。0 = 没有进行中的事务
+        /// </summary>
         private int _depth;
 
-        /// <summary>粘性回滚标记 —— 置位后最外层也只能回滚</summary>
+        /// <summary>
+        /// 粘性回滚标记 —— 置位后最外层也只能回滚
+        /// </summary>
         private bool _rollbackOnly;
 
         public UnitOfWorkManager(ITransactionKernel kernel, ILoggerContract logger)
@@ -61,7 +59,9 @@ namespace Viv.Engine.UnitOfWork
             return new TransactionHandle(this, isRoot);
         }
 
-        /// <summary>句柄结束时回头找管理者结账。只有最外层那个句柄会碰到数据库。</summary>
+        /// <summary>
+        /// 句柄结束时回头找管理者结账。只有最外层那个句柄会碰到数据库。
+        /// </summary>
         internal async Task EndAsync(bool isRoot, bool commitRequested, CancellationToken cancellationToken)
         {
             if (_depth > 0) _depth--;
