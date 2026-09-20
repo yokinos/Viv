@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Engine.UnitOfWork;
 using Viv.Fakes;
@@ -119,20 +120,22 @@ public class UnitOfWorkTests
     }
 
     [Fact]
-    public async Task 嵌套_内层未提交_外层提交被降级为回滚()
+    public async Task 嵌套_内层未提交_外层提交被拒绝并回滚()
     {
         var (uow, kernel, logger) = New();
 
-        await using (var outer = await uow.BeginAsync())
+        var ex = await Assert.ThrowsAsync<VivUnitOfWorkException>(async () =>
         {
+            await using var outer = await uow.BeginAsync();
             await using (var inner = await uow.BeginAsync())
             {
                 // 内层没提交就结束 —— 粘性回滚标记（没有保存点，整个事务一起回滚）
             }
 
             await outer.CommitAsync();
-        }
+        });
 
+        Assert.Contains("回滚", ex.Message);
         Assert.Equal("begin|rollback", kernel.Trace());
         Assert.Equal(0, kernel.Count("commit"));
 
@@ -141,19 +144,20 @@ public class UnitOfWorkTests
     }
 
     [Fact]
-    public async Task 嵌套_内层显式回滚_外层提交被降级为回滚()
+    public async Task 嵌套_内层显式回滚_外层提交被拒绝并回滚()
     {
         var (uow, kernel, _) = New();
 
-        await using (var outer = await uow.BeginAsync())
+        await Assert.ThrowsAsync<VivUnitOfWorkException>(async () =>
         {
+            await using var outer = await uow.BeginAsync();
             await using (var inner = await uow.BeginAsync())
             {
                 await inner.RollbackAsync();
             }
 
             await outer.CommitAsync();
-        }
+        });
 
         Assert.Equal("begin|rollback", kernel.Trace());
     }
@@ -189,7 +193,7 @@ public class UnitOfWorkTests
                 // 内层不提交 → 整个作用域只能回滚
             }
 
-            await first.CommitAsync();     // 降级为回滚
+            await Assert.ThrowsAsync<VivUnitOfWorkException>(() => first.CommitAsync());
         }
 
         await using (var second = await uow.BeginAsync())
@@ -283,8 +287,8 @@ public class UnitOfWorkTests
     /// <summary>
     /// 换作用域 = 换 <c>IMomoDbContext</c> = 换连接 = 换事务状态机，内层那个是真独立事务。
     ///
-    /// 对照组在同一个作用域里：内层回滚会把外层提交一起降级掉
-    /// （见 <see cref="嵌套_内层显式回滚_外层提交被降级为回滚"/>）。差的就是一个作用域。
+    /// 对照组在同一个作用域里：内层回滚会把外层提交一起拒绝
+    /// （见 <see cref="嵌套_内层显式回滚_外层提交被拒绝并回滚"/>）。差的就是一个作用域。
     /// </summary>
     [Fact]
     public async Task 换作用域_内层提交与外层回滚互不影响()
@@ -315,7 +319,7 @@ public class UnitOfWorkTests
 
     /// <summary>
     /// 反过来：内层失败也带不走外层。这是「独立事务」真正的用处 ——
-    /// 同一个作用域里做不到（内层一旦回滚，外层提交必被降级）。
+    /// 同一个作用域里做不到（内层一旦回滚，外层提交必被拒绝）。
     /// </summary>
     [Fact]
     public async Task 换作用域_内层回滚不拖垮外层提交()

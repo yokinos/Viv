@@ -2,6 +2,7 @@ using Autofac;
 using Autofac.Extras.DynamicProxy;
 using Castle.DynamicProxy;
 using Viv.Contracts.Attributes;
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Engine.UnitOfWork;
 using Viv.Fakes;
@@ -35,12 +36,18 @@ public class UnitOfWorkInterceptorTests
         Task<VivApiResult> UntaggedAsync();
         Task<VivApiResult> DisabledAsync();
         Task VoidAsync();
+        Task<VivApiResult> StickySuccessAsync();
+        Task<VivApiResult> CreateWithTokenAsync(CancellationToken cancellationToken);
     }
 
     public class ProbeService : IProbeService
     {
         /// <summary>业务体真正跑完时置位 —— 内核在「提交那一刻」读它</summary>
         public static bool BodyFinished;
+
+        private readonly IVivUnitOfWork _unitOfWork;
+
+        public ProbeService(IVivUnitOfWork unitOfWork) => _unitOfWork = unitOfWork;
 
         [VivUnitOfWork]
         public virtual async Task<VivApiResult> CreateAsync()
@@ -83,6 +90,22 @@ public class UnitOfWorkInterceptorTests
             await Task.Delay(10);
             BodyFinished = true;
         }
+
+        /// <summary>返回成功信封，但内层事务没提交 —— 拦截器必须看见提交失败</summary>
+        [VivUnitOfWork]
+        public virtual async Task<VivApiResult> StickySuccessAsync()
+        {
+            await using (var inner = await _unitOfWork.BeginAsync())
+            {
+                // 不提交 → 粘性 rollback-only
+            }
+
+            return VivApiResult.Success("粘性成功信封");
+        }
+
+        [VivUnitOfWork]
+        public virtual Task<VivApiResult> CreateWithTokenAsync(CancellationToken cancellationToken)
+            => Task.FromResult(VivApiResult.Success("带令牌"));
     }
 
     public interface IClassLevelService
@@ -91,7 +114,7 @@ public class UnitOfWorkInterceptorTests
         Task<VivApiResult> OptOutAsync();
     }
 
-    /// <summary>类级特性 —— Worker 侧那条路（下一轮）就先按这个形状走</summary>
+    /// <summary>类级特性 —— 公开异步虚方法默认开事务</summary>
     [VivUnitOfWork]
     public class ClassLevelService : IClassLevelService
     {
@@ -289,5 +312,33 @@ public class UnitOfWorkInterceptorTests
 
         Assert.NotSame(c1.Resolve<VivUnitOfWorkInterceptor>(), c2.Resolve<VivUnitOfWorkInterceptor>());
         Assert.NotSame(c1.Resolve<IVivUnitOfWork>(), c2.Resolve<IVivUnitOfWork>());
+    }
+
+    [Fact]
+    public async Task 粘性回滚_成功信封也抛异常且回滚()
+    {
+        var (container, kernel, _) = Build();
+        using var scope = container.BeginLifetimeScope();
+
+        var ex = await Assert.ThrowsAsync<VivUnitOfWorkException>(
+            () => scope.Resolve<IProbeService>().StickySuccessAsync());
+
+        Assert.Contains("回滚", ex.Message);
+        Assert.Equal("begin|rollback", kernel.Trace());
+        Assert.Equal(0, kernel.Count("commit"));
+    }
+
+    [Fact]
+    public async Task 被拦方法带CancellationToken_开提交都传入()
+    {
+        var (container, kernel, _) = Build();
+        using var scope = container.BeginLifetimeScope();
+        using var cts = new CancellationTokenSource();
+
+        await scope.Resolve<IProbeService>().CreateWithTokenAsync(cts.Token);
+
+        Assert.Equal("begin|commit", kernel.Trace());
+        Assert.Equal(cts.Token, Assert.Single(kernel.BeginTokens));
+        Assert.Equal(cts.Token, Assert.Single(kernel.CommitTokens));
     }
 }

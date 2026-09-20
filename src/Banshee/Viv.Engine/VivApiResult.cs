@@ -57,6 +57,7 @@ namespace Viv.Engine
 
             // 设置请求Id 此Id由网关生成
             TraceId = context.HttpContext.TraceIdentifier;
+            context.HttpContext.Items[VivRunDefine.ApiResultItemKey] = this;
 
             // 业务在返回前先设置、且在 VivRunDefine 白名单内的状态码（301/302/304/404 等）原样保留；
             // 其余场景统一 200（业务信封语义）。

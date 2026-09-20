@@ -311,6 +311,7 @@ namespace Viv.Engine
         {
             var result = VivApiResult.ApiResult(code);
             result.TraceId = context.TraceIdentifier;
+            context.Items[VivRunDefine.ApiResultItemKey] = result;
             context.Response.Clear();
             httpStatusCode ??= context.Response.StatusCode;
             // 与 VivApiResult.ExecuteResultAsync 保持一致：仅 VivRunDefine 白名单内的状态码原样返回，其余强制 200

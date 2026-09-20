@@ -8,6 +8,9 @@ namespace Viv.Nana
     /// <summary>
     /// 本地事件发布器 —— 进程内异步队列，走 Wolverine 本地队列，不出网。
     /// 与 <see cref="IVivEventPublisher"/> 平行、互不继承、互不引用，泛型约束是唯一的类型防线。
+    ///
+    /// 与数据库事务无关：入队即交给 Wolverine 本地队列，不加入调用方的工作单元；
+    /// 消费端是独立 DI 作用域。需要与写库原子的跨进程消息请用发件箱（<c>IVivOutbox</c>）。
     /// </summary>
     public interface IVivLocalEventPublisher
     {

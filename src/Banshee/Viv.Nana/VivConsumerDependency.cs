@@ -1,5 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
 using Viv.Contracts.Attributes;
 using Viv.Contracts.Interface;
 using Viv.Log;
@@ -32,13 +31,20 @@ namespace Viv.Nana
         /// </summary>
         public readonly IVivLocalEventBus _localEventBus;
 
+        /// <summary>
+        /// 工作单元。未配数据库时容器可能解析不到，允许为 null；
+        /// 子类标了 <c>[VivUnitOfWork]</c> 却为 null 时，基类构造会立刻失败。
+        /// </summary>
+        public readonly IVivUnitOfWork? _unitOfWork;
+
         public VivConsumerDependency(
             ILoggerContract logger,
             IVivContext context,
             IVivEventPublisher publisher,
             IOptions<NanaOptions> options,
             IVivLocalEventBus localEventBus,
-            IDistributedLock? distributedLock = null)
+            IDistributedLock? distributedLock = null,
+            IVivUnitOfWork? unitOfWork = null)
         {
             _logger = logger;
             _context = context;
@@ -46,6 +52,7 @@ namespace Viv.Nana
             _nanaOptions = options.Value;
             _localEventBus = localEventBus;
             _distributedLock = distributedLock;
+            _unitOfWork = unitOfWork;
         }
     }
 }

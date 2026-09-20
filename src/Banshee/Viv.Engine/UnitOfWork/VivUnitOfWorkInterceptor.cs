@@ -53,18 +53,19 @@ namespace Viv.Engine.UnitOfWork
                 return;
             }
 
-            await using var transaction = await _unitOfWork.BeginAsync().ConfigureAwait(false);
+            var cancellationToken = ResolveCancellationToken(invocation);
+            await using var transaction = await _unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 await proceed(invocation, proceedInfo).ConfigureAwait(false);
             }
             catch
             {
-                await transaction.RollbackAsync().ConfigureAwait(false);
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
                 throw;                                          // 原样上抛，绝不吞
             }
 
-            await transaction.CommitAsync().ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -77,7 +78,8 @@ namespace Viv.Engine.UnitOfWork
                 return await proceed(invocation, proceedInfo).ConfigureAwait(false);
             }
 
-            await using var transaction = await _unitOfWork.BeginAsync().ConfigureAwait(false);
+            var cancellationToken = ResolveCancellationToken(invocation);
+            await using var transaction = await _unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
 
             TResult result;
             try
@@ -86,7 +88,7 @@ namespace Viv.Engine.UnitOfWork
             }
             catch
             {
-                await transaction.RollbackAsync().ConfigureAwait(false);
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
                 throw;
             }
 
@@ -94,12 +96,12 @@ namespace Viv.Engine.UnitOfWork
             // 与本地事件分发的成败判定同源，见 FailDetector。
             if (FailDetector.IsFailed(result))
             {
-                await transaction.RollbackAsync().ConfigureAwait(false);
+                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
                 _logger.Warning("方法返回失败信封，事务已回滚：{0}", Describe(invocation));
                 return result;
             }
 
-            await transaction.CommitAsync().ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return result;
         }
 
@@ -119,6 +121,22 @@ namespace Viv.Engine.UnitOfWork
 
                 return attribute is { Enabled: true };
             });
+        }
+
+        /// <summary>
+        /// 从被拦方法的实参里取出 <see cref="CancellationToken"/>（通常是最后一个参数）。
+        /// 没有则 <see cref="CancellationToken.None"/>，与窄事务入口的默认值一致。
+        /// </summary>
+        private static CancellationToken ResolveCancellationToken(IInvocation invocation)
+        {
+            var arguments = invocation.Arguments;
+            for (var i = arguments.Length - 1; i >= 0; i--)
+            {
+                if (arguments[i] is CancellationToken token)
+                    return token;
+            }
+
+            return CancellationToken.None;
         }
 
         private static string Describe(IInvocation invocation) => $"{invocation.TargetType?.Name}.{invocation.Method.Name}";

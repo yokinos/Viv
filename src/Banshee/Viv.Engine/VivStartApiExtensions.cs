@@ -196,6 +196,7 @@ namespace Viv.Engine
             // 位置有两个讲究：① 必须在 VivContextMiddleware 之内 —— 分发要跑在它 finally Clear()
             // 租户上下文之前，否则处理器拿不到 IVivContext（租户过滤会失效）；
             // ② 必须在 MVC 之外包住它 —— Flush/Discard 幂等，MVC 已处理过的请求到这里是 no-op。
+            // TickerQ / 手写 BackgroundService 不走这条管道，请用 IVivLocalEventScope.RunAsync。
             app.UseMiddleware<LocalEventFlushMiddleware>();
 
             app.UseHttpsRedirection();

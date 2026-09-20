@@ -9,7 +9,7 @@ namespace Viv.Contracts.Interface
     /// <list type="bullet">
     /// <item><description>接口与基类：基类 <see cref="LocalEventHandler{TEvent}"/> 提供与 VivConsumer&lt;T&gt; 一致的编码手感；C#单继承限制，基于基类的处理器仅能订阅单个事件，如需订阅多个事件，直接实现本接口。基类已实现本接口，两种写法均可被扫描识别，注册逻辑统一。</description></item>
     /// <item><description>自动注册：实现类无需添加任何特性，也不用实现 IDependency；LocalEventRegistration 启动时扫描该开放泛型接口，自动以 Scoped 完成注册。</description></item>
-    /// <item><description>执行语义：与发布方共用同一个DI作用域；同一事件多个处理器按解析顺序依次执行；处理器抛出异常会中断后续处理器并向上冒泡，本地事件属于主业务流程，不会静默吞异常；处理器内部可再次 PublishAsync，新事件进下一轮分发（单次 Flush 最多 5 轮，超限记错误日志并丢弃）。</description></item>
+    /// <item><description>执行语义：与发布方共用同一个DI作用域；同一事件多个处理器按解析顺序依次执行；处理器抛出异常会中断后续处理器并向上冒泡，不会静默吞异常。处理器在主业务成功提交之后才运行，失败不能回滚已经落库的写；需要与写库原子的跨进程消息请用发件箱。处理器内部可再次 PublishAsync，新事件进下一轮分发（单次 Flush 最多 5 轮，超限记错误日志并丢弃）。</description></item>
     /// </list>
     /// </summary>
     /// <typeparam name="TEvent">事件类型，须继承 <see cref="LocalEvent"/></typeparam>

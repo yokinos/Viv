@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Threading;
 using Viv.Log;
 
@@ -12,20 +11,19 @@ namespace Viv.Engine.UnitOfWork
     /// 与 NanaRegister.RecordLocalQueueScan 同一套做法。
     ///
     /// 这条日志必须打：拦截失效是完全静默的，启动时至少留下一句「拦截了几处」。
+    /// 类级特性拦不到的方法现在是启动期硬失败，不再用 Warning 放行。
     /// </summary>
     internal static class UnitOfWorkDiagnostics
     {
         private static int _typeCount;
         private static int _methodCount;
-        private static List<string> _notCovered = [];
         private static int _logged;
 
         /// <summary>注册期记下扫描结论（本方法在 Autofac 配置阶段调用）</summary>
-        public static void RecordScan(int typeCount, int methodCount, List<string> notCovered)
+        public static void RecordScan(int typeCount, int methodCount)
         {
             _typeCount = typeCount;
             _methodCount = methodCount;
-            _notCovered = notCovered;
         }
 
         /// <summary>首次构造工作单元时打一次。</summary>
@@ -44,13 +42,6 @@ namespace Viv.Engine.UnitOfWork
             {
                 logger.Info("工作单元已就绪：{0} 个类型、{1} 个方法开启方法级事务", types, methods);
             }
-
-            // 类级特性承诺「整个类都是事务的」，但接口代理只拦得住可重写的异步方法。
-            // 剩下的逐个列出来（含原因）—— 静默漏掉就是业务以为在事务里、实际裸奔。
-            foreach (var item in _notCovered)
-            {
-                logger.Warning("类级 [VivUnitOfWork] 未覆盖该公开方法，它不会开启事务：{0}", item);
-            }
         }
 
         /// <summary>仅测试用：重置一次性的静态状态</summary>
@@ -58,7 +49,6 @@ namespace Viv.Engine.UnitOfWork
         {
             _typeCount = 0;
             _methodCount = 0;
-            _notCovered = [];
             _logged = 0;
         }
     }

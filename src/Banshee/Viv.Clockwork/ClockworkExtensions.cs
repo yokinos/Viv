@@ -13,6 +13,11 @@ using Viv.Momo.Enums;
 
 namespace Viv.Clockwork
 {
+    /// <summary>
+    /// TickerQ 接入。定时任务没有 MVC 过滤器 / 消费者 HandleAsync 那样的本地事件触发点，
+    /// 若任务里会 <c>IVivLocalEventBus.PublishAsync</c>，请用 <c>IVivLocalEventScope.RunAsync</c>
+    /// 包住业务（成功 Flush，失败 Discard），并在清理 <c>IVivContext</c> 之前完成分发。
+    /// </summary>
     public static class ClockworkExtensions
     {
         public static IServiceCollection AddVivTickerQ(this IServiceCollection services, TickOptions options)

@@ -1,3 +1,4 @@
+using Viv.Contracts.Interface;
 using Viv.Engine.UnitOfWork;
 
 namespace Viv.Fakes;
@@ -27,6 +28,12 @@ internal class KernelStub : ITransactionKernel
     /// <summary>提交那一刻的回调 —— 用于验证「提交发生在业务方法真正结束之后」</summary>
     public Func<Task>? OnCommit { get; set; }
 
+    public List<CancellationToken> BeginTokens { get; } = [];
+
+    public List<CancellationToken> CommitTokens { get; } = [];
+
+    public List<CancellationToken> RollbackTokens { get; } = [];
+
     /// <summary>用 "|" 拼出来的调用序列，便于整串断言</summary>
     public string Trace() => string.Join("|", Calls);
 
@@ -35,12 +42,14 @@ internal class KernelStub : ITransactionKernel
     public Task<bool> BeginAsync(CancellationToken cancellationToken = default)
     {
         Calls.Add("begin");
+        BeginTokens.Add(cancellationToken);
         return Task.FromResult(BeginResult);
     }
 
     public async Task CommitAsync(CancellationToken cancellationToken = default)
     {
         Calls.Add("commit");
+        CommitTokens.Add(cancellationToken);
         if (OnCommit != null) await OnCommit().ConfigureAwait(false);
         if (CommitException != null) throw CommitException;
     }
@@ -48,6 +57,61 @@ internal class KernelStub : ITransactionKernel
     public Task RollbackAsync(CancellationToken cancellationToken = default)
     {
         Calls.Add("rollback");
+        RollbackTokens.Add(cancellationToken);
         return RollbackException is null ? Task.CompletedTask : Task.FromException(RollbackException);
+    }
+}
+
+/// <summary>
+/// 公开的工作单元记录替身 —— 给跨程序集测试（如 Nana 消费者）用，不必碰 internal 的内核桩。
+/// </summary>
+public sealed class RecordingUnitOfWork : IVivUnitOfWork
+{
+    public List<string> Calls { get; } = [];
+
+    public List<CancellationToken> BeginTokens { get; } = [];
+
+    public List<CancellationToken> CommitTokens { get; } = [];
+
+    public List<CancellationToken> RollbackTokens { get; } = [];
+
+    public string Trace() => string.Join("|", Calls);
+
+    public Task<IVivTransaction> BeginAsync(CancellationToken cancellationToken = default)
+    {
+        Calls.Add("begin");
+        BeginTokens.Add(cancellationToken);
+        return Task.FromResult<IVivTransaction>(new Handle(this));
+    }
+
+    private sealed class Handle : IVivTransaction
+    {
+        private readonly RecordingUnitOfWork _owner;
+        private bool _completed;
+
+        public Handle(RecordingUnitOfWork owner) => _owner = owner;
+
+        public Task CommitAsync(CancellationToken cancellationToken = default)
+        {
+            if (_completed) return Task.CompletedTask;
+            _completed = true;
+            _owner.Calls.Add("commit");
+            _owner.CommitTokens.Add(cancellationToken);
+            return Task.CompletedTask;
+        }
+
+        public Task RollbackAsync(CancellationToken cancellationToken = default)
+        {
+            if (_completed) return Task.CompletedTask;
+            _completed = true;
+            _owner.Calls.Add("rollback");
+            _owner.RollbackTokens.Add(cancellationToken);
+            return Task.CompletedTask;
+        }
+
+        public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+        public ValueTask DisposeAsync()
+            => new(RollbackAsync(CancellationToken.None));
     }
 }

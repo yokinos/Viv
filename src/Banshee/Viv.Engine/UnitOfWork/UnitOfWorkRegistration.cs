@@ -42,6 +42,20 @@ namespace Viv.Engine.UnitOfWork
 
             var registeredSet = new HashSet<Type>(registered);
 
+            // 开放泛型注册走 RegisterGeneric，当前不会挂接口代理。标了特性就是静默无事务。
+            var attributedOpenGenerics = interfaceRegisteredTypes
+                .Concat(dependencyTypes)
+                .Where(t => t.IsGenericTypeDefinition && HasAttribute(t) && !IsConsumer(t))
+                .Distinct()
+                .ToArray();
+            if (attributedOpenGenerics.Length > 0)
+            {
+                throw new InvalidOperationException(
+                    "[VivUnitOfWork] 标在开放泛型类型上，扫描注册不会为开放泛型挂接口代理，事务不会生效：" +
+                    string.Join(", ", attributedOpenGenerics.Select(t => t.FullName)) +
+                    "。请把特性标在闭合实现上，或改用窄事务 IVivUnitOfWork。");
+            }
+
             // ① 数据库没开却标了特性 —— 拦截器解析不到 IVivUnitOfWork，运行期必炸，提前说清楚
             var anyoneAttributed = registered.Concat(dependencyTypes).Any(HasAttribute);
             if (anyoneAttributed && !databaseEnabled)
@@ -53,7 +67,6 @@ namespace Viv.Engine.UnitOfWork
 
             var intercepted = new List<Type>();
             var methodCount = 0;
-            var notCovered = new List<string>();
 
             foreach (var type in registered)
             {
@@ -77,16 +90,17 @@ namespace Viv.Engine.UnitOfWork
                 {
                     var methodAttribute = method.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: false);
                     if (methodAttribute == null) continue;
+                    if (!methodAttribute.Enabled) continue;
 
                     ValidateMethod(type, method);
-
-                    if (methodAttribute.Enabled) methodCount++;
+                    methodCount++;
                 }
 
-                // ③ 类级特性：只对可重写的异步方法生效，其余的收集起来启动时告警
+                // ③ 类级特性：与方法级同一把尺子。标了就必须能拦到，否则启动失败。
+                //    [VivUnitOfWork(Enabled = false)] 是明确豁免，跳过。
                 if (classLevel != null)
                 {
-                    methodCount += CollectClassLevelAsyncMethods(type, notCovered);
+                    methodCount += CollectClassLevelAsyncMethods(type);
                 }
 
                 intercepted.Add(type);
@@ -105,7 +119,7 @@ namespace Viv.Engine.UnitOfWork
                     "没有接口就生成不出代理，事务不会生效。请改为按接口注册。");
             }
 
-            UnitOfWorkDiagnostics.RecordScan(intercepted.Count, methodCount, notCovered);
+            UnitOfWorkDiagnostics.RecordScan(intercepted.Count, methodCount);
             return intercepted.ToArray();
         }
 
@@ -153,10 +167,10 @@ namespace Viv.Engine.UnitOfWork
         }
 
         /// <summary>
-        /// 类级特性下，数一遍会被覆盖的异步方法，同时把没覆盖到的公开方法逐个收集起来告警。
-        /// 类级特性承诺「整个类都是事务的」，但接口代理只拦得住可重写的异步方法，剩下的一律要报出来。
+        /// 类级特性下，每个公开实例方法都必须能被拦截（与方法级同一套 ValidateMethod），
+        /// 否则「标了特性 = 有事务」不成立。方法上显式 <c>Enabled = false</c> 的跳过。
         /// </summary>
-        private static int CollectClassLevelAsyncMethods(Type type, List<string> notCovered)
+        private static int CollectClassLevelAsyncMethods(Type type)
         {
             var count = 0;
 
@@ -164,22 +178,11 @@ namespace Viv.Engine.UnitOfWork
             {
                 if (method.IsSpecialName) continue;              // 属性存取器不单独计数
 
-                // 隐式实现接口的 public 方法在元数据里是 virtual + final（见 ValidateMethod 里的实测说明），
-                // 光看 IsVirtual 会把它当成「已覆盖」
-                if (!method.IsVirtual || method.IsFinal)
-                {
-                    notCovered.Add($"{type.FullName}.{method.Name}（不可重写：非 virtual 或已 sealed）");
-                    continue;
-                }
+                var methodAttribute = method.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: false);
+                if (methodAttribute is { Enabled: false }) continue;
 
-                if (IsAsyncReturn(method.ReturnType))
-                {
-                    count++;
-                }
-                else
-                {
-                    notCovered.Add($"{type.FullName}.{method.Name}（返回 {method.ReturnType.Name}，同步方法不开事务）");
-                }
+                ValidateMethod(type, method);
+                count++;
             }
 
             return count;
@@ -195,8 +198,9 @@ namespace Viv.Engine.UnitOfWork
         }
 
         /// <summary>
-        /// 消费者（<c>VivConsumer&lt;T&gt;</c> / <c>VivLocalConsumer&lt;T&gt;</c>）豁免 ——
-        /// Worker 侧事务由消费者基类的 HandleAsync 显式读类级特性来开，不走接口代理。
+        /// 消费者（<c>VivConsumer&lt;T&gt;</c> / <c>VivLocalConsumer&lt;T&gt;</c>）豁免接口代理校验 ——
+        /// Worker 侧事务由消费者基类的 HandleAsync 按类级 / ReceiveMessageAsync 上的特性显式开启。
+        /// 没配 DatabaseOption 却标了特性，仍走上面「anyoneAttributed」那条硬失败。
         /// </summary>
         private static bool IsConsumer(Type type)
         {

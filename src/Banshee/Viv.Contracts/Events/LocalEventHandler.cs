@@ -15,7 +15,8 @@ namespace Viv.Contracts.Events
     ///
     ///     public override async Task HandleAsync(OrderCreatedEvent e, CancellationToken ct)
     ///     {
-    ///         // 这里的 _db 与发布方是同一个实例、同一个作用域
+    ///         // 这里的 _db 与发布方是同一个实例、同一个作用域，
+    ///         // 但本方法跑在主业务提交之后，失败不能回滚已经落库的写。
     ///     }
     /// }
     /// </code>

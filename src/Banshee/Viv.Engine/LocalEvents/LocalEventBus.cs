@@ -155,7 +155,8 @@ namespace Viv.Engine.LocalEvents
         }
 
         /// <summary>
-        /// 作用域结束时兜底：说明调用方忘了走 Flush/Discard（或该宿主没有触发点，如 Worker / TickerQ）。
+        /// 作用域结束时兜底：说明调用方忘了走 Flush/Discard（或该宿主没有触发点）。
+        /// TickerQ / 手写 BackgroundService 请用 <see cref="IVivLocalEventScope"/> 包一层。
         /// 只记 Warning，绝不静默吞。
         /// </summary>
         public void Dispose()

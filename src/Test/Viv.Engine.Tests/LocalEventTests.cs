@@ -318,6 +318,20 @@ public class LocalEventTests
     }
 
     [Fact]
+    public async Task 作用域已注册_成功则Flush()
+    {
+        using var provider = BuildProvider();
+        using var scope = provider.CreateScope();
+
+        var localScope = scope.ServiceProvider.GetRequiredService<IVivLocalEventScope>();
+        var bus = scope.ServiceProvider.GetRequiredService<IVivLocalEventBus>();
+        await localScope.RunAsync(async () => await bus.PublishAsync(new ScannedEvent()));
+
+        Assert.Contains("scan-base", Hits);
+        Assert.Contains("scan-interface", Hits);
+    }
+
+    [Fact]
     public void LocalEvent是空标记基类_且与NanaEvent互不继承()
     {
         const System.Reflection.BindingFlags declared =

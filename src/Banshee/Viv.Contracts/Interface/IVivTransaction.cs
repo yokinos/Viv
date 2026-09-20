@@ -15,11 +15,17 @@ namespace Viv.Contracts.Interface
     ///
     /// 嵌套：只有最外层真正开事务，嵌套拿到的是子句柄。子句柄提交是空操作（等最外层）；
     /// 未提交就释放、显式回滚、或抛异常，都会把整个作用域标记为 rollback-only（粘性），
-    /// 此后最外层提交也只回滚。没有保存点，内层回滚会拖垮整个事务。
+    /// 此后最外层 <see cref="CommitAsync"/> 会先回滚再抛
+    /// <see cref="Viv.Contracts.Exceptions.VivUnitOfWorkException"/>，让拦截器 / 调用方看见失败。
+    /// 没有保存点，内层回滚会拖垮整个事务。
     /// </summary>
     public interface IVivTransaction : IAsyncDisposable, IDisposable
     {
-        /// <summary>提交。嵌套子句柄上调用是空操作（等最外层）。幂等。</summary>
+        /// <summary>
+        /// 提交。嵌套子句柄上调用是空操作（等最外层）。幂等。
+        /// 最外层若已被标记 rollback-only，会回滚并抛
+        /// <see cref="Viv.Contracts.Exceptions.VivUnitOfWorkException"/>，不会假装提交成功。
+        /// </summary>
         Task CommitAsync(CancellationToken cancellationToken = default);
 
         /// <summary>回滚。会把整个作用域标记为 rollback-only。幂等。</summary>

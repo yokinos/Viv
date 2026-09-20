@@ -15,6 +15,7 @@ public class VivRunDefineTests
         Assert.Equal("x-viv-serviceName", VivRunDefine.ServiceNameHeader);
         Assert.Equal("x-viv-holder-id", VivRunDefine.HolderIdHeader);
         Assert.Equal("x-request-token", VivRunDefine.InnerRequestTokenHeader);
+        Assert.Equal("Viv.Engine.ApiResult", VivRunDefine.ApiResultItemKey);
     }
 
     [Fact]

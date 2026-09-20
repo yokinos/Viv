@@ -4,6 +4,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Viv.Contracts.Interface;
+using Viv.Log;
 
 namespace Viv.Engine.LocalEvents
 {
@@ -11,29 +12,44 @@ namespace Viv.Engine.LocalEvents
     /// 本地事件分发触发点 —— HTTP 主路径，挂在 MVC 全局过滤链上，业务控制器无需标注。
     ///
     /// 这里用 action filter 而不是中间件，是因为两件事：
-    /// 位置对 —— next() 返回时结果尚未执行、响应尚未写出，分发失败还能把响应改成错误信封；
+    /// 位置对 —— next() 返回时结果尚未执行、响应尚未写出，分发失败会把 <c>context.Result</c>
+    /// 改成错误信封（主写入若已提交，文案会写明这一点）；
     /// 看得见业务成败 —— VivExceptionFilterAttribute 在 next() 内部处理异常并置 ExceptionHandled，
     /// MVC 随之把已处理的异常从 ActionExecutedContext.Exception 上剥离，此时唯一的失败信号只剩
     /// context.Result 里那个错误 VivApiResult。中间件看不到信封码，只能看 HTTP 状态码，
-    /// 而业务失败恰恰是「HTTP 200 + 信封非 2xx」，会被误判成成功。
+    /// 而业务失败恰恰是「HTTP 200 + 信封非 2xx」，会被误判成成功
+    /// （兜底中间件会再读一次写出的信封作为补偿）。
     ///
-    /// 分发不了的请求一律 Discard，不出现「库已经写坏了但事件照发」的幽灵事件。
+    /// next() 抛异常时本过滤器后半段原本不会执行，这里显式 catch 后 Discard 再上抛，
+    /// 避免「异常过滤器把 HTTP 写成 200、中间件按状态码 Flush」。
+    ///
+    /// 分发不了的请求一律 Discard，不出现「库已经回滚但事件照发」的幽灵事件。
+    /// Flush 失败时剩余事件丢弃，并改写信封；已经提交的主写入无法回滚。
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
     public class LocalEventFlushFilterAttribute : Attribute, IAsyncActionFilter
     {
         private readonly IVivLocalEventBus _localEventBus;
+        private readonly ILoggerContract _logger;
 
-        public LocalEventFlushFilterAttribute(IVivLocalEventBus localEventBus)
+        public LocalEventFlushFilterAttribute(IVivLocalEventBus localEventBus, ILoggerContract logger)
         {
             _localEventBus = localEventBus;
+            _logger = logger;
         }
 
         public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
-            // 异常未被处理时 next() 直接抛出，本过滤器后半段不会执行 —— 下面只处理
-            // 「正常返回」与「异常已被 VivExceptionFilterAttribute 接住」两种情况
-            var executed = await next();
+            ActionExecutedContext executed;
+            try
+            {
+                executed = await next();
+            }
+            catch
+            {
+                _localEventBus.Discard();
+                throw;
+            }
 
             if (IsFailed(executed))
             {
@@ -41,10 +57,21 @@ namespace Viv.Engine.LocalEvents
                 return;
             }
 
-            // 刻意传 None、不用 HttpContext.RequestAborted：本地事件的 handler 就是业务的一部分，
-            // 写下来就必须跑完。客户端中途断开不该造成「主业务已提交、通知没发出去」的脱节。
-            // 真能容忍不执行的逻辑，一开始就不该用本地事件，该走 MQ。
-            await _localEventBus.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+            // 刻意传 None、不用 HttpContext.RequestAborted：本地事件的 handler 必须跑完。
+            // 客户端中途断开不该造成「主业务已提交、通知没发出去」的脱节。
+            try
+            {
+                await _localEventBus.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _localEventBus.Discard();
+                _logger.Error("主业务已提交，本地事件分发失败。已丢弃剩余事件。", ex);
+                // 结果尚未执行，这里改信封才能兑现「分发失败把响应改成错误」的承诺。
+                executed.Result = VivApiResult.ApiResult(
+                    ApiResultCode.ServerError,
+                    "主业务已提交，但本地事件分发失败");
+            }
         }
 
         /// <summary>

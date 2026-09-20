@@ -29,16 +29,24 @@ namespace Viv.Nana
         /// </summary>
         public readonly IVivLocalEventBus _localEventBus;
 
+        /// <summary>
+        /// 工作单元。未配数据库时容器可能解析不到，允许为 null；
+        /// 子类标了 <c>[VivUnitOfWork]</c> 却为 null 时，基类构造会立刻失败。
+        /// </summary>
+        public readonly IVivUnitOfWork? _unitOfWork;
+
         public VivLocalConsumerDependency(
             ILoggerContract logger,
             IVivContext context,
             IVivLocalEventPublisher publisher,
-            IVivLocalEventBus localEventBus)
+            IVivLocalEventBus localEventBus,
+            IVivUnitOfWork? unitOfWork = null)
         {
             _logger = logger;
             _context = context;
             _publisher = publisher;
             _localEventBus = localEventBus;
+            _unitOfWork = unitOfWork;
         }
     }
 }

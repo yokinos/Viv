@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Log;
 
@@ -14,7 +15,9 @@ namespace Viv.Engine.UnitOfWork
     ///
     /// 嵌套：只有最外层真正开事务和提交，嵌套拿到的是子句柄。
     /// 子句柄没提交就结束 → 整个作用域被标记 rollback-only（粘性），
-    /// 最外层再提交也会降级成回滚，并记一条 Warning。没有保存点。
+    /// 最外层再提交会先回滚再抛 <see cref="VivUnitOfWorkException"/> ——
+    /// 不能返回成功，否则拦截器会把 2xx 交给本地事件 Flush，出现「库回滚了、handler 仍在跑」。
+    /// 没有保存点。
     ///
     /// 不用锁 —— 一个作用域内的事务不该被多个线程同时驱动。全仓无 Task.WhenAll / Parallel.* /
     /// new Thread 做数据库操作；将来若出现，并发进 BeginAsync 会让 _depth 竞争，那时再加锁或改 AsyncLocal。
@@ -79,9 +82,10 @@ namespace Viv.Engine.UnitOfWork
                 return;
             }
 
-            var effectiveCommit = commitRequested && !_rollbackOnly;
+            var wasRollbackOnly = _rollbackOnly;
+            var effectiveCommit = commitRequested && !wasRollbackOnly;
 
-            if (commitRequested && _rollbackOnly)
+            if (commitRequested && wasRollbackOnly)
             {
                 // 不静默 —— 业务以为提交了、实际回滚了，是排查成本最高的一类问题
                 _logger.Warning("嵌套事务已标记回滚，最外层的提交被降级为回滚");
@@ -100,6 +104,14 @@ namespace Viv.Engine.UnitOfWork
             }
 
             await SafeRollbackAsync(cancellationToken).ConfigureAwait(false);
+
+            // 粘性提交必须让调用方（含 [VivUnitOfWork] 拦截器）看见失败，
+            // 否则成功信封会把本地事件带进 Flush。
+            if (commitRequested && wasRollbackOnly)
+            {
+                throw new VivUnitOfWorkException(
+                    "嵌套事务已标记回滚，最外层提交被拒绝。数据库已回滚。");
+            }
         }
 
         /// <summary>

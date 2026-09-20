@@ -30,7 +30,9 @@ namespace Viv.Nana
     ///
     /// 本地事件分发：子类里经 IVivLocalEventBus 入队的本地事件由基类 finally 统一分发，
     /// 消费成功才 Flush，其余路径（Requeue / 丢弃 / 抛异常）整队 Discard。
-    /// 顺序天然正确 —— 消费者每次写当场提交，分发排在 ReceiveMessageAsync 返回之后，即「提交 → 分发」。
+    /// 顺序：若标了 <c>[VivUnitOfWork]</c>，事务在 ReceiveMessageAsync 成功后提交、失败回滚，
+    /// 然后才 Flush / Discard（提交先于分发；失败不发事件）。
+    /// 未标特性则不碰事务。标了却拿不到 IVivUnitOfWork 时构造即失败。
     ///
     /// 本版没有 RedeliverAsync，需要延迟再试请先 Failed(true, ...) 交给退避重试。
     /// </summary>
@@ -45,12 +47,16 @@ namespace Viv.Nana
 
         protected readonly IVivLocalEventBus _localEventBus;
 
+        private readonly IVivUnitOfWork? _unitOfWork;
+
         protected VivLocalConsumer(VivLocalConsumerDependency dependency)
         {
             _logger = dependency._logger;
             _context = dependency._context;
             _publisher = dependency._publisher;
             _localEventBus = dependency._localEventBus;
+            _unitOfWork = dependency._unitOfWork;
+            ConsumerUnitOfWork.EnsureAvailable(GetType(), _unitOfWork);
         }
 
         /// <summary>
@@ -87,7 +93,11 @@ namespace Viv.Nana
 
                 LockHolderContext.SetHolderId(holderId);
 
-                var result = await ReceiveMessageAsync(envelope, cancellationToken).ConfigureAwait(false);
+                var result = await ConsumerUnitOfWork.ExecuteAsync(
+                    _unitOfWork,
+                    GetType(),
+                    ct => ReceiveMessageAsync(envelope, ct),
+                    cancellationToken).ConfigureAwait(false);
 
                 if (result.IsSuccess)
                 {

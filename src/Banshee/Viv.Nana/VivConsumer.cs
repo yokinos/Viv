@@ -42,6 +42,11 @@ namespace Viv.Nana
     /// 消费成功才 Flush，其余路径（抢锁失败 / Requeue / 丢弃 / 抛异常）整队 Discard。放在 finally 是因为
     /// HandleAsync 有四个出口，单点插入会漏；用 else 分支而不是一并 Flush，是为了不顶掉在途的重投异常。
     /// 分发排在 _context?.Clear() 之前，handler 才拿得到租户上下文做过滤。
+    ///
+    /// 工作单元：子类（或 <see cref="ReceiveMessageAsync"/>）标了 <c>[VivUnitOfWork]</c> 时，
+    /// HandleAsync 在取锁成功后显式开事务，业务成功才提交、失败/重投/抛异常回滚。
+    /// 提交发生在 Flush 之前；失败路径 Discard。未标特性则不碰事务。
+    /// 标了却拿不到 <see cref="IVivUnitOfWork"/>（没配数据库）时构造即失败，不会静默裸奔。
     /// </summary>
     public abstract class VivConsumer<T> where T : NanaEvent
     {
@@ -57,6 +62,8 @@ namespace Viv.Nana
 
         protected readonly IVivLocalEventBus _localEventBus;
 
+        private readonly IVivUnitOfWork? _unitOfWork;
+
         protected VivConsumer(VivConsumerDependency dependency)
         {
             _logger = dependency._logger;
@@ -65,6 +72,8 @@ namespace Viv.Nana
             _distributedLock = dependency._distributedLock;
             _nanaOptions = dependency._nanaOptions;
             _localEventBus = dependency._localEventBus;
+            _unitOfWork = dependency._unitOfWork;
+            ConsumerUnitOfWork.EnsureAvailable(GetType(), _unitOfWork);
         }
 
         /// <summary>
@@ -114,7 +123,11 @@ namespace Viv.Nana
                     }
                 }
 
-                var result = await ReceiveMessageAsync(envelope, cancellationToken).ConfigureAwait(false);
+                var result = await ConsumerUnitOfWork.ExecuteAsync(
+                    _unitOfWork,
+                    GetType(),
+                    ct => ReceiveMessageAsync(envelope, ct),
+                    cancellationToken).ConfigureAwait(false);
 
                 if (result.IsSuccess)
                 {

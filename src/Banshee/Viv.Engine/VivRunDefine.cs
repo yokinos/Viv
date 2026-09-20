@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+using Microsoft.AspNetCore.Http;
 using System.Collections.Generic;
 using Viv.Contracts.Interface;
 
@@ -19,6 +19,12 @@ namespace Viv.Engine
         public const string ServiceNameHeader = VivHeaderContract.ServiceName; // 服务名，如 viv.apex.api
         public const string HolderIdHeader = VivHeaderContract.HolderId; // 锁持有者 Id，验签通过才信任
         public const string InnerRequestTokenHeader = VivHeaderContract.InnerRequestToken; // 内部请求签名 Token（HMAC）
+
+        /// <summary>
+        /// <see cref="HttpContext.Items"/> 键：最近一次写出的 <see cref="VivApiResult"/>。
+        /// 本地事件兜底中间件靠它在「HTTP 200 + 信封非 2xx」时 Discard，而不是只看状态码。
+        /// </summary>
+        public const string ApiResultItemKey = "Viv.Engine.ApiResult";
 
         public const string VivTraceIdHeader = "X-Trace-Id";
         public const string ContextTraceId = "TraceId";

@@ -92,19 +92,53 @@ public class UnitOfWorkRegistrationTests
         public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
     }
 
-    /// <summary>类级特性：方法级不用逐个标，同步方法只告警</summary>
+    /// <summary>类级特性：方法级不用逐个标；不可拦截的公开方法启动失败</summary>
     [VivUnitOfWork]
     public class ClassLevelService : IGoodService
+    {
+        public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>类级 + 隐式接口实现（virtual+final）—— 必须启动失败</summary>
+    [VivUnitOfWork]
+    public class ClassLevelImplicitService : IGoodService
+    {
+        public Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>类级 + 同步虚方法 —— 必须启动失败</summary>
+    [VivUnitOfWork]
+    public class ClassLevelSyncService : IGoodService
     {
         public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
 
         public virtual VivApiResult SyncVirtual() => VivApiResult.Success();
     }
 
+    public interface IOpenGenericService<T>
+    {
+        Task<VivApiResult> RunAsync();
+    }
+
+    [VivUnitOfWork]
+    public class ClassLevelOptOutSyncService : IGoodService
+    {
+        public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+
+        [VivUnitOfWork(Enabled = false)]
+        public virtual VivApiResult SyncVirtual() => VivApiResult.Success();
+    }
+
+    [VivUnitOfWork]
+    public class OpenGenericAttributedService<T> : IOpenGenericService<T>
+    {
+        public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
     public sealed class ConsumerStubEvent : NanaEvent;
 
     /// <summary>
-    /// 消费者子类：Worker 侧的事务由基类 HandleAsync 显式读取类级特性来开，不走接口代理 ——
+    /// 消费者子类：HandleAsync 按特性显式开事务，不走接口代理 ——
     /// 所以「没按接口注册」这条校验必须放它过去，否则消费者一标特性应用就起不来。
     /// </summary>
     [VivUnitOfWork]
@@ -242,19 +276,43 @@ public class UnitOfWorkRegistrationTests
     }
 
     [Fact]
-    public void 类级特性_同步虚方法不报错_只在启动期告警()
+    public void 类级特性_可重写异步方法_进拦截清单()
     {
-        UnitOfWorkDiagnostics.ResetForTest();
-
-        // 不抛 —— 类级特性覆盖的是接口暴露出去的异步方法，同步方法只是拿不到事务，
-        // 拦也拦不住（异步拦截链不处理它），所以降级为启动期告警
         Assert.Single(Resolve([typeof(ClassLevelService)]));
+    }
 
-        var logger = new RecordingLogger();
-        UnitOfWorkDiagnostics.LogOnce(logger);
+    [Fact]
+    public void 类级特性_隐式接口实现virtual加final_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(ClassLevelImplicitService)]));
 
-        Assert.Contains(logger.Warnings,
-            w => w.Contains(nameof(ClassLevelService.SyncVirtual)));
+        Assert.Contains("RunAsync", ex.Message);
+        Assert.Contains("virtual", ex.Message);
+    }
+
+    [Fact]
+    public void 类级特性_同步虚方法_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(ClassLevelSyncService)]));
+
+        Assert.Contains(nameof(ClassLevelSyncService.SyncVirtual), ex.Message);
+        Assert.Contains("同步方法", ex.Message);
+    }
+
+    [Fact]
+    public void 类级特性_方法级Enabled为false的同步方法_跳过校验()
+    {
+        Assert.Single(Resolve([typeof(ClassLevelOptOutSyncService)]));
+    }
+
+    [Fact]
+    public void 开放泛型类型带特性_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => Resolve([typeof(OpenGenericAttributedService<>)]));
+
+        Assert.Contains("开放泛型", ex.Message);
+        Assert.Contains("OpenGenericAttributedService", ex.Message);
     }
 
     [Fact]

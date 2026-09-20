@@ -62,5 +62,7 @@ public class VivApiResultTests
         Assert.Contains("\"message\"", json);
         Assert.Contains("出错了", json);
         Assert.Contains("application/json", httpContext.Response.ContentType);
+        var stashed = Assert.IsType<VivApiResult>(httpContext.Items[VivRunDefine.ApiResultItemKey]);
+        Assert.Equal(-200, stashed.Code);
     }
 }
