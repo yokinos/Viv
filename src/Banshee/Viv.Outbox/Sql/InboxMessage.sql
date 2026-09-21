@@ -12,3 +12,11 @@ BEGIN
         CONSTRAINT PK_VivInboxMessage PRIMARY KEY (ServiceName, MessageId)
     );
 END
+
+-- 清理按 AcceptedAt 圈行，主键是 (ServiceName, MessageId) 帮不上忙，单独配一个索引。
+-- 对已经建过表的库也生效：整份脚本是幂等的，每次启动都会跑一遍。
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = N'IX_VivInboxMessage_AcceptedAt' AND object_id = OBJECT_ID(N'VivInboxMessage'))
+BEGIN
+    CREATE INDEX IX_VivInboxMessage_AcceptedAt ON VivInboxMessage (AcceptedAt);
+END

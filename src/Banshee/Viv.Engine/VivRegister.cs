@@ -228,7 +228,7 @@ namespace Viv.Engine
         private static void RegisterInbox(IServiceCollection services, VivOptions options)
         {
             if (options.DatabaseOption == null) return;
-            InboxRegister.Initialize(services);
+            InboxRegister.Initialize(services, options.InboxOption);
         }
 
         #endregion

@@ -35,7 +35,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
 | `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server；**实体审计**（`ICreatedAt` / `ICreatedBy` / `IUpdatedAt` / `IUpdatedBy` 四个单字段能力接口，逐个 opt-in，由 `MomoDatabase` 自动盖章，见 `### Entity audit`）；**建表 DDL**（`Sync/SchemaSynchronizer` 按实体生成 CREATE/ALTER，双方言，见 `### Schema sync`）；**缓存基类** `Base/DataAccessCacheBase<T>`（Cache-Aside，8 个业务仓储继承）—— **锁走 `IDistributedLock`，缓存读写走 `IRedisService`**，两条路径 Redis 故障都 catch 后回源数据库（锁那侧 Redis 故障被包成 `DistributedLockException`，得单独接一次）；取锁用 `AcquireLockWithRetryAsync` 并把参数压到 `maxRetryCount: 3, baseDelay/maxDelay: 20ms`（用默认的 5 次指数退避 = 约 3 秒，缓存击穿场景等不起） |
 | `Viv.Nana` | Messaging — **两条平行的线**：① 跨进程 `NanaEvent` + `IVivEventPublisher` / `NanaEventPublisher` / `VivConsumer<T>`（Wolverine + RabbitMQ，fanout）② 进程内本地队列 `NanaLocalEvent` + `IVivLocalEventPublisher` / `NanaLocalEventPublisher` / `VivLocalConsumer<T>`（Wolverine local queue，点对点，两族互不引用）；Saga support with EF Core state persistence |
-| `Viv.Outbox` | **发件箱（事务性消息投递）** — `IVivOutbox` / `OutboxStore`（Scoped，入队走 `ExecuteSqlAsync` 并入业务事务）+ `OutboxDispatcher`/`OutboxWorker`（后台投递，原子认领）+ 手写 SQL（**一次都不经过 EF**，表 `VivOutboxMessage`）。解决「写库 + 发消息」不原子：**写和待发消息进同一个本地事务**，投递交给后台。见下 |
+| `Viv.Outbox` | **发件箱（事务性消息投递）+ Inbox（消费端幂等）** — `IVivOutbox` / `OutboxStore`（Scoped，入队走 `ExecuteSqlAsync` 并入业务事务）+ `OutboxDispatcher`/`OutboxWorker`（后台投递，原子认领）+ 手写 SQL（**一次都不经过 EF**，表 `VivOutboxMessage`）。解决「写库 + 发消息」不原子：**写和待发消息进同一个本地事务**，投递交给后台。Inbox 侧 `IVivInbox` / `InboxStore`（表 `VivInboxMessage`）+ `InboxDispatcher`（按保留期清理，独立循环）。见下 |
 | `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`)。访问失败抛 `VivConnectionException(Redis)`（API 过滤器 `-502`，客户端只回固定文案）；`DataAccessCacheBase` 读路径 catch 后回源数据库，**取锁也走 catch 后回源**（见 `Viv.Momo` 行）。写仍抛。锁续期后台任务仍只记日志后停止 |
 | `Viv.Sandrone` | Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service` |
 | `Viv.Echo` | Service-to-service communication + **框架级 gRPC 宿主**（`Viv.Echo.Grpc`）— HTTP + gRPC 客户端 `VivGrpcInterceptor`/`AddVivGrpcClient`（支持服务发现；注入 x-viv-* 含 holder-id 并纳入签名）、服务端 `VivGrpcServerInterceptor`（验签后水合 `IVivContext` 并 `SetHolderId`）/`AddVivGrpcServer`/`AddVivGrpcKestrel`/`VivGrpcDiscovery`（自动发现 `[BindServiceMethod]` 实现类 + 注册 + 反射映射；REST + gRPC 分端口，见下） |
@@ -165,6 +165,7 @@ Every API and Worker project carries a `VivOptions` node in its `appsettings.jso
 | `DatabaseOption` | Database type, read-write split, entity scan targets, `SyncTableOnStartup`（启动时按实体同步表结构，默认关） |
 | `NanaOption` | RabbitMQ host/port/credentials, consumer type list, retry count, Saga DB |
 | `OutboxOption` | 发件箱：投递器开关、轮询间隔、批大小、重试上限、租约、建表、保留期。**为 null = 不启用**（见下） |
+| `InboxOption` | Inbox 清理：保留期（默认 7 天）、批大小（默认 1000）、清理间隔。**与别的子配置不同 —— 为 null 不是「不启用」**：Inbox 只看 `DatabaseOption`，节点缺席就用默认值照常清理，要关掉把保留期配成 0（见下） |
 | `TokenOption` | JWT secret/expiry/issuer |
 | `EchoOption` | HTTP client enable + gRPC（`GrpcOption { EnableServer, Port }`） |
 | `TickOption` | TickerQ scheduler config |
@@ -306,9 +307,18 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outb
 - **后台异常一律吞掉**：`BackgroundService` 里逃出去的异常在 .NET 6+ 会**直接停掉整个宿主** —— MQ 抖一下整个业务进程跟着死。`OutboxDispatcher` catch 后记 Error 继续下一轮。**真正干活的一轮逻辑在 `OutboxWorker`（可测：`RunOnceAsync` 返回本轮投递条数），它负责报错、不负责吞**（吞是调度层的职责）。
 - **失败处理**：投递失败一律先重试，**不区分「MQ 挂了」和「序列化/路由问题」**（两类在这里的处理本来就是同一个）。记 `LastError`（截断到列宽）+ 指数退避（5s 起、×2、封顶 60s、+0~30% 抖动，与 `GenerateExponentialBackoff` 同形），`RetryCount >= MaxRetryCount` 才置 `Status=3` + Error。`OperationCanceledException`（停机）**直接上抛、不消耗重试次数**，租约到期后自然被重新认领。
 - **租约兜底**：`LeaseSeconds` 配成 0 或负数一律 `Math.Max(1, ...)` 取 1 秒 —— 租约 0 秒 = 认领的瞬间就过期，多个实例会把同一条消息翻来覆去地投。
-- **at-least-once，不是 exactly-once（有意的）**：崩溃 / 租约过期会导致重复投递，这是模式固有的。**不做 Inbox** —— 消费端幂等由业务代码自己负责。要补是纯增量：一张 `ProcessedMessage(ServiceName, MessageId)` 唯一索引表，在同一个 `IVivTransaction` 里写。
+- **at-least-once，不是 exactly-once（有意的）**：崩溃 / 租约过期会导致重复投递，这是模式固有的。消费端幂等由业务代码自己负责 —— 框架另给了可选的 Inbox 当工具（见下），但不强制使用。
 - **配置**：`VivOptions.OutboxOption` 为 `null` = 不启用。配了 `OutboxOption` 却没有 `NanaOption` / `DatabaseOption` → **启动即抛**（投递的是跨进程事件，缺 MQ 配置根本发不出去；发件箱要靠业务主库原子地存下待发消息）。`AutoCreateTable` 默认 `true`，DDL 本身幂等（`IF OBJECT_ID ... IS NULL` / `CREATE TABLE IF NOT EXISTS`），多实例并发启动安全；关掉走纯手工建表。
-- **不做（范围外）**：Inbox（见上）；**延迟入队**（`EnqueueAsync(TimeSpan, T)` —— 现成的 `PublishDelayAsync` 已覆盖「发出去但不立刻到」）。（**Worker 侧类级 `[VivUnitOfWork]` 已补**，见 `### Unit of Work` 的「Worker / 消费者」那条。）
+
+#### Inbox（消费端幂等）
+
+- **`IVivInbox` / `InboxStore`**，表 `VivInboxMessage`（`(ServiceName, MessageId)` 复合主键 + `AcceptedAt`）。消费者在同一条业务事务里调 `TryAcceptAsync(messageId)`：首次 `true`、重复投递 `false`（靠唯一约束冲突判定，不是先查后插）。写入走 `ExecuteSqlAsync` 所以并入调用方当前事务 —— 没有外层事务时依然落库（有持久性、没有与业务写的原子性）。`ServiceName` 取入口程序集名，与 `VivConsumer` 那把消费锁的口径对齐。
+- **写入端可选，清理端不是 —— 表由框架写就由框架保证它不会无限涨**。`InboxDispatcher : BackgroundService`（同理注册 `IHostedService`），`InboxOptions` 三个旋钮：`RetentionDays`（默认 7，0 或负数 = 不清理）、`BatchSize`（默认 1000）、`CleanupIntervalMinutes`（默认 60 —— 幂等表慢增长，不像发件箱那样要求低延迟，没必要每几秒扫一次）。
+- **⚠️ 清理是独立的一条循环，不是折进 `OutboxDispatcher`**：两者启用条件不同 —— Inbox 只要配了 `DatabaseOption` 就注册（`VivRegister.RegisterInbox`），而 `OutboxOption` 未必配（仓库里 6 个有库的服务只有 1 个配了）。折进去的话其余服务永远不会清理，而且是**静默的**，表只会涨。
+- **⚠️ 保留期同时就是去重窗口**：行被删掉之后，同一条消息再被投递就会被当成新消息重新处理。所以 `RetentionDays` 要长于「同一条消息最晚可能被重投」的时间窗 —— 消费端退避重试、`RedeliverAsync` 的 `2×(n+1)` 分钟递增、发件箱自身的重试与租约过期重投，得叠起来算。人工把 `Status=3` 的发件箱行捞回来重投属于框架管不到的路径，那种情况本来就不是自动幂等能覆盖的。
+- **`InboxOption` 允许缺席**（与其它子配置不同，那些是「为 null = 不启用」）：节点没配就用默认值照常清理，要关掉把保留期配成 0。所以清理器直接注入 `InboxOptions` 而不是 `IOptions<InboxOptions>` —— 节点缺席时后者解析不到，会把宿主直接拖垮；`InboxRegister` 里 `?? new InboxOptions()` 那行就是兜底。
+- **清理 SQL 不能照抄发件箱**：表是复合主键，没有单列 `Id` 可供 `Id IN (SELECT ...)` 圈批。SQL Server 走 `DELETE TOP (@BatchSize)`；PostgreSQL 没有 `DELETE LIMIT`，走行值 `(ServiceName, MessageId) IN (SELECT ... LIMIT @BatchSize)`。建表脚本另给 `AcceptedAt` 配了独立索引（复合主键帮不上清理的忙）—— DDL 整份幂等，对已建过表的库也会在下一次启动时补上索引。
+- **不做（范围外）**：**延迟入队**（`EnqueueAsync(TimeSpan, T)` —— 现成的 `PublishDelayAsync` 已覆盖「发出去但不立刻到」）。（**Worker 侧类级 `[VivUnitOfWork]` 已补**，见 `### Unit of Work` 的「Worker / 消费者」那条。）
 
 ### Database (Momo)
 

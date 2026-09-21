@@ -55,6 +55,11 @@ namespace Viv.Engine.Options
         public OutboxOptions OutboxOption { get; set; }
 
         /// <summary>
+        /// Inbox 清理（已接受行的保留期）。为 null 时取默认值 —— Inbox 的启用只要求配了 DatabaseOption。
+        /// </summary>
+        public InboxOptions InboxOption { get; set; }
+
+        /// <summary>
         /// 令牌设置
         /// </summary>
         public TokenOptions TokenOption { get; set; }

@@ -65,6 +65,7 @@ namespace Viv.Engine
             services.Configure<DatabaseOptions>(configuration.GetSection("VivOptions:DatabaseOption"));
             services.Configure<NanaOptions>(configuration.GetSection("VivOptions:NanaOption"));
             services.Configure<OutboxOptions>(configuration.GetSection("VivOptions:OutboxOption"));
+            services.Configure<InboxOptions>(configuration.GetSection("VivOptions:InboxOption"));
             services.Configure<TokenOptions>(configuration.GetSection("VivOptions:TokenOption"));
             services.Configure<TickOptions>(configuration.GetSection("VivOptions:TickOption"));
             services.Configure<TickerQOptions>(configuration.GetSection("VivOptions:TickOption:TickerQ"));
@@ -138,6 +139,12 @@ namespace Viv.Engine
             // OutboxOption
             if (options.OutboxOption != null)
                 RegisterOption(services, options.OutboxOption);
+
+            // InboxOption —— 与别的子配置不同，这个节点允许缺席：
+            // Inbox 的启用条件是「配了 DatabaseOption」。缺席时不在这里注册，
+            // 由 InboxRegister 用默认值兜底，否则清理器解析不到配置会直接把宿主拖垮。
+            if (options.InboxOption != null)
+                RegisterOption(services, options.InboxOption);
 
             // TokenOption
             if (options.TokenOption != null)

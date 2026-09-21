@@ -9,3 +9,6 @@ CREATE TABLE IF NOT EXISTS VivInboxMessage (
     AcceptedAt  TIMESTAMPTZ  NOT NULL,
     CONSTRAINT PK_VivInboxMessage PRIMARY KEY (ServiceName, MessageId)
 );
+
+-- 清理按 AcceptedAt 圈行，主键是 (ServiceName, MessageId) 帮不上忙，单独配一个索引。
+CREATE INDEX IF NOT EXISTS IX_VivInboxMessage_AcceptedAt ON VivInboxMessage (AcceptedAt);

@@ -49,6 +49,21 @@ namespace Viv.Outbox.Core
             }
         }
 
+        public async Task<bool> CleanupBatchAsync(
+            DateTime cutoff, int batchSize, CancellationToken cancellationToken = default)
+        {
+            // 先起表：清理器是唯一一条会跑到「这个服务从没写过 Inbox」的路径，
+            // 表不存在的话 DELETE 直接抛，而且会每小时抛一次
+            await EnsureTableAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return await _db.ExecuteSqlAsync(InboxSql.CleanupBatch(_source), new
+            {
+                Cutoff = cutoff,
+                BatchSize = batchSize,
+            }).ConfigureAwait(false);
+        }
+
         private static bool IsUniqueViolation(Exception ex)
         {
             for (var current = ex; current != null; current = current.InnerException)

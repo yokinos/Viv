@@ -138,12 +138,32 @@ internal sealed class StubInboxRepository : IInboxRepository
 
     public int EnsureTableCalls { get; private set; }
 
+    public int CleanupCalls { get; private set; }
+
+    public DateTime? LastCleanupCutoff { get; private set; }
+
+    public int LastCleanupBatchSize { get; private set; }
+
     public bool DuplicateReturnsFalse { get; set; } = true;
+
+    /// <summary>清理是否「删掉了东西」。true 会让清理器一直删到上限，测试要的就是这个边界。</summary>
+    public bool CleanupResult { get; set; }
+
+    /// <summary>逐次返回的清理结果；用完后回落到 <see cref="CleanupResult"/>。</summary>
+    public Queue<bool> CleanupScript { get; } = new();
 
     public Task EnsureTableAsync(CancellationToken cancellationToken = default)
     {
         EnsureTableCalls++;
         return Task.CompletedTask;
+    }
+
+    public Task<bool> CleanupBatchAsync(DateTime cutoff, int batchSize, CancellationToken cancellationToken = default)
+    {
+        CleanupCalls++;
+        LastCleanupCutoff = cutoff;
+        LastCleanupBatchSize = batchSize;
+        return Task.FromResult(CleanupScript.Count > 0 ? CleanupScript.Dequeue() : CleanupResult);
     }
 
     public Task<bool> TryInsertAsync(string serviceName, long messageId, DateTime acceptedAt, CancellationToken cancellationToken = default)
