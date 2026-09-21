@@ -79,12 +79,14 @@ public class InternalTrustGuardTests
     [Fact]
     public void 配了InternalToken_直接通过()
     {
+        // 这里的取值刻意不是 "CHANGE_ME" 那类占位符：校验只判非空白，占位符会被当成真密钥放行，
+        // 测试里写占位符等于把「填了个众所周知的字符串也算配好了」这件事固化成期望行为。
         var options = new VivOptions
         {
             EnvOption = new EnvOptions
             {
                 Env = VivEnv.Production,
-                InternalToken = "CHANGE_ME"
+                InternalToken = "0123456789abcdef0123456789abcdef"
             },
             DatabaseOption = new DatabaseOptions()
         };

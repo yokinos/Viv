@@ -29,7 +29,7 @@ public class ClockworkDefaultsTests
             DashboardOptions = new TickerQDashboradOptions
             {
                 UserName = "viv",
-                Password = "CHANGE_ME"
+                Password = "test-dashboard-pass"
             }
         });
     }
