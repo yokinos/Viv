@@ -10,27 +10,26 @@ using Viv.Delusion.Magic;
 namespace Viv.Engine.Tests;
 
 /// <summary>
-/// Docker 不可用时跳过。与 Viv.Momo.Tests 同一条约定：CI 有 Docker 就跑，没有就跳过不是失败。
+/// 显式开启才会跑：环境变量 VIV_CONTAINER_TESTS 为 1 或 true 时才拉起 Testcontainers，否则跳过。
+/// 与 Viv.Momo.Tests 同名特性同一条约定，两处判据要保持一致。
 /// </summary>
 internal sealed class DockerFactAttribute : FactAttribute
 {
     public DockerFactAttribute()
     {
-        if (!DockerEnvironment.IsAvailable)
+        if (!DockerEnvironment.IsEnabled)
         {
-            Skip = "Docker 不可用，跳过 Testcontainers 集成测试。" +
-                   "CI（GitHub ubuntu-latest）有 Docker 时会跑；本地无 Docker 时这是跳过不是失败。";
+            Skip = "容器集成测试未开启，跳过。要跑请设环境变量 VIV_CONTAINER_TESTS=1，并确保本机 Docker 可用。";
         }
     }
 }
 
 internal static class DockerEnvironment
 {
-    internal static bool IsAvailable { get; } = Detect();
+    internal static bool IsEnabled { get; } = Detect();
 
     private static bool Detect()
-        => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DOCKER_HOST"))
-           || File.Exists("/var/run/docker.sock");
+        => Environment.GetEnvironmentVariable("VIV_CONTAINER_TESTS") is "1" or "true" or "TRUE";
 }
 
 public sealed class EnginePostgresFixture : IAsyncLifetime
@@ -42,7 +41,7 @@ public sealed class EnginePostgresFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        if (!DockerEnvironment.IsAvailable) return;
+        if (!DockerEnvironment.IsEnabled) return;
 
         Container = new PostgreSqlBuilder()
             .WithImage("postgres:16-alpine")

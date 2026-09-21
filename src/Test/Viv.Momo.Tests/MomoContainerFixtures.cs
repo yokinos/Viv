@@ -18,7 +18,7 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        if (!DockerEnvironment.IsAvailable) return;
+        if (!DockerEnvironment.IsEnabled) return;
 
         Container = new PostgreSqlBuilder()
             .WithImage("postgres:16-alpine")
@@ -45,7 +45,7 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        if (!DockerEnvironment.IsAvailable) return;
+        if (!DockerEnvironment.IsEnabled) return;
 
         Container = new MsSqlBuilder()
             .WithPassword("Viv_Sql_77!")

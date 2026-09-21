@@ -49,9 +49,10 @@ jobs:
       - name: Build (Release)
         run: dotnet build Viv.slnx -c Release --verbosity minimal
 
-      # Testcontainers 集成测试（Viv.Momo.Tests / Viv.Engine.Tests）在本 runner 有 Docker
-      # 时会跑：同步建表 → EF 读写 → Dapper 批量打同一张表，以及工作单元提交/回滚。
-      # Docker 不可用时这些用例以 [DockerFact] 跳过，不会让 CI 变红。
+      # Testcontainers 集成测试（Viv.Momo.Tests / Viv.Engine.Tests）在这里一律跳过。
+      # 它们要起 SQL Server / PostgreSQL 容器（前者镜像约 450M，就绪要一两分钟），
+      # 而 ubuntu-latest 自带 Docker —— 按「有 Docker 就跑」判断等于每次 CI 都被拖着走。
+      # 故 [DockerFact] 改成显式开启：设 VIV_CONTAINER_TESTS=1 才跑，这里刻意不设。
       - name: Test — 全部测试套件 + 覆盖率 + TRX
         run: >
           dotnet test Viv.slnx -c Release --no-build --verbosity minimal
