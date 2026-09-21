@@ -17,16 +17,17 @@ public class SqlMagicTests
     }
 
     [Fact]
-    public void QuoteIdentifier_Postgres转小写()
+    public void QuoteIdentifier_Postgres转snake_case()
     {
         Assert.Equal("name", SqlMagic.QuoteIdentifier("Name", DatabaseSourceType.PostgreSQL));
+        Assert.Equal("tenant_id", SqlMagic.QuoteIdentifier("TenantId", DatabaseSourceType.PostgreSQL));
     }
 
     [Fact]
     public void GetTableName_无Table特性用类名()
     {
         Assert.Equal("[TenantUserEntity]", SqlMagic.GetTableName<TenantUserEntity>(DatabaseSourceType.SqlServer));
-        Assert.Equal("tenantuserentity", SqlMagic.GetTableName<TenantUserEntity>(DatabaseSourceType.PostgreSQL));
+        Assert.Equal("tenant_user_entity", SqlMagic.GetTableName<TenantUserEntity>(DatabaseSourceType.PostgreSQL));
     }
 
     [Fact]
@@ -56,7 +57,7 @@ public class SqlMagicTests
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
         var (sql, p) = SqlMagic.CreateInsertSql("users", entity, DatabaseSourceType.SqlServer);
 
-        Assert.Equal("INSERT INTO users (Id,Name,Active) VALUES (@p0,@p1,@p2)", sql);
+        Assert.Equal("INSERT INTO [users] ([Id],[Name],[Active]) VALUES (@p0,@p1,@p2)", sql);
         Assert.Equal(1L, p.Get<object>("@p0"));
         Assert.Equal("x", p.Get<object>("@p1"));
         Assert.Equal(true, p.Get<object>("@p2"));
@@ -68,7 +69,7 @@ public class SqlMagicTests
         var entity = new NullableRow { Id = 1, Name = null };
         var (sql, p) = SqlMagic.CreateInsertSql("rows", entity, DatabaseSourceType.SqlServer);
 
-        Assert.Equal("INSERT INTO rows (Id) VALUES (@p0)", sql);
+        Assert.Equal("INSERT INTO [rows] ([Id]) VALUES (@p0)", sql);
         Assert.Single(p.ParameterNames);
     }
 
@@ -91,7 +92,7 @@ public class SqlMagicTests
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
         var (sql, p) = SqlMagic.CreateUpdateSql("users", entity, "Id", DatabaseSourceType.SqlServer);
 
-        Assert.Equal("UPDATE users SET Name = @p1,Active = @p2 WHERE Id = @p0", sql);
+        Assert.Equal("UPDATE [users] SET [Name] = @p1,[Active] = @p2 WHERE [Id] = @p0", sql);
         Assert.Equal("x", p.Get<object>("@p1"));
     }
 
@@ -108,7 +109,7 @@ public class SqlMagicTests
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
         var (sql, _) = SqlMagic.CreateDeleteSql("users", entity, DatabaseSourceType.SqlServer);
 
-        Assert.Equal("DELETE FROM users WHERE Id = @p0 AND Name = @p1 AND Active = @p2", sql);
+        Assert.Equal("DELETE FROM [users] WHERE [Id] = @p0 AND [Name] = @p1 AND [Active] = @p2", sql);
     }
 
     #endregion
@@ -120,7 +121,7 @@ public class SqlMagicTests
     {
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
         var sql = SqlMagic.CreateInsertSqlRaw("users", entity, DatabaseSourceType.SqlServer);
-        Assert.Equal("INSERT INTO users (Id,Name,Active) VALUES (1,'x',1)", sql);
+        Assert.Equal("INSERT INTO [users] ([Id],[Name],[Active]) VALUES (1,'x',1)", sql);
     }
 
     [Fact]
@@ -136,7 +137,7 @@ public class SqlMagicTests
     {
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
         var sql = SqlMagic.CreateUpdateSqlRaw("users", entity, "Id", DatabaseSourceType.SqlServer);
-        Assert.Equal("UPDATE users SET Name = 'x',Active = 1 WHERE Id = 1", sql);
+        Assert.Equal("UPDATE [users] SET [Name] = 'x',[Active] = 1 WHERE [Id] = 1", sql);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using Viv.Nana;
 using Viv.Outbox;
 using Viv.Outbox.Core;
 
@@ -104,4 +105,54 @@ internal class StubOutboxRepository : IOutboxRepository
         CleanupCalls++;
         return Task.FromResult(CleanupResult);
     }
+
+    public (long Pending, long Failed) Depth { get; set; }
+
+    public Task<(long Pending, long Failed)> CountDepthAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(Depth);
 }
+
+/// <summary>
+/// 发件箱入队替身 —— ChatService 采用样本用它断言入队而不是当场 Publish。
+/// </summary>
+public sealed class RecordingOutbox : IVivOutbox
+{
+    public List<NanaEvent> Enqueued { get; } = [];
+
+    public bool Result { get; set; } = true;
+
+    public Task<bool> EnqueueAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
+    {
+        if (content is null) return Task.FromResult(false);
+        Enqueued.Add(content);
+        return Task.FromResult(Result);
+    }
+}
+
+/// <summary>
+/// Inbox 仓储替身。与 StubOutboxRepository 同因：IInboxRepository 是 internal。
+/// </summary>
+internal sealed class StubInboxRepository : IInboxRepository
+{
+    public HashSet<(string Service, long MessageId)> Accepted { get; } = [];
+
+    public int EnsureTableCalls { get; private set; }
+
+    public bool DuplicateReturnsFalse { get; set; } = true;
+
+    public Task EnsureTableAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureTableCalls++;
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> TryInsertAsync(string serviceName, long messageId, DateTime acceptedAt, CancellationToken cancellationToken = default)
+    {
+        var key = (serviceName, messageId);
+        if (DuplicateReturnsFalse && !Accepted.Add(key))
+            return Task.FromResult(false);
+        Accepted.Add(key);
+        return Task.FromResult(true);
+    }
+}
+

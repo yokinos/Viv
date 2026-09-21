@@ -1,4 +1,3 @@
-using System.Data;
 using Dapper;
 using Viv.Delusion;
 using Viv.Momo.Enums;
@@ -9,6 +8,8 @@ namespace Viv.Momo
     /// 跨数据库 SQL 生成器（兼容 PostgreSQL / SQL Server）
     /// - 参数化版本：返回 (sql, DynamicParameters)，用于 Dapper 执行
     /// - Raw 版本：返回内联值 SQL 字符串，用于非参数化场景
+    /// 列名/表名一律走 <see cref="MomoIdentifier"/>，与 EF / SchemaSynchronizer 同一套物理名。
+    /// ignoreKeys / whereKeys 按 CLR 属性名匹配（大小写不敏感），不要拿加过引号的物理名去 Contains。
     /// </summary>
     public static partial class SqlMagic
     {
@@ -25,19 +26,18 @@ namespace Viv.Momo
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseSource);
-                if (ignoreKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase)) continue;
+                if (ignoreKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
                 var value = property.GetValue(entity);
                 if (value == null) continue;
 
                 var paramName = $"@p{idx++}";
-                fieldList.Add(name);
+                fieldList.Add(MomoIdentifier.QuoteClr(property.Name, databaseSource));
                 valueList.Add(paramName);
                 parameters.Add(paramName, value);
             }
 
-            var sql = $"INSERT INTO {FormatName(tableName, databaseSource)} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
+            var sql = $"INSERT INTO {QuoteTable(tableName, databaseSource)} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
             return (sql, parameters);
         }
 
@@ -52,14 +52,14 @@ namespace Viv.Momo
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseSource);
-                if (ignoreKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase)) continue;
+                if (ignoreKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
+                var name = MomoIdentifier.QuoteClr(property.Name, databaseSource);
                 var value = property.GetValue(entity);
                 var paramName = $"@p{idx++}";
                 parameters.Add(paramName, value);
 
-                if (whereKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase))
+                if (whereKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase))
                 {
                     var line = whereList.Count == 0 ? "WHERE" : "AND";
                     whereList.Add($"{line} {name} = {paramName}");
@@ -72,7 +72,7 @@ namespace Viv.Momo
 
             if (whereList.Count == 0) throw new ArgumentException("WhereKeys is empty.");
 
-            var sql = $"UPDATE {FormatName(tableName, databaseSource)} SET {string.Join(",", setList)} {string.Join(" ", whereList)}";
+            var sql = $"UPDATE {QuoteTable(tableName, databaseSource)} SET {string.Join(",", setList)} {string.Join(" ", whereList)}";
             return (sql, parameters);
         }
 
@@ -86,7 +86,7 @@ namespace Viv.Momo
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseSource);
+                var name = MomoIdentifier.QuoteClr(property.Name, databaseSource);
                 var value = property.GetValue(entity);
                 var paramName = $"@p{idx++}";
                 parameters.Add(paramName, value);
@@ -95,7 +95,7 @@ namespace Viv.Momo
                 whereList.Add($"{line} {name} = {paramName}");
             }
 
-            var sql = $"DELETE FROM {FormatName(tableName, databaseSource)} {string.Join(" ", whereList)}";
+            var sql = $"DELETE FROM {QuoteTable(tableName, databaseSource)} {string.Join(" ", whereList)}";
             return (sql, parameters);
         }
 
@@ -112,17 +112,16 @@ namespace Viv.Momo
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseSource);
-                if (ignoreKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase)) continue;
+                if (ignoreKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
                 var value = property.GetValue(entity);
                 if (value == null) continue;
 
-                fieldList.Add(name);
+                fieldList.Add(MomoIdentifier.QuoteClr(property.Name, databaseSource));
                 valueList.Add(ToDatabaseValue(value, databaseSource));
             }
 
-            return $"INSERT INTO {FormatName(tableName, databaseSource)} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
+            return $"INSERT INTO {QuoteTable(tableName, databaseSource)} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
         }
 
         public static string CreateUpdateSqlRaw(
@@ -134,13 +133,13 @@ namespace Viv.Momo
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseSource);
-                if (ignoreKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase)) continue;
+                if (ignoreKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
+                var name = MomoIdentifier.QuoteClr(property.Name, databaseSource);
                 var value = property.GetValue(entity);
                 var dbValue = ToDatabaseValue(value, databaseSource);
 
-                if (whereKeys.Contains(name, StringComparison.InvariantCultureIgnoreCase))
+                if (whereKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase))
                 {
                     var line = whereList.Count == 0 ? "WHERE" : "AND";
                     whereList.Add($"{line} {name} = {dbValue}");
@@ -153,7 +152,7 @@ namespace Viv.Momo
 
             if (whereList.Count == 0) throw new ArgumentException("WhereKeys is empty.");
 
-            return $"UPDATE {FormatName(tableName, databaseSource)} SET {string.Join(",", setList)} {string.Join(" ", whereList)}";
+            return $"UPDATE {QuoteTable(tableName, databaseSource)} SET {string.Join(",", setList)} {string.Join(" ", whereList)}";
         }
 
         public static string CreateDeleteSqlRaw(
@@ -164,25 +163,26 @@ namespace Viv.Momo
 
             foreach (var property in propertieList)
             {
-                var name = FormatName(property.Name, databaseSource);
+                var name = MomoIdentifier.QuoteClr(property.Name, databaseSource);
                 var value = property.GetValue(entity);
 
                 var line = whereList.Count == 0 ? "WHERE" : "AND";
                 whereList.Add($"{line} {name} = {ToDatabaseValue(value, databaseSource)}");
             }
 
-            return $"DELETE FROM {FormatName(tableName, databaseSource)} {string.Join(" ", whereList)}";
+            return $"DELETE FROM {QuoteTable(tableName, databaseSource)} {string.Join(" ", whereList)}";
         }
 
         #endregion
 
-        private static string FormatName(string name, DatabaseSourceType databaseSource)
+        /// <summary>
+        /// 手写表名（测试里的 users、或已经 Quote 过的 GetTableName 结果）。
+        /// 已带方括号的不再改写，避免 [[AtUser]]。
+        /// </summary>
+        private static string QuoteTable(string tableName, DatabaseSourceType databaseSource)
         {
-            return databaseSource switch
-            {
-                DatabaseSourceType.PostgreSQL => name.ToLowerInvariant(),
-                _ => name
-            };
+            if (string.IsNullOrEmpty(tableName) || tableName[0] == '[') return tableName;
+            return MomoIdentifier.QuoteClr(tableName, databaseSource);
         }
     }
 }

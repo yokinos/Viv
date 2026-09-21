@@ -14,6 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Viv.Nana.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
     <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
     <ProjectReference Include="..\Viv.Momo\Viv.Momo.csproj" />

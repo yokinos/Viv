@@ -49,6 +49,9 @@ jobs:
       - name: Build (Release)
         run: dotnet build Viv.slnx -c Release --verbosity minimal
 
+      # Testcontainers 集成测试（Viv.Momo.Tests / Viv.Engine.Tests）在本 runner 有 Docker
+      # 时会跑：同步建表 → EF 读写 → Dapper 批量打同一张表，以及工作单元提交/回滚。
+      # Docker 不可用时这些用例以 [DockerFact] 跳过，不会让 CI 变红。
       - name: Test — 全部测试套件 + 覆盖率 + TRX
         run: >
           dotnet test Viv.slnx -c Release --no-build --verbosity minimal

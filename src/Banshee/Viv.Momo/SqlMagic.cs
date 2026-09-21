@@ -21,10 +21,17 @@ namespace Viv.Momo
     /// </summary>
     public static partial class SqlMagic
     {
+        static SqlMagic()
+        {
+            // PostgreSQL 物理列是 snake_case，Dapper 默认只按属性名精确匹配（忽略大小写）。
+            // 打开之后 display_name → DisplayName；SQL Server 返回 DisplayName 仍然匹配。
+            Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+        }
+
         /// <summary>
         /// 缓存实体类型对应的数据库表名称
         /// </summary>
-        private static readonly ConcurrentDictionary<Type, string> _tableNameCache = [];
+        private static readonly ConcurrentDictionary<Type, (string Name, bool Explicit)> _tableNameCache = [];
 
         /// <summary>
         /// 获取实体对应的数据库表名称（带缓存，避免重复反射）
@@ -35,25 +42,22 @@ namespace Viv.Momo
         public static string GetTableName<T>(DatabaseSourceType databaseSource)
         {
             var entityType = typeof(T);
-            if (!_tableNameCache.TryGetValue(entityType, out var tableName))
+            if (!_tableNameCache.TryGetValue(entityType, out var cached))
             {
                 var tableAttr = entityType.GetCustomAttribute<TableAttribute>();
-                tableName = tableAttr?.Name ?? entityType.Name;
-                _tableNameCache[entityType] = tableName;
+                cached = (tableAttr?.Name ?? entityType.Name, tableAttr != null);
+                _tableNameCache[entityType] = cached;
             }
 
-            return QuoteIdentifier(tableName, databaseSource);
+            var physical = cached.Explicit ? cached.Name : MomoIdentifier.ToPhysical(cached.Name, databaseSource);
+            return MomoIdentifier.Quote(physical, databaseSource);
         }
 
+        /// <summary>
+        /// CLR 标识符 → 该 provider 下带引号的物理名。见 <see cref="MomoIdentifier"/>。
+        /// </summary>
         public static string QuoteIdentifier(string field, DatabaseSourceType databaseSource)
-        {
-            return databaseSource switch
-            {
-                DatabaseSourceType.SqlServer => $"[{field}]",
-                DatabaseSourceType.PostgreSQL => $"{field.ToLowerInvariant()}",
-                _ => field
-            };
-        }
+            => MomoIdentifier.QuoteClr(field, databaseSource);
 
         /// <summary>
         /// 生成通用INSERT SQL模板

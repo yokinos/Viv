@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Viv.Contracts;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
@@ -34,7 +35,9 @@ namespace Viv.Nana.Core
 
             try
             {
+                var started = Stopwatch.GetTimestamp();
                 await _bus.PublishAsync(message);
+                NanaMetrics.RecordPublish(typeof(T).Name, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
                 return true;
             }
             catch (OperationCanceledException)
@@ -55,7 +58,9 @@ namespace Viv.Nana.Core
             // 原样重发：不调 SnapshotWithHolder（不重新盖 holderId），投递的就是调用方递进来的那个信封
             try
             {
+                var started = Stopwatch.GetTimestamp();
                 await _bus.PublishAsync(envelope);
+                NanaMetrics.RecordPublish(typeof(T).Name, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
                 return true;
             }
             catch (OperationCanceledException)

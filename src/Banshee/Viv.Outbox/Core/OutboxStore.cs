@@ -59,6 +59,11 @@ namespace Viv.Outbox.Core
 
             var inserted = await _repository.InsertAsync(message, cancellationToken).ConfigureAwait(false);
 
+            if (inserted)
+            {
+                OutboxMetrics.RecordEnqueue();
+            }
+
             // false 只表示影响 0 行。落库没生效必须让人看见 —— 静默返回会让业务
             // 以为消息已经进了发件箱，而它其实永远不会被投递出去。
             if (!inserted)

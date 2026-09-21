@@ -37,6 +37,11 @@ namespace Viv.Nana
         /// </summary>
         public readonly IVivUnitOfWork? _unitOfWork;
 
+        /// <summary>
+        /// 可选 Inbox。未配数据库时解析不到，允许为 null —— 此时 <see cref="VivConsumer{T}.TryAcceptInboxAsync"/> 恒为 true。
+        /// </summary>
+        public readonly IVivInbox? _inbox;
+
         public VivConsumerDependency(
             ILoggerContract logger,
             IVivContext context,
@@ -44,7 +49,8 @@ namespace Viv.Nana
             IOptions<NanaOptions> options,
             IVivLocalEventBus localEventBus,
             IDistributedLock? distributedLock = null,
-            IVivUnitOfWork? unitOfWork = null)
+            IVivUnitOfWork? unitOfWork = null,
+            IVivInbox? inbox = null)
         {
             _logger = logger;
             _context = context;
@@ -53,6 +59,7 @@ namespace Viv.Nana
             _localEventBus = localEventBus;
             _distributedLock = distributedLock;
             _unitOfWork = unitOfWork;
+            _inbox = inbox;
         }
     }
 }

@@ -1,26 +1,29 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Viv.Contracts.Attributes;
 using Viv.Engine;
 using Viv.EventContracts.Herta;
 using Viv.Herta.Core.Entity.Dto.Chat;
 using Viv.Herta.Core.IService;
 using Viv.Herta.Core.Magic;
-using Viv.Nana;
+using Viv.Outbox;
 using Viv.Delusion.Extension;
 
 namespace Viv.Herta.Core.Service
 {
     public class ChatService : IChatService
     {
-        private readonly IVivEventPublisher _vivPublisher;
+        private readonly IVivOutbox _outbox;
 
-        public ChatService(IVivEventPublisher vivPublisher)
+        public ChatService(IVivOutbox outbox)
         {
-            _vivPublisher = vivPublisher;
+            _outbox = outbox;
         }
 
-        public async Task<VivApiResult> SendMessageAsync(SendMessageRequest request)
+        /// <summary>
+        /// 窄写入样本：消息入队走发件箱，与 <c>[VivUnitOfWork]</c> 同事务。
+        /// 业务失败信封或异常会回滚待发行，投递器看不到这条。
+        /// </summary>
+        [VivUnitOfWork]
+        public virtual async Task<VivApiResult> SendMessageAsync(SendMessageRequest request)
         {
             var messaage = HertaMagic.GetChatMessage(request.MessageType, request.Message);
             if (messaage == null)
@@ -29,7 +32,7 @@ namespace Viv.Herta.Core.Service
             }
 
             var sendMessageEvent = new SendMessageEvent(request.FromUserId, request.TargetId, messaage, request.ReceiverType, request.MessageType);
-            await _vivPublisher.PublishAsync(sendMessageEvent);
+            await _outbox.EnqueueAsync(sendMessageEvent);
 
             return VivApiResult.Success();
         }

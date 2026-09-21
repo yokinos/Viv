@@ -75,7 +75,7 @@ public class TenantFilterTests
     {
         var (sql, _) = SqlMagic.GetSoftDeleteSql<SoftDeleteTenantEntity>("users", x => x.Name == "a", DatabaseSourceType.PostgreSQL, tenantId: 7);
 
-        Assert.Equal("UPDATE users SET isdeleted = true, deletedat = NOW() WHERE (name = @p0) AND tenantid = @TenantId", sql);
+        Assert.Equal("UPDATE users SET is_deleted = true, deleted_at = NOW() WHERE (name = @p0) AND tenant_id = @TenantId", sql);
     }
 
     #endregion

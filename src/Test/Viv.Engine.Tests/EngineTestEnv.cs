@@ -22,6 +22,18 @@ internal static class EngineTestEnv
                 ["VivOptions:EnvOption:ServiceType"] = serviceType.ToString()
             })
             .Build());
+
+    /// <summary>
+    /// Development + AllowUnsignedInternalTrust：HTTP 允许解析未签名身份头（holder-id 仍不信）。
+    /// </summary>
+    public static void ForceUnsignedHatchMode()
+        => VivEngine.LoadVivConfig(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["VivOptions:EnvOption:Env"] = "0",
+                ["VivOptions:EnvOption:AllowUnsignedInternalTrust"] = "true"
+            })
+            .Build());
 }
 
 /// <summary>

@@ -185,6 +185,16 @@ public class OutboxSqlTests
     }
 
     [Fact]
+    public void 深度查询_只统计Pending和Failed()
+    {
+        Assert.Contains("Status = 0", OutboxSql.CountDepth);
+        Assert.Contains("Status = 3", OutboxSql.CountDepth);
+        Assert.Contains("VivOutboxMessage", OutboxSql.CountDepth);
+        Assert.DoesNotContain("Status = 1", OutboxSql.CountDepth);
+        Assert.DoesNotContain("Status = 2", OutboxSql.CountDepth);
+    }
+
+    [Fact]
     public void 资源缺失_抛带资源名的异常而不是静默返回空串()
     {
         var ex = Assert.Throws<InvalidOperationException>(() => OutboxSql.ReadResource("Viv.Outbox.Sql.NoSuch.sql"));

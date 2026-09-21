@@ -201,13 +201,15 @@ public class SchemaSyncTests
     }
 
     [Fact]
-    public void 新建表_PostgreSQL方言表名列名转小写()
+    public void 新建表_PostgreSQL方言表名列名转snake_case()
     {
         var ddl = CreateTableDdl(DatabaseSourceType.PostgreSQL, typeof(SyncConventionRow));
 
         var sql = Assert.Single(ddl);
-        Assert.Contains("CREATE TABLE syncconventionrow", sql);
+        Assert.Contains("CREATE TABLE sync_convention_row", sql);
         Assert.Contains("id bigint NOT NULL", sql);
+        Assert.Contains("name", sql);
+        Assert.DoesNotContain("syncconventionrow", sql);
     }
 
     #endregion
@@ -263,6 +265,9 @@ public class SchemaSyncTests
 
         var existingCodeType = dbType == DatabaseSourceType.PostgreSQL ? "varchar(200)" : "nvarchar(200)";
         var createdAtType = dbType == DatabaseSourceType.PostgreSQL ? "timestamp without time zone" : "datetime2";
+        var idName = dbType == DatabaseSourceType.PostgreSQL ? "id" : "Id";
+        var codeName = dbType == DatabaseSourceType.PostgreSQL ? "code" : "Code";
+        var createdAtName = dbType == DatabaseSourceType.PostgreSQL ? "created_at" : "CreatedAt";
 
         var existing = new List<TableInfo>
         {
@@ -271,9 +276,9 @@ public class SchemaSyncTests
                 Name = "sync_ddl_row",
                 Columns =
                 [
-                    new ColumnInfo { Name = "Id", SqlType = "bigint", IsNullable = false },
-                    new ColumnInfo { Name = "Code", SqlType = existingCodeType, IsNullable = true },
-                    new ColumnInfo { Name = "CreatedAt", SqlType = createdAtType, IsNullable = true },
+                    new ColumnInfo { Name = idName, SqlType = "bigint", IsNullable = false },
+                    new ColumnInfo { Name = codeName, SqlType = existingCodeType, IsNullable = true },
+                    new ColumnInfo { Name = createdAtName, SqlType = createdAtType, IsNullable = true },
                 ]
             }
         };
@@ -345,10 +350,10 @@ public class SchemaSyncTests
     #region 表名匹配
 
     [Fact]
-    public void Diff_表名忽略下划线与大小写()
+    public void Diff_表名忽略大小写_保留下划线()
     {
         var sync = CreateSync();
-        var expected = new List<TableInfo> { new() { Name = "Viv_Client_App" } };
+        var expected = new List<TableInfo> { new() { Name = "VivClientApp" } };
         var actual = new List<TableInfo> { new() { Name = "vivclientapp" } };
 
         var diff = sync.Diff(expected, actual);
@@ -356,6 +361,21 @@ public class SchemaSyncTests
         Assert.Empty(diff.NewTables);
         Assert.Empty(diff.DeletedTables);
         Assert.Empty(diff.ModifiedTables);
+    }
+
+    [Fact]
+    public void Diff_下划线不同视为不同表()
+    {
+        // 以前靠去下划线模糊匹配把 EF snake_case 和 Dapper PascalCase 的差异藏掉。
+        // 现在两边必须落到同一物理名，下划线是名字的一部分。
+        var sync = CreateSync();
+        var expected = new List<TableInfo> { new() { Name = "Viv_Client_App" } };
+        var actual = new List<TableInfo> { new() { Name = "vivclientapp" } };
+
+        var diff = sync.Diff(expected, actual);
+
+        Assert.Single(diff.NewTables);
+        Assert.Single(diff.DeletedTables);
     }
 
     #endregion

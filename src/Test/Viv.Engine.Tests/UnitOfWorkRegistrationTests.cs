@@ -78,8 +78,8 @@ public class UnitOfWorkRegistrationTests
         ValueTask<VivApiResult> RunAsync();
     }
 
-    /// <summary>ValueTask&lt;T&gt; 走异步链，正常放行（非泛型 ValueTask 才拦）</summary>
-    public class GenericValueTaskService : IVtService
+        /// <summary>ValueTask&lt;T&gt; 不能安全拦截，注册期必须拒绝（见 UnitOfWorkRegistrationTests）</summary>
+        public class GenericValueTaskService : IVtService
     {
         [VivUnitOfWork]
         public virtual ValueTask<VivApiResult> RunAsync() => new(VivApiResult.Success());
@@ -256,17 +256,19 @@ public class UnitOfWorkRegistrationTests
     [Fact]
     public void 非泛型ValueTask带特性_抛()
     {
-        // 实测反直觉：同步方法和非泛型 ValueTask 都走不可重写的同步路径，
-        // 表现是「方法照常执行、事务根本没开」；泛型版 ValueTask<T> 才走异步链
+        // 同步方法、非泛型 ValueTask、ValueTask<T> 都不能安全拦截，启动期一律拒绝。
         var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(NonGenericValueTaskService)]));
 
         Assert.Contains("ValueTask", ex.Message);
     }
 
     [Fact]
-    public void 泛型ValueTask带特性_放行()
+    public void 泛型ValueTask带特性_启动失败()
     {
-        Assert.Single(Resolve([typeof(GenericValueTaskService)]));
+        // Castle 会进异步链，但提交发生在方法体结束之前 —— 比「不开事务」更毒。
+        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(GenericValueTaskService)]));
+
+        Assert.Contains("ValueTask", ex.Message);
     }
 
     [Fact]

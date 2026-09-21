@@ -55,6 +55,8 @@ namespace Viv.Engine
             RegisterDatabase(services, options);
             // 注册发件箱（依赖数据库 + MQ；内部会注册 IHostedService 投递器）
             RegisterOutbox(services, options);
+            // 可选 Inbox（有数据库就注册，消费者自行决定是否用）
+            RegisterInbox(services, options);
             // 注册Token
             RegisterToken(services, options);
             // 注册调度
@@ -217,6 +219,16 @@ namespace Viv.Engine
             }
 
             OutboxRegister.Initialize(services, options.OutboxOption);
+        }
+
+        #endregion
+
+        #region Inbox
+
+        private static void RegisterInbox(IServiceCollection services, VivOptions options)
+        {
+            if (options.DatabaseOption == null) return;
+            InboxRegister.Initialize(services);
         }
 
         #endregion

@@ -21,24 +21,24 @@ namespace Viv.Herta.Tests
         };
 
         [Fact]
-        public async Task SendMessage_Text_ReturnsSuccessAndPublishes()
+        public async Task SendMessage_Text_ReturnsSuccessAndEnqueuesOutbox()
         {
-            var publisher = new RecordingEventPublisher();
-            var service = new ChatService(publisher);
+            var outbox = new RecordingOutbox();
+            var service = new ChatService(outbox);
 
             var result = await service.SendMessageAsync(CreateTextRequest());
 
             Assert.True(result.Code >= 200);
-            var evt = Assert.IsType<SendMessageEvent>(Assert.Single(publisher.Published));
+            var evt = Assert.IsType<SendMessageEvent>(Assert.Single(outbox.Enqueued));
             Assert.Equal(2L, evt.FromUserId);
             Assert.Equal(5L, evt.TargetId);
         }
 
         [Fact]
-        public async Task SendMessage_UnsupportedType_ReturnsFailedAndDoesNotPublish()
+        public async Task SendMessage_UnsupportedType_ReturnsFailedAndDoesNotEnqueue()
         {
-            var publisher = new RecordingEventPublisher();
-            var service = new ChatService(publisher);
+            var outbox = new RecordingOutbox();
+            var service = new ChatService(outbox);
             var request = CreateTextRequest();
             request.MessageType = unchecked((EmChatMessageType)999);
             request.Message = "{}";
@@ -46,7 +46,7 @@ namespace Viv.Herta.Tests
             var result = await service.SendMessageAsync(request);
 
             Assert.False(result.Code >= 200);
-            Assert.Empty(publisher.Published);
+            Assert.Empty(outbox.Enqueued);
         }
     }
 }

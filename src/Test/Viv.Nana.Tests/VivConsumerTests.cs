@@ -74,8 +74,9 @@ namespace Viv.Nana.Tests
             RecordingEventPublisher publisher,
             IOptions<NanaOptions> options,
             IDistributedLock? distributedLock = null,
-            RecordingLocalEventBus? localEventBus = null)
-            => new(logger, new TestContext(), publisher, options, localEventBus ?? new RecordingLocalEventBus(), distributedLock);
+            RecordingLocalEventBus? localEventBus = null,
+            IVivInbox? inbox = null)
+            => new(logger, new TestContext(), publisher, options, localEventBus ?? new RecordingLocalEventBus(), distributedLock, inbox: inbox);
 
         [Fact]
         public async Task 成功_无异常无日志()
@@ -294,6 +295,42 @@ namespace Viv.Nana.Tests
 
             Assert.Equal(VivConnType.RabbitMQ, ex.ConnType);
             Assert.False(publisher.PublishDelayEnvelopeCalled);
+        }
+
+        [Fact]
+        public async Task 可选Inbox_重复MessageId第二次TryAccept为false()
+        {
+            var inbox = new RecordingInbox();
+            var consumer = new InboxAwareConsumer(Dep(
+                new RecordingLogger(),
+                new RecordingEventPublisher(),
+                XUnitTestMagic.CreateOptions(new NanaOptions()),
+                inbox: inbox));
+            var envelope = Envelope();
+
+            await consumer.HandleAsync(envelope, CancellationToken.None);
+            await consumer.HandleAsync(envelope, CancellationToken.None);
+
+            Assert.Equal(1, consumer.BusinessCalls);
+            Assert.Equal(2, inbox.Attempts.Count);
+            Assert.Single(inbox.Accepted);
+        }
+    }
+
+    /// <summary>业务里显式调 Inbox helper；未注入时 TryAcceptInboxAsync 恒为 true。</summary>
+    public class InboxAwareConsumer : VivConsumer<TestApexEvent>
+    {
+        public int BusinessCalls { get; private set; }
+
+        public InboxAwareConsumer(VivConsumerDependency dependency) : base(dependency) { }
+
+        public override async Task<SubscribeResult> ReceiveMessageAsync(
+            NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
+        {
+            if (!await TryAcceptInboxAsync(envelope, cancellationToken))
+                return SubscribeResult.Success();
+            BusinessCalls++;
+            return SubscribeResult.Success();
         }
     }
 }

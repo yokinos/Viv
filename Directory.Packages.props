@@ -101,6 +101,9 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="Testcontainers" Version="4.7.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.7.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.7.0" />
     <!-- ── 安全钉版（传递依赖，无项目直接引用）───────────────
          Microsoft.OpenApi 2.0.0 有高危 DoS 漏洞（GHSA-v5pm-xwqc-g5wc / CVE-2026-49451，
          循环 schema 引用 → 栈溢出崩溃）。由 Microsoft.AspNetCore.OpenApi 10.0.x 传递引入，

@@ -7,10 +7,11 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Viv.Contracts.Enums;
 using Viv.Delusion.Magic;
+using Viv.Delusion;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
-using Viv.Delusion;
+using MomoIdentifier = Viv.Momo.MomoIdentifier;
 
 namespace Viv.Momo.Sync
 {
@@ -87,9 +88,9 @@ namespace Viv.Momo.Sync
 
             foreach (var type in entityTypes)
             {
-                // [Table("xxx")] → 表名，无特性则用类名
+                // [Table("xxx")] → 已经是物理名，不再改写；无特性则按 provider 从类名推导
                 var tableAttr = type.GetCustomAttribute<TableAttribute>();
-                var tableName = tableAttr?.Name ?? type.Name;
+                var tableName = tableAttr?.Name ?? MomoIdentifier.ToPhysical(type.Name, _dbType);
 
                 var tableInfo = new TableInfo { Name = tableName };
 
@@ -151,7 +152,7 @@ namespace Viv.Momo.Sync
 
         /// <summary>
         /// 对比预期和实际 Schema，返回差异列表。
-        /// 表名匹配忽略大小写和下划线（VivClientApp == vivclientapp）。
+        /// 表名匹配忽略大小写（SQL Server 不区分），但保留下划线：<c>at_user</c> 与 <c>atuser</c> 不是同一张表。
         /// 列级比较：类型字符串（如 nvarchar(100)）和 IsNullable 是否一致。
         /// </summary>
         public SyncDiffResult Diff(List<TableInfo> expected, List<TableInfo> actual)
@@ -320,7 +321,7 @@ namespace Viv.Momo.Sync
         private ColumnInfo BuildColumnInfo(PropertyInfo prop)
         {
             var colAttr = prop.GetCustomAttribute<ColumnAttribute>();
-            var colName = colAttr?.Name ?? prop.Name;
+            var colName = colAttr?.Name ?? MomoIdentifier.ToPhysical(prop.Name, _dbType);
 
             var clrType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
             var isPk = IsPrimaryKeyProperty(prop);
@@ -551,18 +552,10 @@ namespace Viv.Momo.Sync
         // ==================== Quoting ====================
 
         /// <summary>
-        /// 标识符引用：PG 用小写（vivclientapp），SqlServer 用方括号（[VivClientApp]）。
-        /// 与 SqlMagic.QuoteIdentifier 逻辑一致。
+        /// 标识符引用：物理名已经按 provider 改写过（PG snake_case / SQL Server PascalCase）。
+        /// SQL Server 加方括号，PostgreSQL 原样。与 <see cref="MomoIdentifier.Quote"/> 同一套。
         /// </summary>
-        private string Quote(string name)
-        {
-            return _dbType switch
-            {
-                DatabaseSourceType.SqlServer => $"[{name}]",
-                DatabaseSourceType.PostgreSQL => name.ToLowerInvariant(),
-                _ => name
-            };
-        }
+        private string Quote(string name) => MomoIdentifier.Quote(name, _dbType);
 
         // ==================== DB queries ====================
 
@@ -741,8 +734,8 @@ namespace Viv.Momo.Sync
             return !prop.PropertyType.IsValueType;
         }
 
-        /// <summary>去掉下划线并转小写，用于表名/列名的模糊匹配。Viv_Client_App == vivclientapp</summary>
-        private static string NormalizeName(string name) => name.Replace("_", "").ToLowerInvariant();
+        /// <summary>忽略大小写匹配。下划线有意义：at_user ≠ atuser。</summary>
+        private static string NormalizeName(string name) => name.ToLowerInvariant();
 
         private static string NormalizeTableName(string name) => NormalizeName(name);
     }

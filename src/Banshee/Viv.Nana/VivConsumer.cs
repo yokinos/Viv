@@ -1,4 +1,5 @@
-﻿using Viv.Contracts;
+﻿using System.Diagnostics;
+using Viv.Contracts;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Delusion;
@@ -64,6 +65,8 @@ namespace Viv.Nana
 
         private readonly IVivUnitOfWork? _unitOfWork;
 
+        private readonly IVivInbox? _inbox;
+
         protected VivConsumer(VivConsumerDependency dependency)
         {
             _logger = dependency._logger;
@@ -73,6 +76,7 @@ namespace Viv.Nana
             _nanaOptions = dependency._nanaOptions;
             _localEventBus = dependency._localEventBus;
             _unitOfWork = dependency._unitOfWork;
+            _inbox = dependency._inbox;
             ConsumerUnitOfWork.EnsureAvailable(GetType(), _unitOfWork);
         }
 
@@ -80,6 +84,17 @@ namespace Viv.Nana
         /// 业务消费逻辑 — 子类只需实现这个方法，框架处理消费锁、重试、异常、日志
         /// </summary>
         public abstract Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<T> envelope, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 可选 Inbox：与业务写同事务记下 <c>(ServiceName, MessageId)</c>。
+        /// 未注入 <see cref="IVivInbox"/> 时恒为 true（不强迫所有消费者启用）。
+        /// 返回 false 表示这条已经处理过，调用方应跳过业务。
+        /// </summary>
+        protected Task<bool> TryAcceptInboxAsync(NanaEnvelope<T> envelope, CancellationToken cancellationToken = default)
+        {
+            if (_inbox == null) return Task.FromResult(true);
+            return _inbox.TryAcceptAsync(envelope.MessageId, cancellationToken);
+        }
 
         /// <summary>
         /// Wolverine 消费入口（框架内部调用，子类不必关心）。
@@ -123,6 +138,7 @@ namespace Viv.Nana
                     }
                 }
 
+                var started = Stopwatch.GetTimestamp();
                 var result = await ConsumerUnitOfWork.ExecuteAsync(
                     _unitOfWork,
                     GetType(),
@@ -131,6 +147,7 @@ namespace Viv.Nana
 
                 if (result.IsSuccess)
                 {
+                    NanaMetrics.RecordConsume(typeof(T).Name, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
                     succeeded = true;
                     return;
                 }

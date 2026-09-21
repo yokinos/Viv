@@ -253,3 +253,63 @@ public class RecordingDistributedLock : IDistributedLock
     /// </summary>
     private static string Key(object key) => key?.ToString() ?? "null";
 }
+
+/// <summary>
+/// 可选 Inbox 替身。消费者子类调 <c>TryAcceptInboxAsync</c> 时用它断言去重，不强迫所有消费者注入。
+/// </summary>
+public sealed class RecordingInbox : IVivInbox
+{
+    public HashSet<long> Accepted { get; } = [];
+
+    public List<long> Attempts { get; } = [];
+
+    public Task<bool> TryAcceptAsync(long messageId, CancellationToken cancellationToken = default)
+    {
+        Attempts.Add(messageId);
+        return Task.FromResult(Accepted.Add(messageId));
+    }
+}
+
+/// <summary>
+/// <see cref="IVivLocalEventScope"/> 替身 —— Clockwork 任务包装测 Flush/Discard，不拉真实 LocalEventBus。
+/// </summary>
+public sealed class RecordingLocalEventScope : IVivLocalEventScope
+{
+    public RecordingLocalEventBus Bus { get; }
+
+    public int RunCalls { get; private set; }
+
+    public RecordingLocalEventScope(RecordingLocalEventBus? bus = null)
+        => Bus = bus ?? new RecordingLocalEventBus();
+
+    public async Task RunAsync(Func<Task> work, CancellationToken cancellationToken = default)
+    {
+        RunCalls++;
+        try
+        {
+            await work().ConfigureAwait(false);
+            await Bus.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            Bus.Discard();
+            throw;
+        }
+    }
+
+    public async Task<TResult> RunAsync<TResult>(Func<Task<TResult>> work, CancellationToken cancellationToken = default)
+    {
+        RunCalls++;
+        try
+        {
+            var result = await work().ConfigureAwait(false);
+            await Bus.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+            return result;
+        }
+        catch
+        {
+            Bus.Discard();
+            throw;
+        }
+    }
+}

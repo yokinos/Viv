@@ -30,7 +30,7 @@ public class ExpressionToSqlConverterTests
         var (sql, _) = ExpressionToSqlConverter.Convert<TenantUserEntity>(
             x => x.TenantId == 7 && x.Age > 18, DatabaseSourceType.PostgreSQL);
 
-        Assert.Equal("((tenantid = @p0) AND (age > @p1))", sql);
+        Assert.Equal("((tenant_id = @p0) AND (age > @p1))", sql);
     }
 
     [Fact]

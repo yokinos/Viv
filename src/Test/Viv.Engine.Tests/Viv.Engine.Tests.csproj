@@ -12,6 +12,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Testcontainers" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
   <!-- 工作单元拦截器测试跑真链路（Autofac 接口代理 + Castle 异步拦截），直接用到这三个包，
@@ -24,6 +26,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Clockwork\Viv.Clockwork.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Momo\Viv.Momo.csproj" />
     <!-- 替身集中在这个程序集里，测试项目只留「被测对象 + 探针 + 测试数据」 -->
     <ProjectReference Include="..\Viv.Fakes\Viv.Fakes.csproj" />
   </ItemGroup>

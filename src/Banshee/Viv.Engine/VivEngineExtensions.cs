@@ -12,6 +12,7 @@ using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
 using Viv.Engine.Options;
+using Viv.Engine.Power;
 using Viv.Engine.UnitOfWork;
 
 namespace Viv.Engine
@@ -27,6 +28,7 @@ namespace Viv.Engine
         public static IServiceCollection AddViv(this IServiceCollection services, VivOptions vivOptions)
         {
             ArgumentNullException.ThrowIfNull(vivOptions);
+            InternalTrustGuard.Validate(vivOptions);
             VivRegister.Register(services, vivOptions);
             return services;
         }

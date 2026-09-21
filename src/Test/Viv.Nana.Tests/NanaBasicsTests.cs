@@ -1,5 +1,6 @@
 using Viv.Contracts.Models;
 using Viv.Momo.Enums;
+using Viv.Nana;
 using Viv.Nana.Core;
 using Viv.Nana.Options;
 
@@ -120,6 +121,51 @@ namespace Viv.Nana.Tests
             Assert.Empty(o.ConsumerTypes);
             Assert.Equal(DatabaseSourceType.PostgreSQL, o.SagaDatabaseSource);
             Assert.Null(o.SagaConnectionString);
+        }
+    }
+
+    public class NanaEventContractTests
+    {
+        [Fact]
+        public void NanaEvent没有已删除的假旋钮LockFailShouldRetryDeliver()
+        {
+            Assert.Null(typeof(NanaEvent).GetProperty("LockFailShouldRetryDeliver"));
+            Assert.NotNull(typeof(NanaEvent).GetProperty(nameof(NanaEvent.Priority)));
+            Assert.NotNull(typeof(NanaEvent).GetProperty(nameof(NanaEvent.IsJob)));
+        }
+    }
+
+    public class NanaMetricsTests
+    {
+        [Fact]
+        public void 仪器名稳定()
+        {
+            Assert.Equal("Viv.Nana", NanaMetrics.MeterName);
+            Assert.Equal("viv.nana.published", NanaMetrics.PublishedInstrument);
+            Assert.Equal("viv.nana.consumed", NanaMetrics.ConsumedInstrument);
+            Assert.Equal("viv.nana.publish.duration", NanaMetrics.PublishDurationInstrument);
+        }
+
+        [Fact]
+        public void RecordPublish能被MeterListener看到()
+        {
+            using var listener = new System.Diagnostics.Metrics.MeterListener();
+            var seen = 0L;
+            listener.InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == NanaMetrics.MeterName
+                    && instrument.Name == NanaMetrics.PublishedInstrument)
+                {
+                    l.EnableMeasurementEvents(instrument);
+                }
+            };
+            listener.SetMeasurementEventCallback<long>((_, value, _, _) => seen += value);
+            listener.Start();
+
+            NanaMetrics.RecordPublish("TestEvent", 5);
+            listener.RecordObservableInstruments();
+
+            Assert.True(seen >= 1);
         }
     }
 }

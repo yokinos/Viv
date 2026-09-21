@@ -58,7 +58,9 @@ public static class Extensions
             {
                 metrics.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation();
+                    .AddRuntimeInstrumentation()
+                    .AddMeter("Viv.Outbox")
+                    .AddMeter("Viv.Nana");
             })
             .WithTracing(tracing =>
             {

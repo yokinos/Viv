@@ -54,6 +54,27 @@ namespace Viv.Contracts.Models
             return AppId == 0 && UserId == 0;
         }
 
+        /// <summary>
+        /// 系统租户快照：后台任务没有真实登录用户时显式声明「这是系统作业」。
+        /// AppId 必须为正（Viv 里定时任务也是一个客户端）；SubjectId/UserId 为 0。
+        /// 与「忘了 SetSnapshot」的全 0 缺省态区分开。
+        /// </summary>
+        public static VivContextContent ForSystemJob(long appId, string? traceId = null)
+        {
+            if (appId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(appId), "系统作业也必须有正的 AppId。");
+            }
+
+            return new VivContextContent
+            {
+                AppId = appId,
+                SubjectId = 0,
+                UserId = 0,
+                TraceId = string.IsNullOrWhiteSpace(traceId) ? "viv-system-job" : traceId
+            };
+        }
+
         public override string ToString()
         {
             return $"AppId:{AppId},SubjectId:{SubjectId},UserId:{UserId},TraceId:{TraceId},HolderId:{HolderId}";

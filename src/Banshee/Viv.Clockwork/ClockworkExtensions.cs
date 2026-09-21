@@ -1,22 +1,18 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using TickerQ.Dashboard.DependencyInjection;
 using TickerQ.DependencyInjection;
 using TickerQ.EntityFrameworkCore.DbContextFactory;
 using TickerQ.EntityFrameworkCore.DependencyInjection;
-using TickerQ.Utilities.Interfaces;
 using Viv.Clockwork.Options;
-using Viv.Delusion.Extension;
-using Viv.Delusion.Magic;
 using Viv.Momo.Enums;
 
 namespace Viv.Clockwork
 {
     /// <summary>
-    /// TickerQ 接入。定时任务没有 MVC 过滤器 / 消费者 HandleAsync 那样的本地事件触发点，
-    /// 若任务里会 <c>IVivLocalEventBus.PublishAsync</c>，请用 <c>IVivLocalEventScope.RunAsync</c>
-    /// 包住业务（成功 Flush，失败 Discard），并在清理 <c>IVivContext</c> 之前完成分发。
+    /// TickerQ 接入。任务入口请继承 <see cref="VivTickerJobBase"/>，经 <c>RunAsync</c> 默认包上
+    /// <c>IVivLocalEventScope</c>（成功 Flush，失败 Discard），开工前必须 SetSnapshot。
+    /// Dashboard 打开却没有凭证会启动失败。
     /// </summary>
     public static class ClockworkExtensions
     {
@@ -25,6 +21,11 @@ namespace Viv.Clockwork
             ArgumentNullException.ThrowIfNull(options);
             ArgumentNullException.ThrowIfNull(options.TickerQ);
             var tickerOpt = options.TickerQ;
+
+            if (tickerOpt.EnableDashboard)
+            {
+                EnsureDashboardCredentials(tickerOpt);
+            }
 
             services.AddTickerQ(opt =>
             {
@@ -58,7 +59,7 @@ namespace Viv.Clockwork
                         {
                             dashboard.WithBasicAuth(tickerOpt.DashboardOptions.UserName, tickerOpt.DashboardOptions.Password);
                         }
-                        else if (!string.IsNullOrEmpty(tickerOpt.DashboardOptions.WebApiKey))
+                        else
                         {
                             dashboard.WithApiKey(tickerOpt.DashboardOptions.WebApiKey);
                         }
@@ -67,6 +68,18 @@ namespace Viv.Clockwork
             });
 
             return services;
+        }
+
+        internal static void EnsureDashboardCredentials(TickerQOptions tickerOpt)
+        {
+            var dash = tickerOpt.DashboardOptions ?? new TickerQDashboradOptions();
+            var hasBasic = !string.IsNullOrWhiteSpace(dash.UserName) && !string.IsNullOrWhiteSpace(dash.Password);
+            var hasApiKey = !string.IsNullOrWhiteSpace(dash.WebApiKey);
+            if (!hasBasic && !hasApiKey)
+            {
+                throw new InvalidOperationException(
+                    "TickerQ Dashboard 已启用但未配置凭证。请设置 DashboardOptions.UserName/Password 或 WebApiKey。");
+            }
         }
     }
 }

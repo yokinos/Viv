@@ -18,6 +18,7 @@ namespace Viv.Engine.UnitOfWork
     /// invocation.Proceed() 在业务遇到第一个 await 时就返回了，写成 Proceed(); Commit(); 会在业务
     /// 真正跑完之前就提交，事务边界完全错位且不报错。AsyncInterceptorBase 把调用拆成
     /// 同步 / Task / Task&lt;T&gt; 三分法，「提交」才能挂在业务 Task 真正完成之后。
+    /// ValueTask / ValueTask&lt;T&gt; 实测不能安全走这条链，注册期直接拒绝。
     ///
     /// 注册时要垫一层 <c>AsyncDeterminationInterceptor</c>：InterceptedBy 只认 IInterceptor，
     /// 而本类实现的是 IAsyncInterceptor，直接挂上去解析时会抛 InvalidCastException。

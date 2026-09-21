@@ -151,14 +151,16 @@ namespace Viv.Engine.UnitOfWork
             if (method.IsGenericMethodDefinition)
                 throw new InvalidOperationException($"[VivUnitOfWork] 标在泛型方法上，代理拦不到：{where}");
 
-            // 实测：同步方法与非泛型 ValueTask 都走 AsyncInterceptorBase 不可重写的同步路径
-            // （InterceptSynchronous），表现是「方法照常执行、事务根本没开」，完全静默。
-            // 泛型版 ValueTask<T> 正常走异步链。这条差异反直觉，所以照实测结果拦。
-            if (method.ReturnType == typeof(ValueTask))
+            // 实测：同步方法与全部 ValueTask / ValueTask<T> 都不能安全走异步拦截链。
+            // 非泛型 ValueTask 走 InterceptSynchronous，事务根本不开；
+            // ValueTask<T> 会进 InterceptAsync<T> 但提交发生在方法体结束之前（事务边界错位且不报错）。
+            // 一律启动失败，逼业务改成 Task / Task<T>。
+            if (method.ReturnType == typeof(ValueTask)
+                || (method.ReturnType.IsGenericType && method.ReturnType.GetGenericTypeDefinition() == typeof(ValueTask<>)))
             {
                 throw new InvalidOperationException(
-                    $"[VivUnitOfWork] 标在返回非泛型 ValueTask 的方法上：{where}。" +
-                    "非泛型 ValueTask 不经过异步拦截链（ValueTask<T> 才走），事务不会生效。" +
+                    $"[VivUnitOfWork] 标在返回 ValueTask / ValueTask<T> 的方法上：{where}。" +
+                    "Castle AsyncInterceptor 不能安全拦截 ValueTask：提交会早于方法体结束（或根本不开事务）。" +
                     "请改为返回 Task / Task<T>，或改用窄事务 IVivUnitOfWork。");
             }
 
@@ -223,15 +225,14 @@ namespace Viv.Engine.UnitOfWork
         }
 
         /// <summary>
-        /// 能被异步拦截链接管的返回类型。非泛型 <c>ValueTask</c> 不在此列，实测它走同步路径。
+        /// 能被异步拦截链接管的返回类型。ValueTask / ValueTask&lt;T&gt; 一律不在此列。
         /// </summary>
         private static bool IsAsyncReturn(Type returnType)
         {
             if (returnType == typeof(Task)) return true;
             if (!returnType.IsGenericType) return false;
 
-            var definition = returnType.GetGenericTypeDefinition();
-            return definition == typeof(Task<>) || definition == typeof(ValueTask<>);
+            return returnType.GetGenericTypeDefinition() == typeof(Task<>);
         }
     }
 }

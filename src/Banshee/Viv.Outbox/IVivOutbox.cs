@@ -7,7 +7,7 @@ namespace Viv.Outbox
     /// 真正发出去交给后台投递器（<c>OutboxDispatcher</c>）。
     ///
     /// 投递是 at-least-once：投递器崩溃 / 租约过期会让同一条消息被投递两次。
-    /// 消费端去重靠 <c>MessageId</c>，框架不做 Inbox。
+    /// 消费端去重靠 <c>MessageId</c>；需要与业务写同事务的幂等时用可选的 <c>IVivInbox</c>。
     /// </summary>
     public interface IVivOutbox
     {

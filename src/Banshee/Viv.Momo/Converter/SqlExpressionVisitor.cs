@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
 using Viv.Momo.Enums;
+using MomoIdentifier = Viv.Momo.MomoIdentifier;
 
 namespace Viv.Momo.Converter
 {
@@ -18,16 +19,9 @@ namespace Viv.Momo.Converter
             _databaseSource = databaseSource;
         }
 
-        // 根据数据库类型引用标识符
+        // 根据数据库类型引用标识符（CLR 属性名 → 物理列名）
         private string QuoteIdentifier(string name)
-        {
-            return _databaseSource switch
-            {
-                DatabaseSourceType.SqlServer => $"[{name}]",
-                DatabaseSourceType.PostgreSQL => $"{name.ToLowerInvariant()}",
-                _ => name
-            };
-        }
+            => MomoIdentifier.QuoteClr(name, _databaseSource);
 
         // 辅助方法：检测表达式是否依赖任何参数
         private static bool ContainsParameter(Expression expr)

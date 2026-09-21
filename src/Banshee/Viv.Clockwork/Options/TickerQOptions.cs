@@ -14,8 +14,6 @@ namespace Viv.Clockwork.Options
         /// </summary>
         public DatabaseSourceType DatabaseSource { get; set; } = DatabaseSourceType.SqlServer;
 
-        public string EFCoreSchemaName { get; set; } = "dbo";
-
         public string? AssemblyName { get; set; }
 
         /// <summary>
@@ -37,14 +35,14 @@ namespace Viv.Clockwork.Options
         public string DashboardPath { get; set; } = "/tickerq";
 
         /// <summary>
-        /// 账号
+        /// 账号。Dashboard 启用时必须与 Password 同时有值，或改用 WebApiKey。
         /// </summary>
-        public string UserName { get; set; } = "viv";
+        public string UserName { get; set; } = string.Empty;
 
         /// <summary>
-        /// 密码
+        /// 密码。不要把真实口令提交进仓库。
         /// </summary>
-        public string Password { get; set; } = "viv_tickerq_77";
+        public string Password { get; set; } = string.Empty;
 
         /// <summary>
         /// 使用ApiKey进行认证

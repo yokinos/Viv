@@ -45,5 +45,8 @@ namespace Viv.Outbox.Core
         /// <returns>本批是否删掉了东西（false = 已清干净，调用方停止循环）。</returns>
         /// </summary>
         Task<bool> CleanupBatchAsync(DateTime cutoff, int batchSize, CancellationToken cancellationToken = default);
+
+        /// <summary>Pending / Failed 条数，给运行指标用。</summary>
+        Task<(long Pending, long Failed)> CountDepthAsync(CancellationToken cancellationToken = default);
     }
 }

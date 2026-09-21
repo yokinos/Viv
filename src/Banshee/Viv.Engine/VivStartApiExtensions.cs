@@ -1,7 +1,6 @@
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -17,6 +16,7 @@ using Viv.Echo.Grpc;
 using Viv.Engine.Filter;
 using Viv.Engine.LocalEvents;
 using Viv.Engine.Middleware;
+using Viv.Engine.Power;
 using Viv.Sandrone.Conveter;
 using Viv.Sandrone.OpenApi;
 
@@ -160,12 +160,9 @@ namespace Viv.Engine
             // 尝试同步表结构
             VivStartupSchemaSync.Run(app.Services);
 
-            // 网关代理场景：信任 YARP 默认透传的 X-Forwarded-Proto/Host/For，
-            // 否则下游 UseHttpsRedirection 会把 http 请求 302 到自己的 https 地址，浏览器绕开网关直连下游。
-            app.UseForwardedHeaders(new ForwardedHeadersOptions
-            {
-                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
-            });
+            // 网关代理场景：信任 YARP 透传的 X-Forwarded-Proto/Host/For。
+            // Aspire/YARP 网关不在 loopback，必须清空默认 KnownProxies，否则转发头被丢掉。
+            app.UseForwardedHeaders(VivForwardedHeaders.Create(VivEngine.VivOptions?.EnvOption));
 
             if (app.Environment.IsDevelopment())
             {

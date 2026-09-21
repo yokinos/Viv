@@ -11,6 +11,7 @@
     <ProjectReference Include="..\Viv.Elysia\Viv.Elysia.csproj" />
     <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
     <ProjectReference Include="..\Viv.EventContracts\Viv.EventContracts.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Outbox\Viv.Outbox.csproj" />
   </ItemGroup>
 
 </Project>

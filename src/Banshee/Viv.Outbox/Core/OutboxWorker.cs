@@ -1,5 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
+using System.Diagnostics;
 using Viv.Delusion.Magic;
 using Viv.Log;
 using Viv.Nana;
@@ -109,6 +109,16 @@ namespace Viv.Outbox.Core
             // 3) 清理已投递且超过保留期的行
             await CleanupAsync(repository, cancellationToken).ConfigureAwait(false);
 
+            try
+            {
+                var (pending, failed) = await repository.CountDepthAsync(cancellationToken).ConfigureAwait(false);
+                OutboxMetrics.SetDepth(pending, failed);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.Warning($"发件箱深度统计失败：{ex.Message}");
+            }
+
             return delivered;
         }
 
@@ -129,12 +139,15 @@ namespace Viv.Outbox.Core
                 await repository
                     .MarkFailedAsync(message.Id, message.RetryCount, $"未知事件类型：{message.EventType}", cancellationToken)
                     .ConfigureAwait(false);
+                OutboxMetrics.RecordFailed();
                 return;
             }
 
             try
             {
+                var started = Stopwatch.GetTimestamp();
                 await sender.SendAsync(publisher, message.Payload, message.MessageId, cancellationToken).ConfigureAwait(false);
+                OutboxMetrics.RecordDelivered((long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
                 await repository.MarkSentAsync(message.Id, DateTime.UtcNow, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -165,6 +178,7 @@ namespace Viv.Outbox.Core
                     $"MessageId={message.MessageId}, Id={message.Id}, EventType={message.EventType}",
                     ex);
                 await repository.MarkFailedAsync(message.Id, retryCount, ex.Message, cancellationToken).ConfigureAwait(false);
+                OutboxMetrics.RecordFailed();
                 return;
             }
 

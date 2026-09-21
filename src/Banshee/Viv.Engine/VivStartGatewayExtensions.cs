@@ -19,6 +19,7 @@ using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Engine.Middleware;
 using Viv.Engine.Options;
+using Viv.Engine.Power;
 using Yarp.ReverseProxy;
 using Yarp.ReverseProxy.Configuration;
 
@@ -155,6 +156,9 @@ namespace Viv.Engine
         {
             var app = builder.Build();
             VivLocator.Initialize(app.Services);
+
+            // Aspire 入口 / 前置 LB 通常不在 loopback，清空默认 KnownProxies 才能吃到 X-Forwarded-*。
+            app.UseForwardedHeaders(VivForwardedHeaders.Create(VivEngine.VivOptions?.EnvOption));
 
             app.UseMiddleware<RequestTrackMiddleware>();
             app.UseMiddleware<ApiStartedMiddleware>();

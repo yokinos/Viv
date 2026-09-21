@@ -13,13 +13,20 @@ namespace Viv.Engine.Power
         /// <summary>
         /// 从可信内部请求 Header 中获取上下文。
         /// 安全约束：x-viv-* 上下文头只有网关（或持有共享密钥的对等服务）签名后才可信。
-        /// 密钥只取 EnvOption.InternalToken；未配置时无法验签，按原行为信任身份头（该场景无租户数据）。
-        /// holderId 除外：无密钥不写入快照，避免客户端伪造锁身份。
+        /// 密钥只取 EnvOption.InternalToken；未配置时与 gRPC 一样失败闭合（不灌上下文），
+        /// 除非 Development 显式打开 AllowUnsignedInternalTrust。holder-id 即使走逃生也不信任。
         /// </summary>
         public static VivContextContent? GetContextFromHeaders(HttpContext context)
         {
             var secret = GetInternalSecret();
-            if (!string.IsNullOrWhiteSpace(secret) && !VerifySignature(context.Request.Headers, secret))
+            if (string.IsNullOrWhiteSpace(secret))
+            {
+                if (!InternalTrustGuard.AllowsUnsignedHeaders())
+                {
+                    return null;
+                }
+            }
+            else if (!VerifySignature(context.Request.Headers, secret))
             {
                 return null;
             }

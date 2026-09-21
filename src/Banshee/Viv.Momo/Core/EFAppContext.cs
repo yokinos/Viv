@@ -98,9 +98,10 @@ namespace Viv.Momo.Core
                         .UseSnakeCaseNamingConvention();
                     break;
                 case DatabaseSourceType.SqlServer:
+                    // SQL Server 保持 CLR PascalCase（[AtUser]/[TenantId]），与 SqlMagic / SchemaSynchronizer 一致。
+                    // 不要在这边再套 UseSnakeCaseNamingConvention —— 那会建成 at_user，而 Dapper 还在打 [AtUser]。
                     optionsBuilder.UseSqlServer(connectionString, x => x.EnableRetryOnFailure())
-                        .UseQueryTrackingBehavior(queryTrackingBehavior)
-                        .UseSnakeCaseNamingConvention();
+                        .UseQueryTrackingBehavior(queryTrackingBehavior);
                     break;
                 default:
                     throw new NotSupportedException($"不支持的数据库类型：{_options.DatabaseSource}");

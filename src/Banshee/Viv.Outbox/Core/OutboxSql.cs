@@ -143,5 +143,20 @@ namespace Viv.Outbox.Core
                 )
                 """,
         };
+
+        /// <summary>待投（Pending=0）与失败（Failed=3）条数，给仪表盘/gauge 用。</summary>
+        internal const string CountDepth =
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN Status = 0 THEN 1 ELSE 0 END), 0) AS Pending,
+                COALESCE(SUM(CASE WHEN Status = 3 THEN 1 ELSE 0 END), 0) AS Failed
+            FROM VivOutboxMessage
+            """;
+    }
+
+    internal sealed class OutboxDepth
+    {
+        public long Pending { get; set; }
+        public long Failed { get; set; }
     }
 }

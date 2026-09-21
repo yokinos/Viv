@@ -148,9 +148,19 @@ public class RequestTokenResolverTests
     #region GetContextFromHeaders
 
     [Fact]
-    public void GetContextFromHeaders_无密钥信任头()
+    public void GetContextFromHeaders_无密钥失败闭合不信任头()
     {
-        var result = RequestTokenResolver.GetContextFromHeaders(HttpContextFrom(ContextHeaders()));
+        Assert.Null(RequestTokenResolver.GetContextFromHeaders(HttpContextFrom(ContextHeaders())));
+    }
+
+    [Fact]
+    public void GetContextFromHeaders_Development逃生开关_信任身份头但不信任holderId()
+    {
+        EngineTestEnv.ForceUnsignedHatchMode();
+        var headers = ContextHeaders();
+        headers[VivRunDefine.HolderIdHeader] = "forged-holder";
+
+        var result = RequestTokenResolver.GetContextFromHeaders(HttpContextFrom(headers));
 
         Assert.NotNull(result);
         Assert.Equal(1, result!.AppId);
@@ -162,6 +172,7 @@ public class RequestTokenResolverTests
     [Fact]
     public void GetContextFromHeaders_无密钥不信任holderId头()
     {
+        EngineTestEnv.ForceUnsignedHatchMode();
         var headers = ContextHeaders();
         headers[VivRunDefine.HolderIdHeader] = "forged-holder";
 
@@ -198,6 +209,7 @@ public class RequestTokenResolverTests
     [Fact]
     public void GetContextFromHeaders_非法appId返回null()
     {
+        EngineTestEnv.ForceUnsignedHatchMode();
         var headers = ContextHeaders();
         headers[VivRunDefine.AppIdHeader] = "abc";
 
@@ -207,6 +219,7 @@ public class RequestTokenResolverTests
     [Fact]
     public void GetContextFromHeaders_缺userId返回null()
     {
+        EngineTestEnv.ForceUnsignedHatchMode();
         var headers = ContextHeaders();
         headers.Remove(VivRunDefine.UserIdHeader);
 

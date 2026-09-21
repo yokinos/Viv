@@ -17,6 +17,8 @@
   <ItemGroup>
     <EmbeddedResource Include="Sql\OutboxMessage.sql" />
     <EmbeddedResource Include="Sql\OutboxMessage.pg.sql" />
+    <EmbeddedResource Include="Sql\InboxMessage.sql" />
+    <EmbeddedResource Include="Sql\InboxMessage.pg.sql" />
   </ItemGroup>
 
   <ItemGroup>

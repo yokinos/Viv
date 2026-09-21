@@ -135,6 +135,32 @@ namespace Viv.Outbox.Core
             return _db.ExecuteSqlAsync(OutboxSql.CleanupBatch(_source), new { Cutoff = cutoff, BatchSize = batchSize });
         }
 
+        public async Task<(long Pending, long Failed)> CountDepthAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var connection = _db.GetDbConnection(DbReadWriteType.Write);
+                var row = await connection.QuerySingleAsync<OutboxDepth>(
+                    new CommandDefinition(
+                        OutboxSql.CountDepth,
+                        transaction: null,
+                        commandTimeout: _timeout,
+                        commandType: CommandType.Text,
+                        cancellationToken: cancellationToken)).ConfigureAwait(false);
+                return (row.Pending, row.Failed);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"发件箱深度统计失败（{_source}）", ex);
+                return (0, 0);
+            }
+        }
+
         /// <summary>LastError 列宽 2000，超长直接截断 —— 宁可少几个字，也别让整条标记语句失败。</summary>
         private static string? Truncate(string? error)
             => error is null || error.Length <= MaxErrorLength ? error : error[..MaxErrorLength];
