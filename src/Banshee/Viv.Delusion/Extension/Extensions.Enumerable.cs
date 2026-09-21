@@ -166,23 +166,63 @@ namespace Viv.Delusion.Extension
 
             #endregion
 
-            if (left.IsNullOrEmpty()) { yield break; }
-            var rightList = right ?? [];
-            var rightLookup = rightList.ToLookup(rightKeySelector);
+            if (left == null) { yield break; }
+            var rightLookup = (right ?? []).ToLookup(rightKeySelector);
+
             foreach (var leftItem in left)
             {
                 var leftKey = leftKeySelector(leftItem);
-                var rightItems = rightLookup[leftKey];
-                if (rightItems.Any())
+                var rightGroup = rightLookup[leftKey];
+
+                bool hasMatch = false;
+                foreach (var rightItem in rightGroup)
                 {
-                    foreach (var rightItem in rightItems)
-                    {
-                        yield return resultSelector(leftItem, rightItem);
-                    }
+                    hasMatch = true;
+                    yield return resultSelector(leftItem, rightItem);
                 }
-                else
+
+                if (!hasMatch)
                 {
                     yield return resultSelector(leftItem, default);
+                }
+            }
+        }
+
+        /// <summary>
+        /// [扩展方法] 实现LINQ内连接（Inner Join），兼容左表为空、右表为空场景
+        /// </summary>
+        /// <typeparam name="TLeft">左表元素类型</typeparam>
+        /// <typeparam name="TRight">右表元素类型</typeparam>
+        /// <typeparam name="TKey">连接键类型</typeparam>
+        /// <typeparam name="TResult">结果集元素类型</typeparam>
+        /// <param name="left">左表集合（为null/空时返回空）</param>
+        /// <param name="right">右表集合（为null时视为空集合）</param>
+        /// <param name="leftKeySelector">左表连接键选择器</param>
+        /// <param name="rightKeySelector">右表连接键选择器</param>
+        /// <param name="resultSelector">结果映射委托（只在左右都有匹配时调用）</param>
+        /// <returns>内连接后的结果集，仅保留左右表键匹配的元素</returns>
+        /// <remarks>
+        /// 1. 底层通过ToLookup构建右表连接键映射，比原生Join更高效；
+        /// 2. 左表为空时直接返回空，右表为空时也返回空；
+        /// 3. 支持一对多连接，左表一条记录匹配右表多条时会返回多条结果；
+        /// 4. 与LeftJoin的区别：无匹配的左表元素会被丢弃，不会产生null右表结果
+        /// </remarks>
+        public static IEnumerable<TResult> InnerJoin<TLeft, TRight, TKey, TResult>([AllowNull] this IEnumerable<TLeft> left, IEnumerable<TRight>? right,
+            Func<TLeft, TKey> leftKeySelector,
+            Func<TRight, TKey> rightKeySelector,
+            Func<TLeft, TRight, TResult> resultSelector)
+        {
+            if (left == null) { yield break; }
+            var rightLookup = (right ?? []).ToLookup(rightKeySelector);
+
+            foreach (var leftItem in left)
+            {
+                var leftKey = leftKeySelector(leftItem);
+                var rightGroup = rightLookup[leftKey];
+
+                foreach (var rightItem in rightGroup)
+                {
+                    yield return resultSelector(leftItem, rightItem);
                 }
             }
         }
