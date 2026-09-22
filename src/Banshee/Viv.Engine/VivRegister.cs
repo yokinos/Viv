@@ -196,8 +196,7 @@ namespace Viv.Engine
             // 内核适配器必须与 IMomoDbContext 同生命周期（都是 Scoped）：Momo 的事务状态
             // 挂在它自己的 _transaction 字段上、跟着实例走，适配器解析到别的实例就等于
             // 「开的和提交的是两个不同的事务」。
-            services.AddScoped<ITransactionKernel>(sp =>
-                new MomoTransactionAdapter(sp.GetRequiredService<IMomoDbContext>()));
+            services.AddScoped<ITransactionKernel>(sp => new MomoTransactionAdapter(sp.GetRequiredService<IMomoDbContext>()));
             services.AddScoped<IVivUnitOfWork, UnitOfWorkManager>();
         }
 
