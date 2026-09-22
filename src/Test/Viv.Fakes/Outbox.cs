@@ -134,7 +134,9 @@ public sealed class RecordingOutbox : IVivOutbox
 /// </summary>
 internal sealed class StubInboxRepository : IInboxRepository
 {
-    public HashSet<(string Service, long MessageId)> Accepted { get; } = [];
+    /// <summary>落库的键 —— 是 InboxStore 拼好前缀之后的那一串（<c>msg:42</c> / <c>biz:order:42</c>），
+    /// 所以「消息 42 与业务键 42 不互撞」这类断言在这个集合上才成立。</summary>
+    public HashSet<(string Service, string Key)> Accepted { get; } = [];
 
     public int EnsureTableCalls { get; private set; }
 
@@ -166,9 +168,9 @@ internal sealed class StubInboxRepository : IInboxRepository
         return Task.FromResult(CleanupScript.Count > 0 ? CleanupScript.Dequeue() : CleanupResult);
     }
 
-    public Task<bool> TryInsertAsync(string serviceName, long messageId, DateTime acceptedAt, CancellationToken cancellationToken = default)
+    public Task<bool> TryInsertAsync(string serviceName, string idempotentKey, DateTime acceptedAt, CancellationToken cancellationToken = default)
     {
-        var key = (serviceName, messageId);
+        var key = (serviceName, idempotentKey);
         if (DuplicateReturnsFalse && !Accepted.Add(key))
             return Task.FromResult(false);
         Accepted.Add(key);

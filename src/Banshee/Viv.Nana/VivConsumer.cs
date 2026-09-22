@@ -92,14 +92,27 @@ namespace Viv.Nana
         public abstract Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<T> envelope, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 可选 Inbox：与业务写同事务记下 <c>(ServiceName, MessageId)</c>。
+        /// 可选 Inbox：与业务写同事务记下 <c>(ServiceName, msg:{MessageId})</c>。
         /// 未注入 <see cref="IVivInbox"/> 时恒为 true（不强迫所有消费者启用）。
         /// 返回 false 表示这条已经处理过，调用方应跳过业务。
+        /// 这是消息级去重 —— 挡的是同一条消息被投递两次。要按业务粒度去重（同一张订单的不同消息
+        /// 只处理一次）用下面那个收业务键的重载。
         /// </summary>
         protected Task<bool> TryAcceptInboxAsync(NanaEnvelope<T> envelope, CancellationToken cancellationToken = default)
         {
             if (_inbox == null) return Task.FromResult(true);
             return _inbox.TryAcceptAsync(envelope.MessageId, cancellationToken);
+        }
+
+        /// <summary>
+        /// 可选 Inbox 的业务幂等版：键由调用方给，同一件事第二次消费返回 false。
+        /// 未注入 <see cref="IVivInbox"/> 时同样恒为 true。
+        /// 多租户下记得把租户拼进键（如 <c>$"{_context.SubjectId}:{orderId}"</c>），框架不替你带。
+        /// </summary>
+        protected Task<bool> TryAcceptInboxAsync(string idempotentKey, CancellationToken cancellationToken = default)
+        {
+            if (_inbox == null) return Task.FromResult(true);
+            return _inbox.TryAcceptAsync(idempotentKey, cancellationToken);
         }
 
         /// <summary>

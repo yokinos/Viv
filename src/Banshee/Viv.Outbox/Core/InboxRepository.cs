@@ -31,7 +31,7 @@ namespace Viv.Outbox.Core
         }
 
         public async Task<bool> TryInsertAsync(
-            string serviceName, long messageId, DateTime acceptedAt, CancellationToken cancellationToken = default)
+            string serviceName, string idempotentKey, DateTime acceptedAt, CancellationToken cancellationToken = default)
         {
             await EnsureTableAsync(cancellationToken).ConfigureAwait(false);
             try
@@ -39,7 +39,7 @@ namespace Viv.Outbox.Core
                 return await _db.ExecuteSqlAsync(InboxSql.Insert, new
                 {
                     ServiceName = serviceName,
-                    MessageId = messageId,
+                    IdempotentKey = idempotentKey,
                     AcceptedAt = acceptedAt,
                 }).ConfigureAwait(false);
             }

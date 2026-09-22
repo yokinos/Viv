@@ -15,14 +15,14 @@ namespace Viv.Outbox.Core
 
         internal const string Insert =
             """
-            INSERT INTO VivInboxMessage (ServiceName, MessageId, AcceptedAt)
-            VALUES (@ServiceName, @MessageId, @AcceptedAt)
+            INSERT INTO VivInboxMessage (ServiceName, IdempotentKey, AcceptedAt)
+            VALUES (@ServiceName, @IdempotentKey, @AcceptedAt)
             """;
 
         /// <summary>
         /// 分批清理超过保留期的行（一批一次，调用方循环到没得删为止）。
         ///
-        /// 表的主键是 (ServiceName, MessageId) 复合键，没有单列 Id 可拿来圈批 —— 所以不能照抄发件箱那条
+        /// 表的主键是 (ServiceName, IdempotentKey) 复合键，没有单列 Id 可拿来圈批 —— 所以不能照抄发件箱那条
         /// 「Id IN (SELECT ...)」。SQL Server 用 DELETE TOP，PostgreSQL 没有 DELETE LIMIT，
         /// 改用行值 IN 子查询。两端都落在 AcceptedAt 上，建表脚本给它配了索引。
         /// </summary>
@@ -31,8 +31,8 @@ namespace Viv.Outbox.Core
             DatabaseSourceType.PostgreSQL =>
                 """
                 DELETE FROM VivInboxMessage
-                WHERE (ServiceName, MessageId) IN (
-                    SELECT ServiceName, MessageId FROM VivInboxMessage
+                WHERE (ServiceName, IdempotentKey) IN (
+                    SELECT ServiceName, IdempotentKey FROM VivInboxMessage
                     WHERE AcceptedAt < @Cutoff
                     LIMIT @BatchSize
                 )

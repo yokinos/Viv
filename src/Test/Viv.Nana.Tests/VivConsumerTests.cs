@@ -457,6 +457,46 @@ namespace Viv.Nana.Tests
             Assert.Equal(2, inbox.Attempts.Count);
             Assert.Single(inbox.Accepted);
         }
+
+        [Fact]
+        public async Task 可选Inbox_业务键相同但MessageId不同_只处理第一次()
+        {
+            var inbox = new RecordingInbox();
+            var consumer = new BusinessInboxConsumer(Dep(
+                new RecordingLogger(),
+                new RecordingEventPublisher(),
+                XUnitTestMagic.CreateOptions(new NanaOptions()),
+                inbox: inbox));
+
+            // 两条不同的消息（MessageId 不同），但说的是同一件事 —— 消息级去重对它们完全无感
+            var first = Envelope(new TestApexEvent { Payload = "42" });
+            var second = Envelope(new TestApexEvent { Payload = "42" });
+            first.MessageId = 100;
+            second.MessageId = 200;
+
+            await consumer.HandleAsync(first, CancellationToken.None);
+            await consumer.HandleAsync(second, CancellationToken.None);
+
+            Assert.Equal(1, consumer.BusinessCalls);
+            Assert.Equal(["biz:order:42", "biz:order:42"], inbox.Attempts);
+        }
+    }
+
+    /// <summary>按业务键去重 —— 键取自消息内容，两条 MessageId 不同的消息说的是同一件事</summary>
+    public class BusinessInboxConsumer : VivConsumer<TestApexEvent>
+    {
+        public int BusinessCalls { get; private set; }
+
+        public BusinessInboxConsumer(VivConsumerDependency dependency) : base(dependency) { }
+
+        public override async Task<SubscribeResult> ReceiveMessageAsync(
+            NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
+        {
+            if (!await TryAcceptInboxAsync($"order:{envelope.Content!.Payload}", cancellationToken))
+                return SubscribeResult.Success();
+            BusinessCalls++;
+            return SubscribeResult.Success();
+        }
     }
 
     /// <summary>业务里显式调 Inbox helper；未注入时 TryAcceptInboxAsync 恒为 true。</summary>

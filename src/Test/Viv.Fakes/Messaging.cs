@@ -264,17 +264,26 @@ public class RecordingDistributedLock : IDistributedLock
 
 /// <summary>
 /// 可选 Inbox 替身。消费者子类调 <c>TryAcceptInboxAsync</c> 时用它断言去重，不强迫所有消费者注入。
+///
+/// 两个重载各自加上与真实实现一致的前缀再入集合：替身把「两族键不互撞」这条行为也带上，
+/// 否则消息 42 与业务键 "42" 在这里会被当成同一个键去重，而真实实现是两行。
 /// </summary>
 public sealed class RecordingInbox : IVivInbox
 {
-    public HashSet<long> Accepted { get; } = [];
+    public HashSet<string> Accepted { get; } = [];
 
-    public List<long> Attempts { get; } = [];
+    public List<string> Attempts { get; } = [];
 
     public Task<bool> TryAcceptAsync(long messageId, CancellationToken cancellationToken = default)
+        => Task.FromResult(Accept($"msg:{messageId}"));
+
+    public Task<bool> TryAcceptAsync(string idempotentKey, CancellationToken cancellationToken = default)
+        => Task.FromResult(Accept($"biz:{idempotentKey}"));
+
+    private bool Accept(string key)
     {
-        Attempts.Add(messageId);
-        return Task.FromResult(Accepted.Add(messageId));
+        Attempts.Add(key);
+        return Accepted.Add(key);
     }
 }
 

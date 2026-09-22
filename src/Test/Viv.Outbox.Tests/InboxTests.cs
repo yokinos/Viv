@@ -16,15 +16,15 @@ public class InboxSqlTests
 
     [Theory]
     [MemberData(nameof(Sources))]
-    public void 建表脚本_幂等且主键是ServiceName加MessageId(DatabaseSourceType source)
+    public void 建表脚本_幂等且主键是ServiceName加IdempotentKey(DatabaseSourceType source)
     {
         var ddl = InboxSql.CreateTable(source);
 
         Assert.Contains("VivInboxMessage", ddl);
         Assert.Contains("ServiceName", ddl);
-        Assert.Contains("MessageId", ddl);
+        Assert.Contains("IdempotentKey", ddl);
         Assert.Contains("AcceptedAt", ddl);
-        Assert.Contains("PRIMARY KEY", ddl, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PRIMARY KEY (ServiceName, IdempotentKey)", ddl, StringComparison.OrdinalIgnoreCase);
 
         var idempotent = ddl.Contains("IF OBJECT_ID", StringComparison.OrdinalIgnoreCase)
                          || ddl.Contains("IF NOT EXISTS", StringComparison.OrdinalIgnoreCase);
@@ -40,7 +40,7 @@ public class InboxSqlTests
     public void 插入语句_走参数化()
     {
         Assert.Contains("@ServiceName", InboxSql.Insert);
-        Assert.Contains("@MessageId", InboxSql.Insert);
+        Assert.Contains("@IdempotentKey", InboxSql.Insert);
         Assert.Contains("@AcceptedAt", InboxSql.Insert);
         Assert.StartsWith("INSERT INTO VivInboxMessage", InboxSql.Insert, StringComparison.OrdinalIgnoreCase);
     }
@@ -60,7 +60,7 @@ public class InboxSqlTests
         // SQL Server 有 DELETE TOP，PostgreSQL 没有 DELETE LIMIT，只能行值 IN 子查询。
         if (source == DatabaseSourceType.PostgreSQL)
         {
-            Assert.Contains("(ServiceName, MessageId) IN", sql);
+            Assert.Contains("(ServiceName, IdempotentKey) IN", sql);
             Assert.Contains("LIMIT @BatchSize", sql);
         }
         else
@@ -223,6 +223,46 @@ public class InboxStoreTests
     {
         var store = new InboxStore(new StubInboxRepository(), new RecordingLogger());
         Assert.False(await store.TryAcceptAsync(0));
+    }
+
+    [Fact]
+    public async Task 业务键_首次接受重复拒绝()
+    {
+        var store = new InboxStore(new StubInboxRepository(), new RecordingLogger());
+
+        Assert.True(await store.TryAcceptAsync("order:42"));
+        Assert.False(await store.TryAcceptAsync("order:42"));
+        Assert.True(await store.TryAcceptAsync("order:43"));
+    }
+
+    [Fact]
+    public async Task 业务键与MessageId不互撞_键按前缀分命名空间()
+    {
+        // 数值型业务键（订单号 42）与 MessageId 42 的裸值都是「42」，不靠前缀分家就是同一行 ——
+        // 表现是另一件不相干的事被当成重复跳过，而表里两行长得一模一样，看不出问题
+        var repo = new StubInboxRepository();
+        var store = new InboxStore(repo, new RecordingLogger());
+
+        Assert.True(await store.TryAcceptAsync(42));
+        Assert.True(await store.TryAcceptAsync("42"));
+        Assert.False(await store.TryAcceptAsync(42));
+        Assert.False(await store.TryAcceptAsync("42"));
+
+        Assert.Contains(repo.Accepted, x => x.Key == "msg:42");
+        Assert.Contains(repo.Accepted, x => x.Key == "biz:42");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task 业务键为空或全空白返回false(string key)
+    {
+        // 空白键落库就成了「所有空白键互相去重」，挡在插入之前
+        var repo = new StubInboxRepository();
+        var store = new InboxStore(repo, new RecordingLogger());
+
+        Assert.False(await store.TryAcceptAsync(key));
+        Assert.Empty(repo.Accepted);
     }
 }
 
