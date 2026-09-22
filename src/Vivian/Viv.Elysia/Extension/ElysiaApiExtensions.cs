@@ -11,7 +11,6 @@ namespace Viv.Elysia.Extension
         /// <summary>
         /// 添加自定义的过滤器
         /// </summary>
-        /// <typeparam name="TFilterType"></typeparam>
         /// <param name="filters"></param>
         /// <returns></returns>
         public static FilterCollection AddElysiaFilter(this FilterCollection filters)

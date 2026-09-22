@@ -40,9 +40,9 @@ namespace Viv.Delusion
         /// </summary>
         /// <param name="message"></param>
         /// <returns></returns>
-        public static FuncResult Failed(string? message)
+        public static FuncResult Failed(string? message, object? data = null)
         {
-            return new FuncResult { IsSuccess = false, Message = message };
+            return new FuncResult { IsSuccess = false, Message = message, Data = data };
         }
     }
 }

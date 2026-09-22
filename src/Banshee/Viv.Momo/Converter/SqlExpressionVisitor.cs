@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
 using Viv.Momo.Enums;
-using MomoIdentifier = Viv.Momo.MomoIdentifier;
 
 namespace Viv.Momo.Converter
 {

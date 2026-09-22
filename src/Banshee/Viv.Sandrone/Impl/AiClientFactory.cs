@@ -33,7 +33,7 @@ namespace Viv.Sandrone.Impl
         }
 
         [return: MaybeNull]
-        public IChatClient GetDefaultClient()
+        public IChatClient? GetDefaultClient()
         {
             if (_openAIOptions == null) return default;
             return CreateClient(_openAIOptions.ApiUrl, _openAIOptions.ApiKey, _openAIOptions.Model);

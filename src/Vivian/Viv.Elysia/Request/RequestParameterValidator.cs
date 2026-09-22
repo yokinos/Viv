@@ -356,7 +356,7 @@ namespace Viv.Elysia.Request
 
             }
 
-            public new bool Equals(object x, object y)
+            public new bool Equals(object? x, object? y)
             {
                 return ReferenceEquals(x, y);
             }

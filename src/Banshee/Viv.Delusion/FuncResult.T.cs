@@ -15,7 +15,7 @@ namespace Viv.Delusion
         public new T? Data { get; set; }
 
         /// <summary>
-        /// 
+        /// 成功
         /// </summary>
         /// <param name="message"></param>
         /// <param name="data"></param>
@@ -26,7 +26,7 @@ namespace Viv.Delusion
         }
 
         /// <summary>
-        /// 
+        /// 成功
         /// </summary>
         /// <param name="message"></param>
         /// <param name="data"></param>
@@ -37,13 +37,14 @@ namespace Viv.Delusion
         }
 
         /// <summary>
-        /// 
+        /// 失败
         /// </summary>
         /// <param name="message"></param>
+        /// <param name="data"></param>
         /// <returns></returns>
-        public static FuncResult<T> Failed(string? message)
+        public static FuncResult<T> Failed(string? message, T? data = default)
         {
-            return new FuncResult<T> { IsSuccess = false, Message = message };
+            return new FuncResult<T> { IsSuccess = false, Message = message, Data = data };
         }
     }
 }

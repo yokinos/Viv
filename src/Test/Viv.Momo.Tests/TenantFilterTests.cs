@@ -98,8 +98,8 @@ public class TenantFilterTests
         var ctx = new ExposedEfAppContext(EntityScanOptions(), new TestContextAccessor());
         var model = ctx.BuildModel();
 
-        Assert.NotNull(model.Entity(typeof(TenantUserEntity)).Metadata.GetQueryFilter());
-        Assert.NotNull(model.Entity(typeof(SoftDeleteTenantEntity)).Metadata.GetQueryFilter());
+        Assert.NotNull(model.Entity(typeof(TenantUserEntity)).Metadata.GetDeclaredQueryFilters());
+        Assert.NotNull(model.Entity(typeof(SoftDeleteTenantEntity)).Metadata.GetDeclaredQueryFilters());
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class TenantFilterTests
         var ctx = new ExposedEfAppContext(EntityScanOptions(), new TestContextAccessor());
         var model = ctx.BuildModel();
 
-        Assert.Null(model.Entity(typeof(NonTenantEntity)).Metadata.GetQueryFilter());
+        Assert.Null(model.Entity(typeof(NonTenantEntity)).Metadata.GetDeclaredQueryFilters());
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public class TenantFilterTests
         var ctx = new ExposedEfAppContext(EntityScanOptions(), null);
         var model = ctx.BuildModel();
 
-        Assert.Null(model.Entity(typeof(TenantUserEntity)).Metadata.GetQueryFilter());
+        Assert.Null(model.Entity(typeof(TenantUserEntity)).Metadata.GetDeclaredQueryFilters());
     }
 
     #endregion

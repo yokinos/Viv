@@ -67,15 +67,13 @@ namespace Viv.Delusion.Mapper
         private static Func<object, object> BuildMapper(Type sourceType, Type targetType)
         {
             // 动态方法：object Map(object source)
-            DynamicMethod method = new DynamicMethod("Map_" + targetType.Name, typeof(object), new[] { typeof(object) }, typeof(EmitMapper).Module);
+            var method = new DynamicMethod("Map_" + targetType.Name, typeof(object), [typeof(object)], typeof(EmitMapper).Module);
 
             ILGenerator il = method.GetILGenerator();
 
             // 声明局部变量：targetType target = new targetType();
             LocalBuilder targetLocal = il.DeclareLocal(targetType);
-            ConstructorInfo ctor = targetType.GetConstructor(Type.EmptyTypes);
-            if (ctor == null)
-                throw new InvalidOperationException($"目标类型 {targetType} 必须具有无参构造函数");
+            ConstructorInfo ctor = targetType.GetConstructor(Type.EmptyTypes) ?? throw new InvalidOperationException($"目标类型 {targetType} 必须具有无参构造函数");
             il.Emit(OpCodes.Newobj, ctor);
             il.Emit(OpCodes.Stloc, targetLocal);
 
@@ -121,14 +119,11 @@ namespace Viv.Delusion.Mapper
                     if (targetIsList || targetIsArray)
                     {
                         // 准备调用辅助方法：MapToList 或 MapToArray
-                        MethodInfo mapMethod = targetIsList
+                        MethodInfo mapMethod = (targetIsList
                             ? typeof(EmitMapper).GetMethod(nameof(MapToList), BindingFlags.NonPublic | BindingFlags.Static)
                             ?.MakeGenericMethod(srcElemType, tgtElemType)
                             : typeof(EmitMapper).GetMethod(nameof(MapToArray), BindingFlags.NonPublic | BindingFlags.Static)
-                                ?.MakeGenericMethod(srcElemType, tgtElemType);
-
-                        if (mapMethod == null)
-                            throw new InvalidOperationException("无法获取集合映射辅助方法");
+                                ?.MakeGenericMethod(srcElemType, tgtElemType)) ?? throw new InvalidOperationException("无法获取集合映射辅助方法");
 
                         // target.Prop = MapXxx(source.Prop);
                         il.Emit(OpCodes.Ldloc, targetLocal);

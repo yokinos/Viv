@@ -43,7 +43,7 @@ namespace Viv.Engine
             ArgumentNullException.ThrowIfNull(vivOptions);
 
             // 暂存标题供 RunVivApi 使用
-            builder.Configuration[ApiTitleKey] = initSetting?.ApiName;
+            builder.Configuration[ApiTitleKey] = initSetting.ApiName;
             builder.Services.AddHttpContextAccessor();
 
             // Autofac 容器

@@ -10,9 +10,9 @@ namespace Viv.Delusion.Mapper
 {
     public static class ExpressionMapper
     {
-        public static bool IsEnabled = false;
+        public const bool IsEnabled = false;
 
-        private static readonly Dictionary<string, Delegate> _compiledCache = new();
+        private static readonly Dictionary<string, Delegate> _compiledCache = [];
 
         public static TTarget Map<TTarget>(object source)
         {
@@ -112,7 +112,7 @@ namespace Viv.Delusion.Mapper
             body.Add(Expression.Return(returnLabel, targetVar, targetType));
             body.Add(Expression.Label(returnLabel, targetVar));
 
-            BlockExpression block = Expression.Block(new[] { targetVar }, body);
+            BlockExpression block = Expression.Block([targetVar], body);
             return Expression.Lambda(block, sourceParam);
         }
 

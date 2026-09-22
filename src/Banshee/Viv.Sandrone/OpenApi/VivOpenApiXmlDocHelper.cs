@@ -55,7 +55,7 @@ internal static class VivOpenApiXmlDocHelper
             return string.Empty;
 
         return string.Join(' ',
-            raw.Split(new[] { '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+            raw.Split(['\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries)
                .Select(x => x.Trim()));
     }
 

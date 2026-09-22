@@ -8,7 +8,7 @@ namespace Viv.Contracts.Interface
 {
     public interface IAiClientFactory
     {
-        IChatClient GetDefaultClient();
+        IChatClient? GetDefaultClient();
 
         IChatClient CreateClient(string apiUrl, string apiKey, string model);
 
