@@ -24,6 +24,9 @@ namespace Viv.Nana
     /// 抢不到 → 二次裁决锁是否真被持有：确实被持有（真竞争）ACK 丢弃不回队；
     /// 锁未被持有或无法确认（瞬时不稳 / Redis 故障）→ 抛异常交给 Wolverine 重试，耗尽进死信。
     /// 未注入 <see cref="IDistributedLock"/>（无 Redis 环境）时整段锁逻辑跳过。
+    /// 锁 Key 由 <see cref="GetConsumeLockKey"/> 给出，默认就是上面那把消息级去重锁；
+    /// 重写它可换成业务粒度（让同一订单的不同消息互斥），返回 null 则这条消息完全不加锁。
+    /// 过期时间由 <see cref="GetConsumeLockTime"/> 给出，默认 5 分钟。
     ///
     /// 两套重试机制，别混：
     /// ① Wolverine 内存退避重试（业务异常重试）—— 子类 <see cref="ReceiveMessageAsync"/> 返回
@@ -67,6 +70,9 @@ namespace Viv.Nana
 
         private readonly IVivInbox? _inbox;
 
+        /// <summary>消费锁默认过期时间 —— 重写 <see cref="GetConsumeLockTime"/> 可改</summary>
+        private static readonly TimeSpan DefaultConsumeLockExpire = TimeSpan.FromMinutes(5);
+
         protected VivConsumer(VivConsumerDependency dependency)
         {
             _logger = dependency._logger;
@@ -106,7 +112,7 @@ namespace Viv.Nana
             if (envelope == null || envelope.Content == null)
                 return;
 
-            var lockKey = NanaRegister.GetConsumerLockKey(typeof(T).Name, envelope.MessageId);
+            object? lockKey = null;
             var acquired = false;
             var succeeded = false;
 
@@ -123,10 +129,23 @@ namespace Viv.Nana
                 }
 
                 LockHolderContext.SetHolderId(holderId);
-                if (_distributedLock != null)
+
+                // 取 Key 排在上下文水合之后：重写方要用 _context / LockHolderContext 拼业务 Key，得先看得到本条消息
+                lockKey = GetConsumeLockKey(envelope);
+                if (_distributedLock != null && lockKey != null)
                 {
+                    // 非正数在这儿挡掉：真实实现对 expire <= 0 是直接 return false（不抛、不记），
+                    // 表现成「取锁失败」→ IsLockHeldAsync 也是 false → 抛 DistributedLockException →
+                    // 每条消息都进死信，而错误信息里一个字都不会提过期时间配错了。
+                    var lockExpire = GetConsumeLockTime(envelope);
+                    if (lockExpire <= TimeSpan.Zero)
+                    {
+                        _logger.Warning($"消费锁过期时间无效（{lockExpire}），回落默认 {DefaultConsumeLockExpire}: MessageId: {envelope.MessageId}");
+                        lockExpire = DefaultConsumeLockExpire;
+                    }
+
                     // 取锁失败 → 二次裁决锁状态，确认是否真竞争 这里的锁采用不可重入模式，避免同一消息在多个服务内消费时重复取锁
-                    acquired = await _distributedLock.AcquireLockAsync(lockKey, TimeSpan.FromMinutes(5), holderId, false).ConfigureAwait(false);
+                    acquired = await _distributedLock.AcquireLockAsync(lockKey, lockExpire, holderId, false).ConfigureAwait(false);
                     if (!acquired)
                     {
                         // 二次裁决：锁确实被其他实例持有 → 真竞争，丢弃不回队；
@@ -134,7 +153,8 @@ namespace Viv.Nana
                         // 裁决本身失败（Redis 不可用）→ 异常冒泡，同样交由 Wolverine 重试/进死信。
                         if (await _distributedLock.IsLockHeldAsync(lockKey).ConfigureAwait(false))
                             return;
-                        throw new DistributedLockException(lockKey, 0);
+                        // 异常只吃 string：Key 允许是任意对象（归一化由 DistributedLockAccessor 内部做），这里只要个可读的标识
+                        throw new DistributedLockException(lockKey.ToString()!, 0);
                     }
                 }
 
@@ -173,7 +193,7 @@ namespace Viv.Nana
                 {
                     try
                     {
-                        await _distributedLock.ReleaseLockAsync(lockKey).ConfigureAwait(false);
+                        await _distributedLock.ReleaseLockAsync(lockKey!).ConfigureAwait(false);
                     }
                     catch (Exception relEx)
                     {
@@ -231,5 +251,29 @@ namespace Viv.Nana
             _logger.Info($"消息延迟重投，第 {envelope.ReDeliverCount} 次，{delay.TotalSeconds:0.#} 秒后重投: MessageId: {envelope.MessageId}");
             return SubscribeResult.Success();
         }
+
+        /// <summary>
+        /// 本次消费要抢的分布式锁 Key，返回 null 表示这条消息完全不加锁。
+        /// 默认是消息级去重锁 <c>nana:{ServiceName}:{EventType}:{MessageId}</c>；
+        /// 重写它可以把锁换成业务粒度 —— 比如按订单号锁，让同一订单的不同消息互斥。
+        ///
+        /// 在上下文水合之后调用，重写方能读到本条消息的 <c>_context</c> 与 <c>LockHolderContext</c>。
+        /// 别返回空字符串：那是一个合法的 Key，而 Redis 不接受空 Key，会抛异常把消息送进死信。
+        /// </summary>
+        protected virtual object? GetConsumeLockKey(NanaEnvelope<T> envelope)
+            => NanaRegister.GetConsumerLockKey(typeof(T).Name, envelope.MessageId);
+
+        /// <summary>
+        /// 本次消费锁的过期时间，默认 5 分钟。返回非正数会被挡回默认值并记 Warning ——
+        /// 真实实现对非正数是不抛异常的取锁失败，放任下去表现成「每条消息都进死信」而看不出原因。
+        ///
+        /// 它管的是崩溃兜底，不是业务耗时上限：锁取到就自动续期（Redis 实现会在过期时间的一半时续一次），
+        /// 业务跑多久锁都不会掉，进程活着就一直续。真出事的场景是进程被 kill —— 续期跟着停，
+        /// 锁最多再占这么久。所以调大 = 崩溃后同一把锁占得更久，期间重投回来的消息撞上「真竞争」被丢弃；
+        /// 调小 = 恢复快，但留给业务跑完的余量也小。
+        ///
+        /// 与 <see cref="GetConsumeLockKey"/> 一样在上下文水合之后调用。
+        /// </summary>
+        protected virtual TimeSpan GetConsumeLockTime(NanaEnvelope<T> envelope) => DefaultConsumeLockExpire;
     }
 }

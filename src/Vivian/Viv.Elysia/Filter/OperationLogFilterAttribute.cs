@@ -84,8 +84,6 @@ namespace Viv.Elysia.Filter
                     Operation = opCtx.Operation,
                     RequestJson = requestBody,
                     ResponseJson = responseBody,
-                    IsJob = false,
-                    Priority = 0
                 }).ConfigureAwait(false);
             }
             finally

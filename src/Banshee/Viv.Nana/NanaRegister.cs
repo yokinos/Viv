@@ -1,4 +1,5 @@
 using System.Reflection;
+using Viv.Contracts;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
@@ -95,7 +96,7 @@ namespace Viv.Nana
         /// </summary>
         public static string GetConsumerLockKey(string eventTypeName, long messageId)
         {
-            return $"nana:{CurrentServiceName}:{eventTypeName}:{messageId}";
+            return LockKeyMagic.Join(LockKeyMagic.NanaPrefix, CurrentServiceName, eventTypeName, messageId);
         }
 
         /// <summary>

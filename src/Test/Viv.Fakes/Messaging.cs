@@ -179,7 +179,13 @@ public class RecordingDistributedLock : IDistributedLock
 
     public string? LastLockKey { get; private set; }
 
+    /// <summary>最后一次释放传的 Key —— 验「释放的是取锁时那把」</summary>
+    public string? LastReleaseKey { get; private set; }
+
     public string? LastHolderId { get; private set; }
+
+    /// <summary>最后一次取锁传的过期时间 —— 验「消费锁过期时间可重写」</summary>
+    public TimeSpan? LastExpire { get; private set; }
 
     public Exception? AcquireException { get; set; }
 
@@ -188,6 +194,7 @@ public class RecordingDistributedLock : IDistributedLock
         AcquireCalls++;
         LastLockKey = Key(key);
         LastHolderId = lockHolderId;
+        LastExpire = expire;
         if (AcquireException is not null)
             throw AcquireException;
         return Task.FromResult(AcquireResult);
@@ -204,6 +211,7 @@ public class RecordingDistributedLock : IDistributedLock
     public Task<bool> ReleaseLockAsync(object key, string? lockHolderId = null, bool isReentrant = true)
     {
         ReleaseCalls++;
+        LastReleaseKey = Key(key);
         return Task.FromResult(true);
     }
 
@@ -248,7 +256,7 @@ public class RecordingDistributedLock : IDistributedLock
     }
 
     /// <summary>
-    /// 替身不做归一化（真实实现在 <c>DistributedLockAccessor.GenerateLockKey</c>），string 直接落原文，
+    /// 替身不做归一化（真实实现在 <c>LockKeyMagic.Generate</c>），string 直接落原文，
     /// 其余类型 ToString —— 断言 <see cref="LastLockKey"/> 的用例都是传 string 的路径。
     /// </summary>
     private static string Key(object key) => key?.ToString() ?? "null";

@@ -1,3 +1,4 @@
+using Viv.Contracts;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
@@ -58,7 +59,7 @@ namespace Viv.Momo.Base
         {
             var bucket = new T();
             var cacheKey = bucket.GetCacheKey(keys);
-            var lockKey = $"lock:{cacheKey}";
+            var lockKey = LockKeyMagic.Join(LockKeyMagic.BusinessPrefix, cacheKey);
             var hasLock = false;
 
             try

@@ -60,6 +60,56 @@ namespace Viv.Nana.Tests
         }
     }
 
+    /// <summary>重写锁 Key 返回 null —— 这条消息不该进锁逻辑</summary>
+    public class NoLockConsumer : VivConsumer<TestApexEvent>
+    {
+        public int Calls { get; private set; }
+
+        public NoLockConsumer(VivConsumerDependency dependency) : base(dependency) { }
+
+        protected override object? GetConsumeLockKey(NanaEnvelope<TestApexEvent> envelope) => null;
+
+        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return Task.FromResult(SubscribeResult.Success());
+        }
+    }
+
+    /// <summary>把锁换业务粒度，并在拼 Key 时读本条消息的租户与锁持有者</summary>
+    public class BusinessLockConsumer : VivConsumer<TestApexEvent>
+    {
+        public long SeenTenantId { get; private set; }
+
+        public string? SeenHolderId { get; private set; }
+
+        public BusinessLockConsumer(VivConsumerDependency dependency) : base(dependency) { }
+
+        protected override object? GetConsumeLockKey(NanaEnvelope<TestApexEvent> envelope)
+        {
+            SeenTenantId = _context.SubjectId;
+            SeenHolderId = LockHolderContext.CurrentHolderId;
+            // 走到这里 Content 必不为 null：HandleAsync 开头就挡掉了空信封
+            return $"biz:apex:{envelope.Content!.Payload}";
+        }
+
+        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
+            => Task.FromResult(SubscribeResult.Success());
+    }
+
+    /// <summary>重写锁过期时间 —— LockTime 摆什么就用什么</summary>
+    public class LockTimeConsumer : VivConsumer<TestApexEvent>
+    {
+        public TimeSpan LockTime { get; set; } = TimeSpan.FromMinutes(5);
+
+        public LockTimeConsumer(VivConsumerDependency dependency) : base(dependency) { }
+
+        protected override TimeSpan GetConsumeLockTime(NanaEnvelope<TestApexEvent> envelope) => LockTime;
+
+        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<TestApexEvent> envelope, CancellationToken cancellationToken = default)
+            => Task.FromResult(SubscribeResult.Success());
+    }
+
     /// <summary>
     /// 消费者重试/确认/丢弃语义 —— VivConsumer.HandleAsync 是 Wolverine handler 入口，
     /// 结果映射到框架行为（确认 / 抛 VivRequeueException / 记日志丢弃）。
@@ -227,6 +277,98 @@ namespace Viv.Nana.Tests
             await consumer.HandleAsync(envelope, CancellationToken.None);
 
             Assert.Equal("42", distributedLock.LastHolderId);
+        }
+
+        [Fact]
+        public async Task 默认锁Key_是消息级去重锁()
+        {
+            var distributedLock = new RecordingDistributedLock { AcquireResult = true };
+            var consumer = new CountingConsumer(Dep(new RecordingLogger(), new RecordingEventPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock));
+            var envelope = Envelope();
+            envelope.MessageId = 42;
+
+            await consumer.HandleAsync(envelope, CancellationToken.None);
+
+            var expected = NanaRegister.GetConsumerLockKey(typeof(TestApexEvent).Name, 42);
+            Assert.Equal(expected, distributedLock.LastLockKey);
+            Assert.Equal(expected, distributedLock.LastReleaseKey);
+        }
+
+        [Fact]
+        public async Task 重写锁Key返回Null_整段锁逻辑跳过()
+        {
+            var distributedLock = new RecordingDistributedLock();
+            var consumer = new NoLockConsumer(Dep(new RecordingLogger(), new RecordingEventPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock));
+
+            await consumer.HandleAsync(Envelope(), CancellationToken.None);
+
+            Assert.Equal(1, consumer.Calls);
+            Assert.Equal(0, distributedLock.AcquireCalls);
+            Assert.Equal(0, distributedLock.HeldCalls);
+            Assert.Equal(0, distributedLock.ReleaseCalls);
+        }
+
+        [Fact]
+        public async Task 重写业务锁Key_按业务Key取放且拼Key时读得到本条消息上下文()
+        {
+            var distributedLock = new RecordingDistributedLock { AcquireResult = true };
+            var consumer = new BusinessLockConsumer(Dep(new RecordingLogger(), new RecordingEventPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock));
+            var envelope = Envelope();
+            envelope.MessageId = 42;
+            envelope.Context = new VivContextContent { AppId = 1, SubjectId = 7, UserId = 2, HolderId = "from-publisher" };
+
+            await consumer.HandleAsync(envelope, CancellationToken.None);
+
+            Assert.Equal("biz:apex:data", distributedLock.LastLockKey);
+            Assert.Equal("biz:apex:data", distributedLock.LastReleaseKey);
+
+            // 拼 Key 排在水合之后，才看得到本条消息的租户与持有者
+            Assert.Equal(7L, consumer.SeenTenantId);
+            Assert.Equal("from-publisher", consumer.SeenHolderId);
+        }
+
+        [Fact]
+        public async Task 默认锁过期时间_五分钟()
+        {
+            var distributedLock = new RecordingDistributedLock { AcquireResult = true };
+            var consumer = new CountingConsumer(Dep(new RecordingLogger(), new RecordingEventPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock));
+
+            await consumer.HandleAsync(Envelope(), CancellationToken.None);
+
+            Assert.Equal(TimeSpan.FromMinutes(5), distributedLock.LastExpire);
+        }
+
+        [Fact]
+        public async Task 重写锁过期时间_按重写值取锁()
+        {
+            var distributedLock = new RecordingDistributedLock { AcquireResult = true };
+            var consumer = new LockTimeConsumer(Dep(new RecordingLogger(), new RecordingEventPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock))
+            {
+                LockTime = TimeSpan.FromSeconds(30)
+            };
+
+            await consumer.HandleAsync(Envelope(), CancellationToken.None);
+
+            Assert.Equal(TimeSpan.FromSeconds(30), distributedLock.LastExpire);
+        }
+
+        [Fact]
+        public async Task 重写锁过期时间非正数_回落默认并记Warning()
+        {
+            // 非正数放任下去是「取锁失败 → 抛 DistributedLockException → 每条消息进死信」，
+            // 真实实现对 expire <= 0 不抛不记，错误信息里看不出是过期时间配错了
+            var logger = new RecordingLogger();
+            var distributedLock = new RecordingDistributedLock { AcquireResult = true };
+            var consumer = new LockTimeConsumer(Dep(logger, new RecordingEventPublisher(), XUnitTestMagic.CreateOptions(new NanaOptions()), distributedLock))
+            {
+                LockTime = TimeSpan.Zero
+            };
+
+            await consumer.HandleAsync(Envelope(), CancellationToken.None);
+
+            Assert.Equal(TimeSpan.FromMinutes(5), distributedLock.LastExpire);
+            var warning = Assert.Single(logger.Warnings);
+            Assert.Contains("过期时间", warning);
         }
 
         [Fact]

@@ -23,7 +23,7 @@ namespace Viv.Contracts.Interface
         /// <param name="key">锁的唯一标识（string 原样下发，其余类型归一化为 lock:{...}）</param>
         /// <param name="expire">锁过期时间（必须大于 TimeSpan.Zero，防止死锁）</param>
         /// <param name="lockHolderId">锁持有者唯一标识（不传则自动从上下文获取 TraceId）</param>
-        /// <param name="isReentrant">是否启用重入，默认 true</param>
+        /// <param name="isReentrant">是否启用重入，默认 false</param>
         /// <returns><c>true</c> = 加锁/重入成功；<c>false</c> = 锁已被其他持有者占用</returns>
         Task<bool> AcquireLockAsync(object key, TimeSpan expire, string? lockHolderId = null, bool isReentrant = false);
 
@@ -53,7 +53,7 @@ namespace Viv.Contracts.Interface
         /// <param name="key">锁的唯一标识（string 原样下发，其余类型归一化为 lock:{...}）</param>
         /// <param name="expire">锁过期时间</param>
         /// <param name="lockHolderId">锁持有者唯一标识（不传则自动从上下文获取 TraceId）</param>
-        /// <param name="isReentrant">是否启用重入，默认 true</param>
+        /// <param name="isReentrant">是否启用重入，默认 false</param>
         /// <param name="maxRetryCount">最大重试次数，默认 5 次</param>
         /// <param name="baseDelay">退避基础延迟（毫秒），默认 200ms</param>
         /// <param name="maxDelay">最大延迟上限（毫秒），默认 5000ms</param>
@@ -74,7 +74,7 @@ namespace Viv.Contracts.Interface
         /// <param name="executeMethod">业务委托（取锁成功时执行）</param>
         /// <param name="fallbackMethod">降级委托（取锁失败时执行）。为 null 时取锁失败抛出 <see cref="DistributedLockException"/></param>
         /// <param name="lockHolderId">锁持有者唯一标识（不传则自动从上下文获取 TraceId）</param>
-        /// <param name="isReentrant">是否启用重入，默认 true</param>
+        /// <param name="isReentrant">是否启用重入，默认 false</param>
         /// <param name="maxRetryCount">最大重试次数，默认 5 次</param>
         /// <param name="baseDelay">退避基础延迟（毫秒），默认 200ms</param>
         /// <param name="maxDelay">最大延迟上限（毫秒），默认 5000ms</param>

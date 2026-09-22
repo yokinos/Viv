@@ -80,7 +80,11 @@ namespace Viv.Delusion.Magic
         /// <summary>
         /// 强制加载当前已加载程序集的传递引用。
         /// 业务 Core 程序集（如 Viv.Apex.Core，含 Saga/Service/gRPC 类型）在宿主启动早期往往尚未加载，
-        /// 而类型扫描只扫已加载程序集，会导致 ScanTypes/Scan 静默漏扫。仅启动时执行一次，加载失败的程序集跳过。
+        /// 而类型扫描只扫已加载程序集，会导致 ScanTypes/Scan 静默漏扫。
+        ///
+        /// 幂等：调一次就够，重复调用只是空转一遍已加载的程序集图。
+        /// 调用点各自调一次是自我防护 —— 各处扫描彼此不知道谁先跑，而漏扫是无声的（扫到 0 个类型不报错）。
+        /// 调用时机不限于启动期，也有挂在 Lazy 上首次使用时才跑的。加载失败的程序集跳过。
         /// </summary>
         public static void ForceLoadReferencedAssemblies()
         {
