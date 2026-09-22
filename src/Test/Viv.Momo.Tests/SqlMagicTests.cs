@@ -1,4 +1,6 @@
+using Viv.Momo.DataFilter;
 using Viv.Momo.Enums;
+using Viv.Momo.Interface;
 
 namespace Viv.Momo.Tests;
 
@@ -159,11 +161,53 @@ public class SqlMagicTests
         Assert.Equal("SELECT * FROM users WHERE id = @Id", SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.PostgreSQL));
     }
 
+    /// <summary>从静态清单里挑出指定的几条过滤器 —— 与框架拼 SQL 时的取法一致</summary>
+    private static IMomoDataFilter[] Filters(params Type[] filterTypes)
+        => MomoDataFilters.All.Where(x => filterTypes.Contains(x.GetType())).ToArray();
+
     [Fact]
     public void GetFindSqlTemplate_含租户过滤()
     {
-        var sql = SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.SqlServer, includeTenantFilter: true);
+        var parameters = new Dictionary<string, object> { ["Id"] = 1L };
+        var sql = SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.SqlServer, 7L,
+            Filters(typeof(TenantDataFilter)), parameters);
+
         Assert.Equal("SELECT * FROM users WHERE [Id] = @Id AND [TenantId] = @TenantId", sql);
+        Assert.Equal(7L, parameters["TenantId"]);
+    }
+
+    [Fact]
+    public void GetFindSqlTemplate_含软删除过滤()
+    {
+        // 布尔字面量按方言给：PostgreSQL 的 boolean 列不接受 = 0
+        Assert.Equal("SELECT * FROM users WHERE [Id] = @Id AND [IsDeleted] = 0",
+            SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.SqlServer, 7L,
+                Filters(typeof(SoftDeletedFilter)), new Dictionary<string, object>()));
+        Assert.Equal("SELECT * FROM users WHERE id = @Id AND is_deleted = false",
+            SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.PostgreSQL, 7L,
+                Filters(typeof(SoftDeletedFilter)), new Dictionary<string, object>()));
+    }
+
+    [Fact]
+    public void GetFindSqlTemplate_租户与软删除两条叠加()
+    {
+        var parameters = new Dictionary<string, object>();
+        var sql = SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.SqlServer, 7L,
+            Filters(typeof(TenantDataFilter), typeof(SoftDeletedFilter)), parameters);
+
+        Assert.Equal("SELECT * FROM users WHERE [Id] = @Id AND [TenantId] = @TenantId AND [IsDeleted] = 0", sql);
+    }
+
+    [Fact]
+    public void GetFindSqlTemplate_无租户时不加租户条件()
+    {
+        // 与 EF 那条「无上下文不过滤」同一语义：后台任务没有租户，不能凭空拼一个 TenantId = 0 进去
+        var parameters = new Dictionary<string, object>();
+        var sql = SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.SqlServer, 0L,
+            Filters(typeof(TenantDataFilter)), parameters);
+
+        Assert.Equal("SELECT * FROM users WHERE [Id] = @Id", sql);
+        Assert.False(parameters.ContainsKey("TenantId"));
     }
 
     #endregion

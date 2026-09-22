@@ -1,16 +1,13 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System;
 using System.Data;
-using System.Linq.Expressions;
 using Viv.Aoi;
 using Viv.Contracts.Interface;
-using Viv.Contracts.Models;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
+using Viv.Momo.DataFilter;
 using Viv.Momo.Enums;
-using Viv.Momo.Interface;
 using Viv.Momo.Options;
 
 namespace Viv.Momo.Core
@@ -20,14 +17,42 @@ namespace Viv.Momo.Core
     /// </summary>
     public class EFAppContext : DbContext
     {
+        /// <summary>
+        /// 当前数据库连接配置
+        /// </summary>
         private readonly DatabaseOptions _options;
+
+        /// <summary>
+        /// 读/写 类型
+        /// </summary>
         private readonly DbReadWriteType _dbReadWriteType;
 
         /// <summary>
         /// 当前租户访问器（单例，静态 AsyncLocal）。用于 ITenant 实体的全局查询过滤。
-        /// 模型缓存后仍按当前线程读取租户，因此跨请求正确。
         /// </summary>
         private readonly IVivContextAccessor? _tenantAccessor;
+
+        /// <summary>
+        /// 有没有租户访问器。租户过滤器用它决定挂不挂，VivLocator 未初始化（测试直建上下文）时没有
+        /// </summary>
+        public bool HasTenantAccessor => _tenantAccessor != null;
+
+        /// <summary>
+        /// 当前租户
+        /// 过滤器表达式经 DataFilterExpression 读这里，EF 会把本次查询的上下文补进来、每次查询重求值。
+        /// 不能改成把访问器当常量捕获，那样取到的是建模型那一刻的值，之后冻在缓存计划里
+        /// </summary>
+        public long CurrentTenantId => _tenantAccessor?.Current?.SubjectId ?? 0;
+
+        /// <summary>
+        /// 当前是否没有租户上下文。无上下文（后台消费者未设置租户）时租户过滤放行，保持既有行为。
+        /// </summary>
+        public bool HasNoTenantContext => _tenantAccessor?.Current == null;
+
+        /// <summary>
+        /// 某条过滤器有没有被 IDataFilter 关掉。走上下文实例是为了让 EF 按查询重新求值。
+        /// </summary>
+        public bool IsDataFilterDisabled(Type filterType) => DataFilterSwitch.IsDisabled(filterType);
 
         public EFAppContext(DatabaseOptions options, DbReadWriteType dbReadWriteType = DbReadWriteType.Read)
             : this(options, ResolveTenantAccessor(), dbReadWriteType)
@@ -122,16 +147,19 @@ namespace Viv.Momo.Core
             {
                 var entity = modelBuilder.Entity(type);
 
-                // 多租户隔离：ITenant 实体全局查询过滤，阻止租户读取/查询到其他租户的行
-                if (_tenantAccessor != null && typeof(ITenant).IsAssignableFrom(type))
+                // 读隔离：每条过滤器自己判断管不管这个实体、挂不挂得上、表达式怎么写
+                foreach (var filter in MomoDataFilters.All)
                 {
-                    ApplyTenantFilter(entity, type);
+                    if (filter.AppliesTo(type) && filter.CanApply(this))
+                    {
+                        entity.HasQueryFilter(filter.Name, filter.BuildExpression(this, type));
+                    }
                 }
             }
         }
 
         /// <summary>
-        /// 解析当前租户访问器。VivLocator 未初始化（如单元测试直建上下文）时返回 null，跳过租户过滤。
+        /// 解析当前租户访问器。VivLocator 未初始化（如单元测试直建上下文）时返回 null，跳过租户过滤
         /// </summary>
         private static IVivContextAccessor? ResolveTenantAccessor()
         {
@@ -143,27 +171,6 @@ namespace Viv.Momo.Core
             {
                 return null;
             }
-        }
-
-        /// <summary>
-        /// 对 ITenant 实体加全局查询过滤：e => 无请求上下文 || e.TenantId == 当前租户。
-        /// 无上下文（后台消费者未设置租户）时不过滤，保持既有行为；HTTP 请求路径由
-        /// VivContextMiddleware 保证必有上下文，因此请求侧跨租户读取被拦截。
-        /// 表达式捕获 accessor 常量（单例），EF 每次查询重新求值 Current.SubjectId。
-        /// </summary>
-        private void ApplyTenantFilter(EntityTypeBuilder entity, Type type)
-        {
-            var e = Expression.Parameter(type, "e");
-            var accessor = Expression.Constant(_tenantAccessor);
-            var current = Expression.Property(accessor, nameof(IVivContextAccessor.Current));
-            var subjectId = Expression.Property(current, nameof(VivContextContent.SubjectId));
-            var hasContext = Expression.NotEqual(current, Expression.Constant(null, typeof(VivContextContent)));
-
-            var body = Expression.OrElse(
-                Expression.Not(hasContext),
-                Expression.Equal(Expression.PropertyOrField(e, nameof(ITenant.TenantId)), subjectId));
-
-            entity.HasQueryFilter(Expression.Lambda(body, e));
         }
 
         /// <summary>

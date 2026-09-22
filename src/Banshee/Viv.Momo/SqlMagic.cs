@@ -78,18 +78,32 @@ namespace Viv.Momo
         }
 
         /// <summary>
-        /// 生成根据ID查询单条数据的SELECT SQL模板
+        /// 生成根据ID查询单条数据的SELECT SQL模板（不带读过滤器）
         /// 适配PostgreSQL（表名小写）和SQL Server（表名加方括号）
         /// </summary>
         /// <param name="tableName">数据库表名称</param>
         /// <param name="databaseSource">数据库类型（PostgreSQL/SQL Server等）</param>
         /// <returns>带参数占位符@Id的SELECT SQL语句</returns>
-        public static string GetFindSqlTemplate(string tableName, DatabaseSourceType databaseSource, bool includeTenantFilter = false)
+        public static string GetFindSqlTemplate(string tableName, DatabaseSourceType databaseSource)
+            => $"SELECT * FROM {tableName} WHERE {QuoteIdentifier("Id", databaseSource)} = @Id";
+
+        /// <summary>
+        /// 同上，另按逐条生效的读过滤器追加 WHERE 条件。
+        /// 框架不认识具体是哪几条，条件与参数都由过滤器自己给（见 IMomoDataFilter）。
+        /// </summary>
+        /// <param name="tableName">数据库表名称</param>
+        /// <param name="databaseSource">数据库类型（PostgreSQL/SQL Server等）</param>
+        /// <param name="tenantId">本次读生效的租户（无租户传 0）</param>
+        /// <param name="filters">本次生效的读过滤器</param>
+        /// <param name="parameters">参数容器，过滤器把自带的参数放进来，最终交给 Dapper</param>
+        /// <returns>带参数占位符的SELECT SQL语句</returns>
+        public static string GetFindSqlTemplate(string tableName, DatabaseSourceType databaseSource,
+            long tenantId, IReadOnlyList<IMomoDataFilter> filters, IDictionary<string, object> parameters)
         {
-            var sql = $"SELECT * FROM {tableName} WHERE {QuoteIdentifier("Id", databaseSource)} = @Id";
-            if (includeTenantFilter)
+            var sql = GetFindSqlTemplate(tableName, databaseSource);
+            foreach (var filter in filters)
             {
-                sql += $" AND {QuoteIdentifier("TenantId", databaseSource)} = @TenantId";
+                sql += filter.BuildSqlCondition(tenantId, databaseSource, parameters);
             }
             return sql;
         }

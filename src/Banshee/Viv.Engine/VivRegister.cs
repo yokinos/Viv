@@ -15,6 +15,7 @@ using Viv.Engine.UnitOfWork;
 using Viv.Log;
 using Viv.Momo;
 using Viv.Momo.Core;
+using Viv.Momo.DataFilter;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Nana;
@@ -187,6 +188,9 @@ namespace Viv.Engine
 
             services.AddScoped<IDatabaseOptionsProvider, DefaultDatabaseOptionsProvider>();
             services.AddScoped<IMomoDbContext, MomoDatabaseContext>();
+
+            // 数据过滤器开关。实例无状态，状态在静态 AsyncLocal 里，与 IVivContextAccessor 同一形状。
+            services.AddSingleton<IDataFilter, DataFilterSwitch>();
 
             // ── 工作单元（Unit of Work）─────────────────────────────
             // 内核适配器必须与 IMomoDbContext 同生命周期（都是 Scoped）：Momo 的事务状态

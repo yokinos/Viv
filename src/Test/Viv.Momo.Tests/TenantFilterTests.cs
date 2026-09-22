@@ -92,14 +92,21 @@ public class TenantFilterTests
             ]
         };
 
+    /// <summary>
+    /// 取该实体上的过滤器 Key。断言按 Key 而不是集合本身 —— EF Core 10 对「一条过滤器都没有」
+    /// 的实体返回的是空集合而非 null，判 null 与判非 null 两边都恒真恒假，等于没测。
+    /// </summary>
+    private static List<string?> QueryFilterKeys(ModelBuilder model, Type entityType)
+        => model.Entity(entityType).Metadata.GetDeclaredQueryFilters().Select(x => x.Key).ToList();
+
     [Fact]
     public void EfOnModelCreating_ITenant实体加查询过滤()
     {
         var ctx = new ExposedEfAppContext(EntityScanOptions(), new TestContextAccessor());
         var model = ctx.BuildModel();
 
-        Assert.NotNull(model.Entity(typeof(TenantUserEntity)).Metadata.GetDeclaredQueryFilters());
-        Assert.NotNull(model.Entity(typeof(SoftDeleteTenantEntity)).Metadata.GetDeclaredQueryFilters());
+        Assert.Contains("tenant", QueryFilterKeys(model, typeof(TenantUserEntity)));
+        Assert.Contains("tenant", QueryFilterKeys(model, typeof(SoftDeleteTenantEntity)));
     }
 
     [Fact]
@@ -108,7 +115,7 @@ public class TenantFilterTests
         var ctx = new ExposedEfAppContext(EntityScanOptions(), new TestContextAccessor());
         var model = ctx.BuildModel();
 
-        Assert.Null(model.Entity(typeof(NonTenantEntity)).Metadata.GetDeclaredQueryFilters());
+        Assert.Empty(QueryFilterKeys(model, typeof(NonTenantEntity)));
     }
 
     [Fact]
@@ -117,7 +124,7 @@ public class TenantFilterTests
         var ctx = new ExposedEfAppContext(EntityScanOptions(), null);
         var model = ctx.BuildModel();
 
-        Assert.Null(model.Entity(typeof(TenantUserEntity)).Metadata.GetDeclaredQueryFilters());
+        Assert.DoesNotContain("tenant", QueryFilterKeys(model, typeof(TenantUserEntity)));
     }
 
     #endregion

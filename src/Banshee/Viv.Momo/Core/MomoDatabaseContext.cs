@@ -11,6 +11,7 @@ using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Generic;
 using Viv.Log;
+using Viv.Momo.DataFilter;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
@@ -145,6 +146,13 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext();
+
+                // 必须看得见被软删除的行，否则拿不到库里那一份、CopyProtectedValues 被整段跳过，
+                // 入参上的 CreatedAt/CreatedBy/TenantId 默认值会盖掉库里的值。
+                // 用开关而不是 IgnoreQueryFilters：T 只约束到 IEntity（不是 class），
+                // context.Set&lt;T&gt;() 编译不过，Find 是 EF 的非泛型入口，只能靠开关放行。
+                // 只放行软删除，租户那条照旧生效。
+                using var filterScope = DataFilterSwitch.Disable(typeof(SoftDeletedFilter));
                 var existingEntity = context.Find(typeof(T), entity.Id);
                 if (existingEntity is T existing)
                 {
@@ -210,6 +218,9 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext();
+
+                // 同同步版：按 Id 取库里那一份要放行软删除过滤，否则 CopyProtectedValues 被跳过
+                using var filterScope = DataFilterSwitch.Disable(typeof(SoftDeletedFilter));
                 var existingEntity = await context.FindAsync(typeof(T), [entity.Id], cancellationToken).ConfigureAwait(false);
                 if (existingEntity is T existing)
                 {
@@ -1163,6 +1174,23 @@ namespace Viv.Momo.Core
             }
         }
 
+        /// <summary>
+        /// 本次按主键读 T 时生效的读过滤器：管这个实体、且没被开关关掉的。
+        /// 与 EF 挂模型那条路径取法一致。
+        /// </summary>
+        private static List<IMomoDataFilter> GetActiveFilters<T>()
+        {
+            var active = new List<IMomoDataFilter>(MomoDataFilters.All.Count);
+            foreach (var filter in MomoDataFilters.All)
+            {
+                if (filter.AppliesTo(typeof(T)) && !filter.IsDisabled)
+                {
+                    active.Add(filter);
+                }
+            }
+            return active;
+        }
+
         [return: MaybeNull]
         public T? Find<T>(long id) where T : class, IEntity
         {
@@ -1171,11 +1199,12 @@ namespace Viv.Momo.Core
 
             try
             {
-                var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T));
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
-                var sql = SqlMagic.GetFindSqlTemplate(tableName, _databaseOptions.DatabaseSource, isTenantEntity);
-                object parameters = isTenantEntity ? new { Id = id, TenantId } : new { Id = id };
+                // 参数由过滤器自己往字典里放（租户那条放 TenantId），SQL 也由它拼。
+                // 传 TenantId 而不是 _vivContext.SubjectId，ChangeTenant 的覆盖要算数
+                var parameters = new Dictionary<string, object> { ["Id"] = id };
+                var sql = SqlMagic.GetFindSqlTemplate(tableName, _databaseOptions.DatabaseSource, TenantId, GetActiveFilters<T>(), parameters);
                 return connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
             }
             catch (OperationCanceledException) { throw; }
@@ -1192,11 +1221,10 @@ namespace Viv.Momo.Core
 
             try
             {
-                var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T));
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
-                var sql = SqlMagic.GetFindSqlTemplate(tableName, _databaseOptions.DatabaseSource, isTenantEntity);
-                object parameters = isTenantEntity ? new { Id = id, TenantId } : new { Id = id };
+                var parameters = new Dictionary<string, object> { ["Id"] = id };
+                var sql = SqlMagic.GetFindSqlTemplate(tableName, _databaseOptions.DatabaseSource, TenantId, GetActiveFilters<T>(), parameters);
                 var command = new CommandDefinition(sql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
                 return await connection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false);
             }

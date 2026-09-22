@@ -28,12 +28,12 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 
 | Project | Role |
 |---|---|
-| `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums；**本地事件契约** `IVivLocalEventBus` / `IVivLocalEventScope` / `LocalEvent`（空标记基类）/ `IVivLocalEventHandler<TEvent>` / `LocalEventHandler<TEvent>`（零 Nana 依赖，业务 Core 直接引它写处理器）；**分布式锁契约** `IDistributedLock` —— 6 个方法的锁标识**统一是 `object key`**（不再有 `string lockKey` / `object key` 之分）：传 `string` 原样作 Redis Key（前缀调用方自己拼），其余类型由实现 `DistributedLockAccessor.GenerateLockKey` 归一化成 `lock:{...}` |
+| `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums；**本地事件契约** `IVivLocalEventBus` / `IVivLocalEventScope` / `LocalEvent`（空标记基类）/ `IVivLocalEventHandler<TEvent>` / `LocalEventHandler<TEvent>`（零 Nana 依赖，业务 Core 直接引它写处理器）；**分布式锁契约** `IDistributedLock` —— 6 个方法的锁标识**统一是 `object key`**（不再有 `string lockKey` / `object key` 之分）：传 `string` 原样作 Redis Key（前缀调用方自己拼），其余类型由实现 `DistributedLockAccessor.GenerateLockKey` 归一化成 `lock:{...}`；**数据过滤器开关** `IDataFilter` + `IDataFilterScope`（泛型，标识是**过滤器类本身**：`Disable<SoftDeletedFilter>()` 放行已软删除的行、`Disable<TenantDataFilter>()` 跨租户读；一次关多条用 `Scope()`；实现落在 `Viv.Momo`，见 `### 读过滤器`） |
 | `Viv.Delusion` | Utility library — `TypeScanMagic` (assembly type scanning), `ObjectMapper` (Emit + Expression-based), encryption, common extensions |
 | `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios |
 | `Viv.Engine` | **Core wiring hub** — `VivEngine.LoadVivConfig(builder.Configuration)` binds the `VivOptions` node from appsettings.json into `VivOptions`; `VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup；**本地事件总线实现** `LocalEvents/`（`LocalEventBus` / `LocalEventHandlerInvoker<T>` / `LocalEventRegistration` / `LocalEventScope`）+ 两个触发点 `LocalEventFlushFilterAttribute`、`LocalEventFlushMiddleware`（**同目录**，本地事件一个文件夹全包）。⚠️ **目录／命名空间是复数 `LocalEvents`**：事件基类叫 `LocalEvent`，若目录同名，`Viv.Engine.LocalEvent` 这个命名空间会在 `Viv.Engine` 里把类型 `LocalEvent` 遮住，`LocalEvent` 一律解析成命名空间（CS0118，实测踩过） |
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
-| `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server；**实体审计**（`ICreatedAt` / `ICreatedBy` / `IUpdatedAt` / `IUpdatedBy` 四个单字段能力接口，逐个 opt-in，由 `MomoDatabase` 自动盖章，见 `### Entity audit`）；**建表 DDL**（`Sync/SchemaSynchronizer` 按实体生成 CREATE/ALTER，双方言，见 `### Schema sync`）；**缓存基类** `Base/DataAccessCacheBase<T>`（Cache-Aside，8 个业务仓储继承）—— **锁走 `IDistributedLock`，缓存读写走 `IRedisService`**，两条路径 Redis 故障都 catch 后回源数据库（锁那侧 Redis 故障被包成 `DistributedLockException`，得单独接一次）；取锁用 `AcquireLockWithRetryAsync` 并把参数压到 `maxRetryCount: 3, baseDelay/maxDelay: 20ms`（用默认的 5 次指数退避 = 约 3 秒，缓存击穿场景等不起） |
+| `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server；**实体审计**（`ICreatedAt` / `ICreatedBy` / `IUpdatedAt` / `IUpdatedBy` 四个单字段能力接口，逐个 opt-in，由 `MomoDatabase` 自动盖章，见 `### Entity audit`）；**建表 DDL**（`Sync/SchemaSynchronizer` 按实体生成 CREATE/ALTER，双方言，见 `### Schema sync`）；**读过滤器**（`DataFilter/` —— `IMomoDataFilter` 抽象 + `TenantDataFilter`/`SoftDeletedFilter` 两条实现 + `MomoDataFilters.All` 静态清单；EF 全局查询过滤器与框架自有按主键 SQL 两处都遍历清单，加过滤器只写类、不改框架。`IDataFilter.Disable<TFilter>()` 逐条放行，见 `### 读过滤器`）；**缓存基类** `Base/DataAccessCacheBase<T>`（Cache-Aside，8 个业务仓储继承）—— **锁走 `IDistributedLock`，缓存读写走 `IRedisService`**，两条路径 Redis 故障都 catch 后回源数据库（锁那侧 Redis 故障被包成 `DistributedLockException`，得单独接一次）；取锁用 `AcquireLockWithRetryAsync` 并把参数压到 `maxRetryCount: 3, baseDelay/maxDelay: 20ms`（用默认的 5 次指数退避 = 约 3 秒，缓存击穿场景等不起） |
 | `Viv.Nana` | Messaging — **两条平行的线**：① 跨进程 `NanaEvent` + `IVivEventPublisher` / `NanaEventPublisher` / `VivConsumer<T>`（Wolverine + RabbitMQ，fanout）② 进程内本地队列 `NanaLocalEvent` + `IVivLocalEventPublisher` / `NanaLocalEventPublisher` / `VivLocalConsumer<T>`（Wolverine local queue，点对点，两族互不引用）；Saga support with EF Core state persistence |
 | `Viv.Outbox` | **发件箱（事务性消息投递）+ Inbox（消费端幂等）** — `IVivOutbox` / `OutboxStore`（Scoped，入队走 `ExecuteSqlAsync` 并入业务事务）+ `OutboxDispatcher`/`OutboxWorker`（后台投递，原子认领）+ 手写 SQL（**一次都不经过 EF**，表 `VivOutboxMessage`）。解决「写库 + 发消息」不原子：**写和待发消息进同一个本地事务**，投递交给后台。Inbox 侧 `IVivInbox` / `InboxStore`（表 `VivInboxMessage`）+ `InboxDispatcher`（按保留期清理，独立循环）。见下 |
 | `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`)。访问失败抛 `VivConnectionException(Redis)`（API 过滤器 `-502`，客户端只回固定文案）；`DataAccessCacheBase` 读路径 catch 后回源数据库，**取锁也走 catch 后回源**（见 `Viv.Momo` 行）。写仍抛。锁续期后台任务仍只记日志后停止 |
@@ -324,6 +324,49 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outb
 
 `MomoDatabaseContext` (implements `IMomoDbContext`) uses EF Core for small operations and Dapper for bulk queries (threshold: `EFMaxCount`). `EFAppContext` is created as either read or write — reads randomly select a slave connection, writes always use the master. Entities are auto-scanned via `DatabaseOption.EntityTypeOptions`。**访问失败抛 `VivConnectionException`**（记日志后包装，API 过滤器映射 `-501 DatabaseError`，客户端 Message 用枚举固定文案「数据库操作异常」，实体 JSON / 底层详情只进日志）；`Insert`/`Update`/`Delete` 的 `false` 只表示语句成功但影响 0 行（或入参为空）。`Exist`/`Count`/`Find` 遇库故障不再返回 false/default/-1。`OperationCanceledException` 原样冒泡。回滚失败只记日志，避免掩盖原始异常。`DataAccessCacheBase` Redis 故障当作 miss 回源数据库。
 
+### 读过滤器（`IMomoDataFilter` + `IDataFilter`）
+
+**一条过滤器就是一个类** —— 实体实现 `ISoftDeleted`（`bool IsDeleted` + `DateTime? DeletedAt`）就**自动**获得读侧过滤，业务代码不必再手写 `&& !x.IsDeleted`。这是纯数据层行为，与实体审计同族。内置两条：`TenantDataFilter`（`ITenant` 实体）与 `SoftDeletedFilter`（`ISoftDeleted` 实体）。
+
+| 位置 | 内容 |
+|---|---|
+| `Viv.Momo/Interface/IMomoDataFilter.cs` | 契约：`Name` / `AppliesTo(Type)` / `CanApply(EFAppContext)` / `IsDisabled` / `BuildExpression(EFAppContext, Type)` / `BuildSqlCondition(context, 方言, 参数字典)` |
+| `Viv.Momo/DataFilter/` | `TenantDataFilter` + `SoftDeletedFilter`（两条内置）+ `MomoDataFilters.All`（静态清单）+ `DataFilterSwitch`（开关实现）+ `DataFilterExpression`（表达式小工具） |
+| `Viv.Contracts/Interface/IDataFilter.cs` | 业务侧开关契约，实现是 `DataFilterSwitch` |
+
+加一条过滤器**只动两处**：写一个实现类、挂进 `MomoDataFilters.All`。`EFAppContext` 建模型与 `MomoDatabaseContext` 拼按主键 SQL 都只遍历清单，不认识具体是哪几条。
+
+**两处生效**：EF 谓词查询（`FindAsync<T>` 谓词版 / `FindListAsync<T>(谓词)` / `Exist` / `Count` / `SingleOrDefaultAsync`）走全局查询过滤器（遍历 `AppliesTo && CanApply`，逐条 `HasQueryFilter(filter.Name, filter.BuildExpression(...))`）；框架自己拼 SQL 的 `Find<T>(id)` / `FindAsync<T>(id)`（`SqlMagic.GetFindSqlTemplate`）跟着逐条 `BuildSqlCondition` 拼 WHERE（PG 的布尔列是 `= false`，布尔字面量不能跨方言写死）。
+
+- **⚠️ 多条过滤器必须都用具名重载**：EF Core 10 的 `HasQueryFilter(string, LambdaExpression)`。**单参重载是替换语义** —— 同一个实体先加租户再加软删除，只会剩最后一条，而且编译通过、跑起来只是少挡了一边。Key 就是 `IMomoDataFilter.Name`（`"tenant"` / `"softdelete"`）。**既有测试差点没看出来**：`TenantFilterTests` 原来断言的是 `GetDeclaredQueryFilters()` 的 null / 非 null，而 EF Core 10 对「一条过滤器都没有」的实体返回**空集合而非 null** —— 判 null 恒假、判非 null 恒真，两条断言都是空的。现已改成按 Key 断言（`Contains("tenant")` / `Empty` / `DoesNotContain`），别改回去。
+- **🔴 过滤器表达式必须引用 `EFAppContext` 的实例成员，绝不能捕获外部对象当常量** —— 这里踩过一次大的。原先写的是 `Expression.Constant(_tenantAccessor)` 再一路取 `.Current.SubjectId`，注释还写着「EF 每次查询重新求值」；实测是假的：**EF 把这种「不依赖当前上下文」的子树在建模型/编译查询时就求值掉，直接烘进缓存计划**。表现是过滤条件永远停在该查询形状**第一次编译**时的取值上，换请求、换租户都不变，而且 `ToQueryString` 里写死成字面量（`CAST(7 AS bigint)`）一望即知。**这等于租户隔离一直没生效**（那个 bug 早于本轮的开关改动）。现在一律经 `DataFilterExpression`：`Expression.Constant(context, typeof(EFAppContext))` 再取属性 / 调 `IsDataFilterDisabled`，EF 才会把它参数化并在每次查询时用**当前**上下文重求值。想验证就 `queryable.CreateDbCommand()` 把 `@ef_filter__*` 几个参数的真实取值打出来 —— 断言 SQL 里出现过 `IsDeleted` / `TenantId` 是没用的，那两个列在 SELECT 投影里本来就有，过滤器整条没了照样绿。`DataFilterTests` 里按参数值断言的几条钉死这点，别退回常量形状。
+- **顺带一个口味问题**：EF 从**属性访问**推导参数名（`@ef_filter__CurrentTenantId`），遇到**方法调用**推不出来、直接叫 `@ef_filter__p4`。所以 `IsDataFilterDisabled(...)` 那一条在 SQL 里是 `pN`。值是对的（有测试按值断言切换生效），只是名字难看 —— 别去「修」它，把开关做回逐过滤器的属性就等于把 `EFAppContext` 重新绑死在具体过滤器上。
+- **开关 `IDataFilter`**（`Viv.Contracts`，实现 `Viv.Momo/DataFilter/DataFilterSwitch.cs`）—— 泛型参数是**过滤器类本身**。返回 `IDisposable`，`using` 包起来即可放行，**释放时恢复到进入之前的取值**，所以可嵌套。状态在一个静态 `AsyncLocal<HashSet<Type>?>`（关掉的过滤器集合），因此天然按请求 / 按作用域隔离，不会串线程。用法：
+
+```csharp
+using (_dataFilter.Disable<SoftDeletedFilter>())
+{
+    var row = await _db.FindAsync<Order>(id);   // 这行能看到 IsDeleted = 1 的行
+}
+
+using (_dataFilter.Disable<TenantDataFilter>())   // 跨租户读，只在自己清楚要读全量时用
+{
+    var all = await _db.FindListAsync<Order>(x => x.Status == 1);
+}
+
+// 一次关多条用 Scope()：一个句柄管全部，释放时整份恢复，不用管释放顺序。
+// 关的动作在调用当下生效，Dispose 只负责恢复；另有按 Type 的重载，运行期拼的集合也能关
+using var scope = _dataFilter.Scope();
+scope.Disable<SoftDeletedFilter>().Disable<TenantDataFilter>();
+var everything = await _db.FindListAsync<Order>(x => x.Status == 1);
+```
+
+- **框架内部走静态入口 `DataFilterSwitch.Disable(Type)` / `IsDisabled(Type)`**（`internal`）—— `MomoDatabaseContext` 拼按主键 SQL 时要读它，为这个给它构造函数加注入参数会牵动全仓三个构造点，不划算。泛型那对只给业务用。顺带躲开两个 C# 限制：实例成员与静态入口只在 `static` 上不同会 **CS0111**，所以静态的换签名；类名也**不能叫 `DataFilter`** —— 命名空间 `Viv.Momo.DataFilter` 会在 `namespace Viv.Momo` 里把类型 `DataFilter` 遮住（`SqlMagic.cs` 就在那儿），**CS0118**，与文档里 `LocalEvent` / `LocalEvents` 那个坑同形。
+- **语义是「关掉了吗」不是「开着吗」**：EF 表达式写成 `关掉了 || 没删`（`Expression.OrElse(disabled, Expression.Not(isDeleted))`），租户那条是 `关掉了 || 无上下文 || TenantId == 当前`。写成「开着 && 没删」时，开关一开就什么都不过滤、一关反而全过滤 —— 极性整个倒过来。`DataFilterTests` 里有一条把模型里的表达式编译出来直接对 POCO 跑的测试钉死方向。
+- **无上下文照样过滤，与租户那条刻意相反**：租户过滤是「不知道是谁所以别猜」（`accessor.Current == null` 就不过滤，免得静默搞坏后台任务），软删除没有这层歧义 —— `IsDeleted = 1` 就是删了，Worker / 消息消费 / 后台任务同样不该看见。所以它无条件生效（`CanApply` 恒 true），也不依赖 `VivLocator` 是否就绪。Dapper 那条同理：无租户时 `BuildSqlCondition` 返回空串，不会凭空拼一个 `TenantId = 0` 进去。
+- **⚠️ `Update<T>` / `UpdateAsync<T>` 必须显式放行**：它们要 `Find` 出库里那一份来跑 `CopyProtectedValues`，被过滤挡住就落到「拿不到 → 跳过保护」，入参 DTO 上的 `CreatedAt`/`CreatedBy`/`TenantId` 默认值直接落库（`TenantId = 0` 会把行搬走、此后被全局过滤器藏掉，正是审计那轮修掉的形状）。现在这两处用 `using var filterScope = DataFilterSwitch.Disable(typeof(SoftDeletedFilter));` 包住取行语句 —— **不用 `IgnoreQueryFilters`**，因为 `T` 只约束到 `IEntity`、不是 `class`，`context.Set<T>()` 编译不过。这把开关**只放行软删除，租户那条照旧生效**，跨租户改写仍被挡住。
+- **不覆盖（有意，不是遗漏）**：① **业务交整条 SQL 的 12 处逃生口**（`PageAsync` 分页 / `FindList<T>(sql)` / `FirstOrDefault<T>(sql)` / `FindScalar`）—— 框架无法安全改写任意 SQL，硬塞 `WHERE` 撞上子查询 / JOIN / CTE 就不可靠且**错误是静默的**，与 `### Multi-tenancy` 里「原生 SQL 重载由调用方自持 SQL」同一立场。**代价是口径分裂**：同一实体「详情挡住了、列表没挡」，想挡得在 `GetSqlQuery()` 里自己写 `AND IsDeleted = 0`。② **`DataAccessCacheBase` 缓存层**（第三套读路径，缓存桶不经过 EF）。各仓储的 `SoftDeleteAsync` 都调了 `RefreshAsync(key)` 清键，写路径是闭的；本轮不改。③ **写路径**（`SoftDelete<T>` / `Delete<T>`）—— 软删除本就该能删已删除的行。
+
 ### Schema sync（按实体生成建表/改表 SQL）
 
 **不要再手写 DDL** —— `Viv.Momo/Sync/SchemaSynchronizer.cs` 是一条既有的完整流水线（反射 → 预期 Schema → 查 `INFORMATION_SCHEMA` → Diff → DDL），SQL Server 与 PostgreSQL 双方言：
@@ -359,7 +402,7 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outb
 - **⚠️ 批量 Update（> `EFMaxCount`）走的是同一形状的另一个实现，必须单独挡**：`BuildUpdateSqlList` 反射**全部**公开属性拼 `UPDATE ... SET col = CASE Id WHEN ... END`，而且它**根本不加载库里的那一份** —— 没有可补的来源。所以那边改成按 **`IsProtectedColumn`** 直接**跳过**这几列（`ELSE {dbField} END` 自然保留原值）。判据只能问 `typeof(T)` 是否实现了该契约（没有实例可 `is`）。两个机制**共用同一份清单**，改一处要改两处。
 - **`Worker` 侧没有触发点、也没有软删除的份**（明确范围外，不是遗忘）：
   - **EF `SaveChanges` 拦截器方案不可行** —— 批量 Insert（≥200）、批量 Update、**全部 `SoftDelete`** 都走 Dapper 原生 SQL，压根不经过 `SaveChanges`，覆盖不全。别走这条。
-  - **软删除的 `DeletedAt` 是数据库端填的**（`SqlMagic.GetSoftDeleteSql` 用 `NOW()` / `GETDATE()`），绕开实体；`ISoftDeleted` 里也**没有 `DeletedBy`**。要补是独立改动。
+  - **软删除的 `DeletedAt` 是数据库端填的**（`SqlMagic.GetSoftDeleteSql` 用 `NOW()` / `GETDATE()`），绕开实体；`ISoftDeleted` 里也**没有 `DeletedBy`**。要补是独立改动。（**读侧过滤是另一回事，已经做了** —— 见 `### 读过滤器`；这里说的只是写侧盖章没有统一触发点。）
 - **标记现状（`src/Vivian/Viv.Entity/Database/`，41 个实体）**：
   - **Apex 24 个 —— 按「实体现有字段」逐个标**：21 个完整四件套；`AtFileRecord` 只有 `CreatedAt` → 仅 `ICreatedAt`；`AtUserRoleRelation` 只有 `CreatedAt` + `CreatedBy` → 仅这两个（**这两个偏门实体正是「拆四个接口」而非一个大 `IAudited` 的理由**）；`AtUserBind` 一个审计字段都没有 → **不标**。
   - **Herta 16 个 `Et*` —— 原先一列都没有，本次整体新增四件套**（属性 + 接口）。它们都实现 `ITenant` / `ISoftDeleted`，是唯一会被 `CopyProtectedValues` 的租户保护照到的实体（Apex 一个都不实现 `ITenant`）。
@@ -371,7 +414,7 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outb
 
 `VivContextMiddleware` reads `Viv_AppId`, `Viv_TenantId`, `Viv_UserId` from HTTP headers and hydrates `IVivContext` (scoped, backed by `AsyncLocal<long>`). **数据层租户隔离**（框架自动，业务代码无需手写租户条件）：
 
-- **EF 全局查询过滤**：`EFAppContext.OnModelCreating` 对所有 `ITenant` 实体加 `HasQueryFilter`——`e => 无请求上下文 || e.TenantId == 当前租户`。覆盖全部 EF 谓词查询（`Exist`/`Count`/`SingleOrDefault`/`FirstOrDefault`/`FindList` 及 Async）和 `ExecuteDeleteAsync`。表达式捕获 `IVivContextAccessor` 常量（单例，静态 AsyncLocal），每次查询重求值，跨请求正确。
+- **EF 全局查询过滤**：`EFAppContext.OnModelCreating` 遍历 `MomoDataFilters.All`，`TenantDataFilter` 对 `ITenant` 实体加 `HasQueryFilter`——`e => 过滤已关掉 || 无请求上下文 || e.TenantId == 当前租户`（同一次遍历里软删除那条也挂上，见 `### 读过滤器`）。覆盖全部 EF 谓词查询（`Exist`/`Count`/`SingleOrDefault`/`FirstOrDefault`/`FindList` 及 Async）和 `ExecuteDeleteAsync`。**表达式读的是 `EFAppContext` 实例属性**（`HasNoTenantContext` / `CurrentTenantId`），EF 每次查询用当前上下文重求值，跨请求正确 —— 详见 `### 读过滤器` 里那条「绝不能捕获外部对象当常量」，写成捕获常量的形状实测会被烘进缓存计划、租户值冻死在第一次查询上。
 - **无上下文不过滤**：`tenantAccessor.Current == null`（后台消费者等无请求场景）时不过滤，避免静默破坏后台任务；HTTP 请求路径由 `VivContextMiddleware` 保证必有上下文，因此请求侧跨租户读取被拦截。
 - **Dapper 单实体/删除**：`Find<T>/FindAsync<T>`（按 Id）、`Delete<T>/SoftDelete<T>`（谓词/Id/批量）在 `T : ITenant` 且当前有租户时追加 `AND [TenantId] = @TenantId`（`SqlMagic.AppendTenantFilter`，删改同样按租户隔离）。
 - **逃生口（框架不自动加租户）**：接受原生 SQL 字符串的重载（`FirstOrDefault<T>(sql,…)`/`FindList<T>(sql,…)`/`FindScalar`/`Page`）由调用方自持 SQL，框架无法安全改写，跨租户风险由调用方负责。
