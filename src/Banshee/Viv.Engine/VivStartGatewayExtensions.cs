@@ -56,8 +56,8 @@ namespace Viv.Engine
             string rateLimitConfigFile = "viv.ratelimit.json",
             IGatewayRouteProvider? gatewayRouter = null)
         {
-            var vivOptions = VivEngine.LoadVivConfig(builder.Configuration);
-            ArgumentNullException.ThrowIfNull(vivOptions);
+            // 绑定 + 写 VivEngine.VivOptions 快照 + 注册进 DI，三件事在这一次调用里做完
+            var vivOptions = builder.AddVivConfig();
 
             // 限流配置热重载（路由/集群改为从 Aspire 服务发现自动生成，不再读 viv.yarp.json）
             builder.Configuration.AddJsonFile(rateLimitConfigFile, optional: false, reloadOnChange: true);
@@ -69,7 +69,6 @@ namespace Viv.Engine
                 container.VivAutofacRegister(vivOptions);
             });
 
-            builder.AddVivConfig();
             builder.Services.AddViv(vivOptions);
 
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)

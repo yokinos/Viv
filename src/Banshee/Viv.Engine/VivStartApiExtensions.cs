@@ -39,8 +39,9 @@ namespace Viv.Engine
             Action<IServiceCollection>? serviceCollectionConfigure = null)
         {
             ArgumentNullException.ThrowIfNull(initSetting);
-            var vivOptions = VivEngine.LoadVivConfig(builder.Configuration);
-            ArgumentNullException.ThrowIfNull(vivOptions);
+
+            // 绑定 + 写 VivEngine.VivOptions 快照 + 注册进 DI，三件事在这一次调用里做完
+            var vivOptions = builder.AddVivConfig();
 
             // 暂存标题供 RunVivApi 使用
             builder.Configuration[ApiTitleKey] = initSetting.ApiName;
@@ -57,8 +58,6 @@ namespace Viv.Engine
             {
                 builder.Host.UseSerilog();
             }
-
-            builder.AddVivConfig();
 
             // 基础服务
             builder.Services.AddViv(vivOptions);

@@ -19,8 +19,8 @@ namespace Viv.Engine
         /// </summary>
         public static HostApplicationBuilder AddVivWorker(this HostApplicationBuilder builder)
         {
-            var vivOptions = VivEngine.LoadVivConfig(builder.Configuration);
-            ArgumentNullException.ThrowIfNull(vivOptions);
+            // 绑定 + 写 VivEngine.VivOptions 快照 + 注册进 DI，三件事在这一次调用里做完
+            var vivOptions = builder.AddVivConfig();
 
             // Autofac 容器
             builder.ConfigureContainer(new AutofacServiceProviderFactory(), container =>
@@ -29,7 +29,6 @@ namespace Viv.Engine
             });
 
             // 基础服务
-            builder.AddVivConfig();
             builder.Services.AddViv(vivOptions);
 
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)

@@ -5,7 +5,7 @@ using Viv.Engine;
 namespace Viv.Engine.Tests;
 
 /// <summary>
-/// VivEngine.LoadVivConfig(IConfiguration) 从 appsettings.json 的 VivOptions 节点绑定。
+/// VivConfigLoader.Load(IConfiguration) 从 appsettings.json 的 VivOptions 节点绑定。
 /// 验证 MS ConfigurationBinder 语义：枚举("0")/数值/bool/数组/BaseType 字符串/null 节点跳过，
 /// JSON 形状对齐真实服务配置（含 EntityTypeOptions.BaseType 程序集限定名）。
 /// 与 RequestTokenResolverTests 共享禁用并行集合（都改静态 VivEngine.VivOptions）。
@@ -53,7 +53,7 @@ public class VivConfigBindingTests
             .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(Json)))
             .Build();
 
-        var options = VivEngine.LoadVivConfig(config);
+        var options = VivConfigLoader.Load(config);
 
         // EnvOption
         Assert.Equal("tok-abc", options.EnvOption!.InternalToken);

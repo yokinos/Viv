@@ -18,30 +18,48 @@ using Viv.Redis;
 namespace Viv.Engine
 {
     /// <summary>
-    /// Viv 框架配置加载器
-    /// 从 appsettings.json 的 VivOptions 节点加载配置，并注册到 DI
+    /// Viv 框架配置加载器 —— 全进程唯一的 VivOptions 绑定入口。
+    ///
+    /// 绑一次、快照一次、注册一次。以前绑定散在三个 starter（各自 LoadVivConfig + AddVivConfig 各绑一遍）
+    /// 加 VivEngine 自己一份深拷贝，同一份 appsettings.json 会得到三份对象图，改动只落在其中一份上。
+    ///
     /// 提供两种互斥模式，二选一，不要同时调用：
     /// 1. AddVivConfig（推荐）：静态实例模式，绑定后注册为 Singleton 实例 + IOptions&lt;T&gt;
     /// 2. AddVivConfigFromConfiguration：动态配置模式，使用 Configure + IOptionsMonitor，支持热更新
+    ///
+    /// 两种模式都返回绑定出来的那份 VivOptions，且都写入 VivEngine.VivOptions 静态快照。
+    /// 区别只在 DI 那侧：动态模式的热更新改的是 IOptionsMonitor 里的值，静态快照是启动时冻结的
+    /// —— 走静态读写的那几处（RequestTokenResolver / 网关判定 / ApiStartedMiddleware）看不到刷新。
     /// </summary>
     public static class VivConfigLoader
     {
+        /// <summary>
+        /// 绑定 IConfiguration 的 VivOptions 节点，写入全局静态快照并返回。
+        /// 节点缺失时返回一份默认实例（不返回 null）。
+        ///
+        /// 有副作用：会覆盖 VivEngine.VivOptions 与 VivAppStartTime。测试要单独拿配置也走它，
+        /// 免得在别处再写一份绑定表达式 —— 那正是这一轮要消掉的东西。
+        /// </summary>
+        public static VivOptions Load(IConfiguration configuration)
+        {
+            ArgumentNullException.ThrowIfNull(configuration);
+
+            var options = configuration.GetSection(nameof(VivOptions)).Get<VivOptions>() ?? new VivOptions();
+            VivEngine.SetVivOptions(options);
+            return options;
+        }
+
         /// <summary>
         /// 【推荐】从 IConfiguration 的 VivOptions 节点加载配置并注册为静态实例
         /// 适合：配置在启动时固定，不需要热更新的场景
         /// 注入方式：直接注入 T，或注入 IOptions&lt;T&gt;
         /// 注意：如果某个子配置节点为 null，则不会注册到 DI，注入该类型时会报错
         /// </summary>
-        public static IHostApplicationBuilder AddVivConfig(this IHostApplicationBuilder builder)
+        public static VivOptions AddVivConfig(this IHostApplicationBuilder builder)
         {
-            var options = new VivOptions();
-
-            // 读取 appsettings.json
-            builder.Configuration.GetSection(nameof(VivOptions)).Bind(options);
-
+            var options = Load(builder.Configuration);
             RegisterOptions(builder.Services, options);
-
-            return builder;
+            return options;
         }
 
         /// <summary>
@@ -51,10 +69,12 @@ namespace Viv.Engine
         ///          不能直接注入 T（本方法不注册 T 本身）
         /// 注意：节点为 null 时 Configure 会生成默认对象，注入不会失败，但值都是默认值
         /// </summary>
-        public static IHostApplicationBuilder AddVivConfigFromConfiguration(this IHostApplicationBuilder builder)
+        public static VivOptions AddVivConfigFromConfiguration(this IHostApplicationBuilder builder)
         {
             var services = builder.Services;
             var configuration = builder.Configuration;
+
+            var options = Load(configuration);
 
             services.Configure<VivOptions>(configuration.GetSection("VivOptions"));
             services.Configure<EnvOptions>(configuration.GetSection("VivOptions:EnvOption"));
@@ -86,7 +106,7 @@ namespace Viv.Engine
                 };
             });
 
-            return builder;
+            return options;
         }
 
         /// <summary>
