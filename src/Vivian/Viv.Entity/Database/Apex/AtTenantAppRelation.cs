@@ -1,4 +1,4 @@
-﻿using System;
+﻿ using System;
 using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
@@ -8,8 +8,11 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 租户应用关联表
     /// 在组织允许的App范围内，精细化管控单个租户可用应用
+    ///
+    /// 三个掩码列存的是十进制数字符串（BigInteger 的 ToString），不是 long ——
+    /// 权限位不受 64 位限制，读写走 BitIndexMaskMagic 的 FromText / ToText。
     /// </summary>
-    public class AtTenantAppRelation : EntityBase, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
+    public class AtTenantAppRelation : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 租户Id（关联AtTenant.Id）
@@ -24,17 +27,17 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 该租户此App允许开放的菜单最大权限掩码
         /// </summary>
-        public ulong MenuMask { get; set; }
+        public string? MenuMask { get; set; }
 
         /// <summary>
         /// 该租户此App允许开放的子页面最大权限掩码
         /// </summary>
-        public ulong SubPageMask { get; set; }
+        public string? SubPageMask { get; set; }
 
         /// <summary>
         /// 该租户此App允许开放的按钮最大权限掩码
         /// </summary>
-        public ulong ButtonMask { get; set; }
+        public string? ButtonMask { get; set; }
 
         /// <summary>
         /// 状态
@@ -60,5 +63,15 @@ namespace Viv.Entity.Database.Apex
         /// 更新人ID
         /// </summary>
         public long? UpdatedBy { get; set; }
+
+        /// <summary>
+        /// 是否软删除
+        /// </summary>
+        public bool IsDeleted { get; set; }
+
+        /// <summary>
+        /// 删除时间
+        /// </summary>
+        public DateTime? DeletedAt { get; set; }
     }
 }

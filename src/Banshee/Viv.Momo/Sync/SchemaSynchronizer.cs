@@ -450,16 +450,28 @@ namespace Viv.Momo.Sync
             };
         }
 
+        // 两个映射表的键必须覆盖实体上会出现的全部值类型。缺席的键落到 GetValueOrDefault 的
+        // 兜底 "text" / "nvarchar(max)" —— 建出来的是一列字符串，写入时不报错、读出来是另一个
+        // 东西，正是最难查的那种。byte / ulong 这些无符号与窄整数原先就是这么漏的。
+        //
+        // 两侧对不上是常态：SqlServer 根本没有无符号整数，ulong 只能借 decimal(20,0) 承载；
+        // PG 则把 byte 抬成 smallint（PG 的 smallint 就是 2 字节有符号）。
         private static readonly Dictionary<Type, string> PgTypeMap = new()
         {
             [typeof(long)] = "bigint",
             [typeof(int)] = "integer",
             [typeof(short)] = "smallint",
+            [typeof(byte)] = "smallint",
+            [typeof(sbyte)] = "smallint",
+            [typeof(ushort)] = "integer",
+            [typeof(uint)] = "bigint",
+            [typeof(ulong)] = "numeric(20,0)",
             [typeof(bool)] = "boolean",
+            [typeof(char)] = "character(1)",
             [typeof(Guid)] = "uuid",
             [typeof(DateTime)] = "timestamp without time zone",
             [typeof(DateTimeOffset)] = "timestamp with time zone",
-            [typeof(decimal)] = "numeric(18,2)",
+            [typeof(decimal)] = "numeric",
             [typeof(double)] = "double precision",
             [typeof(float)] = "real",
             [typeof(TimeSpan)] = "interval",
@@ -470,7 +482,13 @@ namespace Viv.Momo.Sync
             [typeof(long)] = "bigint",
             [typeof(int)] = "int",
             [typeof(short)] = "smallint",
+            [typeof(byte)] = "tinyint",
+            [typeof(sbyte)] = "smallint",
+            [typeof(ushort)] = "int",
+            [typeof(uint)] = "bigint",
+            [typeof(ulong)] = "decimal(20,0)",
             [typeof(bool)] = "bit",
+            [typeof(char)] = "nvarchar(1)",
             [typeof(Guid)] = "uniqueidentifier",
             [typeof(DateTime)] = "datetime2",
             [typeof(DateTimeOffset)] = "datetimeoffset",
@@ -574,16 +592,19 @@ namespace Viv.Momo.Sync
         {
             var columns = new List<ColumnInfo>();
             await using var cmd = new NpgsqlCommand(
-                "SELECT column_name, data_type, character_maximum_length, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = @t ORDER BY ordinal_position", conn);
+                "SELECT column_name, data_type, character_maximum_length, is_nullable, column_default, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_schema = 'public' AND table_name = @t ORDER BY ordinal_position", conn);
             cmd.Parameters.AddWithValue("@t", tableName);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
+                var maxLen = reader.IsDBNull(2) ? null : (int?)reader.GetInt32(2);
                 columns.Add(new ColumnInfo
                 {
                     Name = reader.GetString(0),
-                    SqlType = NormalizePgType(reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetInt32(2)),
-                    MaxLength = reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                    SqlType = NormalizePgType(reader.GetString(1), maxLen,
+                        reader.IsDBNull(5) ? null : reader.GetInt32(5),
+                        reader.IsDBNull(6) ? null : reader.GetInt32(6)),
+                    MaxLength = maxLen,
                     IsNullable = reader.GetString(3) == "YES",
                     DefaultValue = reader.IsDBNull(4) ? null : reader.GetString(4)
                 });
@@ -606,7 +627,7 @@ namespace Viv.Momo.Sync
         {
             var columns = new List<ColumnInfo>();
             await using var cmd = new SqlCommand(
-                "SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE, COLUMN_DEFAULT FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @t ORDER BY ORDINAL_POSITION", conn);
+                "SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE, COLUMN_DEFAULT, NUMERIC_PRECISION, NUMERIC_SCALE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @t ORDER BY ORDINAL_POSITION", conn);
             cmd.Parameters.AddWithValue("@t", tableName);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
@@ -616,7 +637,9 @@ namespace Viv.Momo.Sync
                 columns.Add(new ColumnInfo
                 {
                     Name = reader.GetString(0),
-                    SqlType = NormalizeSqlServerType(dataType, maxLen),
+                    SqlType = NormalizeSqlServerType(dataType, maxLen,
+                        reader.IsDBNull(5) ? null : (int?)Convert.ToInt32(reader.GetValue(5)),
+                        reader.IsDBNull(6) ? null : (int?)Convert.ToInt32(reader.GetValue(6))),
                     MaxLength = maxLen,
                     IsNullable = reader.GetString(3) == "YES",
                     DefaultValue = reader.IsDBNull(4) ? null : reader.GetString(4)
@@ -627,21 +650,33 @@ namespace Viv.Momo.Sync
 
         // ==================== Type normalization ====================
 
-        /// <summary>PG INFORMATION_SCHEMA 的 data_type → 与 MapToSqlType 一致的类型名，方便比较</summary>
-        private string NormalizePgType(string pgType, int? maxLen)
+        /// <summary>
+        /// PG INFORMATION_SCHEMA 的 data_type → 与 MapToSqlType 一致的类型名，方便比较。
+        ///
+        /// numeric 的精度不在 data_type 里，得单独读 numeric_precision / numeric_scale —— 只回
+        /// "numeric(18,2)" 的话，凡精度不是 18,2 的列（[Precision] 标的、ulong 的 numeric(20,0)）
+        /// 每次启动都被判成 Modified，日志里一条永久的假差异。
+        /// </summary>
+        internal static string NormalizePgType(string pgType, int? maxLen, int? precision, int? scale)
         {
             var t = pgType.ToLowerInvariant();
             if (t == "character varying" && maxLen.HasValue) return $"varchar({maxLen})";
             if (t == "character varying") return "text";
+            if (t == "character" && maxLen.HasValue) return $"character({maxLen})";
+            if (t == "character") return "text";
             if (t == "timestamp with time zone") return "timestamp with time zone";
             if (t == "timestamp without time zone") return "timestamp without time zone";
             if (t == "double precision") return "double precision";
-            if (t == "numeric") return "numeric(18,2)";
+            if (t == "numeric") return precision.HasValue && scale.HasValue ? $"numeric({precision},{scale})" : "numeric";
             return t;
         }
 
-        /// <summary>SqlServer INFORMATION_SCHEMA 的 DATA_TYPE → 与 MapToSqlType 一致的类型名</summary>
-        private string NormalizeSqlServerType(string sqlType, int? maxLen)
+        /// <summary>
+        /// SqlServer INFORMATION_SCHEMA 的 DATA_TYPE → 与 MapToSqlType 一致的类型名。
+        /// numeric 那条同 <see cref="NormalizePgType"/>：DATA_TYPE 只给 "decimal"，精度在
+        /// NUMERIC_PRECISION / NUMERIC_SCALE 两列上。
+        /// </summary>
+        internal static string NormalizeSqlServerType(string sqlType, int? maxLen, int? precision, int? scale)
         {
             var t = sqlType.ToLowerInvariant();
             if (t == "nvarchar" && maxLen.HasValue) return $"nvarchar({maxLen})";
@@ -649,6 +684,7 @@ namespace Viv.Momo.Sync
             if (t == "varchar" && maxLen.HasValue) return $"varchar({maxLen})";
             if (t == "varchar") return "varchar(max)";
             if (t == "varbinary") return "varbinary(max)";
+            if (t is "decimal" or "numeric") return precision.HasValue && scale.HasValue ? $"decimal({precision},{scale})" : "decimal(18,2)";
             return t;
         }
 

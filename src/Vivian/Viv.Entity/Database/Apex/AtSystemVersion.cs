@@ -30,11 +30,6 @@ namespace Viv.Entity.Database.Apex
         public string? Code { get; set; }
 
         /// <summary>
-        /// 售卖套餐类型
-        /// </summary>
-        //public EmSystemSaleType SaleType { get; set; }
-
-        /// <summary>
         /// 套餐价格（单位：分）
         /// </summary>
         public long Price { get; set; }

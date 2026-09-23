@@ -8,6 +8,9 @@ namespace Viv.Entity.Database.Apex
     /// <summary>
     /// 套餐与客户端应用关联表
     /// 一套版本可绑定多个App，每个App独立配置一套功能掩码
+    ///
+    /// 三个掩码列存的是十进制数字符串（BigInteger 的 ToString），不是 long ——
+    /// 权限位不受 64 位限制，读写走 BitIndexMaskMagic 的 FromText / ToText。
     /// </summary>
     public class AtSystemVersionAppRelation : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
@@ -24,17 +27,17 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 当前App对应的主菜单权限掩码
         /// </summary>
-        public ulong MenuMask { get; set; }
+        public string? MenuMask { get; set; }
 
         /// <summary>
         /// 当前App对应的子页面权限掩码
         /// </summary>
-        public ulong SubPageMask { get; set; }
+        public string? SubPageMask { get; set; }
 
         /// <summary>
         /// 当前App对应的操作按钮权限掩码
         /// </summary>
-        public ulong ButtonMask { get; set; }
+        public string? ButtonMask { get; set; }
 
         /// <summary>
         /// 本条App权限启用状态

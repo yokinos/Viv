@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 using Viv.Momo.Base;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
@@ -63,6 +64,29 @@ public class SyncDdlRow : IEntity
     public string Code { get; set; } = "";
 
     public DateTime? CreatedAt { get; set; }
+}
+
+/// <summary>
+/// 窄整数与无符号整数 —— AtCompanyAppRelation 那 12 个 <c>ulong</c> 掩码列的形状
+/// （<c>ulong</c> 在 SqlServer 上没有原生类型，只能落到 <c>decimal(20,0)</c>），
+/// 外加一个可空 <c>byte</c>（AtClientAppCarousel.Position）。
+/// </summary>
+[Table("sync_scalar_row")]
+public class SyncScalarRow : IEntity
+{
+    public long Id { get; set; }
+    public byte ByteCol { get; set; }
+    public byte? NullableByteCol { get; set; }
+    public sbyte SByteCol { get; set; }
+    public ushort UShortCol { get; set; }
+    public uint UIntCol { get; set; }
+    public ulong ULongCol { get; set; }
+    public char CharCol { get; set; }
+
+    [Precision(20, 4)]
+    public decimal PreciseAmount { get; set; }
+
+    public decimal PlainAmount { get; set; }
 }
 
 #endregion
@@ -343,6 +367,145 @@ public class SchemaSyncTests
         var ddl = sync.GenerateDdl(sync.Diff(expected, existing));
 
         Assert.Equal("ALTER TABLE [sync_ddl_row] DROP COLUMN IF EXISTS [Legacy];", Assert.Single(ddl));
+    }
+
+    #endregion
+
+    #region 类型映射
+
+    [Fact]
+    public void 类型映射_无符号与窄整数不再落成字符串()
+    {
+        // 这两张映射表原先只有 long/int/short/bool/Guid/DateTime/decimal/double/float/TimeSpan，
+        // byte / ulong 这些落进 GetValueOrDefault 的兜底 "nvarchar(max)" —— 建出来的是一列字符串，
+        // 写入不报错、读出来是另一个东西。Apex 那 12 个 ulong 掩码列正是这个形状。
+        var sql = Assert.Single(CreateTableDdl(DatabaseSourceType.SqlServer, typeof(SyncScalarRow)));
+
+        Assert.Contains("[ULongCol] decimal(20,0)", sql);   // SqlServer 没有无符号整数，只能借 decimal 承载
+        Assert.Contains("[ByteCol] tinyint", sql);
+        Assert.Contains("[NullableByteCol] tinyint", sql);
+        Assert.Contains("[SByteCol] smallint", sql);
+        Assert.Contains("[UShortCol] int", sql);
+        Assert.Contains("[UIntCol] bigint", sql);
+        Assert.Contains("[CharCol] nvarchar(1)", sql);
+        Assert.DoesNotContain("[ULongCol] nvarchar(max)", sql);   // 修之前就是这个形状
+    }
+
+    [Fact]
+    public void 类型映射_PostgreSQL方言()
+    {
+        var sql = Assert.Single(CreateTableDdl(DatabaseSourceType.PostgreSQL, typeof(SyncScalarRow)));
+
+        Assert.Contains("u_long_col numeric(20,0)", sql);
+        Assert.Contains("byte_col smallint", sql);          // PG 的 smallint 就是 2 字节有符号
+        Assert.Contains("u_short_col integer", sql);
+        Assert.Contains("u_int_col bigint", sql);
+        Assert.Contains("char_col character(1)", sql);      // Npgsql 把 char 落到 character(1)，不是 text
+    }
+
+    [Fact]
+    public void 类型映射_decimal精度取自_Precision_特性()
+    {
+        var table = CreateSync().BuildExpectedSchema([typeof(SyncScalarRow)])[0];
+
+        Assert.Equal("decimal(20,4)", table.Columns.Single(c => c.Name == "PreciseAmount").FullSqlType);
+    }
+
+    #endregion
+
+    #region 与 EF 自身的映射对齐
+
+    // 建表 DDL 的唯一目的，是建出一张 EF 认得的表。所以每一条映射都得跟 EF 自己算出来的列类型对上，
+    // 对不上的表现是 DDL 建了 A 列、EF 读写时按 B 处理 —— 建表不报错、写入也不报错，最迟在读出
+    // 一个不属于那个类型的东西时才发现。这两个上下文只读模型元数据（GetColumnType 由 provider
+    // 在模型构建期算好），不连库。
+    //
+    // 这条同时是「ulong 该映射成什么」的判据来源：SqlServer 没有无符号整数，EF 把它落到
+    // decimal(20,0)，映射表跟着它走，而不是反过来迁就一个好看的类型名。
+
+    private sealed class ScalarSqlServerContext : DbContext
+    {
+        public DbSet<SyncScalarRow> Rows => Set<SyncScalarRow>();
+        protected override void OnConfiguring(DbContextOptionsBuilder b) => b.UseSqlServer("Server=.");
+    }
+
+    private sealed class ScalarPgContext : DbContext
+    {
+        public DbSet<SyncScalarRow> Rows => Set<SyncScalarRow>();
+        protected override void OnConfiguring(DbContextOptionsBuilder b) => b.UseNpgsql("Host=.");
+    }
+
+    private static void AssertMatchesEf(DbContext ctx, DatabaseSourceType dbType)
+    {
+        var entity = ctx.Model.FindEntityType(typeof(SyncScalarRow));
+        Assert.NotNull(entity);
+
+        var table = CreateSync(dbType).BuildExpectedSchema([typeof(SyncScalarRow)])[0];
+
+        foreach (var prop in entity.GetProperties())
+        {
+            var column = table.Columns.Single(
+                c => c.Name == Viv.Momo.MomoIdentifier.ToPhysical(prop.Name, dbType));
+            Assert.Equal(prop.GetColumnType(), column.FullSqlType);
+        }
+    }
+
+    [Fact]
+    public void 类型映射_与SqlServer自己算出的列类型一致()
+    {
+        using var ctx = new ScalarSqlServerContext();
+        AssertMatchesEf(ctx, DatabaseSourceType.SqlServer);
+    }
+
+    [Fact]
+    public void 类型映射_与PostgreSQL自己算出的列类型一致()
+    {
+        using var ctx = new ScalarPgContext();
+        AssertMatchesEf(ctx, DatabaseSourceType.PostgreSQL);
+    }
+
+    #endregion
+
+    #region 实际列的归一化
+
+    // INFORMATION_SCHEMA 的 DATA_TYPE 里没有精度：SqlServer 一律给 "decimal"，PG 给 "numeric"，
+    // 精度在隔壁的 NUMERIC_PRECISION / NUMERIC_SCALE 两列上。不回读那两列、写死 numeric(18,2) 的话，
+    // 凡精度不是 (18,2) 的列每次启动都被判成 Modified（ulong 的 (20,0)、[Precision] 标的 (20,4)），
+    // 日志里挂着一条永远消不掉的假差异。
+
+    [Fact]
+    public void 归一化_SqlServer_decimal带回精度()
+    {
+        Assert.Equal("decimal(20,0)", SchemaSynchronizer.NormalizeSqlServerType("decimal", null, 20, 0));
+        Assert.Equal("decimal(20,4)", SchemaSynchronizer.NormalizeSqlServerType("decimal", null, 20, 4));
+    }
+
+    [Fact]
+    public void 归一化_PG_numeric带回精度()
+    {
+        Assert.Equal("numeric(20,0)", SchemaSynchronizer.NormalizePgType("numeric", null, 20, 0));
+        Assert.Equal("numeric(18,2)", SchemaSynchronizer.NormalizePgType("numeric", null, 18, 2));
+    }
+
+    [Fact]
+    public void 归一化_读不到精度时各按各的约定默认值()
+    {
+        // 两个 provider 对无约束 decimal 的约定不一样，这里跟着 EF 走而不是取同一个数：
+        // SqlServer 的默认就是 decimal(18,2)，PG 的 numeric 无约束时不带精度。
+        // 给 PG 也写 (18,2) 的话，建出来的列会把小数位静默截到两位。
+        Assert.Equal("decimal(18,2)", SchemaSynchronizer.NormalizeSqlServerType("decimal", null, null, null));
+        Assert.Equal("numeric", SchemaSynchronizer.NormalizePgType("numeric", null, null, null));
+    }
+
+    [Fact]
+    public void 归一化_其余类型不受影响()
+    {
+        Assert.Equal("nvarchar(50)", SchemaSynchronizer.NormalizeSqlServerType("nvarchar", 50, null, null));
+        Assert.Equal("nvarchar(max)", SchemaSynchronizer.NormalizeSqlServerType("nvarchar", null, null, null));
+        Assert.Equal("tinyint", SchemaSynchronizer.NormalizeSqlServerType("tinyint", null, 3, 0));
+        Assert.Equal("varchar(50)", SchemaSynchronizer.NormalizePgType("character varying", 50, null, null));
+        Assert.Equal("text", SchemaSynchronizer.NormalizePgType("character varying", null, null, null));
+        Assert.Equal("character(1)", SchemaSynchronizer.NormalizePgType("character", 1, null, null));
     }
 
     #endregion

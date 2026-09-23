@@ -9,6 +9,9 @@ namespace Viv.Entity.Database.Apex
     /// 组织应用关联表
     /// 1. 控制组织可上架/使用哪些客户端App
     /// 2. 配套三组最大功能掩码，限制该OEM组织售卖套餐的功能上限
+    ///
+    /// 三个掩码列存的是十进制数字符串（BigInteger 的 ToString），不是 long ——
+    /// 权限位不受 64 位限制，读写走 BitIndexMaskMagic 的 FromText / ToText。
     /// </summary>
     public class AtOrgAppRelation : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
@@ -25,17 +28,17 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 该组织此App允许开放的菜单最大权限掩码（售卖天花板）
         /// </summary>
-        public ulong MaxMenuMask { get; set; }
+        public string? MaxMenuMask { get; set; }
 
         /// <summary>
         /// 该组织此App允许开放的子页面最大权限掩码（售卖天花板）
         /// </summary>
-        public ulong MaxSubPageMask { get; set; }
+        public string? MaxSubPageMask { get; set; }
 
         /// <summary>
         /// 该组织此App允许开放的按钮最大权限掩码（售卖天花板）
         /// </summary>
-        public ulong MaxButtonMask { get; set; }
+        public string? MaxButtonMask { get; set; }
 
         /// <summary>
         /// 本条App权限启用状态

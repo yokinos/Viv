@@ -70,5 +70,19 @@ namespace Viv.Delusion.Magic
         /// 从字节数组还原（读数据库 varbinary）
         /// </summary>
         public static BigInteger FromBytes(byte[] bytes) => new(bytes);
+
+        /// <summary>
+        /// 转十进制字符串。掩码列（MenuMask / SubPageMask / ButtonMask）存的就是这个格式 ——
+        /// 存数字而不是字节，为的是在数据库客户端里能直接肉眼看。
+        /// </summary>
+        public static string ToText(BigInteger mask) => mask.ToString();
+
+        /// <summary>
+        /// 从十进制字符串还原。null 与空白一律当 0（无权限位）。
+        /// 格式非法时 BigInteger.Parse 直接抛 FormatException，不吞成 0 —— 掩码读错位是权限错乱，
+        /// 比一条异常难查得多。
+        /// </summary>
+        public static BigInteger FromText(string? text) =>
+            string.IsNullOrWhiteSpace(text) ? BigInteger.Zero : BigInteger.Parse(text);
     }
 }

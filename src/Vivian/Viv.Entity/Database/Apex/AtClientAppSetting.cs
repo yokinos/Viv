@@ -21,7 +21,6 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 配置分组Id
         /// </summary>
-        [StringLength(64)]
         public long GroupId { get; set; }
 
         /// <summary>
