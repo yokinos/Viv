@@ -44,5 +44,13 @@ namespace Viv.Momo.Options
         /// 只加不改不删，对已有库安全。开发期打开，生产期交给迁移脚本。
         /// </summary>
         public bool SyncTableOnStartup { get; set; }
+
+        /// <summary>
+        /// 慢查询阈值（毫秒）。超过则记一条 Warning 并计入 viv.momo.query.slow，0 或负数 = 关。
+        ///
+        /// 作用于全部库访问，手写的大 SQL 也在内。判的是单条命令：批量写与 ExecuteSqlList
+        /// 一条一条算，只有分页的 count 与 list 合成一个样本。
+        /// </summary>
+        public int SlowQueryThresholdMs { get; set; } = 1000;
     }
 }

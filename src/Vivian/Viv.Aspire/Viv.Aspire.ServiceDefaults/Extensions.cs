@@ -60,7 +60,9 @@ public static class Extensions
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation()
                     .AddMeter("Viv.Outbox")
-                    .AddMeter("Viv.Nana");
+                    .AddMeter("Viv.Nana")
+                    .AddMeter("Viv.Redis")
+                    .AddMeter("Viv.Momo");
             })
             .WithTracing(tracing =>
             {
@@ -111,19 +113,18 @@ public static class Extensions
 
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        // Adding health checks endpoints to applications in non-development environments has security implications.
-        // See https://aka.ms/dotnet/aspire/healthchecks for details before enabling these endpoints in non-development environments.
-        if (app.Environment.IsDevelopment())
-        {
-            // All health checks must pass for app to be considered ready to accept traffic after starting
-            app.MapHealthChecks(HealthEndpointPath);
+        // 两个端点全环境都开：健康端点本来就是要给编排系统看的，关在开发环境里等于生产环境没有。
+        // 谓词分两档 —— /health 走全部检查（含框架挂的 redis / database），/alive 只看 live 标签，
+        // 所以依赖挂了会摘流量，但不会被判定成「进程该重启」。
 
-            // Only health checks tagged with the "live" tag must pass for app to be considered alive
-            app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
-            {
-                Predicate = r => r.Tags.Contains("live")
-            });
-        }
+        // All health checks must pass for app to be considered ready to accept traffic after starting
+        app.MapHealthChecks(HealthEndpointPath);
+
+        // Only health checks tagged with the "live" tag must pass for app to be considered alive
+        app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
+        {
+            Predicate = r => r.Tags.Contains("live")
+        });
 
         return app;
     }

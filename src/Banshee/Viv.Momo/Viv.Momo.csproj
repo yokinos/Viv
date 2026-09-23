@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- MomoMetrics 的仪表与 Record* 是 internal（照 NanaMetrics / OutboxMetrics 的做法），
+         单元测试要直接读仪表名、并用 MeterListener 观察，同 Viv.Redis -->
+    <InternalsVisibleTo Include="Viv.Momo.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Dapper" />
     <PackageReference Include="Dapper.SqlBuilder" />
     <PackageReference Include="EFCore.NamingConventions" />

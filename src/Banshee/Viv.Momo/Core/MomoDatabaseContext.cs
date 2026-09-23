@@ -64,14 +64,17 @@ namespace Viv.Momo.Core
 
                 if (entityList.Count < EFMaxCount)
                 {
+                    MomoMetrics.RecordBatchPath("ef", "insert");
                     context.AddRange(entityList);
                     affected = context.SaveChanges();
                 }
                 else
                 {
                     var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
+                    MomoMetrics.RecordBatchPath("dapper", "insert");
                     var tempSql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _databaseOptions.DatabaseSource);
-                    affected = context.DbConnection.Execute(tempSql, entityList, _transaction, _timeOut);
+                    affected = _queryTelemetry.Measure("dapper", "insert", tempSql,
+                        () => context.DbConnection.Execute(tempSql, entityList, _transaction, _timeOut));
                 }
 
                 return affected > 0;
@@ -116,6 +119,7 @@ namespace Viv.Momo.Core
 
                 if (entityList.Count < EFMaxCount)
                 {
+                    MomoMetrics.RecordBatchPath("ef", "insert");
                     context.AddRange(entityList);
                     affected = await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 }
@@ -123,7 +127,9 @@ namespace Viv.Momo.Core
                 {
                     var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
                     var tempSql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _databaseOptions.DatabaseSource);
-                    affected = await context.DbConnection.ExecuteAsync(tempSql, entityList, _transaction, _timeOut).ConfigureAwait(false);
+                    MomoMetrics.RecordBatchPath("dapper", "insert");
+                    affected = await _queryTelemetry.MeasureAsync("dapper", "insert", tempSql,
+                        async () => await context.DbConnection.ExecuteAsync(tempSql, entityList, _transaction, _timeOut).ConfigureAwait(false)).ConfigureAwait(false);
                 }
 
                 return affected > 0;
@@ -195,10 +201,12 @@ namespace Viv.Momo.Core
 
                 if (entityList.Count < EFMaxCount)
                 {
+                    MomoMetrics.RecordBatchPath("ef", "update");
                     count = EFBatchUpdate(entityList, context);
                 }
                 else
                 {
+                    MomoMetrics.RecordBatchPath("dapper", "update");
                     count = DapperBatchUpdate(entityList, context);
                 }
 
@@ -261,10 +269,12 @@ namespace Viv.Momo.Core
 
                 if (entityList.Count < EFMaxCount)
                 {
+                    MomoMetrics.RecordBatchPath("ef", "update");
                     count = await EFBatchUpdateAsync(entityList, context, cancellationToken);
                 }
                 else
                 {
+                    MomoMetrics.RecordBatchPath("dapper", "update");
                     count = await DapperBatchUpdateAsync(entityList, context);
                 }
 
@@ -326,10 +336,14 @@ namespace Viv.Momo.Core
         {
             var sqlList = BuildUpdateSqlList(entities);
             int count = 0;
+
+            // 一个 item 一条样本，不包整个循环。BuildUpdateSqlList 按 200 分页，item 就是一条真实 UPDATE，
+            // 包住循环的话样本耗时随实体总数涨，某一条慢就看不出来了
             foreach (var item in sqlList)
             {
                 if (string.IsNullOrEmpty(item.Key)) continue;
-                count += context.DbConnection.Execute(item.Key, item.Value, _transaction, _timeOut);
+                count += _queryTelemetry.Measure("dapper", "update", item.Key,
+                    () => context.DbConnection.Execute(item.Key, item.Value, _transaction, _timeOut));
             }
             return count;
         }
@@ -341,7 +355,8 @@ namespace Viv.Momo.Core
             foreach (var item in sqlList)
             {
                 if (string.IsNullOrEmpty(item.Key)) continue;
-                count += await context.DbConnection.ExecuteAsync(item.Key, item.Value, _transaction, _timeOut).ConfigureAwait(false);
+                count += await _queryTelemetry.MeasureAsync("dapper", "update", item.Key,
+                    async () => await context.DbConnection.ExecuteAsync(item.Key, item.Value, _transaction, _timeOut).ConfigureAwait(false)).ConfigureAwait(false);
             }
             return count;
         }
@@ -478,16 +493,19 @@ namespace Viv.Momo.Core
                 var context = GetAppContext();
                 if (ids.Count < EFMaxCount)
                 {
+                    MomoMetrics.RecordBatchPath("ef", "delete");
                     int affected = context.Set<T>().Where(x => ids.Contains(x.Id)).ExecuteDelete();
                     return affected > 0;
                 }
                 else
                 {
+                    MomoMetrics.RecordBatchPath("dapper", "delete");
                     var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
                     var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T)) && TenantId > 0;
                     var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _databaseOptions.DatabaseSource)} IN @Ids"
                         + (isTenantEntity ? $" AND {SqlMagic.QuoteIdentifier("TenantId", _databaseOptions.DatabaseSource)} = @TenantId" : "");
-                    int affected = context.DbConnection.Execute(deleteSql, isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids }, _transaction, _timeOut);
+                    int affected = _queryTelemetry.Measure("dapper", "delete", deleteSql,
+                        () => context.DbConnection.Execute(deleteSql, isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids }, _transaction, _timeOut));
                     return affected > 0;
                 }
             }
@@ -532,17 +550,20 @@ namespace Viv.Momo.Core
                 var context = GetAppContext();
                 if (ids.Count < EFMaxCount)
                 {
+                    MomoMetrics.RecordBatchPath("ef", "delete");
                     int affected = await context.Set<T>().Where(x => ids.Contains(x.Id)).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
                     return affected > 0;
                 }
                 else
                 {
+                    MomoMetrics.RecordBatchPath("dapper", "delete");
                     cancellationToken.ThrowIfCancellationRequested();
                     var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
                     var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T)) && TenantId > 0;
                     var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _databaseOptions.DatabaseSource)} IN @Ids"
                         + (isTenantEntity ? $" AND {SqlMagic.QuoteIdentifier("TenantId", _databaseOptions.DatabaseSource)} = @TenantId" : "");
-                    int affected = await context.DbConnection.ExecuteAsync(deleteSql, isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids }, _transaction, _timeOut).ConfigureAwait(false);
+                    int affected = await _queryTelemetry.MeasureAsync("dapper", "delete", deleteSql,
+                        async () => await context.DbConnection.ExecuteAsync(deleteSql, isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids }, _transaction, _timeOut).ConfigureAwait(false)).ConfigureAwait(false);
                     return affected > 0;
                 }
             }
@@ -564,7 +585,8 @@ namespace Viv.Momo.Core
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
-                var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
+                var count = _queryTelemetry.Measure("dapper", "delete", sql,
+                    () => context.DbConnection.Execute(sql, parameters, _transaction, _timeOut));
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -586,7 +608,8 @@ namespace Viv.Momo.Core
 
                 var context = GetAppContext();
                 var command = new CommandDefinition(sql, parameters, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                var count = await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false);
+                var count = await _queryTelemetry.MeasureAsync("dapper", "delete", sql,
+                    async () => await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false)).ConfigureAwait(false);
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -605,7 +628,8 @@ namespace Viv.Momo.Core
                 var context = GetAppContext();
                 var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
                 var (sql, parameter) = SqlMagic.GetDeleteSql<T>(tableName, x => x.Id == id, _databaseOptions.DatabaseSource, TenantId);
-                var count = context.DbConnection.Execute(sql, parameter, _transaction, _timeOut);
+                var count = _queryTelemetry.Measure("dapper", "delete", sql,
+                    () => context.DbConnection.Execute(sql, parameter, _transaction, _timeOut));
                 return (count > 0);
             }
             catch (OperationCanceledException) { throw; }
@@ -625,7 +649,8 @@ namespace Viv.Momo.Core
                 var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
                 var (sql, parameter) = SqlMagic.GetDeleteSql<T>(tableName, x => x.Id == id, _databaseOptions.DatabaseSource, TenantId);
                 var command = new CommandDefinition(sql, parameter, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                var count = await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false);
+                var count = await _queryTelemetry.MeasureAsync("dapper", "delete", sql,
+                    async () => await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false)).ConfigureAwait(false);
                 return (count > 0);
             }
             catch (OperationCanceledException) { throw; }
@@ -650,7 +675,8 @@ namespace Viv.Momo.Core
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext(DbReadWriteType.Write);
-                var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
+                var count = _queryTelemetry.Measure("dapper", "delete", sql,
+                    () => context.DbConnection.Execute(sql, parameters, _transaction, _timeOut));
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -672,7 +698,8 @@ namespace Viv.Momo.Core
 
                 var context = GetAppContext();
                 var command = new CommandDefinition(sql, parameters, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                var count = await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false);
+                var count = await _queryTelemetry.MeasureAsync("dapper", "delete", sql,
+                    async () => await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false)).ConfigureAwait(false);
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -692,7 +719,8 @@ namespace Viv.Momo.Core
                 var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
                 var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _databaseOptions.DatabaseSource, TenantId);
                 var context = GetAppContext(DbReadWriteType.Write);
-                var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
+                var count = _queryTelemetry.Measure("dapper", "delete", sql,
+                    () => context.DbConnection.Execute(sql, parameters, _transaction, _timeOut));
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -713,7 +741,8 @@ namespace Viv.Momo.Core
                 var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _databaseOptions.DatabaseSource, TenantId);
                 var context = GetAppContext(DbReadWriteType.Write);
                 var command = new CommandDefinition(sql, parameters, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                var count = await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false);
+                var count = await _queryTelemetry.MeasureAsync("dapper", "delete", sql,
+                    async () => await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false)).ConfigureAwait(false);
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -734,7 +763,8 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext();
-                var count = context.DbConnection.Execute(sql, parameters, _transaction, _timeOut);
+                var count = _queryTelemetry.Measure("dapper", "nonquery", sql,
+                    () => context.DbConnection.Execute(sql, parameters, _transaction, _timeOut));
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -752,7 +782,8 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext();
                 var command = new CommandDefinition(sql, parameters, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                var count = await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false);
+                var count = await _queryTelemetry.MeasureAsync("dapper", "nonquery", sql,
+                    async () => await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false)).ConfigureAwait(false);
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
@@ -787,7 +818,11 @@ namespace Viv.Momo.Core
                 {
                     var batch = sqlList.Skip((page - 1) * batchSize).Take(batchSize).ToList();
                     var batchSql = string.Join(";", batch) + ";";
-                    connection.Execute(batchSql, parameters, transaction, _timeOut);
+
+                    // 一批一条样本。BeginTransaction 与 Commit 留在外面，
+                    // 那是 BEGIN/COMMIT 的往返，不算进 SQL 耗时
+                    _queryTelemetry.Measure("dapper", "nonquery", batchSql,
+                        () => connection.Execute(batchSql, parameters, transaction, _timeOut));
                 }
 
                 if (isSelfCreatedTxn && transaction != null)
@@ -853,7 +888,8 @@ namespace Viv.Momo.Core
                     var batch = sqlList.Skip((page - 1) * batchSize).Take(batchSize).ToList();
                     var batchSql = string.Join(";", batch) + ";";
                     var command = new CommandDefinition(batchSql, parameters, transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                    await connection.ExecuteAsync(command).ConfigureAwait(false);
+                    await _queryTelemetry.MeasureAsync("dapper", "nonquery", batchSql,
+                        async () => await connection.ExecuteAsync(command).ConfigureAwait(false)).ConfigureAwait(false);
                 }
 
                 if (isSelfCreatedTxn && transaction != null)
@@ -915,7 +951,9 @@ namespace Viv.Momo.Core
                 {
                     if (!string.IsNullOrEmpty(item.Key))
                     {
-                        connection.Execute(item.Key, item.Value, transaction, _timeOut);
+                        // 一个 Key 一条样本，同批量 Update
+                        _queryTelemetry.Measure("dapper", "nonquery", item.Key,
+                            () => connection.Execute(item.Key, item.Value, transaction, _timeOut));
                     }
                 }
 
@@ -979,7 +1017,8 @@ namespace Viv.Momo.Core
                     if (!string.IsNullOrEmpty(item.Key))
                     {
                         var command = new CommandDefinition(item.Key, item.Value, transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                        await connection.ExecuteAsync(command).ConfigureAwait(false);
+                        await _queryTelemetry.MeasureAsync("dapper", "nonquery", item.Key,
+                            async () => await connection.ExecuteAsync(command).ConfigureAwait(false)).ConfigureAwait(false);
                     }
                 }
 
@@ -1116,7 +1155,8 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
-                return connection.QuerySingleOrDefault<T>(sql, parameters, null, _timeOut);
+                return _queryTelemetry.Measure("dapper", "scalar", sql,
+                    () => connection.QuerySingleOrDefault<T>(sql, parameters, null, _timeOut));
             }
             catch (InvalidOperationException ex)
             {
@@ -1160,7 +1200,8 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
                 var command = new CommandDefinition(sql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                return await connection.QuerySingleOrDefaultAsync<T>(command).ConfigureAwait(false);
+                return await _queryTelemetry.MeasureAsync("dapper", "scalar", sql,
+                    async () => await connection.QuerySingleOrDefaultAsync<T>(command).ConfigureAwait(false)).ConfigureAwait(false);
             }
             catch (InvalidOperationException ex)
             {
@@ -1205,7 +1246,8 @@ namespace Viv.Momo.Core
                 // 传 TenantId 而不是 _vivContext.SubjectId，ChangeTenant 的覆盖要算数
                 var parameters = new Dictionary<string, object> { ["Id"] = id };
                 var sql = SqlMagic.GetFindSqlTemplate(tableName, _databaseOptions.DatabaseSource, TenantId, GetActiveFilters<T>(), parameters);
-                return connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
+                return _queryTelemetry.Measure("dapper", "scalar", sql,
+                    () => connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut));
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1226,7 +1268,8 @@ namespace Viv.Momo.Core
                 var parameters = new Dictionary<string, object> { ["Id"] = id };
                 var sql = SqlMagic.GetFindSqlTemplate(tableName, _databaseOptions.DatabaseSource, TenantId, GetActiveFilters<T>(), parameters);
                 var command = new CommandDefinition(sql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                return await connection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false);
+                return await _queryTelemetry.MeasureAsync("dapper", "scalar", sql,
+                    async () => await connection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false)).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1259,7 +1302,8 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
-                return connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
+                return _queryTelemetry.Measure("dapper", "scalar", sql,
+                    () => connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut));
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1293,7 +1337,8 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
                 var command = new CommandDefinition(sql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                return await connection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false);
+                return await _queryTelemetry.MeasureAsync("dapper", "scalar", sql,
+                    async () => await connection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false)).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1326,7 +1371,8 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
-                var result = context.DbConnection.Query<T>(sql, parameters, null, true, _timeOut);
+                var result = _queryTelemetry.Measure("dapper", "reader", sql,
+                    () => context.DbConnection.Query<T>(sql, parameters, null, true, _timeOut));
                 return result.ToList();
             }
             catch (OperationCanceledException) { throw; }
@@ -1360,7 +1406,8 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext(DbReadWriteType.Read);
                 var command = new CommandDefinition(sql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                var result = await context.DbConnection.QueryAsync<T>(command).ConfigureAwait(false);
+                var result = await _queryTelemetry.MeasureAsync("dapper", "reader", sql,
+                    async () => await context.DbConnection.QueryAsync<T>(command).ConfigureAwait(false)).ConfigureAwait(false);
                 return result.ToList();
             }
             catch (OperationCanceledException) { throw; }
@@ -1377,7 +1424,8 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
-                return context.DbConnection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut);
+                return _queryTelemetry.Measure("dapper", "scalar", sql,
+                    () => context.DbConnection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut));
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1394,7 +1442,8 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext(DbReadWriteType.Read);
                 var command = new CommandDefinition(sql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                var result = await context.DbConnection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false);
+                var result = await _queryTelemetry.MeasureAsync("dapper", "scalar", sql,
+                    async () => await context.DbConnection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false)).ConfigureAwait(false);
                 return result;
             }
             catch (OperationCanceledException) { throw; }
@@ -1417,18 +1466,24 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext(DbReadWriteType.Read);
                 var (pageSql, countSql) = SqlMagic.GetPageSqlTemplate(sql, pageIndex, pageSize, _databaseOptions.DatabaseSource);
-                var totalCount = context.DbConnection.ExecuteScalar<int>(countSql, parameters, null, _timeOut);
-                if (totalCount > 0)
+
+                // count 与 list 合成一个样本，计时从拼完 SQL 之后起。sql 传原串，不传 pageSql
+                return _queryTelemetry.Measure("dapper", "page", sql, () =>
                 {
-                    var totalPages = CalculateTotalPages(totalCount, pageSize);
-                    var list = context.DbConnection.Query<T>(pageSql, parameters, null, true, _timeOut);
-                    result.TotalCount = totalCount;
-                    result.Items = list;
-                    result.TotalPages = totalPages;
-                    result.IsHaveFrontPage = pageIndex > 1;
-                    result.IsHaveNextPage = pageIndex < totalPages;
-                }
-                return result;
+                    var totalCount = context.DbConnection.ExecuteScalar<int>(countSql, parameters, null, _timeOut);
+                    if (totalCount > 0)
+                    {
+                        var totalPages = CalculateTotalPages(totalCount, pageSize);
+                        var list = context.DbConnection.Query<T>(pageSql, parameters, null, true, _timeOut);
+                        result.TotalCount = totalCount;
+                        result.Items = list;
+                        result.TotalPages = totalPages;
+                        result.IsHaveFrontPage = pageIndex > 1;
+                        result.IsHaveNextPage = pageIndex < totalPages;
+                    }
+
+                    return result;
+                });
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1447,19 +1502,25 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 var (pageSql, countSql) = SqlMagic.GetPageSqlTemplate(sql, pageIndex, pageSize, _databaseOptions.DatabaseSource);
                 var countCommand = new CommandDefinition(countSql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                var totalCount = await context.DbConnection.ExecuteScalarAsync<int>(countCommand).ConfigureAwait(false);
-                if (totalCount > 0)
+
+                // 同 Page
+                return await _queryTelemetry.MeasureAsync("dapper", "page", sql, async () =>
                 {
-                    var totalPages = CalculateTotalPages(totalCount, pageSize);
-                    var pageCommand = new CommandDefinition(pageSql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
-                    var list = await context.DbConnection.QueryAsync<T>(pageCommand).ConfigureAwait(false);
-                    result.TotalCount = totalCount;
-                    result.Items = list;
-                    result.IsHaveFrontPage = pageIndex > 1;
-                    result.TotalPages = totalPages;
-                    result.IsHaveNextPage = pageIndex < totalPages;
-                }
-                return result;
+                    var totalCount = await context.DbConnection.ExecuteScalarAsync<int>(countCommand).ConfigureAwait(false);
+                    if (totalCount > 0)
+                    {
+                        var totalPages = CalculateTotalPages(totalCount, pageSize);
+                        var pageCommand = new CommandDefinition(pageSql, parameters, null, _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                        var list = await context.DbConnection.QueryAsync<T>(pageCommand).ConfigureAwait(false);
+                        result.TotalCount = totalCount;
+                        result.Items = list;
+                        result.IsHaveFrontPage = pageIndex > 1;
+                        result.TotalPages = totalPages;
+                        result.IsHaveNextPage = pageIndex < totalPages;
+                    }
+
+                    return result;
+                }).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)

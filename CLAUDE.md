@@ -28,15 +28,15 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 
 | Project | Role |
 |---|---|
-| `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums；**本地事件契约** `IVivLocalEventBus` / `IVivLocalEventScope` / `LocalEvent`（空标记基类）/ `IVivLocalEventHandler<TEvent>` / `LocalEventHandler<TEvent>`（零 Nana 依赖，业务 Core 直接引它写处理器）；**分布式锁契约** `IDistributedLock` —— 6 个方法的锁标识**统一是 `object key`**（不再有 `string lockKey` / `object key` 之分）：传 `string` 原样作 Redis Key（前缀调用方自己拼），其余类型由 **`LockKeyMagic`（同项目根，全仓唯一的锁 Key 生成处）** 归一化成 `lock:{...}`；段数固定的 Key 走 `LockKeyMagic.Join(prefix, parts)`（消费锁的 `nana:a:b:42` 就是它拼的，不是匿名对象 —— 对象那条路按属性名字母序拼，改个属性名就换了把锁）；**数据过滤器开关** `IDataFilter` + `IDataFilterScope`（泛型，标识是**过滤器类本身**：`Disable<SoftDeletedFilter>()` 放行已软删除的行、`Disable<TenantDataFilter>()` 跨租户读；一次关多条用 `Scope()`；实现落在 `Viv.Momo`，见 `### 读过滤器`） |
+| `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums；**本地事件契约** `IVivLocalEventBus` / `IVivLocalEventScope` / `LocalEvent`（空标记基类）/ `IVivLocalEventHandler<TEvent>` / `LocalEventHandler<TEvent>`（零 Nana 依赖，业务 Core 直接引它写处理器）；**分布式锁契约** `IDistributedLock` —— 6 个方法的锁标识**统一是 `object key`**（不再有 `string lockKey` / `object key` 之分）：传 `string` 原样作 Redis Key（前缀调用方自己拼），其余类型由 **`LockKeyMagic`（同项目根，全仓唯一的锁 Key 生成处）** 归一化成 `lock:{...}`；段数固定的 Key 走 `LockKeyMagic.Join(prefix, parts)`（消费锁的 `nana:a:b:42` 就是它拼的，不是匿名对象 —— 对象那条路按属性名字母序拼，改个属性名就换了把锁）；**数据过滤器开关** `IDataFilter` + `IDataFilterScope`（泛型，标识是**过滤器类本身**：`Disable<SoftDeletedFilter>()` 放行已软删除的行、`Disable<TenantDataFilter>()` 跨租户读；一次关多条用 `Scope()`；实现落在 `Viv.Momo`，见 `### 读过滤器`）；**指标读取契约** `IVivMeter` + `VivMeterSnapshot`（实现落在 `Viv.Engine/Metrics/`，见 `### 指标读取（IVivMeter）`） |
 | `Viv.Delusion` | Utility library — `TypeScanMagic` (assembly type scanning), `ObjectMapper` (Emit + Expression-based), encryption, common extensions |
 | `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios |
-| `Viv.Engine` | **Core wiring hub** — `VivConfigLoader` 是 `VivOptions` 的全进程唯一绑定入口（`Load` 绑 IConfiguration 并写静态快照，`AddVivConfig` 再注册进 DI 并返回那份 `VivOptions`）；`VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup；**本地事件总线实现** `LocalEvents/`（`LocalEventBus` / `LocalEventHandlerInvoker<T>` / `LocalEventRegistration` / `LocalEventScope`）+ 两个触发点 `LocalEventFlushFilterAttribute`、`LocalEventFlushMiddleware`（**同目录**，本地事件一个文件夹全包）。⚠️ **目录／命名空间是复数 `LocalEvents`**：事件基类叫 `LocalEvent`，若目录同名，`Viv.Engine.LocalEvent` 这个命名空间会在 `Viv.Engine` 里把类型 `LocalEvent` 遮住，`LocalEvent` 一律解析成命名空间（CS0118，实测踩过） |
+| `Viv.Engine` | **Core wiring hub** — `VivConfigLoader` 是 `VivOptions` 的全进程唯一绑定入口（`Load` 绑 IConfiguration 并写静态快照，`AddVivConfig` 再注册进 DI 并返回那份 `VivOptions`）；`VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup；**本地事件总线实现** `LocalEvents/`（`LocalEventBus` / `LocalEventHandlerInvoker<T>` / `LocalEventRegistration` / `LocalEventScope`）+ 两个触发点 `LocalEventFlushFilterAttribute`、`LocalEventFlushMiddleware`（**同目录**，本地事件一个文件夹全包）。⚠️ **目录／命名空间是复数 `LocalEvents`**：事件基类叫 `LocalEvent`，若目录同名，`Viv.Engine.LocalEvent` 这个命名空间会在 `Viv.Engine` 里把类型 `LocalEvent` 遮住，`LocalEvent` 一律解析成命名空间（CS0118，实测踩过）；**指标读取** `Metrics/VivMeter.cs`（常驻 `MeterListener` 收账，见 `### 指标读取（IVivMeter）`） |
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
-| `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server；**实体审计**（`ICreatedAt` / `ICreatedBy` / `IUpdatedAt` / `IUpdatedBy` 四个单字段能力接口，逐个 opt-in，由 `MomoDatabase` 自动盖章，见 `### Entity audit`）；**建表 DDL**（`Sync/SchemaSynchronizer` 按实体生成 CREATE/ALTER，双方言，见 `### Schema sync`）；**读过滤器**（`DataFilter/` —— `IMomoDataFilter` 抽象 + `TenantDataFilter`/`SoftDeletedFilter` 两条实现 + `MomoDataFilters.All` 静态清单；EF 全局查询过滤器与框架自有按主键 SQL 两处都遍历清单，加过滤器只写类、不改框架。`IDataFilter.Disable<TFilter>()` 逐条放行，见 `### 读过滤器`）；**缓存基类** `Base/DataAccessCacheBase<T>`（Cache-Aside，8 个业务仓储继承）—— **锁走 `IDistributedLock`，缓存读写走 `IRedisService`**，两条路径 Redis 故障都 catch 后回源数据库（锁那侧 Redis 故障被包成 `DistributedLockException`，得单独接一次）；取锁用 `AcquireLockWithRetryAsync` 并把参数压到 `maxRetryCount: 3, baseDelay/maxDelay: 20ms`（用默认的 5 次指数退避 = 约 3 秒，缓存击穿场景等不起） |
+| `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server；**实体审计**（`ICreatedAt` / `ICreatedBy` / `IUpdatedAt` / `IUpdatedBy` 四个单字段能力接口，逐个 opt-in，由 `MomoDatabase` 自动盖章，见 `### Entity audit`）；**建表 DDL**（`Sync/SchemaSynchronizer` 按实体生成 CREATE/ALTER，双方言，见 `### Schema sync`）；**读过滤器**（`DataFilter/` —— `IMomoDataFilter` 抽象 + `TenantDataFilter`/`SoftDeletedFilter` 两条实现 + `MomoDataFilters.All` 静态清单；EF 全局查询过滤器与框架自有按主键 SQL 两处都遍历清单，加过滤器只写类、不改框架。`IDataFilter.Disable<TFilter>()` 逐条放行，见 `### 读过滤器`）；**缓存基类** `Base/DataAccessCacheBase<T>`（Cache-Aside，8 个业务仓储继承）—— **锁走 `IDistributedLock`，缓存读写走 `IRedisService`**，两条路径 Redis 故障都 catch 后回源数据库（锁那侧 Redis 故障被包成 `DistributedLockException`，得单独接一次）；取锁用 `AcquireLockWithRetryAsync` 并把参数压到 `maxRetryCount: 3, baseDelay/maxDelay: 20ms`（用默认的 5 次指数退避 = 约 3 秒，缓存击穿场景等不起））；**指标** `MomoMetrics`（Meter `Viv.Momo`，查询耗时 / 慢查询 / 库失败 / `EFMaxCount` 分流）+ **慢查询日志**（阈值 `DatabaseOptions.SlowQueryThresholdMs`，默认 1000，0 = 关），见 `### 慢查询与指标` |
 | `Viv.Nana` | Messaging — **两条平行的线**：① 跨进程 `NanaEvent` + `IVivEventPublisher` / `NanaEventPublisher` / `VivConsumer<T>`（Wolverine + RabbitMQ，fanout）② 进程内本地队列 `NanaLocalEvent` + `IVivLocalEventPublisher` / `NanaLocalEventPublisher` / `VivLocalConsumer<T>`（Wolverine local queue，点对点，两族互不引用）；Saga support with EF Core state persistence |
 | `Viv.Outbox` | **发件箱（事务性消息投递）+ Inbox（消费端幂等）** — `IVivOutbox` / `OutboxStore`（Scoped，入队走 `ExecuteSqlAsync` 并入业务事务）+ `OutboxDispatcher`/`OutboxWorker`（后台投递，原子认领）+ 手写 SQL（**一次都不经过 EF**，表 `VivOutboxMessage`）。解决「写库 + 发消息」不原子：**写和待发消息进同一个本地事务**，投递交给后台。Inbox 侧 `IVivInbox` / `InboxStore`（表 `VivInboxMessage`，消息级去重与业务级幂等两族键）+ `InboxDispatcher`（按保留期清理，独立循环）。见下 |
-| `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`)。访问失败抛 `VivConnectionException(Redis)`（API 过滤器 `-502`，客户端只回固定文案）；`DataAccessCacheBase` 读路径 catch 后回源数据库，**取锁也走 catch 后回源**（见 `Viv.Momo` 行）。写仍抛。锁续期后台任务仍只记日志后停止 |
+| `Viv.Redis` | Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`)。访问失败抛 `VivConnectionException(Redis)`（API 过滤器 `-502`，客户端只回固定文案）；`DataAccessCacheBase` 读路径 catch 后回源数据库，**取锁也走 catch 后回源**（见 `Viv.Momo` 行）。写仍抛。锁续期后台任务仍只记日志后停止；**指标** `RedisMetrics`（Meter `Viv.Redis`，9 件：命令耗时 / 失败 / 连接断连 / 缓存命中 / 回源 / 取锁耗时 / 续期停转 / 释锁失败，见 `### 慢查询与指标`）|
 | `Viv.Sandrone` | Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service` |
 | `Viv.Echo` | Service-to-service communication + **框架级 gRPC 宿主**（`Viv.Echo.Grpc`）— HTTP + gRPC 客户端 `VivGrpcInterceptor`/`AddVivGrpcClient`（支持服务发现；注入 x-viv-* 含 holder-id 并纳入签名）、服务端 `VivGrpcServerInterceptor`（验签后水合 `IVivContext` 并 `SetHolderId`）/`AddVivGrpcServer`/`AddVivGrpcKestrel`/`VivGrpcDiscovery`（自动发现 `[BindServiceMethod]` 实现类 + 注册 + 反射映射；REST + gRPC 分端口，见下） |
 | `Viv.Clockwork` | Background scheduling — `TickerQ` integration for cron/interval job execution with dashboard；**任务基类** `VivTickerJobBase`（子类 `[TickerFunction]` 入口走受保护的 `RunAsync`）+ `VivTickerJob.ExecuteAsync`：包一层 `IVivLocalEventScope`（成功 Flush / 失败 Discard），并硬校验开工前已有租户或系统租户快照 —— 定时任务不必自己管本地事件分发 |
@@ -164,7 +164,7 @@ Every API and Worker project carries a `VivOptions` node in its `appsettings.jso
 | `DIOption` | Type-scanning rules for Service/Repository auto-registration |
 | `LogOption` | Logging backend (Serilog → Seq) |
 | `CacheOption` | Redis connection + memory cache toggle |
-| `DatabaseOption` | Database type, read-write split, entity scan targets, `SyncTableOnStartup`（启动时按实体同步表结构，默认关） |
+| `DatabaseOption` | Database type, read-write split, entity scan targets, `SyncTableOnStartup`（启动时按实体同步表结构，默认关）, `SlowQueryThresholdMs`（慢查询阈值，默认 1000，0 = 关，见 `### 慢查询与指标`） |
 | `NanaOption` | RabbitMQ host/port/credentials, consumer type list, retry count, Saga DB |
 | `OutboxOption` | 发件箱：投递器开关、轮询间隔、批大小、重试上限、租约、建表、保留期。**为 null = 不启用**（见下） |
 | `InboxOption` | Inbox 清理：保留期（默认 7 天）、批大小（默认 1000）、清理间隔。**与别的子配置不同 —— 为 null 不是「不启用」**：Inbox 只看 `DatabaseOption`，节点缺席就用默认值照常清理，要关掉把保留期配成 0（见下） |
@@ -330,6 +330,71 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outb
 ### Database (Momo)
 
 `MomoDatabaseContext` (implements `IMomoDbContext`) uses EF Core for small operations and Dapper for bulk queries (threshold: `EFMaxCount`). `EFAppContext` is created as either read or write — reads randomly select a slave connection, writes always use the master. Entities are auto-scanned via `DatabaseOption.EntityTypeOptions`。**访问失败抛 `VivConnectionException`**（记日志后包装，API 过滤器映射 `-501 DatabaseError`，客户端 Message 用枚举固定文案「数据库操作异常」，实体 JSON / 底层详情只进日志）；`Insert`/`Update`/`Delete` 的 `false` 只表示语句成功但影响 0 行（或入参为空）。`Exist`/`Count`/`Find` 遇库故障不再返回 false/default/-1。`OperationCanceledException` 原样冒泡。回滚失败只记日志，避免掩盖原始异常。`DataAccessCacheBase` Redis 故障当作 miss 回源数据库。
+
+### 慢查询与指标（Redis / Momo 观测性）
+
+两条链原先**只有 Error 级日志、没有任何指标**，`/health` 也只挂了 `self` 一条恒 `Healthy` 的假检查。日志回答「这一次调用怎么了」，指标回答「现在整体怎么样」——下面几件事日志答不了：Redis 一挂 `DataAccessCacheBase` 的容错设计会把全部缓存读压回主库，而每处回源只留一条互不相干的日志、没人去聚合；锁续期循环失败即退出，此后没有任何信号；`EFMaxCount` 的 EF/Dapper 分流看不见。本轮把这三件事变成面板上能直接读的数。
+
+两个 `MomoMetrics` / `RedisMetrics` 都是 `NanaMetrics` / `OutboxMetrics` 那套形状（`MeterName` 常量 + instrument 名常量 + `internal static readonly Meter` + `TagList` 打标签），唯一例外是 Redis 的 `Record*` 做成了 **`public static`** —— 调用点横跨 `Viv.Engine`（`DistributedLockAccessor`）与 `Viv.Momo`（`DataAccessCacheBase`），`internal` 够不着。`Viv.Momo.csproj` 因此补了一条 `InternalsVisibleTo Viv.Momo.Tests`。
+
+| Meter | Instrument | 类型 | 标签 |
+|---|---|---|---|
+| `Viv.Redis` | `viv.redis.command.duration` | Histogram(ms) | `result`(ok/error) |
+| | `viv.redis.errors` | Counter | — |
+| | `viv.redis.connection.failed` / `.restored` | Counter | `endpoint` |
+| | `viv.redis.cache.result` | Counter | `result`(hit/miss) |
+| | `viv.redis.fallback` | Counter | `reason`(cache/lock) |
+| | `viv.redis.lock.acquire.duration` | Histogram(ms) | `result`(acquired/timeout) |
+| | `viv.redis.lock.renewal.stopped` / `.release.failed` | Counter | — |
+| `Viv.Momo` | `viv.momo.query.duration` | Histogram(ms) | `path`(ef/dapper)、`op`(reader/nonquery/scalar/page，dapper 侧另有 insert/update/delete) |
+| | `viv.momo.query.slow` | Counter | `path`、`op` |
+| | `viv.momo.errors` | Counter | `type`(sqlserver/postgresql) |
+| | `viv.momo.batch.path` | Counter | `path`、`op`(insert/update/delete) |
+
+- **埋点分两层，这是本方案的关键划分**。底层命令指标在 `VivRedis` 的 4 个 `ExecuteRedis*` 重载里各包一层 `Stopwatch`（一处收口、覆盖全部命令的耗时与失败，改动只有 4 处；那 4 个重载只拿到 `Func<IDatabase,T>`、**不知道命令名**，所以打不出命令级标签）；业务语义指标只挑真有语义的十几个调用点 —— `DataAccessCacheBase.GetCacheAsync` 的命中/未命中与两处回源、`DistributedLockAccessor` 的取锁耗时与释锁失败、`RedisFactory` 已注册的 `ConnectionFailed`/`ConnectionRestored` 两个回调各加一行。**不做 60+ 个 `IRedisService` 方法的全量包装。**
+- **锁续期只在 `RedisService.TryRenewAsync` 里加计数，`LockAutoRenewal` 本身一字未动** —— 尤其那句 `catch (Exception) { break; }` 的语义保持原样。改成持续重试是行为变更，不是观测问题。
+- **数据库耗时覆盖全部库访问（手写的大 SQL 也在内）**：EF 全量走 `DbCommandInterceptor`（`MomoMetricsCommandInterceptor`，六处 EF 官方扩展点覆写，耗时取 `CommandExecutedEventData.Duration`，**不需要自己起 Stopwatch、也没有跨 `Executing`/`Executed` 的状态**）；Dapper 侧 `MomoDatabaseContext` 里 **34 条命令一个不落**，全套在 `QueryTelemetry.Measure` / `MeasureAsync` 的 `finally` 里（`path=dapper`，`op` 取 `page` / `scalar` / `reader` / `insert` / `update` / `delete` / `nonquery`），含 Outbox 走的 `ExecuteSql*` 与 10 个原生 SQL 逃生口。口径是 `op=scalar` 两边**不是一个意思**：ef 的来自 `ExecuteScalar`（单个标量值），dapper 的指单行读（`QueryFirstOrDefault` 一族，底层其实是 `ExecuteReader`）。`FindScalar<T>(sql)` 的实现与 `FirstOrDefault<T>(sql)` 逐字相同，所以两者同标 `scalar`，不按调用方意图去分。
+- **样本数跟真实 SQL 条数走，不跟调用次数走**：批量 `Insert` 是按 `EFMaxCount=200` 分页后的条数、`ExecuteSqlList` 一个 item 一条、`DapperBatchUpdate` 一条 UPDATE 一份样本（**刻意不包整个循环** —— 包了的话样本耗时随实体总数线性膨胀，恰好把「某一条 UPDATE 慢」这个信号盖掉）；唯一的例外是分页，它的 count 与 list 两条命令合成一个样本。`Measure` 把 `BeginTransaction` / `Commit` 留在测量体之外 —— 那是 BEGIN/COMMIT 的往返，以 `op=nonquery` 进直方图就是两回事。
+- **记录放 `finally` 而不是成功之后**（相对上一版分页实现的有意改变）：超时与连接断恰恰是最慢的那一类，只在成功时记的话它们全都看不见。`Measure` 只被调用一次，不引入新的 `SynchronizationContext`，事务边界不受影响。
+- **为什么是助手而不是逐点内联 `Stopwatch`**：`path` / `op` 两处手抄点从 34 个降到 0 个 —— 抄错是编译通过、跑起来只是少一块数据的静默失效。助手住在 `QueryTelemetry`（`Record` 本来就住那儿），只做「拿表量一段委托」，不含任何 Dapper 知识，`path` 仍是参数。
+- **为什么不去包 `EFAppContext.DbConnection`**：那是理论上「一处改全覆盖」的写法，但要写约 30 个纯委托成员、130 行 ADO 样板，还带两个真风险 —— `IDbCommand.Transaction` 必须原样委托（`ExecuteSqlList` 自建事务那条路会把 EF 的事务对象设到 Dapper 命令上），且必须真包成 `DbCommand` 而不是只包 `IDbCommand`（Dapper 的 async 路径靠 `cmd as DbCommand` 分流，退化成 `IDbCommand` 会让每条异步 Dapper 调用**悄悄回落到同步执行**）。`VivRegister.cs` 里那段被注释掉的 `RedisFactory.GetConnectionAsync()` 接线已顺手删掉，它指向的正是这条被否掉的路。
+- **失败计数一处收口**：`MomoDatabase.WrapDatabaseException` 里加一行 `RecordError(connType)`，45 个调用点零改动；`EFMaxCount` 分流则在 `MomoDatabaseContext.cs` 的六个切换点各加一行 `RecordBatchPath`。
+- **慢查询的判据只有一份**：`Viv.Momo/QueryTelemetry.cs`（公开 —— `EFAppContext` 的公开构造函数要收它；计划里原打算 `internal`，那会和 **CS0051**「internal 类型不能出现在 public 构造函数参数表里」撞上）。EF 拦截器与 34 条 Dapper 命令都走它的 `Record(path, op, elapsedMs, sql)`（Dapper 侧经上面那两个助手）：先记耗时，再比 `DatabaseOptions.SlowQueryThresholdMs`，超了记 `query.slow` 并记一条 Warning（SQL 截到 200 字符，空串记成 `<none>` 而不是留白）。实例由 `MomoDatabase` 建（`_logger` 与阈值都是现成字段），随 `EFAppContext` 构造参数下发 —— 所以**拦截器不是静态单例**，与指标类那种无脑照抄的模板不一样。
+- **`MomoMetrics` 保持纯静态指标类，不放日志逻辑、不接 logger 参数**：阈值与日志是「谁来记」的事，指标是「记什么」的事。混在一起之后它就不再是那个可以对着 `NanaMetrics` 抄的模板了。
+
+**健康检查**（`Viv.Engine/HealthChecks/`，`VivRegister.RegisterHealthChecks` 注册）：
+
+- `RedisHealthCheck`（`GetConnectionAsync()` → `PingAsync()`）与 `DatabaseHealthCheck`（按 `DatabaseSource` 开一条新连接跑 `SELECT 1`）都返回 `Unhealthy` 说结论，不把异常甩出去 —— 甩出去整个 `/health` 变 500，反而看不出是哪一项挂了。按配置条件挂：Redis 那条仅在 `CacheOption.CacheProviderType == Redis` 时、库那条仅在 `DatabaseOption != null` 时。
+- **⚠️ `DatabaseHealthCheck` 只能构造注入 `IOptions<DatabaseOptions>`，绝不能注入 `IMomoDbContext`** —— `AddCheck<T>` 用 `ActivatorUtilities.GetServiceOrCreateInstance<T>(sp)`，而那个 `sp` 是**根** provider：从根解析 Scoped 的 `IMomoDbContext` 会拿到跨请求共享的实例，正是 `LocalEventBus` 当初绕开 `IServiceProvider` 的那个坑。`IOptions<T>` 是 Singleton，安全；顺带也躲开了 EF 模型初始化（本身是个慢操作，放在健康探测里会被放大）。
+- **两条都打 `ready` 标签、不打 `live`**：`/alive` 的谓词是 `Tags.Contains("live")`，所以 Redis 挂了不会让编排系统重启进程；`/health` 走默认谓词（全部检查），真挂了才变红。
+- **⚠️ 两个类放在 `Viv.Engine/HealthChecks/` 而不是 `Viv.Redis` / `Viv.Momo`（与原计划的偏差）**：那两个项目是纯 `Microsoft.NET.Sdk`、**看不到 `IHealthCheck` / `HealthCheckResult`**（没有 `FrameworkReference Microsoft.AspNetCore.App`、`Directory.Packages.props` 里也没有 HealthChecks 的包引用）。放进 `Viv.Engine` 保住了「不新增任何 PackageReference」这条，代价是位置与直觉不符 —— 找它们去 Engine，别在 Redis / Momo 里翻。
+- **接线**：`Viv.Aspire.ServiceDefaults/Extensions.cs` 的 meter 列表补 `.AddMeter("Viv.Redis")` 与 `.AddMeter("Viv.Momo")` —— **不加的话指标建了也没人采，表现是「什么都看不到」，很容易误判成埋点没生效**。同一个文件的 `MapDefaultEndpoints` 去掉了 `if (app.Environment.IsDevelopment())`，`/health` 与 `/alive` **全环境都 map**（端点定义与谓词一字未动）；原先两个端点只存在于开发环境。`AddHealthChecks()` 重复调用是安全的（内部 `TryAddSingleton` + `Configure` 追加），与 `AddServiceDefaults()` 里那次不冲突。
+- **顺手删掉的死代码**：`VivServiceDefaultExtensions.cs`（`AddVivServiceDefaults` 零调用点，且**只管 Tracing、没有 `WithMetrics` / `AddMeter`** —— 哪天有人改用它，两个 `AddMeter` 会静默消失）。
+- **测试的边界**：单测证明的是「`Record*` 被调用时指标出得来、标签对、仪器名稳定」与「`QueryTelemetry` 的阈值分支 / SQL 截断 / `Measure` 助手记在 `finally` 且原异常原样上抛」，**不是**「`ExecuteRedisAsync` / EF 拦截器 / 34 个 Dapper 执行点真的调了它」—— 仓库没有连真 Redis / 真库的默认测试基座，与 Outbox / Inbox / 软删除那几轮是同一条边界，别把那些单测当成端到端验证。埋点接线只有手工验：Aspire 面板确认两个 meter 有数据、分页接口出 `path=dapper op=page`、EF 谓词查询出 `path=ef`、阈值临时调 1 看 `query.slow` 涨且日志里出现 `path:dapper op:nonquery`（改动前这里只会有 `op:page`）、停掉 Redis 看 `/health` 变红而 `/alive` 保持绿且 `fallback` 开始涨。`VIV_CONTAINER_TESTS=1` 跑一次 `NamingIntegrationTests` 能真走到批量 `InsertAsync`、`FindAsync` 与自建事务那几条路 —— 断言全在数据上、不看指标，但能确认改造没把执行路径弄坏、也没 NRE。
+
+### 指标读取（IVivMeter）
+
+上一节把数推给了 OTel，面板上能看，但**框架自己读不回来** —— 运维想「出故障了，从现在开始重新数」没有入口。`IVivMeter`（`Viv.Contracts/Interface/`，实现 `Viv.Engine/Metrics/VivMeter.cs`）补的就是这个：`Meters`（收上账的 meter 名，用来一眼确认 listener 挂没挂上）、`Snapshot()`（当前读数，`Viv.Contracts/Models/VivMeterSnapshot`）、`Reset()`（清零并返回清零前的快照）。
+
+**`System.Diagnostics.Metrics` 是只写的**，这一条决定了整个功能的形状：`Meter` / `Counter` / `Histogram` 只负责把测量值推给监听者，producer 自己读不到记了多少，也没有 reset API（`MetricCollector<T>` 只存在于 `Microsoft.Extensions.Diagnostics.Metrics.Testing` 这个测试包里，不在 BCL）。所以框架常驻一个 `MeterListener` 自己在读侧收一份账，`Snapshot` / `Reset` 读写的都是这一份。**加新 meter 只要名字以 `Viv.` 开头就自动纳入，不必改 `VivMeter`** —— 按前缀过滤而不是维护 meter 名单，名单那种写法会在新人加 meter 时静默漏收。
+
+四个 `XxxMetrics` 类**一行未动**，写路径零改动。收账这边有三处值得记：
+
+- **热路径靠 `EnableMeasurementEvents(Instrument, state)` 塞进去的那个 state**，而不是在回调里查字典 —— 文档里 `state` 的用途就是「会原样回传到测量回调上」，字典只留给 `Snapshot` 的枚举。顺带 `Kind` 也挂在 state 上，回调里一次强转拿全，不再查表。
+- **七种数值类型全注册**（byte/short/int/long/float/double/decimal，各自转 `double`）。只注册 `long` / `double` 的话，将来有人建个 `Counter<int>` 会**静默收不到** —— 正是本仓库反复踩的那种「编译通过、跑起来只是少数」。
+- **`Instrument` 没有公开的类型标识**（`IsObservable` 只能给 observable / 非 observable 这一刀，`InstrumentType` 在公开 API 里不存在），判 `Kind` 只能拿 `GetType().GetGenericTypeDefinition()` 跟 `Counter<>` / `Histogram<>` / `Gauge<>` / `ObservableGauge<>` 挨个比。只有 **Gauge 一族算水位**（覆盖），其余 Counter / UpDownCounter / ObservableCounter / ObservableUpDownCounter 一律按累计读，与 OTel 对这几类的归类一致 —— 别写成「observable 就覆盖」，`ObservableCounter` 是单调累计量，压成瞬时值就错了。
+
+- **Gauge 不会主动推数，得显式拉**：`Snapshot()` 里先 `RecordObservableInstruments()` 再读，否则水位永远是上一次的值。这个调用跑在调用方线程上（管理后台的请求线程），所以第一方的 gauge 回调要廉价且纯 —— `OutboxMetrics` 那两个 `Volatile.Read` 没问题，将来谁写一个查库的 gauge，管理后台的读接口就会跟着卡。
+- **`MeasurementsCompleted` 要把序列摘掉**（`Meter.Dispose()` 之后测量是**静默失效**的，`Add` 不抛也没人收）。不摘的话留在账上的就是一条冻在最后一帧的值，管理后台把它当当前值展示，永远不动也永远不报错 —— 正是仓库明确厌恶的那种静默失效。摘掉之后它从 `Meters` 和快照里消失，是个看得见的信号。
+- **序列匹配按标签键、不按位置**。按位置比就等于把「同一个仪表的每个调用点标签顺序必须一致」变成一条隐式契约，哪天有人写成 `{op, path}` 就会静默多出一条各记一半的重复序列。代价是每条测量多一层小循环，标签都是低基数枚举（每个仪表最多十几条序列），可以忽略。回调收到的 `tags` 是 span、出了回调就作废，所以标签只在建序列时 `ToArray()` 拷一次。
+- **清零不清不掉 OTel 那份账**（用户已拍板）。要让面板跟着归零只有两条路，都不走：把仪表换成 Observable —— 但**直方图没有 Observable 版本**，三条耗时分布会整个退化成单值；运行时重建 `Meter` 实例 —— 实测 `Meter.Dispose()` 之后 `Add` 静默不抛，失效完全无声，且导出端会看到时间序列断裂。所以 `Reset()` 返回的快照是清零**之前**那一刻的，水位类仪表在里面是当前水位而不是 0，它没撒谎。
+- **注册是 `services.AddSingleton<IVivMeter>(new VivMeter())`，不是 `AddSingleton<IVivMeter, VivMeter>()`** —— 后者要等第一次有人解析它才起来，而 `MeterListener` 只收「起来之后」的测量、历史补不回来，之前的数全丢。`VivMeter` 实现 `IDisposable` 在内部释放 listener，MS DI 会随宿主关闭一起收掉。
+
+两条边界要跟运维讲清楚，否则数会被读歪：**这是当前进程的视图**（多副本下每个实例各一份，跨实例汇总仍归 OTel 面板管，别把单副本的数当全局），以及**计数活在进程内存里，重启即归零**。口径是「自组装起（`AddViv` 那一刻）」，不是进程生命周期也不是某个时间窗口。
+
+`VivMeter` **不给 HTTP 端点** —— 管理后台的控制器由业务自己在 `Viv.SakuMai.Api` 写，按那边的鉴权与路由风格来。
+
+⚠️ 收账口径（`Viv.` 前缀）与 **OTel 的导出白名单是两回事**：`Viv.Aspire.ServiceDefaults/Extensions.cs` 里是手写死的四条 `.AddMeter("Viv.Xxx")`。以后谁新建一个 `Viv.` 开头的 meter，管理后台看得见、Grafana 看不见。要一致就把那边也改成前缀式，别只改一边。
 
 ### 读过滤器（`IMomoDataFilter` + `IDataFilter`）
 

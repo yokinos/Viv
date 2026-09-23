@@ -36,6 +36,13 @@ namespace Viv.Momo.Core
         protected int _timeOut = 30;
         protected static readonly HashSet<string> _primaryKeys = ["Id"];
 
+        /// <summary>
+        /// 查询耗时与慢查询判据。EF 那条路随 EFAppContext 下发到 DbCommandInterceptor，
+        /// Dapper 的执行点在子类 MomoDatabaseContext 里直接用。
+        /// 与 _databaseOptions 一样在 SetOptions 里赋值（构造函数调得到，编译器看不出来）
+        /// </summary>
+        protected QueryTelemetry _queryTelemetry = null!;
+
         private readonly Lock _lock = new();
         // 串行化异步 BeginTransactionAsync 的 check+begin+set（Monitor 无法跨 await 持有，用信号量替代）
         private readonly SemaphoreSlim _transactionSemaphore = new(1, 1);
@@ -55,6 +62,8 @@ namespace Viv.Momo.Core
             ArgumentNullException.ThrowIfNull(options);
             _databaseOptions = options;
             _timeOut = _databaseOptions.Timeout;
+            // 换 options 就换阈值，跟着重建一份（无状态，重建没有代价）
+            _queryTelemetry = new QueryTelemetry(_logger, _databaseOptions.SlowQueryThresholdMs);
         }
 
         /// <summary>
@@ -83,7 +92,7 @@ namespace Viv.Momo.Core
                     if (_readDbContext == null || reload)
                     {
                         var old = _readDbContext;
-                        _readDbContext = new EFAppContext(options, DbReadWriteType.Read);
+                        _readDbContext = new EFAppContext(options, DbReadWriteType.Read, _queryTelemetry);
                         old?.Dispose();
                     }
                     return _readDbContext;
@@ -93,7 +102,7 @@ namespace Viv.Momo.Core
                     if (_writeDbContext == null || reload)
                     {
                         var old = _writeDbContext;
-                        _writeDbContext = new EFAppContext(options, DbReadWriteType.Write);
+                        _writeDbContext = new EFAppContext(options, DbReadWriteType.Write, _queryTelemetry);
                         old?.Dispose();
                     }
                     return _writeDbContext;
@@ -462,6 +471,8 @@ namespace Viv.Momo.Core
             var connType = _databaseOptions.DatabaseSource == DatabaseSourceType.PostgreSQL
                 ? VivConnType.PostgreSQL
                 : VivConnType.SqlServer;
+            // 45 个调用点都从这儿过，失败计数只在这一处收口
+            MomoMetrics.RecordError(connType);
             return new VivConnectionException(connType, message, ex);
         }
 

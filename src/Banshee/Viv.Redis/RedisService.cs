@@ -649,6 +649,9 @@ namespace Viv.Redis
             catch (Exception ex)
             {
                 WriteLog($"锁续期失败 Key:{lockKey}, Error:{ex.Message}", ex);
+                // 返回 false 会让 LockAutoRenewal 的续期循环停转，之后这把锁再没人续期：
+                // 业务跑到一半锁自然过期，另一个实例就能拿到同一把锁。这条日志一次一条没人看，得计数。
+                RedisMetrics.RecordLockRenewalStopped();
                 return false;
             }
         }

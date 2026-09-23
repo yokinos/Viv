@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Reflection;
 using Viv.Clockwork;
 using Viv.Clockwork.Enums;
@@ -9,7 +10,9 @@ using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
 using Viv.Echo;
+using Viv.Engine.HealthChecks;
 using Viv.Engine.LocalEvents;
+using Viv.Engine.Metrics;
 using Viv.Engine.Options;
 using Viv.Engine.UnitOfWork;
 using Viv.Log;
@@ -39,6 +42,11 @@ namespace Viv.Engine
         /// </summary>
         public static void Register(IServiceCollection services, VivOptions options)
         {
+            // 指标读取（常驻 listener 收账）。这里构造实例再注册，而不是 AddSingleton<接口,实现> ——
+            // 后者要等第一次有人解析它才起来，之前的测量全丢。MeterListener 只收「起来之后」的，
+            // 历史补不回来，所以必须在组装期就挂上
+            services.AddSingleton<IVivMeter>(new VivMeter());
+
             // 注册Viv上下文
             services.AddSingleton<IVivContextProvider, DefaultVivContextProvider>();
             services.AddSingleton<IVivContextAccessor, VivContextAccessor>();
@@ -54,6 +62,8 @@ namespace Viv.Engine
             RegisterNana(services, options);
             // 注册数据库
             RegisterDatabase(services, options);
+            // 健康检查（依赖数据库与缓存两项配置）
+            RegisterHealthChecks(services, options);
             // 注册发件箱（依赖数据库 + MQ；内部会注册 IHostedService 投递器）
             RegisterOutbox(services, options);
             // 可选 Inbox（有数据库就注册，消费者自行决定是否用）
@@ -116,9 +126,6 @@ namespace Viv.Engine
 
                 services.AddSingleton<IRedisService, RedisService>();
                 services.AddSingleton<IDistributedLock, DistributedLockAccessor>();
-
-                // 将 IConnectionMultiplexer 注册到 DI，供 OpenTelemetry Redis 仪表板使用
-                // services.AddSingleton(RedisFactory.GetConnectionAsync().GetAwaiter().GetResult());
             }
 
             // 内存缓存
@@ -198,6 +205,33 @@ namespace Viv.Engine
             // 「开的和提交的是两个不同的事务」。
             services.AddScoped<ITransactionKernel>(sp => new MomoTransactionAdapter(sp.GetRequiredService<IMomoDbContext>()));
             services.AddScoped<IVivUnitOfWork, UnitOfWorkManager>();
+        }
+
+        #endregion
+
+        #region 健康检查
+
+        /// <summary>
+        /// 给 /health 挂上真检查。原先只有 Aspire ServiceDefaults 那条恒 Healthy 的 self，
+        /// Redis 挂了、库挂了 /health 照样绿，编排系统照样往里打流量。
+        ///
+        /// 两条都打 ready 不打 live：/alive 的谓词是 Tags.Contains("live")，所以进程活着就是活着，
+        /// 依赖挂了不该让编排系统去重启它。AddHealthChecks 重复调用是安全的（TryAddSingleton + Configure 追加），
+        /// 与 AddServiceDefaults 里那次不冲突。
+        /// </summary>
+        private static void RegisterHealthChecks(IServiceCollection services, VivOptions options)
+        {
+            var builder = services.AddHealthChecks();
+
+            if (options.CacheOption?.CacheProviderType == DistributedCacheType.Redis)
+            {
+                builder.AddCheck<RedisHealthCheck>("redis", tags: ["ready"]);
+            }
+
+            if (options.DatabaseOption != null)
+            {
+                builder.AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
+            }
         }
 
         #endregion

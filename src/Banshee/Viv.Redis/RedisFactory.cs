@@ -237,10 +237,12 @@ namespace Viv.Redis
             connection.ConnectionFailed += (sender, args) =>
             {
                 WriteLog($"Redis连接失败: {args.Exception?.Message}, Endpoint: {args.EndPoint}, FailureType: {args.FailureType}");
+                RedisMetrics.RecordConnectionFailed(args.EndPoint?.ToString() ?? "unknown");
             };
             connection.ConnectionRestored += (sender, args) =>
             {
                 WriteLog($"Redis连接已恢复, Endpoint: {args.EndPoint}, FailureType: {args.FailureType}");
+                RedisMetrics.RecordConnectionRestored(args.EndPoint?.ToString() ?? "unknown");
             };
             connection.ErrorMessage += (sender, args) =>
             {

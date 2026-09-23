@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Options;
 using StackExchange.Redis;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
@@ -28,11 +29,14 @@ namespace Viv.Redis
         [return: MaybeNull]
         public async Task<T?> ExecuteRedisAsync<T>(string key, Func<IDatabase, Task<T>> func)
         {
+            var sw = Stopwatch.StartNew();
             try
             {
                 if (key.IsNullOrEmpty()) { return default; }
                 var database = await GetDatabaseAsync(key).ConfigureAwait(false);
-                return await func(database).ConfigureAwait(false);
+                var result = await func(database).ConfigureAwait(false);
+                RedisMetrics.RecordCommand(sw.ElapsedMilliseconds, true);
+                return result;
             }
             catch (OperationCanceledException)
             {
@@ -40,6 +44,7 @@ namespace Viv.Redis
             }
             catch (Exception ex)
             {
+                RedisMetrics.RecordCommand(sw.ElapsedMilliseconds, false);
                 throw WrapRedisException($"Redis操作执行失败: {ex.Message}", ex);
             }
         }
@@ -50,11 +55,14 @@ namespace Viv.Redis
         [return: MaybeNull]
         public T ExecuteRedis<T>(string key, Func<IDatabase, T> func)
         {
+            var sw = Stopwatch.StartNew();
             try
             {
                 if (key.IsNullOrEmpty()) { return default; }
                 var database = GetDatabaseAsync(key).GetAwaiter().GetResult();
-                return func(database);
+                var result = func(database);
+                RedisMetrics.RecordCommand(sw.ElapsedMilliseconds, true);
+                return result;
             }
             catch (OperationCanceledException)
             {
@@ -62,6 +70,7 @@ namespace Viv.Redis
             }
             catch (Exception ex)
             {
+                RedisMetrics.RecordCommand(sw.ElapsedMilliseconds, false);
                 throw WrapRedisException($"Redis操作执行失败: {ex.Message}", ex);
             }
         }
@@ -71,6 +80,7 @@ namespace Viv.Redis
         /// </summary>
         public async Task<List<T>> ExecuteRedisAsync<T>(List<string> keyList, Func<IDatabase, RedisKey[], Task<T>> func)
         {
+            var sw = Stopwatch.StartNew();
             try
             {
                 if (_dbAllocator is null || keyList.IsNullOrEmpty()) return [];
@@ -91,6 +101,7 @@ namespace Viv.Redis
                     }
                 }
 
+                RedisMetrics.RecordCommand(sw.ElapsedMilliseconds, true);
                 return list;
             }
             catch (OperationCanceledException)
@@ -99,6 +110,7 @@ namespace Viv.Redis
             }
             catch (Exception ex)
             {
+                RedisMetrics.RecordCommand(sw.ElapsedMilliseconds, false);
                 throw WrapRedisException($"Redis操作执行失败: {ex.Message}", ex);
             }
         }
@@ -108,6 +120,7 @@ namespace Viv.Redis
         /// </summary>
         public List<T> ExecuteRedis<T>(List<string> keyList, Func<IDatabase, RedisKey[], T> func)
         {
+            var sw = Stopwatch.StartNew();
             try
             {
                 if (_dbAllocator is null || keyList.IsNullOrEmpty()) return [];
@@ -129,6 +142,7 @@ namespace Viv.Redis
                     }
                 }
 
+                RedisMetrics.RecordCommand(sw.ElapsedMilliseconds, true);
                 return list;
             }
             catch (OperationCanceledException)
@@ -137,6 +151,7 @@ namespace Viv.Redis
             }
             catch (Exception ex)
             {
+                RedisMetrics.RecordCommand(sw.ElapsedMilliseconds, false);
                 throw WrapRedisException($"Redis操作执行失败: {ex.Message}", ex);
             }
         }

@@ -33,6 +33,11 @@ namespace Viv.Momo.Core
         private readonly IVivContextAccessor? _tenantAccessor;
 
         /// <summary>
+        /// EF 命令耗时的拦截器。没传 QueryTelemetry 时为 null（测试直建上下文），此时不挂、不采集
+        /// </summary>
+        private readonly MomoMetricsCommandInterceptor? _interceptor;
+
+        /// <summary>
         /// 有没有租户访问器。租户过滤器用它决定挂不挂，VivLocator 未初始化（测试直建上下文）时没有
         /// </summary>
         public bool HasTenantAccessor => _tenantAccessor != null;
@@ -54,15 +59,16 @@ namespace Viv.Momo.Core
         /// </summary>
         public bool IsDataFilterDisabled(Type filterType) => DataFilterSwitch.IsDisabled(filterType);
 
-        public EFAppContext(DatabaseOptions options, DbReadWriteType dbReadWriteType = DbReadWriteType.Read)
-            : this(options, ResolveTenantAccessor(), dbReadWriteType)
+        public EFAppContext(DatabaseOptions options, DbReadWriteType dbReadWriteType = DbReadWriteType.Read, QueryTelemetry? telemetry = null)
+            : this(options, ResolveTenantAccessor(), dbReadWriteType, telemetry)
         {
         }
 
-        public EFAppContext(DatabaseOptions options, IVivContextAccessor? tenantAccessor, DbReadWriteType dbReadWriteType = DbReadWriteType.Read)
+        public EFAppContext(DatabaseOptions options, IVivContextAccessor? tenantAccessor, DbReadWriteType dbReadWriteType = DbReadWriteType.Read, QueryTelemetry? telemetry = null)
         {
             _options = options;
             _tenantAccessor = tenantAccessor;
+            _interceptor = telemetry is null ? null : new MomoMetricsCommandInterceptor(telemetry);
 
             if (options.IsReadWriteSplit)
             {
@@ -130,6 +136,12 @@ namespace Viv.Momo.Core
                     break;
                 default:
                     throw new NotSupportedException($"不支持的数据库类型：{_options.DatabaseSource}");
+            }
+
+            // 拦截器与方言无关，放在 switch 外面挂，两种库都盖到
+            if (_interceptor is not null)
+            {
+                optionsBuilder.AddInterceptors(_interceptor);
             }
         }
 

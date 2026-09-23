@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Viv.Engine;
+using Viv.Momo.Options;
 
 namespace Viv.Engine.Tests;
 
@@ -26,6 +27,7 @@ public class VivConfigBindingTests
               "MasterConnectionString": "server=x;database=viv_test",
               "SlaveConnectionStrings": [],
               "Timeout": 30,
+              "SlowQueryThresholdMs": 1500,
               "EntityTypeOptions": [
                 {
                   "AssemblyName": "Viv.Entity",
@@ -101,5 +103,14 @@ public class VivConfigBindingTests
         // EchoOption（null 子节点）
         Assert.True(options.EchoOption!.EnableHttp);
         Assert.Null(options.EchoOption.GrpcOption);
+    }
+
+    /// <summary>
+    /// 慢查询阈值是可选的：节点里没写就用默认值，不用每个服务的 appsettings.json 都补一行
+    /// </summary>
+    [Fact]
+    public void 慢查询阈值默认1000毫秒()
+    {
+        Assert.Equal(1000, new DatabaseOptions().SlowQueryThresholdMs);
     }
 }

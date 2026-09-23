@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using Viv.Contracts;
 using Viv.Contracts.Exceptions;
@@ -84,17 +85,24 @@ namespace Viv.Engine
             CancellationToken cancellationToken = default)
         {
             var lockKey = LockKeyMagic.Generate(key);
+            var sw = Stopwatch.StartNew();
 
             for (int attempt = 1; attempt <= maxRetryCount; attempt++)
             {
                 if (cancellationToken.IsCancellationRequested)
+                {
+                    RedisMetrics.RecordLockAcquire(sw.ElapsedMilliseconds, false);
                     return false;
+                }
 
                 try
                 {
                     var acquired = await _redisService.AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
                     if (acquired)
+                    {
+                        RedisMetrics.RecordLockAcquire(sw.ElapsedMilliseconds, true);
                         return true;
+                    }
                 }
                 catch (VivConnectionException ex)
                 {
@@ -112,6 +120,7 @@ namespace Viv.Engine
             }
 
             _logger.Warning($"获取锁失败，已达最大重试 {maxRetryCount} 次，Key: {lockKey}");
+            RedisMetrics.RecordLockAcquire(sw.ElapsedMilliseconds, false);
             return false;
         }
 
@@ -131,6 +140,7 @@ namespace Viv.Engine
             CancellationToken cancellationToken = default)
         {
             var lockKey = LockKeyMagic.Generate(key);
+            var sw = Stopwatch.StartNew();
 
             for (int attempt = 1; attempt <= maxRetryCount; attempt++)
             {
@@ -140,6 +150,9 @@ namespace Viv.Engine
                     var acquired = await _redisService.AcquireLockAsync(lockKey, expire, lockHolderId, isReentrant);
                     if (acquired)
                     {
+                        // 在业务委托之前记：这之后跑的是业务本身，混进来就不是「取锁耗时」了
+                        RedisMetrics.RecordLockAcquire(sw.ElapsedMilliseconds, true);
+
                         try
                         {
                             return await executeMethod();
@@ -155,7 +168,12 @@ namespace Viv.Engine
                         {
                             // 释放失败只记日志，不冒泡——否则会触发外层重试 → 重复执行业务
                             try { await _redisService.ReleaseLockAsync(lockKey, lockHolderId, isReentrant); }
-                            catch (Exception relEx) { _logger.Error($"释放锁失败 Key: {lockKey}", relEx); }
+                            catch (Exception relEx)
+                            {
+                                _logger.Error($"释放锁失败 Key: {lockKey}", relEx);
+                                // 锁会等到自然过期，这期间别的实例进不来
+                                RedisMetrics.RecordLockReleaseFailed();
+                            }
                         }
                     }
 
@@ -174,6 +192,9 @@ namespace Viv.Engine
                     _logger.Error($"获取锁异常，第 {attempt} 次尝试，Key: {lockKey}", ex);
                     if (attempt >= maxRetryCount)
                     {
+                        // 走到这里业务委托一次都没跑过，所以这段耗时是纯取锁 + 退避
+                        RedisMetrics.RecordLockAcquire(sw.ElapsedMilliseconds, false);
+
                         return fallbackMethod is not null
                             ? await fallbackMethod()
                             : throw new DistributedLockException(lockKey, maxRetryCount, ex);
@@ -184,6 +205,7 @@ namespace Viv.Engine
             }
 
             _logger.Warning($"获取锁失败，已达最大重试 {maxRetryCount} 次，Key: {lockKey}");
+            RedisMetrics.RecordLockAcquire(sw.ElapsedMilliseconds, false);
 
             return fallbackMethod is not null
                 ? await fallbackMethod()

@@ -65,6 +65,8 @@ namespace Viv.Momo.Base
             try
             {
                 var cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
+                RedisMetrics.RecordCache(cacheValue != null);
+
                 if (cacheValue != null)
                     return cacheValue;
 
@@ -79,6 +81,8 @@ namespace Viv.Momo.Base
                 {
                     // 再次检查下是否有其他线程已写入
                     cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
+                    RedisMetrics.RecordCache(cacheValue != null);
+
                     if (cacheValue != null)
                         return cacheValue;
 
@@ -101,6 +105,8 @@ namespace Viv.Momo.Base
                 // 如果没抢到锁 略微等待后再次从缓存尝试获取数据
                 await Task.Delay(RetryDelayMs).ConfigureAwait(false);
                 cacheValue = await _redisService.GetAsync<T>(cacheKey).ConfigureAwait(false);
+                RedisMetrics.RecordCache(cacheValue != null);
+
                 if (cacheValue != null)
                     return cacheValue;
 
@@ -110,11 +116,15 @@ namespace Viv.Momo.Base
             catch (VivConnectionException ex) when (ex.ConnType == VivConnType.Redis)
             {
                 _logger.Error($"缓存或锁不可用，回源数据库 Key:{cacheKey}", ex);
+                // 这两处回源是「Redis 故障」与「数据库压力翻倍」之间唯一的连接点：
+                // 一次故障会让所有缓存读压到主库上，而日志是一次一条的，只有速率看得出来。
+                RedisMetrics.RecordFallback("cache");
                 return await GetDbAsync(keys).ConfigureAwait(false);
             }
             catch (DistributedLockException ex) when (ex.InnerException is VivConnectionException { ConnType: VivConnType.Redis })
             {
                 _logger.Error($"锁不可用，回源数据库 Key:{cacheKey}", ex);
+                RedisMetrics.RecordFallback("lock");
                 return await GetDbAsync(keys).ConfigureAwait(false);
             }
             finally
