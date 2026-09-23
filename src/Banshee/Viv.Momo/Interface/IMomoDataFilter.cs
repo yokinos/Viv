@@ -7,12 +7,8 @@ using Viv.Momo.Enums;
 namespace Viv.Momo.Interface
 {
     /// <summary>
-    /// 一条全局读过滤器
-    ///
-    /// 每条过滤器自己知道名字、管不管某个实体、EF 表达式怎么写、原生 SQL 条件怎么拼、自己有没有被关掉。
-    /// 框架只负责遍历：EFAppContext 建模型、MomoDatabaseContext 拼按主键查询都不认识具体是哪几条。
-    /// 加一条过滤器就是实现这个接口、再在 MomoDataFilters.All 挂一个。
-    ///
+    /// 数据过滤器
+    /// 
     /// 开关是 IDataFilter：_dataFilter.Disable&lt;TenantDataFilter&gt;() 关掉租户过滤，作用域结束自动恢复。
     /// </summary>
     public interface IMomoDataFilter
@@ -28,7 +24,7 @@ namespace Viv.Momo.Interface
         bool AppliesTo(Type entityType);
 
         /// <summary>
-        /// 当前上下文下挂不挂得上。租户那条没有租户访问器就不挂，其余恒为 true
+        /// 当前上下文下挂不挂得上
         /// </summary>
         bool CanApply(EFAppContext context);
 
