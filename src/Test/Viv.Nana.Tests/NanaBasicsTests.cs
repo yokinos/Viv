@@ -127,10 +127,10 @@ namespace Viv.Nana.Tests
     public class NanaEventContractTests
     {
         [Fact]
-        public void NanaEvent没有已删除的假旋钮LockFailShouldRetryDeliver()
+        public void NanaEvent不保留框架不读的假旋钮()
         {
             Assert.Null(typeof(NanaEvent).GetProperty("LockFailShouldRetryDeliver"));
-            Assert.NotNull(typeof(NanaEvent).GetProperty(nameof(NanaEvent.Priority)));
+            Assert.Null(typeof(NanaEvent).GetProperty("Priority"));
             Assert.NotNull(typeof(NanaEvent).GetProperty(nameof(NanaEvent.IsJob)));
         }
     }
