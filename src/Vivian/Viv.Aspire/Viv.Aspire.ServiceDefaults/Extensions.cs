@@ -8,6 +8,7 @@ using Microsoft.Extensions.ServiceDiscovery;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+using Viv.Contracts;
 
 namespace Viv.Aspire.ServiceDefaults;
 
@@ -18,6 +19,12 @@ public static class Extensions
 {
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
+
+    /// <summary>
+    /// Wolverine 自带的 ActivitySource 名，消费侧的 span 走它。不是我们定义的，
+    /// 所以不进 VivTracing，取自 wolverinefx 6.25.3 的程序集
+    /// </summary>
+    private const string WolverineSourceName = "Wolverine";
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
@@ -66,7 +73,11 @@ public static class Extensions
             })
             .WithTracing(tracing =>
             {
+                // 框架自己的 span（库访问、Redis 命令）走 VivTracing，消费侧的走 Wolverine 那个源。
+                // AddSource 与上面 AddMeter 一样是手写死的名单：新起一个 ActivitySource 不改这儿就收不到
                 tracing.AddSource(builder.Environment.ApplicationName)
+                    .AddSource(VivTracing.SourceName)
+                    .AddSource(WolverineSourceName)
                     .AddAspNetCoreInstrumentation(tracing =>
                         // Exclude health check requests from tracing
                         tracing.Filter = context =>

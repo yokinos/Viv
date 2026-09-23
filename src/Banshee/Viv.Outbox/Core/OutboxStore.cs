@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Viv.Contracts;
 using Viv.Contracts.Interface;
@@ -55,6 +56,15 @@ namespace Viv.Outbox.Core
                 RetryCount = 0,
                 NextRetryAt = now,
                 OccurredAt = now,
+
+                // 只有这一刻取得到。投递器跑在后台作用域里，Activity.Current 是 null，
+                // 请求上下文也早没了，入队时不存就等于永久丢。
+                //
+                // 请求 Id 走 IVivContext 而不是 HttpContext：Viv.Outbox 是纯 Microsoft.NET.Sdk，
+                // 看不到 IHttpContextAccessor，而 VivContextMiddleware 填的就是 context.TraceIdentifier。
+                // 无请求上下文时它给的是空串，存成 NULL —— 空串在库里长得像「有但是空的」。
+                TraceId = Activity.Current?.TraceId.ToString(),
+                RequestTraceId = string.IsNullOrWhiteSpace(_context.TraceId) ? null : _context.TraceId,
             };
 
             var inserted = await _repository.InsertAsync(message, cancellationToken).ConfigureAwait(false);

@@ -38,9 +38,9 @@ namespace Viv.Outbox.Core
         internal const string Insert =
             """
             INSERT INTO VivOutboxMessage
-                (Id, MessageId, EventType, Payload, Status, RetryCount, NextRetryAt, LeaseUntil, OccurredAt, SentAt, LastError)
+                (Id, MessageId, EventType, Payload, Status, RetryCount, NextRetryAt, LeaseUntil, OccurredAt, SentAt, LastError, TraceId, RequestTraceId)
             VALUES
-                (@Id, @MessageId, @EventType, @Payload, @Status, @RetryCount, @NextRetryAt, NULL, @OccurredAt, NULL, NULL)
+                (@Id, @MessageId, @EventType, @Payload, @Status, @RetryCount, @NextRetryAt, NULL, @OccurredAt, NULL, NULL, @TraceId, @RequestTraceId)
             """;
 
         /// <summary>投递器崩溃 / 被杀后，卡在 Processing 的行靠这条复活。</summary>
@@ -98,7 +98,8 @@ namespace Viv.Outbox.Core
                 RETURNING Id AS "Id", MessageId AS "MessageId", EventType AS "EventType",
                           Payload AS "Payload", Status AS "Status", RetryCount AS "RetryCount",
                           NextRetryAt AS "NextRetryAt", LeaseUntil AS "LeaseUntil",
-                          OccurredAt AS "OccurredAt", SentAt AS "SentAt", LastError AS "LastError"
+                          OccurredAt AS "OccurredAt", SentAt AS "SentAt", LastError AS "LastError",
+                          TraceId AS "TraceId", RequestTraceId AS "RequestTraceId"
                 """,
 
             // SQL Server 没有 SKIP LOCKED；READPAST 是同一件事的说法 —— 跳过被别人锁住的行，
@@ -112,7 +113,8 @@ namespace Viv.Outbox.Core
                        inserted.Status AS Status, inserted.RetryCount AS RetryCount,
                        inserted.NextRetryAt AS NextRetryAt, inserted.LeaseUntil AS LeaseUntil,
                        inserted.OccurredAt AS OccurredAt, inserted.SentAt AS SentAt,
-                       inserted.LastError AS LastError
+                       inserted.LastError AS LastError,
+                       inserted.TraceId AS TraceId, inserted.RequestTraceId AS RequestTraceId
                 WHERE Id IN (
                     SELECT TOP (@BatchSize) Id FROM VivOutboxMessage WITH (READPAST)
                     WHERE Status = 0 AND NextRetryAt <= @Now

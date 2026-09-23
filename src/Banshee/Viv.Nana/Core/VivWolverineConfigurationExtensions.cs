@@ -1,7 +1,7 @@
+using JasperFx.CodeGeneration.Model;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 using Viv.Delusion.Magic;
-using Viv.Nana.Core;
 using Viv.Nana.Options;
 using Wolverine;
 using Wolverine.EntityFrameworkCore;
@@ -10,7 +10,7 @@ using Wolverine.Persistence;
 using Wolverine.RabbitMQ;
 using Wolverine.RabbitMQ.Internal;
 
-namespace Viv.Nana
+namespace Viv.Nana.Core
 {
     /// <summary>
     /// Wolverine 消息总线配置扩展 — 在 <c>AddViv()</c> 中通过 <c>services.AddVivWolverine(...)</c> 调用。
@@ -23,6 +23,17 @@ namespace Viv.Nana
         {
             services.AddWolverine(opts =>
             {
+                // 0) 放行 service location。消费者依赖注入的那几个实现类都是 internal，
+                //    Wolverine 没法在生成的 handler 代码里直接 new，只能从作用域容器取 ——
+                //    而这正是它们要的：LocalEventBus / UnitOfWorkManager / InboxStore 全是 Scoped，
+                //    必须和本次消费的 IMomoDbContext 同作用域。
+                //
+                //    Wolverine 6.x 默认不允许，且失败得很难认：先排一个取服务的 frame，
+                //    再往上硬接构造 frame，接不上就抛 "Frame chain is being re-arranged"，
+                //    业务代码永远进不去。这个 enum 只有「不让」与「让但记警告」两档，
+                //    警告只在生成代码时打一次，就让它记着。
+                opts.ServiceLocationPolicy = ServiceLocationPolicy.AllowedButWarn;
+
                 // 1) RabbitMQ 传输：连接配置 + 自动声明队列/交换机
                 //    UseRabbitMq(Uri) 由 URI 内部构建 ConnectionFactory（避免 ConfigureConnection 拿到空实例）
                 var vhostPath = nanaOptions.VirtualHost.TrimStart('/');

@@ -45,5 +45,18 @@ namespace Viv.Outbox.Core
 
         /// <summary>最近一次投递失败的原因（截断到列宽）</summary>
         public string? LastError { get; set; }
+
+        /// <summary>
+        /// 入队那一刻的 OTel traceId（<c>Activity.Current?.TraceId</c>，32 位十六进制）。
+        /// 投递器跑在后台作用域里，重建不出入队时的语境，只能入队时存下来。
+        /// </summary>
+        public string? TraceId { get; set; }
+
+        /// <summary>
+        /// 入队那一刻的请求 Id（<c>IVivContext.TraceId</c>，即 <c>HttpContext.TraceIdentifier</c>）。
+        /// 与 <see cref="TraceId"/> 并列存：前者在 dashboard 上看，后者在响应体与日志里看，
+        /// 拿哪个都能反查到同一行。
+        /// </summary>
+        public string? RequestTraceId { get; set; }
     }
 }

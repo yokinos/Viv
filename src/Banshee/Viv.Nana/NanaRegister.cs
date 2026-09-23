@@ -3,7 +3,6 @@ using Viv.Contracts;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
-using Viv.Nana.Core;
 using Viv.Nana.Options;
 
 namespace Viv.Nana

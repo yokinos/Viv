@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Viv.Contracts;
 using Viv.Delusion.Extension;
 using Viv.Log;
 
@@ -12,9 +13,18 @@ namespace Viv.Momo
     ///
     /// 公开是因为 EFAppContext 的公开构造函数要收它。实例由 MomoDatabase 建（_logger 与
     /// SlowQueryThresholdMs 都是现成字段），随 EFAppContext 一起下发。
+    ///
+    /// 库访问的 span 也在这儿发。EF 与 Dapper 两条路的耗时都汇到 Record，所以 span 只加这一处，
+    /// 不必分别往 MomoMetricsCommandInterceptor 与 34 个 Dapper 执行点上各挂一次。
     /// </summary>
     public sealed class QueryTelemetry
     {
+        /// <summary>
+        /// 库访问 span 的名字。固定成常量而不是把 op 拼进去，是为了不按调用次数分配字符串，
+        /// 也不制造高基数 span 名。是哪条命令看 op 标签
+        /// </summary>
+        private const string SpanName = "db.query";
+
         /// <summary>
         /// 慢查询日志里 SQL 的截断长度。日志是给人扫的，不是给回放用的 —— 整条 SQL 会淹掉上下文
         /// </summary>
@@ -43,6 +53,8 @@ namespace Viv.Momo
         /// <param name="sql">命令文本，可为空（拿不到最终拼好的 SQL 时传手上那条原串）</param>
         public void Record(string path, string op, long elapsedMs, string? sql)
         {
+            RecordSpan(path, op, elapsedMs, sql);
+
             MomoMetrics.RecordQuery(path, op, elapsedMs);
 
             if (_slowQueryThresholdMs <= 0 || elapsedMs < _slowQueryThresholdMs)
@@ -84,6 +96,35 @@ namespace Viv.Momo
             {
                 Record(path, op, sw.ElapsedMilliseconds, sql);
             }
+        }
+
+        /// <summary>
+        /// 补一条库访问 span。
+        ///
+        /// 记的是已经跑完的命令，所以起止时间都得自己给：startTime 往前推 elapsedMs，再 SetEndTime
+        /// 收在当下。忘了推 startTime 的话 duration 会恒为 0，而别的都对，最难看出来的就是这种。
+        ///
+        /// 两个参数的类型不一样，不是笔误 —— StartActivity 收 DateTimeOffset，SetEndTime 收 DateTime。
+        /// </summary>
+        private static void RecordSpan(string path, string op, long elapsedMs, string? sql)
+        {
+            // HasListeners 是纯读的廉价判据。没有监听者时 StartActivity 本来就返回 null，
+            // 但不拦一下的话每条命令都要白白建一个 ActivityTagsCollection
+            if (!VivTracing.Source.HasListeners())
+                return;
+
+            var tags = new ActivityTagsCollection
+            {
+                ["path"] = path,
+                ["op"] = op,
+                ["db.statement"] = Truncate(sql),
+            };
+
+            using var activity = VivTracing.Source.StartActivity(
+                SpanName, ActivityKind.Client, Activity.Current?.Context ?? default, tags,
+                links: null, startTime: DateTimeOffset.UtcNow.AddMilliseconds(-elapsedMs));
+
+            activity?.SetEndTime(DateTime.UtcNow);
         }
 
         /// <summary>

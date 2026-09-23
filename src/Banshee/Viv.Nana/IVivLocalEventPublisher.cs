@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Viv.Nana.Core;
 
 namespace Viv.Nana
 {

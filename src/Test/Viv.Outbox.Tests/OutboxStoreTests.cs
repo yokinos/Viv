@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Viv.Contracts;
 using Viv.Contracts.Models;
@@ -141,6 +142,47 @@ public class OutboxStoreTests
         var row = Assert.Single(repo.Inserted);
         var envelope = JsonSerializer.Deserialize<NanaEnvelope<OutboxTestEvent>>(row.Payload, TestPayload.JsonOptions)!;
         Assert.Equal(42, envelope.Context!.SubjectId);
+    }
+
+    // ── 溯源两列 ──────────────────────────────────────────────
+    // 投递器跑在后台作用域里，Activity.Current 是 null、请求上下文也早没了，
+    // 入队那一刻不存下来就永久丢了。这两条钉的就是「真的存了」。
+
+    [Fact]
+    public async Task 入队_记下当前span的TraceId与请求TraceId()
+    {
+        var (store, repo, context, _) = Build();
+        context.Snapshot = new VivContextContent { SubjectId = 42, TraceId = "0HN7AAA:00000001" };
+
+        using var activity = new Activity("test").Start();
+
+        await store.EnqueueAsync(new OutboxTestEvent());
+
+        var row = Assert.Single(repo.Inserted);
+
+        // OTel 那条：dashboard 上给你的 traceId，W3C 格式 32 位十六进制
+        Assert.Equal(activity.TraceId.ToString(), row.TraceId);
+        Assert.Equal(32, row.TraceId!.Length);
+
+        // 请求那条：HttpContext.TraceIdentifier，也是响应体 traceId 字段里那个
+        Assert.Equal("0HN7AAA:00000001", row.RequestTraceId);
+    }
+
+    [Fact]
+    public async Task 入队_没有span也没有请求上下文时_两列存NULL而不是空串()
+    {
+        var (store, repo, _, _) = Build();
+
+        // Worker / 后台任务里入队就是这个样子：Activity.Current 为 null，
+        // TestContext 无快照 → IVivContext.TraceId 给的是空串。
+        // 存空串的话库里长得像「有但是空的」，NULL 才是「本来就没有」
+        Assert.Null(Activity.Current);
+
+        await store.EnqueueAsync(new OutboxTestEvent());
+
+        var row = Assert.Single(repo.Inserted);
+        Assert.Null(row.TraceId);
+        Assert.Null(row.RequestTraceId);
     }
 
     [Fact]

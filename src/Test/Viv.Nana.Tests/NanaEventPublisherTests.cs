@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Viv.Contracts;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
@@ -164,6 +165,84 @@ namespace Viv.Nana.Tests
 
             Assert.Equal(VivConnType.RabbitMQ, ex.ConnType);
             Assert.NotEmpty(logger.ErrorWithException);
+        }
+
+        // ── 发布侧 span ───────────────────────────────────────────
+        // 消费侧那条线靠 Wolverine 自带的源（Viv.Aspire.ServiceDefaults 里 AddSource("Wolverine")），
+        // 发布侧没有，只能自己发。四个发布方法发同一名字，是哪条事件看 event 标签。
+
+        [Fact]
+        public async Task 发布_发一条mq_publish_span带event标签()
+        {
+            var spans = new List<Activity>();
+            using var listener = ListenSpans(spans);
+            var (pub, _) = CapturingPublisher();
+
+            await pub.PublishAsync(new TestApexEvent { Payload = "x" });
+
+            var span = Assert.Single(spans);
+
+            Assert.Equal(VivTracing.SourceName, span.Source.Name);
+            Assert.Equal("mq.publish", span.DisplayName);
+            Assert.Equal(ActivityKind.Producer, span.Kind);
+            Assert.Equal(nameof(TestApexEvent), span.GetTagItem("event"));
+
+            // 不延迟的不该带这个标签 —— 否则瀑布图上分不出哪些是延迟发的
+            Assert.Null(span.GetTagItem("delay.ms"));
+        }
+
+        [Fact]
+        public async Task 延迟发布_span带上延迟毫秒()
+        {
+            var spans = new List<Activity>();
+            using var listener = ListenSpans(spans);
+            var (pub, _) = CapturingPublisher();
+
+            await pub.PublishDelayAsync(TimeSpan.FromSeconds(15), new TestApexEvent { Payload = "x" });
+
+            var span = Assert.Single(spans);
+            Assert.Equal("mq.publish", span.DisplayName);
+            Assert.Equal(15000d, Assert.IsType<double>(span.GetTagItem("delay.ms")));
+        }
+
+        /// <summary>
+        /// 有 Activity.Current 时它就该是父 —— 「HTTP 里发的消息挂在同一条 trace 下」全押在这上面。
+        /// 写成固定 default 父的话这条会挂，而单看 span 名和标签全都对。
+        /// </summary>
+        [Fact]
+        public async Task 发布_span挂在当前span下面而不是自成一条根()
+        {
+            var spans = new List<Activity>();
+            using var listener = ListenSpans(spans);
+            var (pub, _) = CapturingPublisher();
+
+            using var parent = new Activity("http.request").Start();
+            await pub.PublishAsync(new TestApexEvent { Payload = "x" });
+
+            var span = Assert.Single(spans);
+
+            Assert.Equal(parent.TraceId.ToString(), span.TraceId.ToString());
+            Assert.Equal(parent.SpanId.ToString(), span.ParentSpanId.ToString());
+        }
+
+        /// <summary>
+        /// 收 <c>VivTracing.Source</c> 发出的 span。必须在调发布**之前**挂上 ——
+        /// HasListeners 是在 StartActivity 那一刻读的，挂晚了整条测试会静默变成
+        /// 「一条 span 都没有」而不是报错。
+        ///
+        /// Sample 一定要给：监听者不给采样结论时根本不会建 Activity，同样是静默为空。
+        /// </summary>
+        private static ActivityListener ListenSpans(List<Activity> spans)
+        {
+            var listener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name == VivTracing.SourceName,
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStopped = spans.Add,
+            };
+
+            ActivitySource.AddActivityListener(listener);
+            return listener;
         }
 
         /// <summary>记下最近一条被发布的消息（<see cref="TestProxy.LastArg"/>），并按声明返回类型回一个已完成的结果。</summary>

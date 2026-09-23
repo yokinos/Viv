@@ -10,17 +10,19 @@
 -- 写入前一律 DateTime.UtcNow —— Npgsql 拒绝向 timestamptz 写 Kind=Unspecified 的值。
 
 CREATE TABLE IF NOT EXISTS VivOutboxMessage (
-    Id          BIGINT        NOT NULL PRIMARY KEY,
-    MessageId   BIGINT        NOT NULL,
-    EventType   VARCHAR(500)  NOT NULL,
-    Payload     TEXT          NOT NULL,
-    Status      SMALLINT      NOT NULL,
-    RetryCount  INT           NOT NULL DEFAULT 0,
-    NextRetryAt TIMESTAMPTZ   NOT NULL,
-    LeaseUntil  TIMESTAMPTZ   NULL,
-    OccurredAt  TIMESTAMPTZ   NOT NULL,
-    SentAt      TIMESTAMPTZ   NULL,
-    LastError   VARCHAR(2000) NULL
+    Id             BIGINT         NOT NULL PRIMARY KEY,
+    MessageId      BIGINT         NOT NULL,
+    EventType      VARCHAR(500)   NOT NULL,
+    Payload        TEXT           NOT NULL,
+    Status         SMALLINT       NOT NULL,
+    RetryCount     INT            NOT NULL DEFAULT 0,
+    NextRetryAt    TIMESTAMPTZ    NOT NULL,
+    LeaseUntil     TIMESTAMPTZ    NULL,
+    OccurredAt     TIMESTAMPTZ    NOT NULL,
+    SentAt         TIMESTAMPTZ    NULL,
+    LastError      VARCHAR(2000)  NULL,
+    TraceId        VARCHAR(64)    NULL,
+    RequestTraceId VARCHAR(200)   NULL
 );
 
 -- 认领扫描：WHERE Status = 0 AND NextRetryAt <= @Now ORDER BY NextRetryAt, Id
@@ -28,3 +30,8 @@ CREATE INDEX IF NOT EXISTS IX_VivOutboxMessage_Claim ON VivOutboxMessage (Status
 
 -- 排查用：按消费端去重键反查
 CREATE INDEX IF NOT EXISTS IX_VivOutboxMessage_MessageId ON VivOutboxMessage (MessageId);
+
+-- 溯源两列是后加的，上面的 CREATE TABLE 对已存在的表整段是 no-op，
+-- 不补这两句就永远是 column "traceid" does not exist。
+ALTER TABLE VivOutboxMessage ADD COLUMN IF NOT EXISTS TraceId VARCHAR(64) NULL;
+ALTER TABLE VivOutboxMessage ADD COLUMN IF NOT EXISTS RequestTraceId VARCHAR(200) NULL;

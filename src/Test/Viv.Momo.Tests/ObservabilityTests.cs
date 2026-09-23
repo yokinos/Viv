@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using Viv.Contracts;
 using Viv.Contracts.Enums;
 using Viv.Fakes;
 using Viv.Momo;
@@ -267,6 +269,92 @@ public class QueryTelemetryTests
         Assert.Equal(2, logger.Warnings.Count);
         Assert.Contains("UPDATE Big SET x = 1 WHERE id = @id", logger.Warnings[0]);
         Assert.Contains("SQL:<none>", logger.Warnings[1]);
+    }
+
+    /// <summary>
+    /// EF 与 Dapper 两条路的耗时都汇到 Record，所以 span 只在这儿发一次，标签口径也就只有一份
+    /// </summary>
+    [Fact]
+    public void Record发出db_query_span带上path与op与SQL()
+    {
+        var spans = new List<Activity>();
+        using var listener = ListenSpans(spans);
+        var telemetry = new QueryTelemetry(new RecordingLogger(), 100);
+
+        telemetry.Record("ef", "reader", 10, "SELECT 1");
+
+        var span = Assert.Single(spans);
+        Assert.Equal(VivTracing.SourceName, span.Source.Name);
+        Assert.Equal("db.query", span.DisplayName);
+        Assert.Equal(ActivityKind.Client, span.Kind);
+        Assert.Equal("ef", span.GetTagItem("path"));
+        Assert.Equal("reader", span.GetTagItem("op"));
+        Assert.Equal("SELECT 1", span.GetTagItem("db.statement"));
+    }
+
+    /// <summary>
+    /// 补记的 span 时长必须等于传进来的 elapsedMs。StartActivity 的 startTime 忘了往前推的话
+    /// duration 恒为 0，而 span 照样出得来、标签照样对、别的断言全绿 —— 这条是唯一挡得住它的。
+    ///
+    /// 上下界都留得宽：DateTime.UtcNow 在 Windows 上精度只有十几毫秒，两次读数之间正好跨过
+    /// 一个时钟滴答就多出十几毫秒，那不是 bug
+    /// </summary>
+    [Fact]
+    public void 补记的span时长等于传进来的elapsedMs()
+    {
+        var spans = new List<Activity>();
+        using var listener = ListenSpans(spans);
+        var telemetry = new QueryTelemetry(new RecordingLogger(), 100);
+
+        telemetry.Record("dapper", "nonquery", 500, "UPDATE Big SET x = 1");
+
+        var span = Assert.Single(spans);
+        var ms = span.Duration.TotalMilliseconds;
+
+        Assert.True(ms >= 490, $"span 时长只有 {ms}ms，startTime 没往前推 elapsedMs");
+        Assert.True(ms < 1000, $"span 时长 {ms}ms，比传进来的 500ms 多太多");
+    }
+
+    /// <summary>
+    /// 没人听的时候别炸，也别在调用方线程上留下一个环境 span。
+    /// HasListeners 那道早退省的是白建一个 ActivityTagsCollection，不是省一条 span
+    /// </summary>
+    [Fact]
+    public void 没有监听者时不发span也不抛异常()
+    {
+        var stopped = new List<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = _ => false,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = stopped.Add,
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        var telemetry = new QueryTelemetry(new RecordingLogger(), 100);
+        telemetry.Record("ef", "reader", 10, "SELECT 1");
+
+        Assert.Empty(stopped);
+        Assert.Null(Activity.Current);
+    }
+
+    /// <summary>
+    /// 收 VivTracing.Source 发出的 span。必须在调 Record 之前挂上 —— HasListeners 是在
+    /// StartActivity 那一刻读的，挂晚了整条测试会静默变成「一条 span 都没有」而不是报错。
+    ///
+    /// Sample 一定要给：监听者不给采样结论时根本不会建 Activity，同样是静默为空。
+    /// </summary>
+    private static ActivityListener ListenSpans(List<Activity> spans)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == VivTracing.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = spans.Add,
+        };
+
+        ActivitySource.AddActivityListener(listener);
+        return listener;
     }
 
     /// <summary>

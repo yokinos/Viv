@@ -2,7 +2,6 @@ using Viv.Contracts.Events;
 using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Nana;
-using Viv.Nana.Core;
 
 namespace Viv.Fakes;
 

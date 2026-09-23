@@ -1,4 +1,4 @@
-namespace Viv.Nana.Core
+namespace Viv.Nana
 {
     /// <summary>
     /// 本地队列事件基类 —— 进程内异步消息，走 Wolverine 本地队列，不出网。

@@ -202,9 +202,14 @@ public class OutboxSqlTests
         Assert.Contains("Viv.Outbox.Sql.NoSuch.sql", ex.Message);
     }
 
+    /// <summary>
+    /// 表里全部列 —— 建表脚本与认领 SQL 两条一致性断言都遍历它。
+    /// 加列时忘了同步加进来，那两条断言对新列整个是空的，编译通过、跑起来照样绿。
+    /// </summary>
     private static readonly string[] Columns =
     [
         "Id", "MessageId", "EventType", "Payload", "Status", "RetryCount",
         "NextRetryAt", "LeaseUntil", "OccurredAt", "SentAt", "LastError",
+        "TraceId", "RequestTraceId",
     ];
 }

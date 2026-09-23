@@ -20,4 +20,10 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
   </ItemGroup>
 
+  <!-- 取 VivTracing.SourceName。这是本项目唯一一条 ProjectReference：AddSource 的名单
+       如果写成字面量，改源名时两边会静默对不上 -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Banshee\Viv.Contracts\Viv.Contracts.csproj" />
+  </ItemGroup>
+
 </Project>
