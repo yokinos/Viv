@@ -93,7 +93,7 @@ namespace Viv.Apex.Core.Impl.Login
 
         public virtual async Task<FuncResult> ValidateAppAsync(long appId)
         {
-            var clientApp = await _clientAppRepository.GetAsync(appId);
+            var clientApp = await _clientAppRepository.GetAppAsync(appId);
             if (clientApp == null)
             {
                 return FuncResult.Failed("客户端不存在");
@@ -109,7 +109,7 @@ namespace Viv.Apex.Core.Impl.Login
 
         public virtual async Task<FuncResult<AtUser>> ValidateUserAsync(long userId)
         {
-            var user = await _userRepository.GetAsync(userId);
+            var user = await _userRepository.GetUserAsync(userId);
             if (user == null || user.Status != EmStatus.Enabled)
             {
                 return FuncResult<AtUser>.Failed("账号异常");
@@ -120,7 +120,7 @@ namespace Viv.Apex.Core.Impl.Login
 
         public virtual async Task<FuncResult<AtUser>> ValidateUserAsync(EmUserType userType, string userName, string password)
         {
-            var user = await _userRepository.GetByPhoneAsync(userName, userType);
+            var user = await _userRepository.GetUserByPhoneAsync(userName, userType);
             if (user is null)
             {
                 return FuncResult<AtUser>.Failed("账号或者密码错误");
@@ -144,7 +144,7 @@ namespace Viv.Apex.Core.Impl.Login
 
             if (!user.IsSuperAdmin)
             {
-                var roles = await _userRepository.GetAtUserRoleListAsync(user.Id);
+                var roles = await _userRepository.GetUserRolesAsync(user.Id);
                 if (roles.IsNullOrEmpty())
                 {
                     return FuncResult<AtUser>.Failed("用户未绑定角色信息,无法登录");

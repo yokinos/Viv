@@ -13,42 +13,42 @@ namespace Viv.Apex.Core.IRepository
         /// <summary>
         /// 新增组织
         /// </summary>
-        Task<bool> AddAsync(AtOrg org);
+        Task<bool> AddOrgAsync(AtOrg org);
 
         /// <summary>
         /// 更新组织
         /// </summary>
-        Task<bool> UpdateAsync(AtOrg org);
+        Task<bool> UpdateOrgAsync(AtOrg org);
 
         /// <summary>
         /// 物理删除组织
         /// </summary>
-        Task<bool> DeleteAsync(long orgId);
+        Task<bool> DeleteOrgAsync(long orgId);
 
         /// <summary>
         /// 软删除组织
         /// </summary>
-        Task<bool> SoftDeleteAsync(long orgId);
+        Task<bool> SoftDeleteOrgAsync(long orgId);
 
         /// <summary>
         /// 根据Id获取组织及其App权限列表（缓存优先）
         /// </summary>
-        Task<(AtOrg? Org, List<AtOrgAppRelation>? Relations)> GetAsync(long orgId);
+        Task<(AtOrg? Org, List<AtOrgAppRelation>? Relations)> GetOrgAsync(long orgId);
 
         /// <summary>
-        /// 根据Id获取组织及其App权限列表（缓存优先）
+        /// 根据编码获取组织及其App权限列表（缓存优先）
         /// </summary>
         Task<(AtOrg? Org, List<AtOrgAppRelation>? Relations)> GetOrgByOrgCodeAsync(string orgCode);
 
         /// <summary>
         /// 获取子组织列表
         /// </summary>
-        Task<List<AtOrg>> GetChildrenAsync(long parentId);
+        Task<List<AtOrg>> GetOrgChildrenAsync(long parentId);
 
         /// <summary>
         /// 分页查询组织
         /// </summary>
-        Task<PagedList<AtOrg>> GetPagedListAsync(IApiPagedRequest request);
+        Task<PagedList<AtOrg>> GetOrgPagedListAsync(IApiPagedRequest request);
 
         /// <summary>
         /// 新增组织应用关联

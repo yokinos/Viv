@@ -9,15 +9,15 @@ namespace Viv.Apex.Core.IRepository
 {
     public interface ITenantRepository
     {
-        Task<bool> AddAsync(AtTenant tenant);
-        Task<bool> UpdateAsync(AtTenant tenant);
-        Task<bool> DeleteAsync(long tenantId);
-        Task<bool> SoftDeleteAsync(long tenantId);
+        Task<bool> AddTenantAsync(AtTenant tenant);
+        Task<bool> UpdateTenantAsync(AtTenant tenant);
+        Task<bool> DeleteTenantAsync(long tenantId);
+        Task<bool> SoftDeleteTenantAsync(long tenantId);
         Task<AtTenant?> GetTenantAsync(long tenantId);
 
         Task<AtTenant?> GetTenantByCodeAsync(string code);
 
-        Task<PagedList<AtTenant>> GetPagedListAsync(IApiPagedRequest request);
-        Task<List<AtTenantAppRelation>> GetAtTenantAppsAsync(long tenantId);
+        Task<PagedList<AtTenant>> GetTenantPagedListAsync(IApiPagedRequest request);
+        Task<List<AtTenantAppRelation>> GetTenantAppRelationsAsync(long tenantId);
     }
 }

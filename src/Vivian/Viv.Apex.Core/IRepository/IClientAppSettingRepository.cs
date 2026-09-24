@@ -13,27 +13,27 @@ namespace Viv.Apex.Core.IRepository
         /// <summary>
         /// 新增配置
         /// </summary>
-        Task<bool> AddAsync(AtClientAppSetting setting);
+        Task<bool> AddSettingAsync(AtClientAppSetting setting);
 
         /// <summary>
         /// 更新配置
         /// </summary>
-        Task<bool> UpdateAsync(AtClientAppSetting setting);
+        Task<bool> UpdateSettingAsync(AtClientAppSetting setting);
 
         /// <summary>
         /// 物理删除配置（按 ClientAppId + ConfigKey）
         /// </summary>
-        Task<bool> DeleteAsync(long clientAppId, string configKey);
+        Task<bool> DeleteSettingAsync(long clientAppId, string configKey);
 
         /// <summary>
         /// 软删除配置（按 ClientAppId + ConfigKey）
         /// </summary>
-        Task<bool> SoftDeleteAsync(long clientAppId, string configKey);
+        Task<bool> SoftDeleteSettingAsync(long clientAppId, string configKey);
 
         /// <summary>
         /// 根据 ClientAppId + ConfigKey 获取配置（缓存优先）
         /// </summary>
-        Task<AtClientAppSetting?> GetAsync(long clientAppId, string configKey);
+        Task<AtClientAppSetting?> GetSettingAsync(long clientAppId, string configKey);
 
         /// <summary>
         /// 获取指定应用的所有配置
@@ -43,6 +43,6 @@ namespace Viv.Apex.Core.IRepository
         /// <summary>
         /// 分页查询配置
         /// </summary>
-        Task<PagedList<AtClientAppSetting>> GetPagedListAsync(IApiPagedRequest request);
+        Task<PagedList<AtClientAppSetting>> GetSettingPagedListAsync(IApiPagedRequest request);
     }
 }

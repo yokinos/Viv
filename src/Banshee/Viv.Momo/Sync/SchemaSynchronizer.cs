@@ -61,7 +61,7 @@ namespace Viv.Momo.Sync
             _allowAlterColumn = allowAlterColumn;
         }
 
-        // ==================== Public API ====================
+        #region Public API
 
         /// <summary>
         /// 用 TypeScanMagic 扫描 appsettings.json 的 VivOptions 中 EntityTypeOptions 配置的命名空间，
@@ -311,7 +311,9 @@ namespace Viv.Momo.Sync
             return sb.ToString();
         }
 
-        // ==================== Column info ====================
+        #endregion
+
+        #region Column info
 
         /// <summary>
         /// 从 PropertyInfo 构建 ColumnInfo：[Table]→表名 [Column]→列名 [Key]→主键
@@ -343,7 +345,9 @@ namespace Viv.Momo.Sync
             };
         }
 
-        // ==================== Column diff ====================
+        #endregion
+
+        #region Column diff
 
         private List<ColumnDiff> DiffColumns(string tableName, List<ColumnInfo> expected, List<ColumnInfo> actual)
         {
@@ -403,7 +407,9 @@ namespace Viv.Momo.Sync
                 && expected.IsNullable == actual.IsNullable;
         }
 
-        // ==================== Type mapping ====================
+        #endregion
+
+        #region Type mapping
 
         /// <summary>
         /// CLR 类型 → SQL 类型映射。
@@ -498,7 +504,9 @@ namespace Viv.Momo.Sync
             [typeof(TimeSpan)] = "time",
         };
 
-        // ==================== DDL generation ====================
+        #endregion
+
+        #region DDL generation
 
         private string GenerateCreateTable(string tableName, List<ColumnInfo> columns)
         {
@@ -567,7 +575,9 @@ namespace Viv.Momo.Sync
         private string GenerateDropColumn(string tableName, string columnName)
             => $"ALTER TABLE {Quote(tableName)} DROP COLUMN IF EXISTS {Quote(columnName)};";
 
-        // ==================== Quoting ====================
+        #endregion
+
+        #region Quoting
 
         /// <summary>
         /// 标识符引用：物理名已经按 provider 改写过（PG snake_case / SQL Server PascalCase）。
@@ -575,7 +585,9 @@ namespace Viv.Momo.Sync
         /// </summary>
         private string Quote(string name) => MomoIdentifier.Quote(name, _dbType);
 
-        // ==================== DB queries ====================
+        #endregion
+
+        #region DB queries
 
         private async Task<List<string>> QueryTableNamesPgAsync(NpgsqlConnection conn, CancellationToken ct)
         {
@@ -648,7 +660,9 @@ namespace Viv.Momo.Sync
             return columns;
         }
 
-        // ==================== Type normalization ====================
+        #endregion
+
+        #region Type normalization
 
         /// <summary>
         /// PG INFORMATION_SCHEMA 的 data_type → 与 MapToSqlType 一致的类型名，方便比较。
@@ -688,7 +702,9 @@ namespace Viv.Momo.Sync
             return t;
         }
 
-        // ==================== Property filters ====================
+        #endregion
+
+        #region Property filters
 
         /// <summary>跳过 [NotMapped] 标记的属性</summary>
         private static bool IsNotMapped(PropertyInfo prop)
@@ -752,7 +768,9 @@ namespace Viv.Momo.Sync
             return null;
         }
 
-        // ==================== Name normalization ====================
+        #endregion
+
+        #region Name normalization
 
         /// <summary>
         /// 按 CLR 类型判断 nullable：Nullable&lt;T&gt; → true；string 无 [Required] → true；引用类型 → true；值类型 → false。
@@ -774,5 +792,7 @@ namespace Viv.Momo.Sync
         private static string NormalizeName(string name) => name.ToLowerInvariant();
 
         private static string NormalizeTableName(string name) => NormalizeName(name);
+
+        #endregion
     }
 }

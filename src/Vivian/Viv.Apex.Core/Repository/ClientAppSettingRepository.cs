@@ -19,7 +19,7 @@ namespace Viv.Apex.Core.Repository
         {
         }
 
-        public async Task<bool> AddAsync(AtClientAppSetting setting)
+        public async Task<bool> AddSettingAsync(AtClientAppSetting setting)
         {
             var flag = await _dbContext.InsertAsync(setting);
             if (flag && setting.ConfigKey != null)
@@ -29,7 +29,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<bool> UpdateAsync(AtClientAppSetting setting)
+        public async Task<bool> UpdateSettingAsync(AtClientAppSetting setting)
         {
             var flag = await _dbContext.UpdateAsync(setting);
             if (flag && setting.ConfigKey != null)
@@ -39,7 +39,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<bool> DeleteAsync(long clientAppId, string configKey)
+        public async Task<bool> DeleteSettingAsync(long clientAppId, string configKey)
         {
             var flag = await _dbContext.DeleteAsync<AtClientAppSetting>(x => x.ClientAppId == clientAppId && x.ConfigKey == configKey);
             if (flag)
@@ -49,7 +49,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<bool> SoftDeleteAsync(long clientAppId, string configKey)
+        public async Task<bool> SoftDeleteSettingAsync(long clientAppId, string configKey)
         {
             var flag = await _dbContext.SoftDeleteAsync<AtClientAppSetting>(x => x.ClientAppId == clientAppId && x.ConfigKey == configKey);
             if (flag)
@@ -59,7 +59,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<AtClientAppSetting?> GetAsync(long clientAppId, string configKey)
+        public async Task<AtClientAppSetting?> GetSettingAsync(long clientAppId, string configKey)
         {
             var bucket = await GetCacheAsync(clientAppId, configKey);
             return bucket?.Entity;
@@ -80,7 +80,7 @@ namespace Viv.Apex.Core.Repository
             return await _dbContext.FindListAsync<AtClientAppSetting>(x => x.ClientAppId == clientAppId && !x.IsDeleted);
         }
 
-        public async Task<PagedList<AtClientAppSetting>> GetPagedListAsync(IApiPagedRequest request)
+        public async Task<PagedList<AtClientAppSetting>> GetSettingPagedListAsync(IApiPagedRequest request)
         {
             var (sql, parameter) = request.GetSqlQuery();
             return await _dbContext.PageAsync<AtClientAppSetting>(sql, request.PageIndex, request.PageSize, parameter);

@@ -23,7 +23,7 @@ namespace Viv.Apex.Core.Repository
 
         }
 
-        public async Task<bool> AddAsync(AtTenant tenant)
+        public async Task<bool> AddTenantAsync(AtTenant tenant)
         {
             var flag = await _dbContext.InsertAsync(tenant);
             if (flag)
@@ -33,7 +33,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<bool> DeleteAsync(long tenantId)
+        public async Task<bool> DeleteTenantAsync(long tenantId)
         {
             var flag = await _dbContext.DeleteAsync<AtTenant>(x => x.Id == tenantId);
             if (flag)
@@ -49,7 +49,7 @@ namespace Viv.Apex.Core.Repository
             return bucket?.Entity;
         }
 
-        public async Task<bool> SoftDeleteAsync(long tenantId)
+        public async Task<bool> SoftDeleteTenantAsync(long tenantId)
         {
             var flag = await _dbContext.SoftDeleteAsync<AtTenant>(x => x.Id == tenantId);
             if (flag)
@@ -59,7 +59,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<bool> UpdateAsync(AtTenant tenant)
+        public async Task<bool> UpdateTenantAsync(AtTenant tenant)
         {
             var flag = await _dbContext.UpdateAsync(tenant);
             if (flag)
@@ -81,13 +81,13 @@ namespace Viv.Apex.Core.Repository
             };
         }
 
-        public async Task<PagedList<AtTenant>> GetPagedListAsync(IApiPagedRequest request)
+        public async Task<PagedList<AtTenant>> GetTenantPagedListAsync(IApiPagedRequest request)
         {
             var (sql, parameter) = request.GetSqlQuery();
             return await _dbContext.PageAsync<AtTenant>(sql, request.PageIndex, request.PageSize, parameter);
         }
 
-        public async Task<List<AtTenantAppRelation>> GetAtTenantAppsAsync(long tenantId)
+        public async Task<List<AtTenantAppRelation>> GetTenantAppRelationsAsync(long tenantId)
         {
             var bucket = await GetCacheAsync(tenantId);
             return bucket?.Entities ?? [];

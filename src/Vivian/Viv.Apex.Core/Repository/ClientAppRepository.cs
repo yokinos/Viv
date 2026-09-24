@@ -21,7 +21,7 @@ namespace Viv.Apex.Core.Repository
 
         // ==================== AtClientApp ====================
 
-        public async Task<bool> AddAsync(AtClientApp app)
+        public async Task<bool> AddAppAsync(AtClientApp app)
         {
             var flag = await _dbContext.InsertAsync(app);
             if (flag)
@@ -31,7 +31,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<bool> UpdateAsync(AtClientApp app)
+        public async Task<bool> UpdateAppAsync(AtClientApp app)
         {
             var flag = await _dbContext.UpdateAsync(app);
             if (flag)
@@ -41,7 +41,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<bool> DeleteAsync(long appId)
+        public async Task<bool> DeleteAppAsync(long appId)
         {
             var flag = await _dbContext.DeleteAsync<AtClientApp>(x => x.Id == appId);
             if (flag)
@@ -51,7 +51,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<bool> SoftDeleteAsync(long appId)
+        public async Task<bool> SoftDeleteAppAsync(long appId)
         {
             var flag = await _dbContext.SoftDeleteAsync<AtClientApp>(x => x.Id == appId);
             if (flag)
@@ -61,7 +61,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<AtClientApp?> GetAsync(long appId)
+        public async Task<AtClientApp?> GetAppAsync(long appId)
         {
             var bucket = await GetCacheAsync(appId);
             return bucket?.Entity;
@@ -75,7 +75,7 @@ namespace Viv.Apex.Core.Repository
             return new EntityBucket<AtClientApp>(app);
         }
 
-        public async Task<PagedList<AtClientApp>> GetPagedListAsync(IApiPagedRequest request)
+        public async Task<PagedList<AtClientApp>> GetAppPagedListAsync(IApiPagedRequest request)
         {
             var (sql, parameter) = request.GetSqlQuery();
             return await _dbContext.PageAsync<AtClientApp>(sql, request.PageIndex, request.PageSize, parameter);

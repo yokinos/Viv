@@ -45,7 +45,7 @@ namespace Viv.Apex.Core.Impl.Login
                 return FuncResult<LoginOutput>.Failed("租户状态异常");
             }
 
-            var tenantApps = await _tenantRepository.GetAtTenantAppsAsync(tenant.Id);
+            var tenantApps = await _tenantRepository.GetTenantAppRelationsAsync(tenant.Id);
             if (tenantApps.IsNullOrEmpty())
             {
                 return FuncResult<LoginOutput>.Failed("客户端授权异常");

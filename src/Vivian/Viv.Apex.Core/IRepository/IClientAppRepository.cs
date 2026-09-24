@@ -14,32 +14,32 @@ namespace Viv.Apex.Core.IRepository
         /// <summary>
         /// 新增客户端应用
         /// </summary>
-        Task<bool> AddAsync(AtClientApp app);
+        Task<bool> AddAppAsync(AtClientApp app);
 
         /// <summary>
         /// 更新客户端应用
         /// </summary>
-        Task<bool> UpdateAsync(AtClientApp app);
+        Task<bool> UpdateAppAsync(AtClientApp app);
 
         /// <summary>
         /// 物理删除客户端应用
         /// </summary>
-        Task<bool> DeleteAsync(long appId);
+        Task<bool> DeleteAppAsync(long appId);
 
         /// <summary>
         /// 软删除客户端应用
         /// </summary>
-        Task<bool> SoftDeleteAsync(long appId);
+        Task<bool> SoftDeleteAppAsync(long appId);
 
         /// <summary>
         /// 根据Id获取客户端应用
         /// </summary>
-        Task<AtClientApp?> GetAsync(long appId);
+        Task<AtClientApp?> GetAppAsync(long appId);
 
         /// <summary>
         /// 分页查询客户端应用
         /// </summary>
-        Task<PagedList<AtClientApp>> GetPagedListAsync(IApiPagedRequest request);
+        Task<PagedList<AtClientApp>> GetAppPagedListAsync(IApiPagedRequest request);
 
         // ==================== AtClientAppVersion ====================
 

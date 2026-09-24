@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text;
 using Viv.Elysia;
 using Viv.Entity.Database.Apex;
@@ -12,8 +11,6 @@ namespace Viv.Apex.Core.Entity.CacheBucket
         public AtUser? User { get; set; }
 
         public AtUserBind? UserBind { get; set; }
-
-        public List<AtUserRoleRelation>? UserRoleList { get; set; }
 
         public TimeSpan CacheTime => CacheTimeProvider.GetRandomDays();
 

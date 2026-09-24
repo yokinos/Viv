@@ -19,7 +19,7 @@ namespace Viv.Apex.Core.Repository
         {
         }
 
-        public async Task<bool> AddAsync(AtOrg org)
+        public async Task<bool> AddOrgAsync(AtOrg org)
         {
             var flag = await _dbContext.InsertAsync(org);
             if (flag)
@@ -29,7 +29,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<bool> UpdateAsync(AtOrg org)
+        public async Task<bool> UpdateOrgAsync(AtOrg org)
         {
             var flag = await _dbContext.UpdateAsync(org);
             if (flag)
@@ -39,7 +39,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<bool> DeleteAsync(long orgId)
+        public async Task<bool> DeleteOrgAsync(long orgId)
         {
             var flag = await _dbContext.DeleteAsync<AtOrg>(x => x.Id == orgId);
             if (flag)
@@ -49,7 +49,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<bool> SoftDeleteAsync(long orgId)
+        public async Task<bool> SoftDeleteOrgAsync(long orgId)
         {
             var flag = await _dbContext.SoftDeleteAsync<AtOrg>(x => x.Id == orgId);
             if (flag)
@@ -59,7 +59,7 @@ namespace Viv.Apex.Core.Repository
             return flag;
         }
 
-        public async Task<(AtOrg? Org, List<AtOrgAppRelation>? Relations)> GetAsync(long orgId)
+        public async Task<(AtOrg? Org, List<AtOrgAppRelation>? Relations)> GetOrgAsync(long orgId)
         {
             var bucket = await GetCacheAsync(orgId);
             return (bucket?.Entity, bucket?.Entities);
@@ -80,18 +80,25 @@ namespace Viv.Apex.Core.Repository
             };
         }
 
-        public async Task<List<AtOrg>> GetChildrenAsync(long parentId)
+        public async Task<List<AtOrg>> GetOrgChildrenAsync(long parentId)
         {
             return await _dbContext.FindListAsync<AtOrg>(x => x.ParentId == parentId && !x.IsDeleted);
         }
 
-        public async Task<PagedList<AtOrg>> GetPagedListAsync(IApiPagedRequest request)
+        public async Task<PagedList<AtOrg>> GetOrgPagedListAsync(IApiPagedRequest request)
         {
             var (sql, parameter) = request.GetSqlQuery();
             return await _dbContext.PageAsync<AtOrg>(sql, request.PageIndex, request.PageSize, parameter);
         }
 
-        // ==================== AtOrgAppRelation ====================
+        public async Task<(AtOrg? Org, List<AtOrgAppRelation>? Relations)> GetOrgByOrgCodeAsync(string orgCode)
+        {
+            var org = await _dbContext.SingleOrDefaultAsync<AtOrg>(x => x.OrgCode == orgCode && !x.IsDeleted);
+            if (org == null) { return default; }
+            return await GetOrgAsync(org.Id);
+        }
+
+        #region AtOrgAppRelation
 
         public async Task<bool> AddRelationAsync(AtOrgAppRelation relation)
         {
@@ -144,11 +151,6 @@ namespace Viv.Apex.Core.Repository
             return await _dbContext.PageAsync<AtOrgAppRelation>(sql, request.PageIndex, request.PageSize, parameter);
         }
 
-        public async Task<(AtOrg? Org, List<AtOrgAppRelation>? Relations)> GetOrgByOrgCodeAsync(string orgCode)
-        {
-            var org = await _dbContext.SingleOrDefaultAsync<AtOrg>(x => x.OrgCode == orgCode && !x.IsDeleted);
-            if (org == null) { return default; }
-            return await GetAsync(org.Id);
-        }
+        #endregion
     }
 }
