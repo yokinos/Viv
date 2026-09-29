@@ -40,6 +40,7 @@
 - **缓存与分布式锁** — Redis 多库路由、Cache-Aside 防击穿，可重入 / 非重入锁 + 自动续期
 - **网关** — YARP 反向代理，路由自动生成；JWT 解析 + `x-request-token` HMAC 验签回填，防绕过直连伪造身份
 - **跨服务通信** — HTTP + gRPC 双通道、服务发现、`x-viv-*` 上下文透传
+- **可观测性** — 健康检查（`/health` + `/alive`）、Meter 指标 + 进程内读取（`IVivMeter`）、链路追踪（db / redis / mq 三族 span）、慢查询日志
 - **工程化** — 中央包管理、Aspire 统一编排、OpenTelemetry + Seq、TickerQ 调度、代码生成
 
 ---
@@ -201,7 +202,7 @@ Viv/
 │   │   ├── Viv.Contracts/                # 基础接口与枚举（IVivContext、IDependency…）
 │   │   ├── Viv.Delusion/                 # 通用工具 — 类型扫描、对象映射、加密、字符串
 │   │   ├── Viv.Aoi/                      # DI 桥接 — VivLocator（MS DI ↔ Autofac）
-│   │   ├── Viv.Engine/                   # 核心引擎 — 配置加载、AddViv 注册、启动扩展、统一状态码
+│   │   ├── Viv.Engine/                   # 核心引擎 — 配置加载、AddViv 注册、启动扩展、统一状态码、健康检查、指标读取（IVivMeter）
 │   │   ├── Viv.Log/                      # 日志 — Serilog / No-op，Seq 集成
 │   │   ├── Viv.Momo/                     # 数据库 — EF Core + Dapper 混合、读写分离、多租户
 │   │   ├── Viv.Nana/                     # 消息 — Wolverine + RabbitMQ 发布订阅、Saga
@@ -228,7 +229,7 @@ Viv/
 │   │   └── Viv.Aspire/
 │   │       ├── Viv.Aspire.AppHost/        # Aspire 统一编排
 │   │       ├── Viv.Aspire.Gateway/        # YARP 反向代理（路由自动生成）
-│   │       └── Viv.Aspire.ServiceDefaults/ # OpenTelemetry、/health、服务发现、韧性
+│   │       └── Viv.Aspire.ServiceDefaults/ # OpenTelemetry（指标/追踪）、/health + /alive、服务发现、韧性
 │   │
 │   └── Test/                             # 框架单元测试套件（每 Banshee 项目一套）
 ```
@@ -323,6 +324,7 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
     "MasterConnectionString": "Server=...;Database=viv;...",
     "SlaveConnectionStrings": [],
     "Timeout": 30,
+    "SlowQueryThresholdMs": 1000,         // 慢查询阈值（毫秒），超过记 Warning + viv.momo.query.slow；0=关
     "EntityTypeOptions": [{               // 实体自动扫描
       "AssemblyName": "Viv.Entity",
       "Namespace": "Viv.Entity.Database.Apex",
@@ -435,6 +437,20 @@ public class UserCreatedConsumer : VivConsumer<UserCreated> { ... }
 ```
 
 `ConsumerCount` = 队列消费通道数（**>1 会丢失同队列内的严格顺序**，多实例时总数 = 通道数 × 实例数）；`PrefetchCount` = 每通道未确认上限；`MaximumParallelMessages` = 端点最大并行。
+
+### 可观测性
+
+健康检查、指标与链路追踪三件套开箱即用，数据全部汇入 Aspire Dashboard / OTLP。
+
+**健康检查**（`/health` + `/alive`，全环境映射）— `/health` 走全部检查：数据库 `SELECT 1`、Redis 真实 `PING` 往返（按配置挂载，没配就不挂）；`/alive` 只判进程存活（live 标签）。依赖挂了摘流量，但不会被编排系统当成"进程该重启"。
+
+**指标**（Meter 名 `Viv.*`，Aspire 自动采集）— `Viv.Momo`（查询耗时 / 慢查询 / 库失败 / 批量 EF·Dapper 分流）、`Viv.Redis`（命令耗时 / 连接断连 / 缓存命中率 / 回源 / 取锁·续期·释放）、`Viv.Nana` + `Viv.Outbox`（消息发布 / 消费计数与时长）。
+
+**进程内指标读取**（`IVivMeter`，给管理后台用）— `Meters` 列出已收账的 meter 名（确认 listener 挂没挂上）、`Snapshot()` 当前读数、`Reset()` 清零并返回清零前快照。口径：自 `AddViv` 起累计、单副本视图、清零只影响框架自持那份（OTel 面板仍是连续累计值）。
+
+**链路追踪**（`ActivitySource: Viv`，消费侧复用 Wolverine 自带源）— `db.query`（库访问，EF + Dapper 一处收口，标签 `path: ef|dapper` / `op: reader|nonquery|scalar|page`）、`redis.command`（Redis 命令，`op` 标签取调用方方法名）、`mq.publish`（消息发布，Producer）。发件箱消息入队时持久化 `TraceId` / `RequestTraceId` —— 投递器跑在后台作用域，重建不出入队时的语境，只能入队时存下来；从面板按 traceId 可反查到消息的完整处理链。
+
+**慢查询日志** — `DatabaseOptions.SlowQueryThresholdMs`（默认 1000ms，0 = 关）超阈值记一条 Warning + `viv.momo.query.slow` 计数，日志里 SQL 截断到 200 字符。
 
 ### 统一响应
 

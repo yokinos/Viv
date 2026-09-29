@@ -115,6 +115,7 @@ namespace Viv.Cli
                 }
                 finally
                 {
+                    Out.PrintlnSuccess("The task is completed");
                     _registrar?.Resolver.EndScope();
                 }
 
@@ -143,7 +144,7 @@ namespace Viv.Cli
         {
             var commandTypes = assembly
                 .GetTypes()
-                .Where(t => t is { IsClass: true, IsAbstract: false }&& t.GetCustomAttribute<VivCommandAttribute>() != null)
+                .Where(t => t is { IsClass: true, IsAbstract: false } && t.GetCustomAttribute<VivCommandAttribute>() != null)
                 .ToList();
 
             foreach (var type in commandTypes)
@@ -156,7 +157,7 @@ namespace Viv.Cli
 
                     var addCmdMethod = typeof(IConfigurator)
                         .GetMethods()
-                        .First(m => m.Name == nameof(IConfigurator.AddCommand)&& m.GetParameters().Length == 1&& m.GetGenericArguments().Length == 1)
+                        .First(m => m.Name == nameof(IConfigurator.AddCommand) && m.GetParameters().Length == 1 && m.GetGenericArguments().Length == 1)
                         .MakeGenericMethod(type);
 
                     var cmdConfig = addCmdMethod.Invoke(config, [attr.PrimaryName])!;
