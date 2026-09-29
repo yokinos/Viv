@@ -97,9 +97,6 @@ dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.Gateway
 > [!WARNING]
 > **安全钉版**：`Microsoft.OpenApi 2.7.5` —— 修复 [GHSA-v5pm-xwqc-g5wc](https://github.com/advisories/GHSA-v5pm-xwqc-g5wc) / CVE-2026-49451（OpenAPI 循环 schema 引用导致栈溢出 DoS，CVSS 7.5），由 `Microsoft.AspNetCore.OpenApi 10.0.x` 传递引入，原先触发 NuGet 审计 NU1903。
 
-> [!NOTE]
-> `NU1608` 已静默：EF Design 10.0.10 传递的 `Microsoft.CodeAnalysis.Workspaces 5.0.0` 精确要求 `Common =5.0.0`，与中央钉的 5.6.0 冲突；解析结果与未启用 CPM 时一致（NuGet 本就取最高版本），故为预期噪音。
-
 ---
 
 ## 架构
@@ -133,65 +130,20 @@ dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.Gateway
   └───────────┘  └───────────┘  └───────────┘
 ```
 
-### 请求链路（完整）
+### 请求链路
 
 一次请求经 **网关 → 下游服务 → 数据层** 三级，身份与多租户上下文沿链路逐级验真：
 
 ```
-客户端
- │ ① 携带 JWT（Authorization: Bearer <token>；WS 升级改走 ?access_token=<token>）
- ▼
-Viv.Aspire.Gateway  ── 只解析不强制：无 token 也放行 ──
- │ ② CORS / OutputCache / RateLimiter
- │ ③ JwtBearer 解析 token
- │ ④ 剥离客户端伪造的身份来源：x-viv-* 头 + x-request-token + query 里的 tenantId/userId/appId 全部丢弃
- │ ⑤ token 有效 → 从 claims 回填 x-viv-* 头 + HMAC-SHA256 签名写 x-request-token（{unixSeconds}:{base64Sig}）
- ▼
-下游服务（Apex.Api / Herta.Link …）
- │ ⑥ UseForwardedHeaders 信任 X-Forwarded-Proto/Host/For（避免 302 甩出网关直连下游）
- │ ⑦ UseAuthentication(JwtBearer) 验签 JWT → context.User（匿名服务 TokenOption=null 跳过）
- │ ⑧ VivContextMiddleware：验 x-request-token 签名通过才信任 x-viv-* 头 → IVivContext（AsyncLocal）
- │ ⑨ RequestFilterAttribute 参数校验 → Controller Action → VivExceptionFilter → VivApiResult
- ▼
-数据层 Momo
- │ EF 全局租户过滤 / Dapper 自动追加 AND TenantId = @TenantId
- ▼
-返回：{ Code, Message, Data }（HTTP 恒 200）
+客户端携带 JWT
+ → 网关：剥离客户端伪造的 x-viv-* 头与 query 身份参数 → JwtBearer 验签
+ → 从 claims 回填 x-viv-* 头（含 holder-id），HMAC-SHA256 签名写 x-request-token（{unixSeconds}:{base64Sig}，≤300s 时效）
+ → 下游：VivContextMiddleware 验 x-request-token 通过才信任 x-viv-* 头 → IVivContext（AsyncLocal）
+ → 数据层：EF 全局租户过滤 / Dapper 自动追加 AND TenantId = @TenantId
+ → 返回：{ Code, Message, Data }（HTTP 恒 200）
 ```
 
-各环节职责：
-
-1. **客户端** — 携带 `Authorization: Bearer <JWT>`；SignalR 升级请求无法带 Authorization 头，改用 `?access_token=<JWT>`
-2. **网关** — 限流、输出缓存、CORS；JwtBearer 解析（`OnMessageReceived` 支持 `access_token` 查询参数，供 WS/SignalR 场景）
-3. **网关（认证前）** — 剥离客户端可伪造的 `x-viv-appId/subjectId/userId/serviceName/holder-id`、`x-request-token` 头，以及 query 里的 `tenantId/userId/appId` —— 身份与 holderId 只允许来自验签后的 token claims + 网关当前 `LockHolderContext`
-4. **网关（认证后）** — 从 claims 回填 `x-viv-*` 头（含 `x-viv-holder-id`），HMAC-SHA256 签名写 `x-request-token`（载荷含 unix 时间戳，5 分钟过期）—— 防止绕过网关直连下游伪造头
-5. **下游** — 信任网关透传的 `X-Forwarded-Proto/Host/For`；JwtBearer 验签 JWT（`TokenOption=null` 的匿名服务不注册鉴权）
-6. **下游** — `RequestTokenResolver.GetContextFromHeaders` 用 `EnvOption.InternalToken` 验 `x-request-token` 签名 + 时效；失败 → 视为无身份
-7. **下游** — 参数校验 → 业务 → 统一响应
-8. **数据层** — 多租户自动隔离（EF 查询过滤 / Dapper 追加租户条件），业务代码无需手写
-
-**身份 / 租户上下文契约**（由网关验签后回填，下游验签才信任）：
-
-```
-x-viv-appId        客户端应用 ID（claims: appId）
-x-viv-subjectId    租户 ID = TenantId（claims: tenantId）
-x-viv-userId       用户 ID（claims: sub）
-x-viv-serviceName  服务名（网关填自己的 EnvOption.ServiceName）
-x-viv-holder-id    分布式锁持有者 Id（网关填当前 LockHolderContext；验签通过才信任）
-x-request-token    {unixSeconds}:{base64Sig} — 对上面 5 个头 + 时间戳的 HMAC-SHA256
-                   （密钥 EnvOption.InternalToken，网关与所有服务同值，不回落 JWT SecretKey）；
-                   下游验签 + ≤300s 时效通过才信任头组
-```
-
-**SignalR / WebSocket 链路**：
-
-```
-客户端 → /ws/{短名}/chat?access_token=<JWT>
-  → 网关 OnMessageReceived 读 access_token → JwtBearer 验签 → 回填 x-viv-* + 签名 x-request-token
-  → 下游 ChatHub.OnConnectedAsync：GetContextFromHeaders 验签取身份
-  → AppId/SubjectId/UserId 任一无效 → Context.Abort()（不再信任客户端 query 直传的 tenantId/userId/appId）
-  → 通过 → 加入连接池 + 用户组
-```
+上下文头契约（由网关验签后回填，下游验签才信任）：`x-viv-appId`（claims: appId）、`x-viv-subjectId`（租户 ID = TenantId）、`x-viv-userId`（claims: sub）、`x-viv-serviceName`、`x-viv-holder-id`（分布式锁持有者 Id）、`x-request-token`（上述头的 HMAC 签名，密钥 `EnvOption.InternalToken`，网关与所有服务同值，不回落 `TokenOption.SecretKey`）。SignalR / WebSocket 升级请求无法带 Authorization 头，改用 `?access_token=<JWT>`（网关 `OnMessageReceived` 读取）。
 
 ### 项目结构
 
@@ -199,7 +151,7 @@ x-request-token    {unixSeconds}:{base64Sig} — 对上面 5 个头 + 时间戳�
 Viv/
 ├── src/
 │   ├── Banshee/                          # 框架层
-│   │   ├── Viv.Contracts/                # 基础接口与枚举（IVivContext、IDependency…）
+│   │   ├── Viv.Contracts/                # 基础接口与枚举（IVivContext、IVivMeter、IDependency…）
 │   │   ├── Viv.Delusion/                 # 通用工具 — 类型扫描、对象映射、加密、字符串
 │   │   ├── Viv.Aoi/                      # DI 桥接 — VivLocator（MS DI ↔ Autofac）
 │   │   ├── Viv.Engine/                   # 核心引擎 — 配置加载、AddViv 注册、启动扩展、统一状态码、健康检查、指标读取（IVivMeter）
@@ -267,110 +219,28 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 
 ### 配置：appsettings.json 的 `VivOptions` 节点
 
-每个服务项目的 `appsettings.json` 携带一个 `VivOptions` 节点，框架按节驱动子系统装配（以下 JSON 即该节点内容，与 `Logging`/`AllowedHosts` 等同级并列）：
+每个服务项目的 `appsettings.json` 携带一个 `VivOptions` 节点，框架按节驱动子系统装配。最小可用配置：
 
 ```jsonc
 {
-  "EnvOption": {                          // 运行环境
-    "Env": 0,                             // 0=Development 1=Test 2=PreRelease 3=Production
-    "ServiceName": "viv.apex.api",        // 服务名（Nana 队列名 / 网关路由短名依赖它）
-    "MachineId": 101,                     // 机器 ID（分布式 ID 生成）
-    "InternalToken": "<32位随机hex>"       // x-request-token 签名密钥（网关与所有服务必须同一个值；不回落 TokenOption.SecretKey）
+  "EnvOption": { "Env": 0, "ServiceName": "viv.apex.api", "MachineId": 101, "InternalToken": "<32位随机hex>" },
+  "DIOption": { // Service / Repository 自动扫描注册
+    "ServiceImplementation": { "AssemblyName": "Viv.Apex.Core", "Namespace": "Viv.Apex.Core.Service", "ClassNameEndsWith": "Service" },
+    "RepositoryImplementation": { "AssemblyName": "Viv.Apex.Core", "Namespace": "Viv.Apex.Core.Repository", "ClassNameEndsWith": "Repository" }
   },
-  "DIOption": {                           // Service / Repository 自动扫描注册
-    "ServiceImplementation": {
-      "AssemblyName": "Viv.Apex.Core",
-      "Namespace": "Viv.Apex.Core.Service",
-      "BaseType": null,
-      "ClassNameEndsWith": "Service",
-      "ClassNameStartsWith": ""
-    },
-    "RepositoryImplementation": {
-      "AssemblyName": "Viv.Apex.Core",
-      "Namespace": "Viv.Apex.Core.Repository",
-      "BaseType": null,
-      "ClassNameEndsWith": "Repository",
-      "ClassNameStartsWith": ""
-    }
-  },
-  "CacheOption": {                        // 缓存
-    "CacheProviderType": 1,               // 0=None 1=Redis
-    "IsEnableMemoryCache": true,          // 是否启用进程内内存缓存
-    "RedisOptions": {
-      "RedisMode": 0,                     // 0=Standalone 1=Cluster 2=Sentinel
-      "ConnectionString": "localhost:6379,password=***",
-      "SentinelEndPoints": [],            // 哨兵节点列表（哨兵模式用）
-      "SentinelMasterName": "MasterRedisNode",
-      "Password": "***",
-      "DefaultDatabase": 0,
-      "MaxDbIndex": 12,                   // 可用 DB 范围 0~12（多租户按租户分库）
-      "SelectorType": 0,                  // 0=None 固定默认库 1=KeyHash 按 key 哈希分库
-      "AllowAdmin": true,
-      "AbortOnConnectFail": false,
-      "ConnectTimeout": 5000,
-      "SyncTimeout": 5000,
-      "KeepAlive": 60
-    }
-  },
-  "LogOption": {                          // 日志
-    "LogType": 1,                         // 0=None 1=Serilog
-    "IsUseSeq": true,
-    "SeqUrl": "https://seq.example.com",
-    "SeqApiKey": "***"
-  },
-  "DatabaseOption": {                     // Momo 数据库
-    "DatabaseSource": 0,                  // 0=SqlServer 1=PostgreSQL
-    "IsReadWriteSplit": false,
-    "MasterConnectionString": "Server=...;Database=viv;...",
-    "SlaveConnectionStrings": [],
-    "Timeout": 30,
-    "SlowQueryThresholdMs": 1000,         // 慢查询阈值（毫秒），超过记 Warning + viv.momo.query.slow；0=关
-    "EntityTypeOptions": [{               // 实体自动扫描
-      "AssemblyName": "Viv.Entity",
-      "Namespace": "Viv.Entity.Database.Apex",
-      "BaseType": "Viv.Momo.Interface.IEntity, Viv.Momo, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
-    }]
-  },
-  "NanaOption": {                         // Nana 消息（Wolverine + RabbitMQ）
-    "Host": "localhost",
-    "Port": 5672,
-    "UserName": "viv",
-    "Password": "***",
-    "VirtualHost": "VivNet",
-    "RetryCount": 3,
-    "ConsumerTypes": [],                  // 消费者类型扫描规则（ClassNameEndsWith: "Consumer"）
-    "SagaDatabaseSource": 0,              // Saga 持久化库类型（0=SqlServer 1=PostgreSQL）
-    "SagaConnectionString": null          // 不配则不启用 Saga 持久化
-  },
-  "TokenOption": {                        // JWT
-    "TokenType": 0,                       // 0=Jwt
-    "SecretKey": "***",                   // ≥32 字节，所有签发/验证 token 的服务（含网关）必须一致
-    "ExpireMinutes": 120,
-    "Issuer": "viv.system.net",
-    "Audience": "viv.system.net"
-  },
-  "TickOption": null,                     // Clockwork 调度（TickerQ），不使用则为 null
-  "EchoOption": {                         // 跨服务通信
-    "EnableHttp": true,
-    "GrpcOption": { "EnableServer": true, "Port": 7001 }   // gRPC 服务端专用端口（严格 HTTP/2），null 则只开客户端
-  },
-  "S3Option": {                           // 对象存储（S3 兼容，RustFS 等）
-    "Endpoint": "https://s3.example.com",
-    "UseHttps": true,
-    "Port": 443,
-    "AccessKey": "***",
-    "SecretKey": "***",
-    "Region": "us-east-1",
-    "UploadBucket": "vivbucket",
-    "UploadPresignExpireSeconds": 900,
-    "DownloadPresignExpireSeconds": 900
-  }
+  "CacheOption": { "CacheProviderType": 1, "RedisOptions": { "ConnectionString": "localhost:6379,password=***", "DefaultDatabase": 0, "MaxDbIndex": 12 } },
+  "LogOption": { "LogType": 1, "IsUseSeq": true, "SeqUrl": "https://seq.example.com" },
+  "DatabaseOption": { "DatabaseSource": 0, "MasterConnectionString": "Server=...;Database=viv;...", "SlowQueryThresholdMs": 1000 },
+  "NanaOption": { "Host": "localhost", "Port": 5672, "UserName": "viv", "VirtualHost": "VivNet", "RetryCount": 3 },
+  "TokenOption": { "SecretKey": "***", "ExpireMinutes": 120, "Issuer": "viv.system.net", "Audience": "viv.system.net" }
 }
 ```
 
+各段要点：`EnvOption.InternalToken` 是 `x-request-token` 签名密钥，**网关与所有服务必须同一个值**（不回落 `TokenOption.SecretKey`）；`CacheOption.RedisOptions` 支持 Standalone / Cluster / Sentinel 三模式、`MaxDbIndex` 多租户按租户分库；`DatabaseOption` 支持 PostgreSQL / SQL Server、`IsReadWriteSplit` 读写分离、`SlowQueryThresholdMs` 慢查询阈值（0 = 关）；`NanaOption.SagaConnectionString` 不配则不启用 Saga 持久化。可选段：`TickOption`（TickerQ 调度，不用则为 null）、`EchoOption`（HTTP + gRPC 跨服务通信）、`S3Option`（对象存储）。
+
 ### 数据库 Momo
 
-`IMomoDbContext` 是统一数据访问入口，EF Core 与 Dapper 按阈值混合使用（小操作走 EF 变更追踪，大查询走 Dapper 纯 SQL）。
+`IMomoDbContext` 是统一数据访问入口，EF Core 与 Dapper 按阈值混合使用（小操作走 EF 变更追踪，大查询走 Dapper 纯 SQL）：
 
 ```csharp
 public class UserService : IUserService
@@ -388,20 +258,14 @@ public class UserService : IUserService
 }
 ```
 
-内置能力：
-
-- **读写分离** — 写走主库、读随机选从库（`EFAppContext` 锁定读写方向）
-- **多租户隔离** — 实现 `ITenant` 的实体自动附加租户过滤，跨租户读取被框架拦截
-- **软删除** — 实现 `ISoftDelete` 即可
-- **事务** — `BeginTransactionAsync` / `CommitTransactionAsync` / `RollbackTransactionAsync`
-- **建表** — `SyncTableAsync` 按实体自动同步表结构
+内置能力：**读写分离**（`EFAppContext` 锁定读写方向）、**多租户隔离**（实现 `ITenant` 自动附加租户过滤）、**软删除**（实现 `ISoftDelete`）、**事务**（`BeginTransactionAsync` 三件套）、**建表**（`SyncTableAsync` 按实体自动同步）。
 
 > [!NOTE]
 > 访问失败统一抛 `VivConnectionException`（映射 `-501` 数据库错误），`Insert` / `Update` / `Delete` 的 `false` 只表示影响 0 行或入参无效，不表示数据库故障。
 
 ### 消息 Nana（Wolverine + RabbitMQ）
 
-发布订阅语义：每条事件进 fanout 交换机 `{EventName}Exchange`，每个订阅服务持一条独立队列 `{EventName}Queue.{ServiceName}` 各收一份。同服务只执行一次由 `VivConsumer<T>` 基类按 `nana:{ServiceName}:{EventType}:{MessageId}` 取 Redis 锁：谁取到谁进业务，拿不到当前实例直接 return（ack，不回队）。未配 Redis 时跳过取锁。
+发布订阅语义：每条事件进 fanout 交换机 `{EventName}Exchange`，每个订阅服务持一条独立队列各收一份；同服务只执行一次由 `VivConsumer<T>` 基类按 `nana:{ServiceName}:{EventType}:{MessageId}` 取 Redis 锁（拿不到当前实例直接 ack return，未配 Redis 跳过取锁）。
 
 ```csharp
 // 发布（消息类需继承 NanaEvent）
@@ -426,31 +290,20 @@ public class UserCreatedConsumer : VivConsumer<UserCreated>
 }
 ```
 
-消费失败自动按 `RetryCount × 1s` 重试，耗尽后进死信队列；租户上下文（`NanaEnvelope<T>.Context`）随消息透传到下游，消费侧多租户隔离不受影响。Saga 状态机可基于 EF 持久化（配 `SagaConnectionString` 自动启用）。
+消费失败自动按 `RetryCount × 1s` 重试，耗尽后进死信队列；Saga 状态机可基于 EF 持久化（配 `SagaConnectionString` 自动启用）。
 
 > [!TIP]
-> **消费并发 / 预取调优**：框架默认每通道预取 **20** 条（低于 Wolverine 原生 100，降低崩溃重投放大）、队列用 **Quorum** 类型（多副本防丢消息）。需要吞吐时给消费者标特性覆盖：
-
-```csharp
-[NanaConsumer(ConsumerCount = 4, PrefetchCount = 200, MaximumParallelMessages = 32)]
-public class UserCreatedConsumer : VivConsumer<UserCreated> { ... }
-```
-
-`ConsumerCount` = 队列消费通道数（**>1 会丢失同队列内的严格顺序**，多实例时总数 = 通道数 × 实例数）；`PrefetchCount` = 每通道未确认上限；`MaximumParallelMessages` = 端点最大并行。
+> **消费并发 / 预取调优**：框架默认每通道预取 **20** 条（低于 Wolverine 原生 100，降低崩溃重投放大）、队列用 **Quorum** 类型（多副本防丢消息）。需要吞吐时给消费者标特性覆盖：`[NanaConsumer(ConsumerCount = 4, PrefetchCount = 200, MaximumParallelMessages = 32)]`。`ConsumerCount` > 1 会丢失同队列内的严格顺序，多实例时总数 = 通道数 × 实例数。
 
 ### 可观测性
 
 健康检查、指标与链路追踪三件套开箱即用，数据全部汇入 Aspire Dashboard / OTLP。
 
-**健康检查**（`/health` + `/alive`，全环境映射）— `/health` 走全部检查：数据库 `SELECT 1`、Redis 真实 `PING` 往返（按配置挂载，没配就不挂）；`/alive` 只判进程存活（live 标签）。依赖挂了摘流量，但不会被编排系统当成"进程该重启"。
-
-**指标**（Meter 名 `Viv.*`，Aspire 自动采集）— `Viv.Momo`（查询耗时 / 慢查询 / 库失败 / 批量 EF·Dapper 分流）、`Viv.Redis`（命令耗时 / 连接断连 / 缓存命中率 / 回源 / 取锁·续期·释放）、`Viv.Nana` + `Viv.Outbox`（消息发布 / 消费计数与时长）。
-
-**进程内指标读取**（`IVivMeter`，给管理后台用）— `Meters` 列出已收账的 meter 名（确认 listener 挂没挂上）、`Snapshot()` 当前读数、`Reset()` 清零并返回清零前快照。口径：自 `AddViv` 起累计、单副本视图、清零只影响框架自持那份（OTel 面板仍是连续累计值）。
-
-**链路追踪**（`ActivitySource: Viv`，消费侧复用 Wolverine 自带源）— `db.query`（库访问，EF + Dapper 一处收口，标签 `path: ef|dapper` / `op: reader|nonquery|scalar|page`）、`redis.command`（Redis 命令，`op` 标签取调用方方法名）、`mq.publish`（消息发布，Producer）。发件箱消息入队时持久化 `TraceId` / `RequestTraceId` —— 投递器跑在后台作用域，重建不出入队时的语境，只能入队时存下来；从面板按 traceId 可反查到消息的完整处理链。
-
-**慢查询日志** — `DatabaseOptions.SlowQueryThresholdMs`（默认 1000ms，0 = 关）超阈值记一条 Warning + `viv.momo.query.slow` 计数，日志里 SQL 截断到 200 字符。
+- **健康检查**（`/health` + `/alive`，全环境映射）— `/health` 走全部检查（数据库 `SELECT 1`、Redis 真 `PING`，按配置挂载、没配不挂）；`/alive` 只判进程存活，依赖挂了摘流量但不判"该重启"
+- **指标**（Meter 名 `Viv.*`）— `Viv.Momo`（查询耗时 / 慢查询 / 库失败）、`Viv.Redis`（命令耗时 / 缓存命中 / 取锁·续期·释放）、`Viv.Nana` + `Viv.Outbox`（消息发布 / 消费）
+- **进程内指标读取**（`IVivMeter`，给管理后台用）— `Meters` 列已收账 meter 名、`Snapshot()` 当前读数、`Reset()` 清零并返回清零前快照。口径：自 `AddViv` 起累计、清零只影响框架自持份（OTel 面板仍是连续累计）
+- **链路追踪**（`ActivitySource: Viv`）— `db.query`（EF + Dapper 一处收口，标签 path/op）、`redis.command`、`mq.publish`；消费侧复用 Wolverine 自带源。发件箱消息入队时持久化 `TraceId` / `RequestTraceId`（投递器后台作用域重建不出入队语境），面板按 traceId 反查完整处理链
+- **慢查询日志** — `SlowQueryThresholdMs`（默认 1000ms）超阈值记 Warning + `viv.momo.query.slow` 计数
 
 ### 统一响应
 
@@ -460,20 +313,11 @@ public class UserCreatedConsumer : VivConsumer<UserCreated> { ... }
 { "code": 200, "message": "请求处理成功", "data": { ... } }
 ```
 
-错误码区间：
-
-- `2xx` 成功 — `200` 请求成功、`201` 已创建
-- `-2xx` 参数 / 基础业务 — `-200` 通用业务错误、`-201` 缺参、`-202` 格式错误
-- `-4xx` 鉴权 / Token / 身份 — `-400` Token 空、`-401` Token 异常、`-404` 资源不存在
-- `-5xx` 系统 / 中间件 — `-500` 兜底、`-501` 数据库、`-502` 缓存、`-503` 消息队列
-- `-6xx` 功能 / 数据 / 渠道权限 — `-601` 无权限、`-602` 越权访问
-
-> [!NOTE]
-> 细分业务错误统一用 `-200`，自定义提示文案即可，不新增业务专属枚举。
+错误码区间：`2xx` 成功（200 请求成功 / 201 已创建）、`-2xx` 参数业务（-200 通用 / -201 缺参）、`-4xx` 鉴权身份（-400 Token 空 / -401 Token 异常 / -404 资源不存在）、`-5xx` 系统（-500 兜底 / -501 数据库 / -502 缓存 / -503 消息队列）、`-6xx` 权限（-601 无权限 / -602 越权）。细分业务错误统一用 `-200`，自定义提示文案即可，不新增业务专属枚举。
 
 ### 多租户与网关
 
-上下文头契约见 [请求链路](#请求链路完整) —— 由网关验签后回填，下游验签才信任。`VivContextMiddleware` 解析头部（或 JWT claims）填充 `IVivContext`，数据层据此自动做租户过滤。
+`VivContextMiddleware` 解析 `x-viv-*` 头（或 JWT claims）填充 `IVivContext`，数据层据此自动租户过滤（头契约见 [请求链路](#请求链路)）。
 
 **网关路由自动生成**（零手写 JSON）：从 Aspire 服务发现为每个服务生成 3 条路由 + 1 个集群：
 
@@ -483,7 +327,7 @@ public class UserCreatedConsumer : VivConsumer<UserCreated> { ... }
 /ws/{短名}/{**catch-all}       →  /{**catch-all}            WebSocket / SignalR
 ```
 
-网关只**解析不透传强制**鉴权：JWT 有就验签回填 `x-viv-*` 头（先剥离客户端伪造头与 query 身份参数，再 HMAC 签名 `x-request-token` 防绕过直连），无则放行；鉴权由下游服务 `[Authorize]` 自己控制。签名密钥只取 `EnvOption.InternalToken`（不回落 `TokenOption.SecretKey`）。限流策略在 `viv.ratelimit.json` 热重载。
+网关只**解析不透传强制**鉴权：JWT 有就验签回填（先剥离客户端伪造头），无则放行；鉴权由下游服务 `[Authorize]` 自己控制。限流策略在 `viv.ratelimit.json` 热重载。
 
 ### CLI 命令
 
@@ -498,26 +342,6 @@ public class Cmd_Migrate : AsyncCommand
 }
 ```
 
-交互输入与格式化输出：
-
-```csharp
-var name = InputMagic.GetInput("请输入名称");         // 必填
-if (InputMagic.Confirm("确认?")) { ... }             // y/n
-
-Out.PrintlnSuccess("完成");
-Out.PrintlnFormatJson(someObject);                   // JSON Panel
-```
+交互输入与格式化输出：`InputMagic.GetInput("请输入名称")` / `InputMagic.Confirm("确认?")` / `Out.PrintlnSuccess("完成")` / `Out.PrintlnFormatJson(obj)`。
 
 ---
-
-## 命名
-
-- **Banshee**（报丧女妖）— 框架层，幕后驱动一切基础设施
-- **Vivian**（薇薇安）— 应用层，台前承载业务服务
-- **Test** — 单元测试套件（`src/Test/` 框架测试；CLI 在 `Viv.Cli`）
-
----
-
-## License
-
-MIT
