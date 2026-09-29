@@ -6,17 +6,17 @@ using System.Text;
 using Viv.Cli;
 using Viv.Momo;
 
-namespace Viv.Toolbox.Basic
+namespace Viv.Toolbox.Commands.Basic
 {
     /// <summary>
     /// 用来初始化Viv相关表 及基础数据
     /// </summary>
-    [VivCommand("initviv", "用来初始化Viv相关表 及基础数据")]
-    public class Cmd_InitViv : AsyncCommand
+    [VivCommand("initapex", "用来初始化Apex相关表 及基础数据")]
+    public class Cmd_InitApex : AsyncCommand
     {
         private readonly IMomoDbContext _dbContext;
 
-        public Cmd_InitViv(IMomoDbContext dbContext)
+        public Cmd_InitApex(IMomoDbContext dbContext)
         {
             _dbContext = dbContext;
         }
