@@ -31,7 +31,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums；**本地事件契约** `IVivLocalEventBus` / `IVivLocalEventScope` / `LocalEvent`（空标记基类）/ `IVivLocalEventHandler<TEvent>` / `LocalEventHandler<TEvent>`（零 Nana 依赖，业务 Core 直接引它写处理器）；**分布式锁契约** `IDistributedLock` —— 6 个方法的锁标识**统一是 `object key`**（不再有 `string lockKey` / `object key` 之分）：传 `string` 原样作 Redis Key（前缀调用方自己拼），其余类型由 **`LockKeyMagic`（同项目根，全仓唯一的锁 Key 生成处）** 归一化成 `lock:{...}`；段数固定的 Key 走 `LockKeyMagic.Join(prefix, parts)`（消费锁的 `nana:a:b:42` 就是它拼的，不是匿名对象 —— 对象那条路按属性名字母序拼，改个属性名就换了把锁）；**数据过滤器开关** `IDataFilter` + `IDataFilterScope`（泛型，标识是**过滤器类本身**：`Disable<SoftDeletedFilter>()` 放行已软删除的行、`Disable<TenantDataFilter>()` 跨租户读；一次关多条用 `Scope()`；实现落在 `Viv.Momo`，见 `### 读过滤器`）；**指标读取契约** `IVivMeter` + `VivMeterSnapshot`（实现落在 `Viv.Engine/Metrics/`，见 `### 指标读取（IVivMeter）`） |
 | `Viv.Delusion` | Utility library — `TypeScanMagic` (assembly type scanning), `ObjectMapper` (Emit + Expression-based), encryption, common extensions |
 | `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios |
-| `Viv.Engine` | **Core wiring hub** — `VivConfigLoader` 是 `VivOptions` 的全进程唯一绑定入口（`Load` 绑 IConfiguration 并写静态快照，`AddVivConfig` 再注册进 DI 并返回那份 `VivOptions`）；`VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup；**本地事件总线实现** `LocalEvents/`（`LocalEventBus` / `LocalEventHandlerInvoker<T>` / `LocalEventRegistration` / `LocalEventScope`）+ 两个触发点 `LocalEventFlushFilterAttribute`、`LocalEventFlushMiddleware`（**同目录**，本地事件一个文件夹全包）。⚠️ **目录／命名空间是复数 `LocalEvents`**：事件基类叫 `LocalEvent`，若目录同名，`Viv.Engine.LocalEvent` 这个命名空间会在 `Viv.Engine` 里把类型 `LocalEvent` 遮住，`LocalEvent` 一律解析成命名空间（CS0118，实测踩过）；**指标读取** `Metrics/VivMeter.cs`（常驻 `MeterListener` 收账，见 `### 指标读取（IVivMeter）`） |
+| `Viv.Engine` | **Core wiring hub** — `VivConfigLoader` 是 `VivOptions` 的全进程唯一绑定入口（`Load` 绑 IConfiguration 并写静态快照，`AddVivConfig` 再注册进 DI 并返回那份 `VivOptions`）；`VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup，加**第四种宿主** `VivAppBuilder`（实例门面，控制台 / WinForms / WPF，见 `### Startup: one-liner API & Worker & Gateway`）；**本地事件总线实现** `LocalEvents/`（`LocalEventBus` / `LocalEventHandlerInvoker<T>` / `LocalEventRegistration` / `LocalEventScope`）+ 两个触发点 `LocalEventFlushFilterAttribute`、`LocalEventFlushMiddleware`（**同目录**，本地事件一个文件夹全包）。⚠️ **目录／命名空间是复数 `LocalEvents`**：事件基类叫 `LocalEvent`，若目录同名，`Viv.Engine.LocalEvent` 这个命名空间会在 `Viv.Engine` 里把类型 `LocalEvent` 遮住，`LocalEvent` 一律解析成命名空间（CS0118，实测踩过）；**指标读取** `Metrics/VivMeter.cs`（常驻 `MeterListener` 收账，见 `### 指标读取（IVivMeter）`） |
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
 | `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server；**实体审计**（`ICreatedAt` / `ICreatedBy` / `IUpdatedAt` / `IUpdatedBy` 四个单字段能力接口，逐个 opt-in，由 `MomoDatabase` 自动盖章，见 `### Entity audit`）；**建表 DDL**（`Sync/SchemaSynchronizer` 按实体生成 CREATE/ALTER，双方言，见 `### Schema sync`）；**读过滤器**（`DataFilter/` —— `IMomoDataFilter` 抽象 + `TenantDataFilter`/`SoftDeletedFilter` 两条实现 + `MomoDataFilters.All` 静态清单；EF 全局查询过滤器与框架自有按主键 SQL 两处都遍历清单，加过滤器只写类、不改框架。`IDataFilter.Disable<TFilter>()` 逐条放行，见 `### 读过滤器`）；**缓存基类** `Base/DataAccessCacheBase<T>`（Cache-Aside，8 个业务仓储继承）—— **锁走 `IDistributedLock`，缓存读写走 `IRedisService`**，两条路径 Redis 故障都 catch 后回源数据库（锁那侧 Redis 故障被包成 `DistributedLockException`，得单独接一次）；取锁用 `AcquireLockWithRetryAsync` 并把参数压到 `maxRetryCount: 3, baseDelay/maxDelay: 20ms`（用默认的 5 次指数退避 = 约 3 秒，缓存击穿场景等不起））；**指标** `MomoMetrics`（Meter `Viv.Momo`，查询耗时 / 慢查询 / 库失败 / `EFMaxCount` 分流）+ **慢查询日志**（阈值 `DatabaseOptions.SlowQueryThresholdMs`，默认 1000，0 = 关），见 `### 慢查询与指标`；**链路追踪** span 走 `VivTracing`（`QueryTelemetry.Record` 一处覆盖 EF + Dapper），见 `### 链路追踪（自建 span）` |
 | `Viv.Nana` | Messaging — **两条平行的线**：① 跨进程 `NanaEvent` + `IVivEventPublisher` / `NanaEventPublisher` / `VivConsumer<T>`（Wolverine + RabbitMQ，fanout）② 进程内本地队列 `NanaLocalEvent` + `IVivLocalEventPublisher` / `NanaLocalEventPublisher` / `VivLocalConsumer<T>`（Wolverine local queue，点对点，两族互不引用）；Saga support with EF Core state persistence；**链路追踪** 发布侧 span 走 `VivTracing`（`NanaEventPublisher` 四个方法发 `mq.publish`，消费侧由 Wolverine 自带源），见 `### 链路追踪（自建 span）` |
@@ -40,7 +40,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Sandrone` | Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service` |
 | `Viv.Echo` | Service-to-service communication + **框架级 gRPC 宿主**（`Viv.Echo.Grpc`）— HTTP + gRPC 客户端 `VivGrpcInterceptor`/`AddVivGrpcClient`（支持服务发现；注入 x-viv-* 含 holder-id 并纳入签名）、服务端 `VivGrpcServerInterceptor`（验签后水合 `IVivContext` 并 `SetHolderId`）/`AddVivGrpcServer`/`AddVivGrpcKestrel`/`VivGrpcDiscovery`（自动发现 `[BindServiceMethod]` 实现类 + 注册 + 反射映射；REST + gRPC 分端口，见下） |
 | `Viv.Clockwork` | Background scheduling — `TickerQ` integration for cron/interval job execution with dashboard；**任务基类** `VivTickerJobBase`（子类 `[TickerFunction]` 入口走受保护的 `RunAsync`）+ `VivTickerJob.ExecuteAsync`：包一层 `IVivLocalEventScope`（成功 Flush / 失败 Discard），并硬校验开工前已有租户或系统租户快照 —— 定时任务不必自己管本地事件分发 |
-| `Viv.Cli` | **CLI framework** — `VivCliHost` (REPL loop + Spectre.Console.Cli `CommandApp`); `[VivCommand]` auto-discovery; built-in `Cmd_Clear`; `Out` (formatted output) and `InputMagic` (interactive input) utilities |
+| `Viv.Cli` | **CLI framework** — `VivCliHost` (REPL loop + Spectre.Console.Cli `CommandApp`); `[VivCommand]` auto-discovery; built-in `Cmd_Clear`; `Out` (formatted output) and `InputMagic` (interactive input) utilities；**命令走宿主容器**（`ScanCommands` 把命令类型写进宿主的 `IServiceCollection`，`CliTypeResolver` 从宿主 provider 开作用域解析，**一个命令一个作用域**；`new VivCliHost(options, services)` → `StartAsync` 之后 `UseContainer(provider)`，见 `### CLI commands (Viv.Cli)`）。只依赖 `Microsoft.Extensions.DependencyInjection.Abstractions`，**不认识 Autofac** |
 | `Viv.Forge` | **Source generator base library** — `VivSourceGenerator<TInfo>`（增量管线基类：候选筛选→语义提取→Collect→产出，异常兜底诊断）、`VivAttributeGenerator<TAttribute,TInfo>`（特性驱动基类，按全名匹配特性）、`SourceBuilder`（缩进/using 去重/auto-generated 头）、`SourceGenHelpers`（特性参数读取/标识符清理/字符串转义）。具体生成器标注 `[Generator]` 并继承基类，挂载到目标项目 `<ProjectReference OutputItemType="Analyzer">` |
 
 ---
@@ -66,6 +66,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Generators` | 应用专用源生成器（netstandard2.0，继承 `Viv.Forge` 基类，字符串全名匹配特性） |
 | `Viv.Meta` | 生成代码宿主（net10.0，挂 Viv.Forge + Viv.Generators 两个 Analyzer，业务引它拿生成类型） |
 | `Viv.ServiceProxy` | **业务侧 gRPC 实现层（服务自行 ProjectReference 挂 proto/示例，框架级装配走配置驱动）**：`Protos/tenant_grpc.proto` 契约（4 RPC 覆盖 unary/server-streaming/client-streaming/bidi）+ `Examples/TenantGrpcService` 示例实现 + `TenantGrpcClientDemo` 客户端用法示意；框架级能力（`AddVivGrpcServer`/`AddVivGrpcClient`/服务端租户拦截器/`AddVivGrpcKestrel`）已收进 `Viv.Echo`，宿主配 `EchoOption.GrpcOption` 后示例经 `VivGrpcDiscovery` 自动发现托管 |
+| `Viv.Toolbox` | **业务侧通用工具箱（控制台）**：`VivAppBuilder` 的第一个真实宿主，跑 `VivCliHost` 的 REPL。走 Apex 域的配置（`DIOption` 扫 `Viv.Apex.Core`、`EntityTypeOptions` 指 `Viv.Entity.Database.Apex`、库是 `viv_apex_master`），但 `NanaOption` / `OutboxOption` 都为 null —— 工具既不消费 MQ 也不该跟 Worker 抢发件箱；`SyncTableOnStartup: false` 且 `InboxOption.RetentionDays: 0`，启动路径不碰库。`Program.cs` 里 `VivCliHost` 先于 `AddVivApp` 构造、`StartAsync` 之后才 `UseContainer`，先后顺序是有意的（见 `### Startup: one-liner API & Worker & Gateway`）|
 
 **REST + gRPC 明文端口约束**：gRPC 需要 HTTP/2。明文下 `Http1AndHttp2` 只认 TLS/ALPN，不认 h2c prior-knowledge 前缀（Grpc.Net.Client 明文即发前缀）→ 回 `HTTP_1_1_REQUIRED`；严格 `Http2` 会把 HTTP/1.1 REST 打挂（400）。故 REST 与 gRPC 必须**分开端口**。**配置驱动（宿主零手工接线）**：appsettings.json 的 `VivOptions.EchoOption.GrpcOption`（`EnableServer` + `Port`）启用时，`AddVivApi` 自动调 `AddVivGrpcKestrel(port)`（`Viv.Echo.Grpc`：gRPC 端口绑严格 HTTP/2，并把 urls——`--urls`/`ASPNETCORE_URLS`/launchSettings——显式 `Listen` 回 HTTP/1.1；显式 `Listen` 会顶掉 urls 生成的端点，必须重绑，无 urls 回落 Kestrel 默认 5000；声明端口即自动调 `AddVivGrpcServer` 含租户上下文恢复拦截器）+ `VivGrpcDiscovery` 自动发现注册 gRPC 服务，`RunVivApi` 在 `MapControllers()` 后自动 `MapGrpcService<T>`。**自动发现约定**：grpc_csharp_plugin 生成的基类（如 `TenantGrpcServiceBase`）**不继承 `ServiceBase`**，以基类上的 `[BindServiceMethod]` 特性沿基类链判定（`VivGrpcDiscovery.FindServices` 先 `TypeScanMagic.ForceLoadReferencedAssemblies()` 强制加载懒加载程序集）。**Apex.Api 已配 7001、Herta.Api 配 7002**，示例 `TenantGrpcService` 自动托管（保留 ServiceProxy ProjectReference）；非 gRPC 宿主服务 `EchoOption.GrpcOption: null`（死属性 `EnableGrpc` 已移除）。测试用严格 Http2 的 Kestrel in-process server 验证。 |
 
@@ -127,8 +128,29 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.AddVivGateway();                      // 读 appsettings.json 的 VivOptions + viv.ratelimit.json；路由从 Aspire 服务发现自动生成
 builder.RunVivGateway(app => app.MapDefaultEndpoints());
+
+// ── 控制台 / WinForms / WPF 桌面程序 ────────────────
+var app = VivAppBuilder.Create(args);
+
+// 要接 DI 的命令宿主就得在这时候构造：容器是 AddVivApp 那一刻建起来的，
+// 之后再往 Services 里登记不会进容器
+var vivHost = new VivCliHost(new CliOptions { AppName = "..." }, app.Services);
+
+app.AddVivApp();                              // 自己的注册写在它之前：app.Services.AddSingleton<IFoo, Foo>()
+var provider = await app.StartAsync();        // 起宿主 + VivLocator.Initialize，返回根 provider
+vivHost.UseContainer(provider);               // 接上宿主容器，命令才解析得出依赖
+
+try { /* 跑 UI 或 REPL */ }
+finally { await app.StopAsync(); }
 ```
 
+- `VivAppBuilder`（`Viv.Engine/VivAppBuilder.cs`）是第四种宿主，给 API / Worker / Gateway 之外的场景用。它是实例门面而不是 starter：`Create(args)` → `AddVivApp()` → `StartAsync()` / `StopAsync()`，暴露 `Services` / `Configuration` / `Options` / `Provider`。`AddVivApp` 干的是 `AddVivApi` 里除 MVC 之外的那几件事（`AddVivConfig` → Autofac 根容器 → `AddViv` → Serilog → 编码注册）；`StartAsync` 是 Build → `VivLocator.Initialize` → `VivStartupSchemaSync.Run` → `IHost.StartAsync`。仓库里的实例是 `Viv.Toolbox`。
+- **两个方向都开**：`Services`（MS DI，Build 之前登记普通服务）与 `ConfigureContainer(Action<ContainerBuilder>)`（Autofac 那一层，模块 / 装饰器 / 泛型注册这些 MS DI 表达不了的）。容器是 `AutofacServiceProviderFactory` 自己 `new` 的，回调那一刻才拿得到，所以 `ConfigureContainer` 登记的东西攒在列表里、到 Build 时才回放。**`StartAsync` 之后容器已经建好了，再登记不会生效 —— 那种情况直接抛**，别让它变成无声失效。
+- `Provider` 是 `StartAsync` 之后的宿主容器，给 `new` 出来的窗体和控件用（构造注入够不着它们，只能回头找容器）。**要 Scoped 服务（`IMomoDbContext` / `IVivContext`）得自己 `CreateScope()`** —— 从根 provider 直接解析拿到的会是进程级那一份。
+- ⚠️ 桌面宿主必须显式 `ContentRootPath = AppContext.BaseDirectory`（`VivAppBuilder` 构造里已写）：从快捷方式启动时 cwd 是随机的，不指程序目录的话 `appsettings.json` 静默读不到，全部配置回落默认值。反过来说，**测试进程的输出目录里只要有被引用项目带过来的 `appsettings.json`，`VivAppBuilder` 就会加载它** —— 用例要断言配置得先 `Configuration.Sources.Clear()`。
+- ⚠️ `VivLocator.Initialize` 的 `_initialized` 是永不重置的静态量，第二次调用直接抛 `请勿重复初始化！`，所以一个进程只允许 `StartAsync` 一次。`VivAppBuilder` 自己也挡了第二次 `StartAsync`。测试因此不起真宿主（与仓库既有的启动期测试同一口径），端到端验证靠真跑 `Viv.Toolbox`。
+- `SetVivContext` / `ClearVivContext` 给桌面程序的登录流程用：写的是 **Singleton** 的 `IVivContextAccessor` 上的 `AsyncLocal`，不是 Scoped 的 `IVivContext`（后者从根 provider 解析在 `ValidateScopes` 下直接抛）。值随 ExecutionContext 往下流，哪个线程调就只对那条线程的后续可见 —— 登录成功后要在主线程调一次。没 `StartAsync` 就调会抛 `InvalidOperationException`。
+- 控制台工具不想在启动时碰库：`InboxOption.RetentionDays` 配 0（`InboxDispatcher.ExecuteAsync` 开局就先跑一轮清理，配 0 时直接返回），`DatabaseOption.SyncTableOnStartup` 保持 `false`，工具就不该改表结构。
 - `AddVivApi` / `AddVivWorker` handle config load, Autofac setup, `AddViv()`, MVC/filters, CORS, Swagger, and encoding registration.
 - `RunVivApi` handles Build → VivLocator → **`UseForwardedHeaders`**（信任网关透传的 `X-Forwarded-Proto/Host/For`，避免 `UseHttpsRedirection` 把浏览器 302 甩出网关直连下游）→ Swagger UI (dev) → middleware pipeline → Run. Accepts an `Action<WebApplication>? configure` for custom endpoints (`UseTickerQ()`, `MapHub()`, etc.).
 - `RunVivWorker` handles Build → VivLocator → Run.
@@ -150,7 +172,7 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 
 ### Configuration: `VivOptions` node in `appsettings.json`
 
-Every API and Worker project carries a `VivOptions` node in its `appsettings.json`. It is bound via `configuration.GetSection("VivOptions").Get<VivOptions>()`（MS ConfigurationBinder）by `VivConfigLoader.Load(IConfiguration)`，which also writes the static `VivEngine.VivOptions` snapshot. Sub-sections drive all subsystem wiring:
+Every API / Worker / 工具箱 project carries a `VivOptions` node in its `appsettings.json`. It is bound via `configuration.GetSection("VivOptions").Get<VivOptions>()`（MS ConfigurationBinder）by `VivConfigLoader.Load(IConfiguration)`，which also writes the static `VivEngine.VivOptions` snapshot. Sub-sections drive all subsystem wiring:
 
 > **绑定入口全进程只有一个（`VivConfigLoader.Load`）**：绑一次、快照一次、注册一次。以前三个 starter 各自 `LoadVivConfig` + `AddVivConfig` 把同一份 appsettings.json 绑两遍、`VivEngine` 再深拷一份，最终是三份互不相干的对象图 —— 改配置只落在其中一份上。现在 starter 里就一行 `var vivOptions = builder.AddVivConfig();`，它内部调 `Load`（绑定 + 写 `VivEngine.VivOptions`）再 `RegisterOptions`，**返回那份 VivOptions** 供后续 `VivAutofacRegister(vivOptions)` / `AddViv(vivOptions)` / JWT / CORS / gRPC 判据复用。快照就是绑定产物本身，**不再是深拷贝副本**。
 >
@@ -561,3 +583,21 @@ public class Cmd_Migrate : AsyncCommand
 - Support aliases: `[VivCommand("clear, cl", "清除屏幕")]` → help displays `清除屏幕（别名: cl）`.
 - Built-in commands: `clear` (aliased `cl`) always available.
 - Interactive input via `InputMagic.GetInput()` / `.Confirm()` / `.Select()`; formatted output via `Out.Println()` / `.PrintlnError()` / `.PrintlnFormatJson()`.
+
+**命令注入依赖（`CliTypeRegistrar` / `CliTypeResolver`）**：命令默认是 Spectre 自己的无参构造，什么都注入不了。要注入就把宿主容器的 `IServiceCollection` 传给 `VivCliHost`，StartAsync 之后 `UseContainer(provider)` 接上宿主 provider：
+
+```csharp
+var vivHost = new VivCliHost(new CliOptions { AppName = "..." }, builder.Services);  // 必须在 AddVivApp 之前
+builder.AddVivApp();
+var provider = await builder.StartAsync();
+vivHost.UseContainer(provider);
+```
+
+- **命令类型由 `ScanCommands` 写进宿主注册表**（`AddTransient`），`CliTypeResolver` 从宿主 provider 解析 —— 这是命令注入得到 `IMomoDbContext` 这类服务的唯一来源。**Spectre 不替我们登记命令类型**，它经 registrar 登记的只有自己那两个组件（见下）。
+- **一条命令一个作用域**：`VivCliHost.RunAsync` 在 `_app.RunAsync` 前后调 `CliTypeResolver.BeginScope` / `EndScope`。命令注入的 `IMomoDbContext` 是 Scoped，从根 provider 解析会拿到进程级那一份、永不释放，事务状态还会在命令之间串。
+- **登记用 `AddTransient` 不是官方示例的 `AddSingleton`**：同一条作用域的理由 —— 单例命令会把第一次解析到的 Scoped 依赖一直攥着。
+- **`VivCliHost` 必须在 `AddVivApp` 之前构造**：`ScanCommands` 是把命令类型写进宿主注册表的那一刻，容器一建好再登记就是无声失效。漏登的表现是命令看着一切正常、依赖全解析不出来，所以 `UseContainer` 会用 `IServiceProviderIsService`（只问「登记过没有」、不去实例化）验一次，缺了直接抛并点出是哪条命令、该在什么时候构造。`IServiceProviderIsService` 拿不到（非 MS DI 的 provider）就跳过这道检查，不做没有依据的判断。
+- **🔴 `CliTypeRegistrar` 一律不写宿主的 `IServiceCollection`** —— 登记留在解析器自己那儿（`CliTypeResolver.Add`，一个 `Type → 工厂` 的表），`Resolve` 先查它、没有再落宿主作用域。**这不是洁癖，是必须**：`CommandApp.RunAsync` → `CommandExecutor.ExecuteAsync` **每跑一条命令**都要 `registrar.RegisterInstance(typeof(IConfiguration), ...)` 一次，而宿主注册表在 `StartAsync` 里 `Build()` 那一刻就被 MS DI 封成只读，照官方示例写宿主会**第一条命令就抛** `InvalidOperationException: The service collection cannot be modified because it is read-only.`，Spectre 把它渲染成一行 `Error: ...` 打在 REPL 里。另一处 `Register(typeof(DefaultPairDeconstructor))` 发生在 `CommandApp` 的**构造函数**里，所以 `CommandApp` 必须早于容器建好（即 `VivCliHost` 早于 `AddVivApp`）—— 那一条走的是 `ActivatorUtilities.CreateInstance`，不依赖 Autofac。
+  顺带纠一条：**`IServiceCollection.IsReadOnly` 在真宿主上确实是 true**（实测 `AutofacServiceProviderFactory` + `HostApplicationBuilder.Build()` 这条路会封），只有 `new ServiceCollection().BuildServiceProvider()` 不封 —— 早先拿后者做探针得出过「这护栏不触发」的结论，是错的。
+- **Spectre 的 `ITypeRegistrar` 官方示例其余部分也不能照搬**：它 `Build()` 里自己 `BuildServiceProvider()`、`Dispose()` 里自己拆，而 Spectre **每条命令跑一次 `RunAsync`、每次都调一次 `Build()` 并释放返回的解析器** —— 照搬会在 REPL 里每敲一条命令建拆一个容器，宿主容器第一条命令下去就没了（`VivLocator` 指着的就是那个）。所以这里 `Build()` 返回的是**复用宿主的解析器**，`Dispose()` 只收自己那层作用域。
+- `Viv.Cli` 只依赖 `Microsoft.Extensions.DependencyInjection.Abstractions`，**不认识 Autofac**；`AutofacServiceProviderFactory` 由宿主（`VivAppBuilder` / `AddVivApi`）提供。
