@@ -67,4 +67,7 @@
     <Project Path="src/Vivian/Viv.Herta.Tests/Viv.Herta.Tests.csproj" />
     <Project Path="src/Vivian/Viv.ServiceProxy.Tests/Viv.ServiceProxy.Tests.csproj" />
   </Folder>
+  <Folder Name="/src/Vivian/Tools/">
+    <Project Path="src/Vivian/Viv.Toolbox/Viv.Toolbox.csproj" Id="7488644d-29c2-40ea-a16e-327be628548e" />
+  </Folder>
 </Solution>

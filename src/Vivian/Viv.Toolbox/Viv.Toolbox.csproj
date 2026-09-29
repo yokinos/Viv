@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Banshee\Viv.Cli\Viv.Cli.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
+    <!-- DIOption 扫描与 EntityTypeOptions 都按程序集名找，业务程序集必须在引用图里 -->
+    <ProjectReference Include="..\Viv.Apex.Core\Viv.Apex.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
