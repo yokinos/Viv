@@ -26,26 +26,37 @@ namespace Viv.Momo.Core
     public class MomoDatabase : IDisposable
     {
         protected readonly IVivContext _vivContext;
+
         protected DatabaseOptions _databaseOptions;
+
         protected readonly ILoggerContract _logger;
+
         protected readonly IDatabaseOptionsProvider _optionsProvider;
+
         protected EFAppContext? _writeDbContext;
+
         protected EFAppContext? _readDbContext;
+
         protected IDbTransaction? _transaction;
 
         protected int _timeOut = 30;
+
         protected static readonly HashSet<string> _primaryKeys = ["Id"];
 
         /// <summary>
         /// 查询耗时与慢查询判据。EF 那条路随 EFAppContext 下发到 DbCommandInterceptor，
         /// Dapper 的执行点在子类 MomoDatabaseContext 里直接用。
-        /// 与 _databaseOptions 一样在 SetOptions 里赋值（构造函数调得到，编译器看不出来）
+        /// 与 _databaseOptions 一样在 SetOptions 里赋值
         /// </summary>
         protected QueryTelemetry _queryTelemetry = null!;
 
         private readonly Lock _lock = new();
-        // 串行化异步 BeginTransactionAsync 的 check+begin+set（Monitor 无法跨 await 持有，用信号量替代）
+
+        /// <summary>
+        /// 串行化异步 BeginTransactionAsync 的 check+begin+set（Monitor 无法跨 await 持有，用信号量替代）
+        /// </summary>
         private readonly SemaphoreSlim _transactionSemaphore = new(1, 1);
+
         private bool _disposed = false;
 
         public MomoDatabase(IVivContext vivContext, ILoggerContract logger, IDatabaseOptionsProvider optionsProvider)
