@@ -8,11 +8,6 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-    <!-- NU1608：WolverineFx.RuntimeCompilation 传递的 JasperFx.RuntimeCompiler 5.0.0
-         经 Microsoft.CodeAnalysis.Scripting 精确要求 CSharp =5.0.0，与中央钉的 5.9.0 冲突。
-         该警告是 CPM 传递钉版本的预期行为，解析结果与未启用 CPM 时一致
-         （NuGet 本就取最高版本），静默之。 -->
-    <NoWarn>$(NoWarn);NU1608</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <!-- ── ASP.NET Core 框架 ─────────────────────────────── -->
@@ -86,8 +81,11 @@
     <PackageVersion Include="Autofac.Extras.DynamicProxy" Version="8.1.0" />
     <PackageVersion Include="Castle.Core.AsyncInterceptor" Version="2.1.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.9.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="5.9.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+    <!-- Roslyn 两件刻意压在 5.0.0：WolverineFx 传递的 JasperFx.RuntimeCompiler 经
+         Microsoft.CodeAnalysis.Scripting 精确要求 CSharp =5.0.0，抬高一档就出 NU1608。
+         直接引它们的只有两个源生成器项目，生成器引最低支持版本本就是惯例。 -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="5.0.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
     <PackageVersion Include="MiniExcel" Version="1.46.0" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="SkiaSharp" Version="4.153.0" />
