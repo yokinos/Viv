@@ -44,7 +44,7 @@ namespace Viv.Momo.Converter
         }
 
         // 获取表达式的常量值（支持闭包变量）
-        private object GetConstantValue(Expression expr)
+        private static object GetConstantValue(Expression expr)
         {
             if (expr is ConstantExpression constant)
                 return constant.Value;
