@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Viv.Aoi.Paradox;
 
 namespace Viv.Aoi.Tests
@@ -460,6 +461,105 @@ namespace Viv.Aoi.Tests
             Assert.True(instance.Disposed);
         }
 
+        [Fact]
+        public void 用接口或抽象类当实现注册抛异常()
+        {
+            using var container = new VivContainer();
+
+            // 泛型那条路编译期就拦住了，这两条是给 Type 那条路补的 —— 放过去的话
+            // 要等到解析时才炸在「没有可用的公共构造函数」上，离出错的地方很远。
+            Assert.Throws<ArgumentException>(() => container.AddScoped(typeof(IBar), typeof(IBar)));
+            Assert.Throws<ArgumentException>(() => container.AddScoped(typeof(IBar), typeof(AbstractBar)));
+            Assert.Throws<ArgumentException>(() => container.AddScoped(typeof(IBar)));
+        }
+
+        [Fact]
+        public void 注册容器自身的契约抛异常()
+        {
+            using var container = new VivContainer();
+
+            // 这些契约解析时直接给实例、压根不看描述符表，注册进去永远不会生效。
+            Assert.Throws<ArgumentException>(() => container.AddSingleton(typeof(IServiceProvider), typeof(FakeProvider)));
+            Assert.Throws<ArgumentException>(() => container.AddSingleton(typeof(IVivScope), typeof(VivContainer)));
+            Assert.Throws<ArgumentException>(() => container.AddSingleton(typeof(IServiceScope), typeof(VivContainer)));
+        }
+
+        [Fact]
+        public void 同一个实例注册在两个契约上只释放一次()
+        {
+            var container = new VivContainer();
+            var shared = new DualContractThing();
+
+            container.AddSingleton<IFoo>(shared);
+            container.AddSingleton<IBar>(shared);
+
+            container.Dispose();
+
+            Assert.Equal(1, shared.DisposeCount);
+        }
+
+        [Fact]
+        public void 取值相等但不同实例各自释放一次()
+        {
+            var container = new VivContainer();
+            var first = new EquatableDisposable();
+            var second = new EquatableDisposable();
+
+            container.AddSingleton<IFoo>(first);
+            container.AddSingleton<IBar>(second);
+
+            // 按引用去重。拿 Equals 判重的话这两个对象会被并成一条，第二个就漏了 ——
+            // 实例还在，只是没人释放它。
+            Assert.Equal(first, second);
+
+            container.Dispose();
+
+            Assert.Equal(1, first.DisposeCount);
+            Assert.Equal(1, second.DisposeCount);
+        }
+
+        [Fact]
+        public void 两个释放接口都实现时同步释放也走异步()
+        {
+            var container = new VivContainer();
+            var both = new BothDisposable();
+
+            container.AddSingleton(both);
+            container.Dispose();
+
+            Assert.Equal(1, both.AsyncDisposeCount);
+            Assert.Equal(0, both.SyncDisposeCount);
+        }
+
+        [Fact]
+        public async Task 并发解析与释放不会交出没人释放的实例()
+        {
+            // 窄窗口压力测试：线程在 GetService 那次「已释放」检查和构造锁之间被换下去，
+            // 释放正好在这中间整个跑完 —— 那时建出来的实例会发布进一份已经清空、
+            // 再也不会有人来收的缓存。窗口只有几十纳秒，多跑几轮是唯一能碰到它的办法。
+            for (int round = 0; round < 200; round++)
+            {
+                var container = new VivContainer();
+                container.AddSingleton<DisposableSelf>();
+
+                DisposableSelf? resolved = null;
+                var resolve = Task.Run(() =>
+                {
+                    try { resolved = (DisposableSelf?)container.GetService(typeof(DisposableSelf)); }
+                    catch (ObjectDisposedException) { }
+                });
+
+                var dispose = Task.Run(container.Dispose);
+
+                await Task.WhenAll(resolve, dispose);
+
+                // 要么解析被释放挡下来，要么交出去的实例必须已经释放 ——
+                // 不能有第三种结果：实例交出去了，却再没人会释放它。
+                if (resolved is not null)
+                    Assert.True(resolved.Disposed, $"第 {round} 轮：交出去的实例没有被释放");
+            }
+        }
+
         /// <summary>
         /// 等一个解析任务在限定时间内完成。
         /// </summary>
@@ -497,6 +597,59 @@ namespace Viv.Aoi.Tests
     public sealed class Bar : IBar { }
 
     public sealed class Bar2 : IBar { }
+
+    /// <summary>抽象实现，用来验证注册期的实现类型校验。</summary>
+    public abstract class AbstractBar : IBar { }
+
+    /// <summary>只用来当 <see cref="IServiceProvider"/> 的实现，验注册期的自身契约校验。</summary>
+    public sealed class FakeProvider : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
+    }
+
+    /// <summary>两个契约共用一个实例，释放只该发生一次。</summary>
+    public sealed class DualContractThing : IFoo, IBar, IDisposable
+    {
+        public int DisposeCount { get; private set; }
+
+        public void Dispose() => DisposeCount++;
+    }
+
+    /// <summary>与同类实例互相 Equals，用来钉住释放清单是按引用去重的。</summary>
+    public sealed class EquatableDisposable : IFoo, IBar, IDisposable
+    {
+        public int DisposeCount { get; private set; }
+
+        public void Dispose() => DisposeCount++;
+
+        public override bool Equals(object? obj) => obj is EquatableDisposable;
+
+        public override int GetHashCode() => 0;
+    }
+
+    /// <summary>两个释放接口都实现，用来钉住同步路径也优先走 DisposeAsync。</summary>
+    public sealed class BothDisposable : IDisposable, IAsyncDisposable
+    {
+        public int SyncDisposeCount { get; private set; }
+
+        public int AsyncDisposeCount { get; private set; }
+
+        public void Dispose() => SyncDisposeCount++;
+
+        public ValueTask DisposeAsync()
+        {
+            AsyncDisposeCount++;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>无依赖的可释放类型，并发那条压力测试用。</summary>
+    public sealed class DisposableSelf : IDisposable
+    {
+        public bool Disposed { get; private set; }
+
+        public void Dispose() => Disposed = true;
+    }
 
     /// <summary>契约与实现是同一个类型，用于验证自注册那组重载。</summary>
     public sealed class SelfRegistered { }

@@ -172,14 +172,32 @@ namespace Viv.Aoi.Tests
         [InlineData(typeof(IServiceProvider))]
         [InlineData(typeof(IServiceProviderIsService))]
         [InlineData(typeof(ISupportRequiredService))]
-        [InlineData(typeof(IServiceScope))]
-        [InlineData(typeof(IVivScope))]
         [InlineData(typeof(IVivContainer))]
         public void IsService认自身契约(Type contract)
         {
             using var container = new VivContainer();
+            using var scope = container.CreateScope();
 
             Assert.True(container.IsService(contract));
+            Assert.True(scope.IsService(contract));
+        }
+
+        [Fact]
+        public void 作用域契约只认在作用域上()
+        {
+            using var container = new VivContainer();
+            using var scope = container.CreateScope();
+
+            // 根容器不是一层作用域。在它上面认下这两个契约、又给它实例的话，拿的人会
+            // 把根当成随手可释放的一层，一个 using 就把整个容器连单例一起拆了。
+            Assert.False(container.IsService(typeof(IServiceScope)));
+            Assert.False(container.IsService(typeof(IVivScope)));
+            Assert.Null(container.GetService(typeof(IServiceScope)));
+            Assert.Null(container.GetService(typeof(IVivScope)));
+
+            Assert.True(scope.IsService(typeof(IServiceScope)));
+            Assert.True(scope.IsService(typeof(IVivScope)));
+            Assert.Same(scope, scope.GetService(typeof(IVivScope)));
         }
 
         [Fact]

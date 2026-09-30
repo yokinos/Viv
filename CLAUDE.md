@@ -215,10 +215,22 @@ Business-layer services and repositories are registered via **type scanning** dr
 - **重复注册默认抛异常**，注册方法上的 `bool allowOverride = false` 传 `true` 可以让后来的顶掉先前的（双参泛型 / 双参 Type / 实例 / 工厂 四组各带一个，自注册那组不带 —— 契约就是实现自己，拿它覆盖等于新增一个契约）。覆盖是**装配期**的动作，边界卡在「契约有没有产生过实例」上：产生了就抛。判据不能只看 `_singletons` 里有没有 —— 实例注册从登记那刻就压在那儿，它本来就现成，顶掉没有构造过程可言，所以要连同旧描述符的 `Instance is null` 一起判。**覆盖实例注册时必须顺手把 `_singletons` 里那份摘掉**，否则解析先撞上它、新描述符根本没机会被看到（只换描述符 = 覆盖了却没生效，编译与测试都不会吭声）；被顶掉的旧实例仍留在释放清单里 —— 登记那刻所有权就转移给容器了，半路摘掉等于让它没人管。作用域内的实例缓存根容器看不见，所以 Scoped 那一档的冻结判不出来，只能靠「覆盖在启用前做」这个约定。
 - **唯独没有 `IServiceScopeFactory`**，只能由 `ServiceProviderVivContainer`（`Paradox/` 里的适配器）承担：容器自己的 `CreateScope` 返回更窄的 `IVivScope`，而 **C# 不允许靠返回类型协变去隐式实现接口成员（CS0738）**，两个 `CreateScope` 只能是两个方法。适配器就是为补这一个接口而存在，别把它当多余的一层；它 `Dispose` 会连同被包装的容器一起释放。适配器 `CreateScope()` 直接返回容器原生的 `IVivScope` —— 那本身就是完整的 `IServiceScope`，再套一层是白加对象。
 - **🔴 fallback 必须是一层作用域一份，不能都指向 fallback 的根**：`Resolve` 的未命中分支写的是 `scope._fallback`（`CreateScope` 时从 fallback 的 `IServiceScopeFactory` 另开一层），不是 `_root._fallback`。写成根的话，从 fallback 解析出来的 Scoped 全落在它的根上，**每个 Viv 作用域拿到的都是同一个实例，Scoped 静默退化成单例**，编译与测试都不会吭声。`VivContainerMsDiTests` 里两条「两个作用域拿到的 Scoped 不是同一个」专钉这个（容器一条、适配器一条）。
-- **🔴 MS DI 的具体 `ServiceProvider` 自己并不实现 `IServiceProviderIsService`** —— 实现它的是内部的 `CallSiteFactory`，只能从 provider 里解析出来（实测 `asProvider is IServiceProviderIsService` 为 **False**，`ISupportRequiredService` 也是同一个形状）。所以 `IsService` 是**先按实例问、问不到再 `GetService<IServiceProviderIsService>()` 解析一次**；只写 `is` 判断的话对真 MS DI provider 恒为 false，委派整个静默失效 —— 这条单测抓出来过一次。
-- **容器自身的契约不走注册表**：`IServiceProvider` / `IServiceProviderIsService` / `ISupportRequiredService` / `IServiceScope` / `IVivScope` 解析回当前实例，`IVivContainer` 一律给根容器。`IsService` 认这些契约，且**只问不建**（不查释放状态，也不构造任何实例）。
+- **🔴 MS DI 的具体 `ServiceProvider` 自己并不实现 `IServiceProviderIsService`** —— 实现它的是内部的 `CallSiteFactory`，只能从 provider 里解析出来（实测 `asProvider is IServiceProviderIsService` 为 **False**，`ISupportRequiredService` 也是同一个形状）。所以建容器时由 `ToIsService` **先按实例问、问不到再 `GetService<IServiceProviderIsService>()` 解析一次**，结果存进 `_fallbackIsService`（作用域构造里也要初始化一份，它那层的 fallback provider 与根上不是同一个）；只写 `is` 判断的话对真 MS DI provider 恒为 false，委派整个静默失效 —— 这条单测抓出来过一次。不再每次调用重新解析：`IsService` 正是被按参数类型反复问的那个。
+- **容器自身的契约不走注册表**，它们集中在 `_selfContractTypes`（静态 `HashSet<Type>`）—— **注册期校验与 `ResolveSelf` 共用这一份**，分成两份写迟早有一边多一条少一条，而那种漂移没有任何编译期提示。`IServiceProvider` / `IServiceProviderIsService` / `ISupportRequiredService` 解析回当前实例，`IVivContainer` 一律给根容器。`IsService` 认这些契约，且**只问不建**（不查释放状态，也不构造任何实例）。
+- **🔴 `IServiceScope` / `IVivScope` 只在作用域上给实例，根容器上返回 `null`**：根不是一层作用域。给出来的话拿的人会把它当成随手可释放的一层，**一个 `using` 就把整个容器连里面的单例一起拆了**，而它拿的时候完全看不出这一层就是根。`IsService` 同步收窄（根上问这两个也是 `false`），有单测钉着。
+- **在容器自身的契约上注册直接抛 `ArgumentException`**（不是静默忽略）：解析那一步直接给实例、根本不看描述符表，注册进去永远不会生效，留着就是「注册成功了但解析出的是别的东西」。
+- **注册期能在静态上判定的错误一律当场抛，不留到解析**：契约与实现之间没有实现关系、**实现是接口或抽象类**（`Type.IsAbstract` 对接口同样是 true，一条判据把两者都盖住；泛型那条路编译期能拦住，`Type` 那条拦不住，放过去要到解析时才炸在「没有可用的公共构造函数」上，离出错的地方很远）。同一把尺子也写在 `IVivContainer` 的类注释里。
 - **`IEnumerable<T>` 不支持跨容器合并** —— 本容器没注册就直接转交 fallback，拿回来的是 fallback 那边的集合（多半是空）。这是有意的，别指望把两边的注册拼起来。
 - **两条 `GetService(Type)` 重载标了 `new`**（CS0108）：签名与继承来的 `IServiceProvider.GetService` 逐字相同，重写一遍只为挂那两段说明，实现方一个方法同时满足两者。
+
+**并发与释放（一轮加固的结论，改之前先读）**：
+
+- **🔴 释放状态要在构造锁里重查一次**：`GetService` 入口那次 `ThrowIfDisposed` 在构造锁**外面**，线程可能在排队等锁的过程中被换下去，释放正好在这中间整个跑完 —— 之后构造出来的实例会发布进一份已经清空、再也不会有人来收的缓存，**永远不会被释放**。`ResolveSingleton` / `ResolveScoped` 各自在拿到 `_root._constructionSync` / `scope._constructionSync` 之后重查一次（状态归谁就查谁）。窗口只有几十纳秒，`并发解析与释放不会交出没人释放的实例` 是两百轮的压力测试 —— 去掉那一行它**每轮都失败**。
+- **释放清单按引用去重，不是按 `Equals`**：两个契约用同一个实例注册（或同一实例既被注册又被解析出来）时会登记两次，默认比较器会把**取值相等但不同的两个对象**并成一条 —— 那样第二次释放就没了，而实例本身还在。用 `ReferenceEqualityComparer.Instance`。
+- **两个释放接口都实现的实例，同步路径也走 `DisposeAsync`**：两条路径因此是同一条规则（有异步清理就用它）。代价是同步路径要阻塞等一下 —— 释放发生在停机，等得起；反过来让同步路径优先 `Dispose` 的话，那种只把 `Dispose` 留成空壳的实现会被静默漏掉一次清理，还看不出是哪一条。`_fallbackScope` 那条与实例那一段同样 `try/catch`（同步路径原先没包，异步路径包了）。
+- **构造函数个数打平时按参数类型名定序，不用 `MetadataToken`**：元数据顺序只在同一个编译产物里稳定，重编一次就可能换一个构造函数，而换掉了没有任何提示。
+- **解析全程同步是这两处 `[ThreadStatic]`（`_resolutionStack` / `_singletonDepth`）的前提**：工厂委托与构造函数注入都不会 `await`，中途没有把线程让出去的地方。哪天要支持异步工厂，这两个得一起换成 `AsyncLocal`，否则 `await` 回来就落到别人的栈上了。
+- **根容器上也能解析 Scoped，那份实例落在根自己的 `_scopedInstances` 里、活得和容器一样久** —— 但那**不是**「所有作用域共用一份」：子作用域各自建自己的，根上这份谁都碰不到。反过来说从根解析 Scoped 不会污染子作用域，只是拿到一个比预期长命的实例。
 
 ### Messaging (Nana)
 

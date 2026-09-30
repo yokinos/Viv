@@ -15,6 +15,11 @@ namespace Viv.Aoi.Paradox;
 /// 同一个契约只登记一个实现，重复注册默认抛异常。注册方法上的 allowOverride 传 true 可以让
 /// 后来的顶掉先前的，但那属于装配期的动作：契约一旦产生过实例就覆盖不动了（解析先撞上缓存
 /// 里那份），所以那种情况直接抛，不留下「覆盖了却没生效」的静默失效。
+///
+/// 凡是能在注册期判定的错误一律当场抛，不留到解析时才炸：实现与契约之间没有实现关系、
+/// 实现是接口或抽象类（<see cref="Type"/> 那条路编译期拦不住），以及在容器自身的契约上
+/// 注册 —— <see cref="IServiceProvider"/>、<see cref="IServiceScope"/>、<see cref="IVivScope"/>、
+/// <see cref="IVivContainer"/> 这些解析时直接给实例、压根不看注册表，注册进去永远不会生效。
 /// </remarks>
 public interface IVivContainer : IServiceProvider, IServiceProviderIsService, ISupportRequiredService, IServiceScope, IDisposable, IAsyncDisposable
 {

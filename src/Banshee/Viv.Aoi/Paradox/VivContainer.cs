@@ -49,6 +49,13 @@ namespace Viv.Aoi.Paradox
         private readonly Dictionary<Type, object> _singletons;
 
         /// <summary>Scoped 实例缓存（每个作用域独立）。</summary>
+        /// <remarks>
+        /// 根容器上也有一份，直接从根解析 Scoped 时实例落在这儿，活得和容器一样久。
+        ///
+        /// 那不等于「所有作用域共用一份」—— 子作用域各自建自己的，根上这份谁都碰不到。
+        /// 所以从根解析 Scoped 不会污染子作用域，只是拿到一个比预期长命的实例；
+        /// 真要跨作用域共用一份，就得靠自己持有的引用了。
+        /// </remarks>
         private readonly Dictionary<Type, object> _scopedInstances;
 
         /// <summary>需要释放的实例列表（Singleton 在根容器，Scoped 在各自作用域）。</summary>
@@ -73,14 +80,46 @@ namespace Viv.Aoi.Paradox
         /// </summary>
         private readonly IServiceScopeFactory? _fallbackFactory;
 
+        /// <summary>从 fallback 上取一次的 IServiceProviderIsService，问「有没有」时用。</summary>
+        /// <remarks>
+        /// 建容器时求一次就够：它不是每次解析都会变的东西。不缓存的话 <see cref="IsService"/>
+        /// 每次调用都要在 fallback 上解析一回，而那个方法正是按参数类型反复被问的。
+        /// </remarks>
+        private readonly IServiceProviderIsService? _fallbackIsService;
+
         /// <summary>每类型缓存的构造函数，省掉每次解析都跑一遍反射。</summary>
+        /// <remarks>
+        /// 没有上界，按类型数增长。生产里类型总数有限，够用；真要在运行时造类型
+        /// （Reflection.Emit、动态代理），这里才会一直涨，那时再加淘汰。
+        /// </remarks>
         private static readonly ConcurrentDictionary<Type, ConstructorInfo> _constructorCache = new();
+
+        /// <summary>
+        /// 容器自身的契约，不走注册表，注册它们也不生效。
+        /// </summary>
+        /// <remarks>
+        /// 这份清单是 <see cref="ResolveSelf"/> 与注册期校验共用的唯一来源 —— 分成两份写，
+        /// 迟早会有一边多一条少一条，而那种漂移没有任何编译期提示。
+        /// </remarks>
+        private static readonly HashSet<Type> _selfContractTypes = new()
+        {
+            typeof(IServiceProvider),
+            typeof(IServiceProviderIsService),
+            typeof(ISupportRequiredService),
+            typeof(IServiceScope),
+            typeof(IVivScope),
+            typeof(IVivContainer),
+        };
 
         /// <summary>
         /// 正在构造中的服务类型，按进入顺序排列（线程本地）。
         ///
         /// 用 List 而不是 HashSet 是因为链要按顺序打出来给人看，而 HashSet 的枚举顺序不保证。
         /// 链本身很短，Contains 的线性查找可以忽略。
+        ///
+        /// 它与下面那个 _singletonDepth 都是线程本地量，这依赖「解析全程同步」这一条：
+        /// 工厂委托与构造函数注入都不会 await，中途没有把线程让出去的地方。哪天要支持
+        /// 异步工厂，这两个得一起换成 AsyncLocal，否则 await 回来就落到别人的栈上了。
         /// </summary>
         [ThreadStatic]
         private static List<Type>? _resolutionStack;
@@ -116,7 +155,24 @@ namespace Viv.Aoi.Paradox
             _isScope = false;
             _fallback = fallback;
             _fallbackFactory = fallback?.GetService<IServiceScopeFactory>();
+            _fallbackIsService = ToIsService(fallback);
         }
+
+        /// <summary>
+        /// 从一份 fallback 上拿「有没有这个服务」的判据。
+        /// </summary>
+        /// <remarks>
+        /// MS DI 的具体 ServiceProvider 自己并不实现 <see cref="IServiceProviderIsService"/> ——
+        /// 实现它的是内部的 CallSiteFactory，只能从 provider 里解析出来（ISupportRequiredService
+        /// 也是同一个形状，直接 is 一下恒为 false）。所以先按实例问，问不到再解析一次。
+        /// </remarks>
+        private static IServiceProviderIsService? ToIsService(IServiceProvider? provider)
+            => provider switch
+            {
+                IServiceProviderIsService direct => direct,
+                null => null,
+                _ => provider.GetService<IServiceProviderIsService>(),
+            };
 
         /// <summary>
         /// 由根容器创建一个作用域。
@@ -133,6 +189,7 @@ namespace Viv.Aoi.Paradox
             _fallbackScope = fallbackScope;
             _fallback = fallbackScope?.ServiceProvider ?? root._fallback;
             _fallbackFactory = root._fallbackFactory;
+            _fallbackIsService = ToIsService(_fallback);
         }
 
         /// <summary>
@@ -242,11 +299,28 @@ namespace Viv.Aoi.Paradox
             if (_isScope)
                 throw new NotSupportedException("不能在作用域中注册服务，请在根容器上注册。");
 
+            if (_selfContractTypes.Contains(descriptor.ServiceType))
+            {
+                // 解析那一步直接给实例，根本不看描述符表，所以注册进去只会永远不生效。
+                // 这里挡下来，别让它变成「注册成功了但解析出的是别的东西」。
+                throw new ArgumentException(
+                    $"服务 {descriptor.ServiceType.FullName} 是容器自身的契约，不走注册表。");
+            }
+
             if (descriptor.ImplementationType is not null
                 && !descriptor.ServiceType.IsAssignableFrom(descriptor.ImplementationType))
             {
                 throw new ArgumentException(
                     $"类型 {descriptor.ImplementationType.FullName} 未实现 {descriptor.ServiceType.FullName}。");
+            }
+
+            if (descriptor.ImplementationType?.IsAbstract == true)
+            {
+                // IsAbstract 对接口同样是 true，一条判据把接口与抽象类都盖住。
+                // 放过去的话构造时才炸在「没有可用的公共构造函数」上，离出错的地方很远，
+                // 而 Type 那条路本来就没法在编译期拦住。
+                throw new ArgumentException(
+                    $"类型 {descriptor.ImplementationType.FullName} 是接口或抽象类，不能作为实现注册。");
             }
 
             lock (_root._sync)
@@ -350,16 +424,9 @@ namespace Viv.Aoi.Paradox
                     return true;
             }
 
-            if (_fallback is null)
-                return false;
-
-            // MS DI 的具体 ServiceProvider 自己并不实现 IServiceProviderIsService —— 实现它的是内部的
-            // CallSiteFactory，只能从 provider 里解析出来（ISupportRequiredService 也是这个形状，
-            // 直接 is 一下恒为 false）。所以先按实例问，问不到再解析一次。
-            if (_fallback is IServiceProviderIsService direct)
-                return direct.IsService(serviceType);
-
-            return _fallback.GetService<IServiceProviderIsService>()?.IsService(serviceType) ?? false;
+            // 判据在建容器时取过一次就不动了（见 ToIsService）。这里不每次重新解析一遍：
+            // 这个方法正是被按参数类型反复问的那个，每次都去 fallback 上拧一下太亏。
+            return _fallbackIsService?.IsService(serviceType) ?? false;
         }
 
         /// <inheritdoc />
@@ -377,19 +444,19 @@ namespace Viv.Aoi.Paradox
         /// </summary>
         private object? ResolveSelf(Type serviceType)
         {
-            if (serviceType == typeof(IServiceProvider)
-                || serviceType == typeof(IServiceProviderIsService)
-                || serviceType == typeof(ISupportRequiredService)
-                || serviceType == typeof(IServiceScope)
-                || serviceType == typeof(IVivScope))
-            {
-                return this;
-            }
-
             if (serviceType == typeof(IVivContainer))
                 return _root;
 
-            return null;
+            if (!_selfContractTypes.Contains(serviceType))
+                return null;
+
+            // IServiceScope / IVivScope 只在作用域上给实例。根容器上给出来的话，拿的人
+            // 会把它当成一层随手可释放的作用域，一个 using 下去就把整个容器连里面的
+            // 单例一起拆了 —— 而它拿的时候完全看不出这一层就是根。
+            if (!_isScope && (serviceType == typeof(IServiceScope) || serviceType == typeof(IVivScope)))
+                return null;
+
+            return this;
         }
 
         /// <inheritdoc />
@@ -451,6 +518,11 @@ namespace Viv.Aoi.Paradox
 
             lock (_root._constructionSync)
             {
+                // 进锁之后重问一次。进这个方法时那次检查在构造锁外面，排队等的这段时间里
+                // 释放可能已经整个跑完了；不回查的话，接下来建出来的实例会发布进一份已经
+                // 清空、并且再也不会有人来收的缓存里 —— 它永远不会被释放。
+                _root.ThrowIfDisposed();
+
                 // 双检：等在构造锁外面的这段时间里，别人可能已经建好了。
                 lock (_root._sync)
                 {
@@ -494,6 +566,9 @@ namespace Viv.Aoi.Paradox
             // 作用域一把，所以不同请求之间不受影响。
             lock (scope._constructionSync)
             {
+                // 与单例那条同理：状态归谁，就在谁的构造锁里重问谁。
+                scope.ThrowIfDisposed();
+
                 lock (scope._sync)
                 {
                     if (scope._scopedInstances.TryGetValue(key, out var raced))
@@ -579,17 +654,26 @@ namespace Viv.Aoi.Paradox
                 if (ctors.Length == 0)
                     throw new InvalidOperationException($"类型 {type.FullName} 没有可用的公共构造函数。");
 
-                // 选参数最多的；个数打平时按元数据顺序定，保证同一类型每次选到的是同一个。
+                // 选参数最多的。个数打平时按参数类型名定序，保证同一份源码每次都选到同一个 ——
+                // 拿元数据顺序（MetadataToken）当判据看着也行，但它只在同一个编译产物里稳定，
+                // 重编一次就可能换一个构造函数，而换掉了没有任何提示。
                 return ctors
                     .OrderByDescending(c => c.GetParameters().Length)
-                    .ThenBy(c => c.MetadataToken)
+                    .ThenBy(c => string.Join(
+                        ",", c.GetParameters().Select(p => p.ParameterType.FullName)), StringComparer.Ordinal)
                     .First();
             });
         }
 
         private void TrackDisposable(object instance)
         {
-            if (instance is IDisposable || instance is IAsyncDisposable)
+            if (instance is not IDisposable && instance is not IAsyncDisposable)
+                return;
+
+            // 按引用去重，不是按 Equals。两个契约用同一个实例注册（或同一个实例既被注册
+            // 又被别人解析出来）时它会被登记两次，按 Equals 比较会把两个取值相等但不同的
+            // 对象并成一条 —— 那样第二次释放就没了，而实例本身还在。
+            if (!_disposables.Contains(instance, ReferenceEqualityComparer.Instance))
                 _disposables.Add(instance);
         }
 
@@ -631,25 +715,31 @@ namespace Viv.Aoi.Paradox
 
             // 逆序释放。释放异常一律吞掉 —— 容器没法把 Dispose 变成会抛的方法，
             // 一条实例释放失败也不该拦住后面那些。
+            //
+            // 两个接口都实现的实例在这里也走 DisposeAsync：两条路径的规则因此是同一条，
+            // 有异步清理就用它。代价是同步路径要阻塞等一下，而释放发生在停机，等得起；
+            // 反过来让同步路径优先 Dispose 的话，那种只把 Dispose 留成空壳的实现会被
+            // 静默漏掉一次清理，还看不出是哪一条。
             for (int i = toDispose.Count - 1; i >= 0; i--)
             {
                 switch (toDispose[i])
                 {
-                    case IDisposable d:
-                        try { d.Dispose(); }
+                    case IAsyncDisposable ad:
+                        try { ad.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
                         catch { }
                         break;
 
-                    case IAsyncDisposable ad:
-                        // 同步释放路径：阻塞等待
-                        try { ad.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
+                    case IDisposable d:
+                        try { d.Dispose(); }
                         catch { }
                         break;
                 }
             }
 
             // 自己的放完再放 fallback 那层，与构造顺序相反，和实例的逆序释放同理。
-            _fallbackScope?.Dispose();
+            // 抛出来的话后面就没有接收方了，与实例那一段同一处理。
+            try { _fallbackScope?.Dispose(); }
+            catch { }
         }
 
         /// <inheritdoc />
@@ -659,7 +749,7 @@ namespace Viv.Aoi.Paradox
             if (toDispose is null)
                 return;
 
-            // 与同步路径同一套规则，只是顺序反过来：异步路径优先走 DisposeAsync。
+            // 与同步路径同一套规则：有 DisposeAsync 就走它，两个接口都实现的实例也不例外。
             for (int i = toDispose.Count - 1; i >= 0; i--)
             {
                 switch (toDispose[i])
