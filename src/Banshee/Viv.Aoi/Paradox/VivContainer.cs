@@ -26,7 +26,7 @@ namespace Viv.Aoi.Paradox
     /// </remarks>
     public sealed class VivContainer : IVivContainer, IVivScope
     {
-        private readonly object _sync = new();
+        private readonly Lock _sync = new();
 
         /// <summary>
         /// 只用来串行化本容器的实例构造，与 <see cref="_sync"/> 分开。
@@ -40,7 +40,7 @@ namespace Viv.Aoi.Paradox
         /// 两条线程会各持一把互等而挂死 —— 那种写法现在的结果是干净地抛循环依赖，
         /// 变成「单线程测得出、并发下才挂」最难查。
         /// </remarks>
-        private readonly object _constructionSync = new();
+        private readonly Lock _constructionSync = new();
 
         /// <summary>所有服务描述符。根容器与作用域共享同一份，读写统一走根容器的锁。</summary>
         private readonly Dictionary<Type, ServiceDescriptor> _descriptors;
@@ -198,7 +198,7 @@ namespace Viv.Aoi.Paradox
 
         /// <inheritdoc />
         public void AddScoped<TImpl>() where TImpl : class
-            => AddScoped(typeof(TImpl), typeof(TImpl));
+            => AddScoped<TImpl, TImpl>();
 
         /// <inheritdoc />
         public void AddScoped(Type impl) => AddScoped(impl, impl);
