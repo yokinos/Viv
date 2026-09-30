@@ -67,17 +67,10 @@ namespace Viv.Aoi.Paradox
         /// <summary>是否为作用域实例。</summary>
         private readonly bool _isScope;
 
-        /// <summary>
-        /// 是否拒绝从根容器解析 Scoped，等价于 MS DI 的 ValidateScopes。
-        /// </summary>
+        /// <summary>是否拒绝从根容器解析 Scoped，等价于 MS DI 的 ValidateScopes。</summary>
         /// <remarks>
-        /// 根容器在我们的模型里也是一层合法的作用域，所以默认不拒 —— 从根要一个 Scoped
-        /// 会给你一个活得和根容器一样久的实例，这件事本身是明确的。会出问题的是它被
-        /// 间接接住：一个从根解析的 Transient 依赖了 Scoped，而那个 Transient 又被某个
-        /// 单例或静态字段留了下来，那个 Scoped 就事实变成了单例，全程没有任何提示。
-        ///
-        /// 打开之后这条路直接抛。判据归根本容器所有，作用域上那份只是跟着拷一份，
-        /// 免得哪天有人从作用域上读到它、以为开关没生效。
+        /// 默认不拒：根容器也是容器自己的一层合法作用域。要挡的是间接那条路 —— 从根解析的
+        /// Transient 依赖了 Scoped，而它又被单例或静态字段留下来，那个 Scoped 就成了事实单例。
         /// </remarks>
         private readonly bool _validateScopes;
 
@@ -157,8 +150,7 @@ namespace Viv.Aoi.Paradox
         /// 本容器没有的服务转交给它，通常传宿主自己的 <see cref="IServiceProvider"/>。为 <c>null</c> 表示不桥接。
         /// </param>
         /// <param name="validateScopes">
-        /// 为 <c>true</c> 时拒绝从根容器解析 Scoped（含 Transient 间接依赖到它），
-        /// 相当于 MS DI 的 <c>ValidateScopes</c>。默认 <c>false</c>。
+        /// 拒绝从根容器解析 Scoped，相当于 MS DI 的 <c>ValidateScopes</c>。默认 <c>false</c>。
         /// </param>
         /// <remarks>
         /// fallback 由调用方持有，容器释放时不会释放它，只释放从它上面开的那些子作用域。
@@ -493,11 +485,9 @@ namespace Viv.Aoi.Paradox
             if (self is not null)
                 return self;
 
-            // ResolveSelf 返回 null 有两种意思：「不是容器自身的契约」与「是自身的契约、
-            // 但当前语境不给实例」（根上的 IServiceScope / IVivScope）。后者必须就此打住，
-            // 不能当成前者继续往注册表和 fallback 找 —— fallback 可以是另一层 Viv 作用域
-            // （或者任何实现了这两个契约的 provider），往下走就会把它交出来，拿的人一个
-            // using 就把别人的作用域拆了，而看上去这层是自己的。
+            // ResolveSelf 的 null 有两义：「不是自身契约」与「是自身契约、但当前语境不给实例」
+            // （根上的 IServiceScope / IVivScope）。后者就此打住 —— 往下走会问到 fallback，
+            // 而 fallback 可能是另一层 Viv 作用域，交出来的就是别人的作用域。
             if (_selfContractTypes.Contains(serviceType))
                 return null;
 
@@ -520,9 +510,8 @@ namespace Viv.Aoi.Paradox
                     "单例活在根容器上，这么写会把这个 Scoped 一并提升成事实上的单例，跨作用域共用一份。");
             }
 
-            // 上面那条只管「构造链里有单例」，管不到「从根解析的 Transient 依赖 Scoped」——
-            // 那种情况 _singletonDepth 是 0。开着 validateScopes 时按 MS DI 的口径一律拒。
-            // 排在上面那条之后：单例那条给出的信息更具体，两种都命中时说前者。
+            // 上面那条只管构造链里有单例。从根解析的 Transient 依赖 Scoped 时 _singletonDepth
+            // 是 0，只能靠这个开关挡；排在后面是因为两种都命中时单例那条的信息更具体。
             if (descriptor.Lifetime == ServiceLifetime.Scoped && _root._validateScopes && !scope._isScope)
             {
                 throw new InvalidOperationException(
@@ -540,16 +529,11 @@ namespace Viv.Aoi.Paradox
                     return ResolveScoped(descriptor, scope);
 
                 case ServiceLifetime.Transient:
-                    // 这条路不进任何构造锁，所以它跟释放之间留了一道窄口子：GetService 入口
-                    // 那次检查过了之后、实例造出来之前，另一个线程可能已经把容器释放完了，
-                    // 于是从已释放的容器里交出一个实例。单例与作用域那两条正是在构造锁里
-                    // 回查才堵住的，Transient 这里没有对应的机关。
-                    //
-                    // 之所以就这么留着：Transient 不进 _disposables、也不进任何缓存，交出去
-                    // 的实例归调用方所有，容器这边没有任何登记会因此错乱 —— 那是两种后果里
-                    // 轻的那种。要彻底关掉只能让 Transient 也进构造锁，而那意味着同一容器内
-                    // 所有 Transient 构造串行化，为停机瞬间的窗口付这个代价不划算。中途补一次
-                    // 无锁的 ThrowIfDisposed 只是把窗口缩小，观感上像关掉了而已。
+                    // 这条路不取构造锁，所以入口检查与实例造出来之间有一道窄口子：容器可能
+                    // 已经释放了，交出去的却是个新实例。就这么留着 —— Transient 不进缓存、
+                    // 也不进释放清单，交出去归调用方，比单例那条的后果轻；要关掉只能让它也进
+                    // 构造锁，而那会让同一容器内所有 Transient 构造串行化。补一次无锁的
+                    // ThrowIfDisposed 只是把窗口缩小，别那么写。
                     return CreateInstance(descriptor, scope);
 
                 default:
@@ -750,13 +734,9 @@ namespace Viv.Aoi.Paradox
                     var toDispose = new List<object>(_disposables);
                     _disposables.Clear();
 
-                    // 这个容器自己的快路径会读的那份缓存，在它自己释放时一定被清空 —— 这是
-                    // 解析侧两条快路径不查 _disposed 的前提：释放之后快路径必然落空，接着进
-                    // 构造锁就会被 ThrowIfDisposed 挡住。单例缓存只有根那份、根一定会清，
-                    // 作用域读的是自己那份、作用域一定会清。
-                    //
-                    // 哪天这里改成条件清空，快路径就会把一个已释放容器的实例交出去，
-                    // 而且没有任何提示。
+                    // 清空是解析侧两条快路径不查 _disposed 的前提：释放之后快路径必然落空，
+                    // 接着进构造锁就会被 ThrowIfDisposed 挡住。各自清各自快路径会读的那份 ——
+                    // 单例只有根那份，作用域读的是自己那份。哪天改成条件清空就漏了。
                     if (!_isScope)
                     {
                         _singletons.Clear();

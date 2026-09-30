@@ -566,9 +566,8 @@ namespace Viv.Aoi.Tests
             using var inner = new VivContainer();
             using var outer = new VivContainer(inner.CreateScope());
 
-            // fallback 是另一层 Viv 作用域时它答得出这两个契约。根的 ResolveSelf 返回 null
-            // 意思只是「当前语境不给」，不是「不是自身契约」—— 顺着 fallback 找下去就会把
-            // 别人的作用域交出来，拿的人一个 using 就把它拆了，而这层看上去是自己的。
+            // fallback 是另一层 Viv 作用域时它答得出这两个契约。根的 null 只是「当前语境
+            // 不给」，不是「不是自身契约」—— 顺下去就会把别人的作用域交出来。
             Assert.Null(outer.GetService(typeof(IVivScope)));
             Assert.Null(outer.GetService(typeof(IServiceScope)));
             Assert.False(outer.IsService(typeof(IVivScope)));
@@ -614,8 +613,7 @@ namespace Viv.Aoi.Tests
             container.AddScoped<IScoped, ScopedThing>();
             container.AddTransient<NeedsScoped>();
 
-            // 这条才是开关真正要挡的：Transient 从根拿本身没问题，问题是它被谁接住 ——
-            // 被单例或静态字段留下时，那个 Scoped 就事实变成了单例，全程没有提示。
+            // 开关真正要挡的是这条：Transient 从根拿本身没问题，问题是它被谁接住。
             Assert.Throws<InvalidOperationException>(() => container.GetService<NeedsScoped>());
         }
 

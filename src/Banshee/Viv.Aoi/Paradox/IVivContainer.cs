@@ -21,10 +21,9 @@ namespace Viv.Aoi.Paradox;
 /// 注册 —— <see cref="IServiceProvider"/>、<see cref="IServiceScope"/>、<see cref="IVivScope"/>、
 /// <see cref="IVivContainer"/> 这些解析时直接给实例、压根不看注册表，注册进去永远不会生效。
 ///
-/// 根容器本身也是一层合法的作用域，所以从根解析 Scoped 是允许的，拿到的是一个活得和容器
-/// 一样久的实例。要拒掉这条路（<see cref="VivContainer"/> 构造参数 <c>validateScopes</c>，
-/// 对应 MS DI 的 <c>ValidateScopes</c>，默认关）的场景是：从根解析的 Transient 依赖了 Scoped，
-/// 而那个 Transient 又被某个单例或静态字段留了下来，那个 Scoped 就事实变成了单例。
+/// 根容器本身也是一层合法的作用域，从根解析 Scoped 是允许的。要拒掉它（<see cref="VivContainer"/>
+/// 构造参数 <c>validateScopes</c>，默认关）的场景是：从根解析的 Transient 依赖了 Scoped，
+/// 而它又被单例或静态字段留下来，那个 Scoped 就成了事实单例。
 /// </remarks>
 public interface IVivContainer : IServiceProvider, IServiceProviderIsService, ISupportRequiredService, IServiceScope, IDisposable, IAsyncDisposable
 {
@@ -81,8 +80,8 @@ public interface IVivContainer : IServiceProvider, IServiceProviderIsService, IS
     /// 省掉把同一个类型写两遍。约束只有 <c>class</c>，没有双参版那条可赋值性要求 ——
     /// 契约本来就等于实现自己。
     ///
-    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，覆盖等于用同一个类型顶掉
-    /// 同一个契约，没有语义可表。要换实现必然换契约，那就走双参版那条路。
+    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，覆盖没有语义；要换实现
+    /// 必然换契约，走双参版。
     /// </remarks>
     void AddSingleton<TImpl>() where TImpl : class;
 
@@ -137,8 +136,8 @@ public interface IVivContainer : IServiceProvider, IServiceProviderIsService, IS
     /// 省掉把同一个类型写两遍。约束只有 <c>class</c>，没有双参版那条可赋值性要求 ——
     /// 契约本来就等于实现自己。
     ///
-    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，覆盖等于用同一个类型顶掉
-    /// 同一个契约，没有语义可表。要换实现必然换契约，那就走双参版那条路。
+    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，覆盖没有语义；要换实现
+    /// 必然换契约，走双参版。
     /// </remarks>
     void AddScoped<TImpl>() where TImpl : class;
 
@@ -192,8 +191,8 @@ public interface IVivContainer : IServiceProvider, IServiceProviderIsService, IS
     /// 省掉把同一个类型写两遍。约束只有 <c>class</c>，没有双参版那条可赋值性要求 ——
     /// 契约本来就等于实现自己。
     ///
-    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，覆盖等于用同一个类型顶掉
-    /// 同一个契约，没有语义可表。要换实现必然换契约，那就走双参版那条路。
+    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，覆盖没有语义；要换实现
+    /// 必然换契约，走双参版。
     /// </remarks>
     void AddTransient<TImpl>() where TImpl : class;
 
