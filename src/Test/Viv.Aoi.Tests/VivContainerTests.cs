@@ -560,6 +560,77 @@ namespace Viv.Aoi.Tests
             }
         }
 
+        [Fact]
+        public void 根上问自身契约不会漏到fallback()
+        {
+            using var inner = new VivContainer();
+            using var outer = new VivContainer(inner.CreateScope());
+
+            // fallback 是另一层 Viv 作用域时它答得出这两个契约。根的 ResolveSelf 返回 null
+            // 意思只是「当前语境不给」，不是「不是自身契约」—— 顺着 fallback 找下去就会把
+            // 别人的作用域交出来，拿的人一个 using 就把它拆了，而这层看上去是自己的。
+            Assert.Null(outer.GetService(typeof(IVivScope)));
+            Assert.Null(outer.GetService(typeof(IServiceScope)));
+            Assert.False(outer.IsService(typeof(IVivScope)));
+            Assert.False(outer.IsService(typeof(IServiceScope)));
+        }
+
+        [Fact]
+        public void 作用域上仍拿得到自己那层()
+        {
+            using var container = new VivContainer();
+            using var scope = (VivContainer)container.CreateScope();
+
+            Assert.Same(scope, scope.GetService(typeof(IVivScope)));
+            Assert.Same(scope, scope.GetService(typeof(IServiceScope)));
+        }
+
+        [Fact]
+        public void 默认允许从根解析Scoped()
+        {
+            using var container = new VivContainer();
+            container.AddScoped<IScoped, ScopedThing>();
+
+            Assert.NotNull(container.GetService<IScoped>());
+        }
+
+        [Fact]
+        public void 开着作用域校验时从根解析Scoped抛异常()
+        {
+            using var container = new VivContainer(validateScopes: true);
+            container.AddScoped<IScoped, ScopedThing>();
+
+            var ex = Assert.Throws<InvalidOperationException>(() => container.GetService<IScoped>());
+            Assert.Contains("作用域校验", ex.Message);
+
+            using var scope = container.CreateScope();
+            Assert.NotNull(scope.GetService<IScoped>());
+        }
+
+        [Fact]
+        public void 开着作用域校验时从根解析的Transient依赖Scoped也抛()
+        {
+            using var container = new VivContainer(validateScopes: true);
+            container.AddScoped<IScoped, ScopedThing>();
+            container.AddTransient<NeedsScoped>();
+
+            // 这条才是开关真正要挡的：Transient 从根拿本身没问题，问题是它被谁接住 ——
+            // 被单例或静态字段留下时，那个 Scoped 就事实变成了单例，全程没有提示。
+            Assert.Throws<InvalidOperationException>(() => container.GetService<NeedsScoped>());
+        }
+
+        [Fact]
+        public void 开着作用域校验时不挡作用域里的Transient()
+        {
+            using var container = new VivContainer(validateScopes: true);
+            container.AddScoped<IScoped, ScopedThing>();
+            container.AddTransient<NeedsScoped>();
+
+            using var scope = container.CreateScope();
+
+            Assert.NotNull(scope.GetService<NeedsScoped>());
+        }
+
         /// <summary>
         /// 等一个解析任务在限定时间内完成。
         /// </summary>
@@ -704,6 +775,14 @@ namespace Viv.Aoi.Tests
     public interface ISingletonNeedsScoped { }
 
     public sealed class ScopedThing : IScoped { }
+
+    /// <summary>Transient，依赖一个 Scoped —— 用来钉作用域校验那条间接路径。</summary>
+    public sealed class NeedsScoped
+    {
+        public NeedsScoped(IScoped scoped) => Scoped = scoped;
+
+        public IScoped Scoped { get; }
+    }
 
     public sealed class ScopedThing2 : IScoped { }
 

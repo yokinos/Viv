@@ -67,6 +67,20 @@ namespace Viv.Aoi.Paradox
         /// <summary>是否为作用域实例。</summary>
         private readonly bool _isScope;
 
+        /// <summary>
+        /// 是否拒绝从根容器解析 Scoped，等价于 MS DI 的 ValidateScopes。
+        /// </summary>
+        /// <remarks>
+        /// 根容器在我们的模型里也是一层合法的作用域，所以默认不拒 —— 从根要一个 Scoped
+        /// 会给你一个活得和根容器一样久的实例，这件事本身是明确的。会出问题的是它被
+        /// 间接接住：一个从根解析的 Transient 依赖了 Scoped，而那个 Transient 又被某个
+        /// 单例或静态字段留了下来，那个 Scoped 就事实变成了单例，全程没有任何提示。
+        ///
+        /// 打开之后这条路直接抛。判据归根本容器所有，作用域上那份只是跟着拷一份，
+        /// 免得哪天有人从作用域上读到它、以为开关没生效。
+        /// </remarks>
+        private readonly bool _validateScopes;
+
         /// <summary>本容器没注册的服务转交给它。构造时定下，之后不再变。</summary>
         private readonly IServiceProvider? _fallback;
 
@@ -142,10 +156,14 @@ namespace Viv.Aoi.Paradox
         /// <param name="fallback">
         /// 本容器没有的服务转交给它，通常传宿主自己的 <see cref="IServiceProvider"/>。为 <c>null</c> 表示不桥接。
         /// </param>
+        /// <param name="validateScopes">
+        /// 为 <c>true</c> 时拒绝从根容器解析 Scoped（含 Transient 间接依赖到它），
+        /// 相当于 MS DI 的 <c>ValidateScopes</c>。默认 <c>false</c>。
+        /// </param>
         /// <remarks>
         /// fallback 由调用方持有，容器释放时不会释放它，只释放从它上面开的那些子作用域。
         /// </remarks>
-        public VivContainer(IServiceProvider? fallback = null)
+        public VivContainer(IServiceProvider? fallback = null, bool validateScopes = false)
         {
             _descriptors = new Dictionary<Type, ServiceDescriptor>();
             _singletons = new Dictionary<Type, object>();
@@ -153,6 +171,7 @@ namespace Viv.Aoi.Paradox
             _disposables = new List<object>();
             _root = this;
             _isScope = false;
+            _validateScopes = validateScopes;
             _fallback = fallback;
             _fallbackFactory = fallback?.GetService<IServiceScopeFactory>();
             _fallbackIsService = ToIsService(fallback);
@@ -186,6 +205,7 @@ namespace Viv.Aoi.Paradox
             _disposables = new List<object>();
             _root = root;
             _isScope = true;
+            _validateScopes = root._validateScopes;
             _fallbackScope = fallbackScope;
             _fallback = fallbackScope?.ServiceProvider ?? root._fallback;
             _fallbackFactory = root._fallbackFactory;
@@ -418,6 +438,10 @@ namespace Viv.Aoi.Paradox
             if (ResolveSelf(serviceType) is not null)
                 return true;
 
+            // 与 Resolve 那条同一把尺子：自身契约答不出来就是没有，不问 fallback。
+            if (_selfContractTypes.Contains(serviceType))
+                return false;
+
             lock (_root._sync)
             {
                 if (_descriptors.ContainsKey(serviceType))
@@ -469,6 +493,14 @@ namespace Viv.Aoi.Paradox
             if (self is not null)
                 return self;
 
+            // ResolveSelf 返回 null 有两种意思：「不是容器自身的契约」与「是自身的契约、
+            // 但当前语境不给实例」（根上的 IServiceScope / IVivScope）。后者必须就此打住，
+            // 不能当成前者继续往注册表和 fallback 找 —— fallback 可以是另一层 Viv 作用域
+            // （或者任何实现了这两个契约的 provider），往下走就会把它交出来，拿的人一个
+            // using 就把别人的作用域拆了，而看上去这层是自己的。
+            if (_selfContractTypes.Contains(serviceType))
+                return null;
+
             ServiceDescriptor? descriptor;
             lock (_root._sync)
             {
@@ -488,6 +520,17 @@ namespace Viv.Aoi.Paradox
                     "单例活在根容器上，这么写会把这个 Scoped 一并提升成事实上的单例，跨作用域共用一份。");
             }
 
+            // 上面那条只管「构造链里有单例」，管不到「从根解析的 Transient 依赖 Scoped」——
+            // 那种情况 _singletonDepth 是 0。开着 validateScopes 时按 MS DI 的口径一律拒。
+            // 排在上面那条之后：单例那条给出的信息更具体，两种都命中时说前者。
+            if (descriptor.Lifetime == ServiceLifetime.Scoped && _root._validateScopes && !scope._isScope)
+            {
+                throw new InvalidOperationException(
+                    $"开启了作用域校验，但作用域服务 {serviceType.FullName} 是从根容器解析的。" +
+                    "请从 CreateScope() 开出来的作用域上取，否则它会活得和根容器一样久 —— " +
+                    "被 Transient 或静态字段接住时就是事实上的单例，而看不出任何异常。");
+            }
+
             switch (descriptor.Lifetime)
             {
                 case ServiceLifetime.Singleton:
@@ -497,6 +540,16 @@ namespace Viv.Aoi.Paradox
                     return ResolveScoped(descriptor, scope);
 
                 case ServiceLifetime.Transient:
+                    // 这条路不进任何构造锁，所以它跟释放之间留了一道窄口子：GetService 入口
+                    // 那次检查过了之后、实例造出来之前，另一个线程可能已经把容器释放完了，
+                    // 于是从已释放的容器里交出一个实例。单例与作用域那两条正是在构造锁里
+                    // 回查才堵住的，Transient 这里没有对应的机关。
+                    //
+                    // 之所以就这么留着：Transient 不进 _disposables、也不进任何缓存，交出去
+                    // 的实例归调用方所有，容器这边没有任何登记会因此错乱 —— 那是两种后果里
+                    // 轻的那种。要彻底关掉只能让 Transient 也进构造锁，而那意味着同一容器内
+                    // 所有 Transient 构造串行化，为停机瞬间的窗口付这个代价不划算。中途补一次
+                    // 无锁的 ThrowIfDisposed 只是把窗口缩小，观感上像关掉了而已。
                     return CreateInstance(descriptor, scope);
 
                 default:
@@ -696,6 +749,14 @@ namespace Viv.Aoi.Paradox
 
                     var toDispose = new List<object>(_disposables);
                     _disposables.Clear();
+
+                    // 这个容器自己的快路径会读的那份缓存，在它自己释放时一定被清空 —— 这是
+                    // 解析侧两条快路径不查 _disposed 的前提：释放之后快路径必然落空，接着进
+                    // 构造锁就会被 ThrowIfDisposed 挡住。单例缓存只有根那份、根一定会清，
+                    // 作用域读的是自己那份、作用域一定会清。
+                    //
+                    // 哪天这里改成条件清空，快路径就会把一个已释放容器的实例交出去，
+                    // 而且没有任何提示。
                     if (!_isScope)
                     {
                         _singletons.Clear();
