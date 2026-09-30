@@ -30,7 +30,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 |---|---|
 | `Viv.Contracts` | Base interfaces (`IVivContext`, `IDependency`) and shared enums；**本地事件契约** `IVivLocalEventBus` / `IVivLocalEventScope` / `LocalEvent`（空标记基类）/ `IVivLocalEventHandler<TEvent>` / `LocalEventHandler<TEvent>`（零 Nana 依赖，业务 Core 直接引它写处理器）；**分布式锁契约** `IDistributedLock` —— 6 个方法的锁标识**统一是 `object key`**（不再有 `string lockKey` / `object key` 之分）：传 `string` 原样作 Redis Key（前缀调用方自己拼），其余类型由 **`LockKeyMagic`（同项目根，全仓唯一的锁 Key 生成处）** 归一化成 `lock:{...}`；段数固定的 Key 走 `LockKeyMagic.Join(prefix, parts)`（消费锁的 `nana:a:b:42` 就是它拼的，不是匿名对象 —— 对象那条路按属性名字母序拼，改个属性名就换了把锁）；**数据过滤器开关** `IDataFilter` + `IDataFilterScope`（泛型，标识是**过滤器类本身**：`Disable<SoftDeletedFilter>()` 放行已软删除的行、`Disable<TenantDataFilter>()` 跨租户读；一次关多条用 `Scope()`；实现落在 `Viv.Momo`，见 `### 读过滤器`）；**指标读取契约** `IVivMeter` + `VivMeterSnapshot`（实现落在 `Viv.Engine/Metrics/`，见 `### 指标读取（IVivMeter）`） |
 | `Viv.Delusion` | Utility library — `TypeScanMagic` (assembly type scanning), `ObjectMapper` (Emit + Expression-based), encryption, common extensions |
-| `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios |
+| `Viv.Aoi` | DI bridge — `VivLocator` wraps both MS DI and Autofac `ILifetimeScope`; static service resolution for non-injection scenarios；另有 **`Paradox/` 内置轻量 IOC 容器**（`IVivContainer` / `IVivScope` / `VivContainer`：Singleton/Scoped/Transient 三生命周期、构造注入 + 工厂注册、循环依赖检测、`IDisposable`/`IAsyncDisposable` 自动释放；容器本体实现 `IServiceProvider` 那四个接口，可传 fallback 桥接宿主容器，另有适配器 `ServiceProviderVivContainer` 补 `IServiceScopeFactory` —— 见 `### Paradox（内置 IOC 容器）`。**与 `VivLocator` 那条 MS DI + Autofac 的路互不相干**，是个自足的独立容器）。**移动注意**：它原先住在 `Viv.Delusion`，而 `Viv.Delusion` 被 `Viv.Contracts` 引用、等于全仓每个项目都跟着带一份；搬进 `Viv.Aoi` 后能看到它的只有 Engine / Log / Redis / Sandrone。**本项目从零依赖变成显式引一条 `Microsoft.Extensions.DependencyInjection.Abstractions`** —— 那几个接口经 `Viv.Contracts` 传递过来也能编译，但那是别人的依赖链说了算 |
 | `Viv.Engine` | **Core wiring hub** — `VivConfigLoader` 是 `VivOptions` 的全进程唯一绑定入口（`Load` 绑 IConfiguration 并写静态快照，`AddVivConfig` 再注册进 DI 并返回那份 `VivOptions`）；`VivRegister` wires every Banshee subsystem into DI via `AddViv()`; provides `VivApiExtensions` / `VivWorkerExtensions` / `VivStartGatewayExtensions` for one-liner startup，加**第四种宿主** `VivAppBuilder`（实例门面，控制台 / WinForms / WPF，见 `### Startup: one-liner API & Worker & Gateway`）；**本地事件总线实现** `LocalEvents/`（`LocalEventBus` / `LocalEventHandlerInvoker<T>` / `LocalEventRegistration` / `LocalEventScope`）+ 两个触发点 `LocalEventFlushFilterAttribute`、`LocalEventFlushMiddleware`（**同目录**，本地事件一个文件夹全包）。⚠️ **目录／命名空间是复数 `LocalEvents`**：事件基类叫 `LocalEvent`，若目录同名，`Viv.Engine.LocalEvent` 这个命名空间会在 `Viv.Engine` 里把类型 `LocalEvent` 遮住，`LocalEvent` 一律解析成命名空间（CS0118，实测踩过）；**指标读取** `Metrics/VivMeter.cs`（常驻 `MeterListener` 收账，见 `### 指标读取（IVivMeter）`） |
 | `Viv.Log` | Logging — Serilog or no-op backend, configurable per `LogType`; Seq integration |
 | `Viv.Momo` | Database — `IMomoDbContext` backed by **EF Core + Dapper** hybrid; read/write connection routing via `EFAppContext`; supports PostgreSQL and SQL Server；**实体审计**（`ICreatedAt` / `ICreatedBy` / `IUpdatedAt` / `IUpdatedBy` 四个单字段能力接口，逐个 opt-in，由 `MomoDatabase` 自动盖章，见 `### Entity audit`）；**建表 DDL**（`Sync/SchemaSynchronizer` 按实体生成 CREATE/ALTER，双方言，见 `### Schema sync`）；**读过滤器**（`DataFilter/` —— `IMomoDataFilter` 抽象 + `TenantDataFilter`/`SoftDeletedFilter` 两条实现 + `MomoDataFilters.All` 静态清单；EF 全局查询过滤器与框架自有按主键 SQL 两处都遍历清单，加过滤器只写类、不改框架。`IDataFilter.Disable<TFilter>()` 逐条放行，见 `### 读过滤器`）；**缓存基类** `Base/DataAccessCacheBase<T>`（Cache-Aside，8 个业务仓储继承）—— **锁走 `IDistributedLock`，缓存读写走 `IRedisService`**，两条路径 Redis 故障都 catch 后回源数据库（锁那侧 Redis 故障被包成 `DistributedLockException`，得单独接一次）；取锁用 `AcquireLockWithRetryAsync` 并把参数压到 `maxRetryCount: 3, baseDelay/maxDelay: 20ms`（用默认的 5 次指数退避 = 约 3 秒，缓存击穿场景等不起））；**指标** `MomoMetrics`（Meter `Viv.Momo`，查询耗时 / 慢查询 / 库失败 / `EFMaxCount` 分流）+ **慢查询日志**（阈值 `DatabaseOptions.SlowQueryThresholdMs`，默认 1000，0 = 关），见 `### 慢查询与指标`；**链路追踪** span 走 `VivTracing`（`QueryTelemetry.Record` 一处覆盖 EF + Dapper），见 `### 链路追踪（自建 span）` |
@@ -80,7 +80,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 
 ### Test (`src/Test/`)
 
-Unit test suites, one per framework project — `Viv.Delusion.Tests`、`Viv.Engine.Tests`、`Viv.Momo.Tests`、`Viv.Nana.Tests`、`Viv.Outbox.Tests`、`Viv.Redis.Tests`、`Viv.Sandrone.Tests`。CI（`.github/workflows/dotnet.yml`）会跑全量测试并上报覆盖率。业务层的测试项目（`Viv.Elysia.Tests`、`Viv.Herta.Tests`、`Viv.ServiceProxy.Tests`）在 `src/Vivian/` 各自项目旁。
+Unit test suites, one per framework project — `Viv.Aoi.Tests`、`Viv.Delusion.Tests`、`Viv.Engine.Tests`、`Viv.Momo.Tests`、`Viv.Nana.Tests`、`Viv.Outbox.Tests`、`Viv.Redis.Tests`、`Viv.Sandrone.Tests`。CI（`.github/workflows/dotnet.yml`）会跑全量测试并上报覆盖率。业务层的测试项目（`Viv.Elysia.Tests`、`Viv.Herta.Tests`、`Viv.ServiceProxy.Tests`）在 `src/Vivian/` 各自项目旁。
 
 #### `Viv.Fakes` —— 测试替身集中在此，**不得散落到各测试项目**
 
@@ -204,6 +204,20 @@ Business-layer services and repositories are registered via **type scanning** dr
 - **Worker:** `builder.ConfigureContainer(new AutofacServiceProviderFactory(), ...)`
 
 `VivLocator.Initialize()` is called during startup and provides static access for scenarios where constructor injection is unavailable.
+
+### Paradox（内置 IOC 容器）
+
+上面那条路（MS DI 注册 → Autofac 根容器 → `VivLocator` 静态桥）是**框架自己**用的。`Viv.Aoi/Paradox/` 是另一件事 —— 一个自足的轻量容器（`IVivContainer` / `IVivScope` / `VivContainer`），与 Autofac 那条线互不相干，三方库或宿主想自己拿一个容器时用。三生命周期、构造注入 + 工厂注册、循环依赖检测、`IDisposable`/`IAsyncDisposable` 自动释放。
+
+**与 MS DI 的桥接是单向的**：`VivContainer` 实现了 `IServiceProvider` / `IServiceProviderIsService` / `ISupportRequiredService` / `IServiceScope`，可以直接塞进只认这些接口的地方；反过来把宿主的容器当成 `IVivContainer` 用走不通。构造函数收一个可选 fallback（通常就是宿主自己的 `IServiceProvider`），自己没注册的契约转交过去，因此「大部分服务归 Viv、少数几个还留在宿主」的过渡期不必一次搬完。
+
+- **注册面**：三个生命周期各有四种写法 —— 双参泛型 `AddScoped<TContract, TImpl>()`、双参 Type 版 `AddScoped(Type contract, Type impl)`、工厂 `AddScoped<TContract>(Func<IVivContainer, TContract>)`，以及**自注册** `AddScoped<TImpl>()` / `AddScoped(Type impl)`（契约就是实现类自己，省掉把同一个类型写两遍）。自注册的泛型版约束只有 `where TImpl : class`，**没有**双参版那条「必须可赋值给契约」—— 契约本来就等于实现自己，容器不做可赋值性校验。单参泛型与 `AddScoped<TContract>(TContract instance)` 参数个数不同、单参 Type 版与双参版同理，两组重载并存不撞。
+- **唯独没有 `IServiceScopeFactory`**，只能由 `ServiceProviderVivContainer`（`Paradox/` 里的适配器）承担：容器自己的 `CreateScope` 返回更窄的 `IVivScope`，而 **C# 不允许靠返回类型协变去隐式实现接口成员（CS0738）**，两个 `CreateScope` 只能是两个方法。适配器就是为补这一个接口而存在，别把它当多余的一层；它 `Dispose` 会连同被包装的容器一起释放。适配器 `CreateScope()` 直接返回容器原生的 `IVivScope` —— 那本身就是完整的 `IServiceScope`，再套一层是白加对象。
+- **🔴 fallback 必须是一层作用域一份，不能都指向 fallback 的根**：`Resolve` 的未命中分支写的是 `scope._fallback`（`CreateScope` 时从 fallback 的 `IServiceScopeFactory` 另开一层），不是 `_root._fallback`。写成根的话，从 fallback 解析出来的 Scoped 全落在它的根上，**每个 Viv 作用域拿到的都是同一个实例，Scoped 静默退化成单例**，编译与测试都不会吭声。`VivContainerMsDiTests` 里两条「两个作用域拿到的 Scoped 不是同一个」专钉这个（容器一条、适配器一条）。
+- **🔴 MS DI 的具体 `ServiceProvider` 自己并不实现 `IServiceProviderIsService`** —— 实现它的是内部的 `CallSiteFactory`，只能从 provider 里解析出来（实测 `asProvider is IServiceProviderIsService` 为 **False**，`ISupportRequiredService` 也是同一个形状）。所以 `IsService` 是**先按实例问、问不到再 `GetService<IServiceProviderIsService>()` 解析一次**；只写 `is` 判断的话对真 MS DI provider 恒为 false，委派整个静默失效 —— 这条单测抓出来过一次。
+- **容器自身的契约不走注册表**：`IServiceProvider` / `IServiceProviderIsService` / `ISupportRequiredService` / `IServiceScope` / `IVivScope` 解析回当前实例，`IVivContainer` 一律给根容器。`IsService` 认这些契约，且**只问不建**（不查释放状态，也不构造任何实例）。
+- **`IEnumerable<T>` 不支持跨容器合并** —— 本容器没注册就直接转交 fallback，拿回来的是 fallback 那边的集合（多半是空）。这是有意的，别指望把两边的注册拼起来。
+- **两条 `GetService(Type)` 重载标了 `new`**（CS0108）：签名与继承来的 `IServiceProvider.GetService` 逐字相同，重写一遍只为挂那两段说明，实现方一个方法同时满足两者。
 
 ### Messaging (Nana)
 

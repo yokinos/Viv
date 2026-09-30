@@ -11,4 +11,10 @@
     <ProjectReference Include="..\Viv.Delusion\Viv.Delusion.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Paradox 容器直接实现 IServiceProviderIsService / ISupportRequiredService / IServiceScope 这几个接口。
+         它们经由 Viv.Contracts 传递过来也能编译，但那是别人的依赖链说了算，这里显式声明。 -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
 </Project>

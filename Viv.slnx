@@ -20,6 +20,7 @@
     <File Path="docker-compose.yml" />
   </Folder>
   <Folder Name="/src/Test/">
+    <Project Path="src/Test/Viv.Aoi.Tests/Viv.Aoi.Tests.csproj" />
     <Project Path="src/Test/Viv.Delusion.Tests/Viv.Delusion.Tests.csproj" Id="67f775ab-833f-4333-89d1-d0cbd10d69c0" />
     <Project Path="src/Test/Viv.Engine.Tests/Viv.Engine.Tests.csproj" Id="52a5b0c1-9c22-4387-a45c-52ffc0a21a23" />
     <Project Path="src/Test/Viv.Fakes/Viv.Fakes.csproj" />
