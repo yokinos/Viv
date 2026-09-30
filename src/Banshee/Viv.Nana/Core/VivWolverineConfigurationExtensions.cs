@@ -27,11 +27,6 @@ namespace Viv.Nana.Core
                 //    Wolverine 没法在生成的 handler 代码里直接 new，只能从作用域容器取 ——
                 //    而这正是它们要的：LocalEventBus / UnitOfWorkManager / InboxStore 全是 Scoped，
                 //    必须和本次消费的 IMomoDbContext 同作用域。
-                //
-                //    Wolverine 6.x 默认不允许，且失败得很难认：先排一个取服务的 frame，
-                //    再往上硬接构造 frame，接不上就抛 "Frame chain is being re-arranged"，
-                //    业务代码永远进不去。这个 enum 只有「不让」与「让但记警告」两档，
-                //    警告只在生成代码时打一次，就让它记着。
                 opts.ServiceLocationPolicy = ServiceLocationPolicy.AllowedButWarn;
 
                 // 1) RabbitMQ 传输：连接配置 + 自动声明队列/交换机
@@ -71,7 +66,7 @@ namespace Viv.Nana.Core
                     transport.BindExchange(exchangeName, ExchangeType.Fanout).ToQueue(queueName);
 
                     // 消费并发/预取调优：直接写 RabbitMqQueue 属性。
-                    // 注意：该 fork 的 fluent PreFetchCount/ListenerCount/QueueType 是空壳（编译通过但不落盘），必须直写。
+                    // 注意：官方包的 fluent PreFetchCount/ListenerCount/QueueType/MaximumParallelMessages 都是空壳（2026-09-30 在 WolverineFx 6.42.0 实测：调用不抛异常、队列属性纹丝不动），必须直写。
                     // 默认 prefetch=20（比 Wolverine 原生 100 更低的重投放大）、队列 Quorum（多副本防丢消息）；
                     // ConsumerCount/MaximumParallelMessages 由 [NanaConsumer] 特性显式指定。
                     var attr = consumerType.GetCustomAttribute<NanaConsumerAttribute>();

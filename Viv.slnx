@@ -16,9 +16,6 @@
     <Project Path="src/Banshee/Viv.Redis/Viv.Redis.csproj" Id="681e717d-013f-40c7-9bba-589b9ddf3629" />
     <Project Path="src/Banshee/Viv.Sandrone/Viv.Sandrone.csproj" Id="ba236dd9-a8cd-4150-bc58-16aea65e2704" />
   </Folder>
-  <Folder Name="/src/Doc/">
-    <File Path="docker-compose.yml" />
-  </Folder>
   <Folder Name="/src/Test/">
     <Project Path="src/Test/Viv.Aoi.Tests/Viv.Aoi.Tests.csproj" />
     <Project Path="src/Test/Viv.Delusion.Tests/Viv.Delusion.Tests.csproj" Id="67f775ab-833f-4333-89d1-d0cbd10d69c0" />
