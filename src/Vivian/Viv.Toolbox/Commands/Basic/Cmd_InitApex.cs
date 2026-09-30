@@ -21,7 +21,7 @@ namespace Viv.Toolbox.Commands.Basic
             _dbContext = dbContext;
         }
 
-        protected async override Task<int> ExecuteAsync(CommandContext context, CancellationToken cancellationToken)
+        public async override Task<int> ExecuteAsync(CommandContext context, CancellationToken cancellationToken)
         {
 
             return 0;

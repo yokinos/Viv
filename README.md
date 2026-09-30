@@ -83,7 +83,7 @@ dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.Gateway
 
 ```xml
 <!-- Directory.Packages.props -->
-<PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+<PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
 
 <!-- 任一 csproj -->
 <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
@@ -91,9 +91,6 @@ dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.Gateway
 
 - **升级 / 加包 / 钉传递依赖版本，只改 `Directory.Packages.props` 一处**，全仓库同步生效
 - 已开启 `CentralPackageTransitivePinningEnabled`：中央文件里即使无项目直接引用的包也会按中央版本解析
-
-> [!WARNING]
-> **安全钉版**：`Microsoft.OpenApi 2.7.5` —— 修复 [GHSA-v5pm-xwqc-g5wc](https://github.com/advisories/GHSA-v5pm-xwqc-g5wc) / CVE-2026-49451（OpenAPI 循环 schema 引用导致栈溢出 DoS，CVSS 7.5），由 `Microsoft.AspNetCore.OpenApi 10.0.x` 传递引入，原先触发 NuGet 审计 NU1903。
 
 ---
 

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Text;
 using Viv.Momo.Enums;
@@ -23,7 +24,7 @@ namespace Viv.Momo.Converter
             => MomoIdentifier.QuoteClr(name, _databaseSource);
 
         // 辅助方法：检测表达式是否依赖任何参数
-        private static bool ContainsParameter(Expression expr)
+        private static bool ContainsParameter([AllowNull] Expression expr)
         {
             if (expr == null) return false;
             switch (expr.NodeType)
