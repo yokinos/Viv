@@ -161,6 +161,86 @@ namespace Viv.Aoi.Tests
         }
 
         [Fact]
+        public void 允许覆盖时后来的顶掉先前的()
+        {
+            using var container = new VivContainer();
+            container.AddSingleton<IFoo, Foo>();
+            container.AddSingleton<IFoo, Foo2>(allowOverride: true);
+
+            Assert.IsType<Foo2>(container.GetService<IFoo>());
+        }
+
+        [Fact]
+        public void 覆盖对作用域与瞬时同样生效()
+        {
+            using var container = new VivContainer();
+            container.AddScoped<IScoped, ScopedThing>();
+            container.AddScoped<IScoped, ScopedThing2>(allowOverride: true);
+            container.AddTransient<IBar, Bar>();
+            container.AddTransient<IBar, Bar2>(allowOverride: true);
+
+            using var scope = container.CreateScope();
+
+            Assert.IsType<ScopedThing2>(scope.GetService<IScoped>());
+            Assert.IsType<Bar2>(container.GetService<IBar>());
+        }
+
+        [Fact]
+        public void 实例注册可以被覆盖()
+        {
+            using var container = new VivContainer();
+            var original = new Foo();
+            var replacement = new Foo2();
+
+            container.AddSingleton<IFoo>(original);
+            container.AddSingleton<IFoo>(replacement, allowOverride: true);
+
+            // 实例注册从登记那刻就压在单例缓存里，光换描述符是覆盖不掉的。
+            Assert.Same(replacement, container.GetService<IFoo>());
+        }
+
+        [Fact]
+        public void 已解析过的单例不能再被覆盖()
+        {
+            using var container = new VivContainer();
+            container.AddSingleton<IFoo, Foo>();
+            container.GetService<IFoo>();
+
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => container.AddSingleton<IFoo, Foo2>(allowOverride: true));
+
+            Assert.Contains("已经解析过", ex.Message);
+        }
+
+        [Fact]
+        public void 瞬时服务解析过之后仍然可以被覆盖()
+        {
+            using var container = new VivContainer();
+            container.AddTransient<IBar, Bar>();
+            Assert.IsType<Bar>(container.GetService<IBar>());
+
+            // 冻结判的是单例缓存，瞬时没有缓存，也就没有「覆盖了却没生效」这回事。
+            container.AddTransient<IBar, Bar2>(allowOverride: true);
+
+            Assert.IsType<Bar2>(container.GetService<IBar>());
+        }
+
+        [Fact]
+        public void 被顶掉的实例注册仍然会被释放()
+        {
+            var container = new VivContainer();
+            var original = new DisposableFoo();
+
+            container.AddSingleton<IFoo>(original);
+            container.AddSingleton<IFoo>(new Foo2(), allowOverride: true);
+
+            container.Dispose();
+
+            // 登记那刻所有权就转移给容器了，半路被顶掉不解除这件事。
+            Assert.True(original.Disposed);
+        }
+
+        [Fact]
         public void 未注册的契约解析抛异常()
         {
             using var container = new VivContainer();
@@ -400,6 +480,8 @@ namespace Viv.Aoi.Tests
 
     public sealed class Foo : IFoo { }
 
+    public sealed class Foo2 : IFoo { }
+
     public sealed class DisposableFoo : IFoo, IDisposable
     {
         public bool Disposed { get; private set; }
@@ -469,6 +551,8 @@ namespace Viv.Aoi.Tests
     public interface ISingletonNeedsScoped { }
 
     public sealed class ScopedThing : IScoped { }
+
+    public sealed class ScopedThing2 : IScoped { }
 
     public sealed class DisposableScoped : IScoped, IDisposable
     {

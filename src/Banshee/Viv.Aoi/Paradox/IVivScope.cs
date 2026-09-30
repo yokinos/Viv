@@ -21,8 +21,9 @@ namespace Viv.Aoi.Paradox
     /// 这个接口同时是 <see cref="IServiceProvider"/>、<see cref="IServiceProviderIsService"/>、
     /// <see cref="ISupportRequiredService"/> 与 <see cref="IServiceScope"/>，可以直接当作
     /// MS DI 的作用域交给第三方库（ASP.NET Core 的 <c>RequestServices</c>、<c>ActivatorUtilities</c> 等）。
-    /// 它不实现 <see cref="IServiceScopeFactory"/>，那一个由 <see cref="IVivContainer"/> 承担 ——
-    /// 两边的 CreateScope 返回类型不同，而 C# 的返回类型协变不支持接口实现，只能各归各位。
+    /// 它不实现 <see cref="IServiceScopeFactory"/> —— 那个接口要的是 <c>IServiceScope CreateScope()</c>，
+    /// 而这里的 CreateScope 返回更窄的 <see cref="IVivScope"/>，C# 不允许靠返回类型协变去隐式实现接口成员，
+    /// 补不了。容器与作用域同理，承担它的是 <see cref="ServiceProviderVivContainer"/> 适配器。
     /// </remarks>
     public interface IVivScope : IServiceProvider, IServiceProviderIsService, ISupportRequiredService, IServiceScope, IDisposable, IAsyncDisposable
     {

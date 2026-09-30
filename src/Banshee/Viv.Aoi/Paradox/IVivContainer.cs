@@ -11,6 +11,10 @@ namespace Viv.Aoi.Paradox;
 /// <remarks>
 /// 提供三种生命周期：单例（Singleton）、作用域（Scoped）、瞬时（Transient）。
 /// 通过 <see cref="CreateScope"/> 创建作用域来解析 Scoped 服务。
+///
+/// 同一个契约只登记一个实现，重复注册默认抛异常。注册方法上的 allowOverride 传 true 可以让
+/// 后来的顶掉先前的，但那属于装配期的动作：契约一旦产生过实例就覆盖不动了（解析先撞上缓存
+/// 里那份），所以那种情况直接抛，不留下「覆盖了却没生效」的静默失效。
 /// </remarks>
 public interface IVivContainer : IServiceProvider, IServiceProviderIsService, ISupportRequiredService, IServiceScope, IDisposable, IAsyncDisposable
 {
@@ -19,100 +23,169 @@ public interface IVivContainer : IServiceProvider, IServiceProviderIsService, IS
     /// </summary>
     /// <typeparam name="TContract">服务契约类型（通常为接口或抽象类）。</typeparam>
     /// <typeparam name="TImpl">服务的具体实现类型，必须可赋值给 <typeparamref name="TContract"/>。</typeparam>
+    /// <param name="allowOverride">是否允许顶掉该契约上先前的注册，默认 <c>false</c>（重复注册抛异常）。</param>
     /// <remarks>
     /// 首次解析时创建实例，之后在整个容器生命周期内复用同一个实例。
     /// </remarks>
-    void AddSingleton<TContract, TImpl>() where TImpl : class, TContract;
+    void AddSingleton<TContract, TImpl>(bool allowOverride = false) where TImpl : class, TContract;
 
     /// <summary>
     /// 注册单例服务，使用运行时 <see cref="Type"/> 指定契约与实现类型。
     /// </summary>
     /// <param name="contract">服务契约类型。</param>
     /// <param name="impl">服务的具体实现类型，必须可赋值给 <paramref name="contract"/>。</param>
+    /// <param name="allowOverride">是否允许顶掉该契约上先前的注册，默认 <c>false</c>（重复注册抛异常）。</param>
     /// <remarks>
     /// 用于无法使用泛型的反射或动态注册场景。
     /// </remarks>
-    void AddSingleton(Type contract, Type impl);
+    void AddSingleton(Type contract, Type impl, bool allowOverride = false);
 
     /// <summary>
     /// 注册单例服务，直接使用已创建的实例。
     /// </summary>
     /// <typeparam name="TContract">服务契约类型。</typeparam>
     /// <param name="instance">要注册的实例。为 <c>null</c> 时应抛出 <see cref="ArgumentNullException"/>。</param>
+    /// <param name="allowOverride">是否允许顶掉该契约上先前的注册，默认 <c>false</c>（重复注册抛异常）。</param>
     /// <remarks>
     /// 该实例由容器持有，容器释放时若实现 <see cref="IDisposable"/> 或 <see cref="IAsyncDisposable"/> 会被一并释放。
+    /// 被顶掉时旧实例仍在容器的释放清单里 —— 登记那刻所有权就转移了。
     /// </remarks>
-    void AddSingleton<TContract>(TContract instance) where TContract : class;
+    void AddSingleton<TContract>(TContract instance, bool allowOverride = false) where TContract : class;
 
     /// <summary>
     /// 注册单例服务，使用工厂委托延迟创建实例。
     /// </summary>
     /// <typeparam name="TContract">服务契约类型。</typeparam>
     /// <param name="factory">工厂委托，接收当前容器作为参数并返回服务实例。</param>
+    /// <param name="allowOverride">是否允许顶掉该契约上先前的注册，默认 <c>false</c>（重复注册抛异常）。</param>
     /// <remarks>
     /// 工厂仅在首次解析时调用一次，其结果会被缓存复用。
     /// </remarks>
-    void AddSingleton<TContract>(Func<IVivContainer, TContract> factory) where TContract : class;
+    void AddSingleton<TContract>(Func<IVivContainer, TContract> factory, bool allowOverride = false) where TContract : class;
+
+    /// <summary>
+    /// 注册单例服务，契约就是实现类型自身。
+    /// </summary>
+    /// <typeparam name="TImpl">服务的具体实现类型，同时用作契约。</typeparam>
+    /// <remarks>
+    /// 省掉把同一个类型写两遍。约束只有 <c>class</c>，没有双参版那条可赋值性要求 ——
+    /// 契约本来就等于实现自己。
+    /// </remarks>
+    void AddSingleton<TImpl>() where TImpl : class;
+
+    /// <summary>
+    /// 注册单例服务，契约就是实现类型自身，使用运行时 <see cref="Type"/>。
+    /// </summary>
+    /// <param name="impl">服务的具体实现类型，同时用作契约。</param>
+    /// <remarks>
+    /// 用于无法使用泛型的反射或动态注册场景。
+    /// </remarks>
+    void AddSingleton(Type impl);
 
     /// <summary>
     /// 注册作用域服务，使用泛型指定契约与实现类型。
     /// </summary>
     /// <typeparam name="TContract">服务契约类型。</typeparam>
     /// <typeparam name="TImpl">服务的具体实现类型，必须可赋值给 <typeparamref name="TContract"/>。</typeparam>
+    /// <param name="allowOverride">是否允许顶掉该契约上先前的注册，默认 <c>false</c>（重复注册抛异常）。</param>
     /// <remarks>
     /// 每个 <see cref="IVivScope"/> 内最多创建一个实例，不同作用域间互不共享。
     /// </remarks>
-    void AddScoped<TContract, TImpl>() where TImpl : class, TContract;
+    void AddScoped<TContract, TImpl>(bool allowOverride = false) where TImpl : class, TContract;
 
     /// <summary>
     /// 注册作用域服务，使用运行时 <see cref="Type"/> 指定契约与实现类型。
     /// </summary>
     /// <param name="contract">服务契约类型。</param>
     /// <param name="impl">服务的具体实现类型，必须可赋值给 <paramref name="contract"/>。</param>
+    /// <param name="allowOverride">是否允许顶掉该契约上先前的注册，默认 <c>false</c>（重复注册抛异常）。</param>
     /// <remarks>
     /// 用于无法使用泛型的反射或动态注册场景。
     /// </remarks>
-    void AddScoped(Type contract, Type impl);
+    void AddScoped(Type contract, Type impl, bool allowOverride = false);
 
     /// <summary>
     /// 注册作用域服务，使用工厂委托延迟创建实例。
     /// </summary>
     /// <typeparam name="TContract">服务契约类型。</typeparam>
     /// <param name="factory">工厂委托，接收所属作用域的容器作为参数并返回服务实例。</param>
+    /// <param name="allowOverride">是否允许顶掉该契约上先前的注册，默认 <c>false</c>（重复注册抛异常）。</param>
     /// <remarks>
     /// 每个作用域内工厂至多调用一次，其结果在该作用域内被缓存复用。
+    /// 作用域内的实例缓存根容器看不见，所以这一档的覆盖同样只在建作用域之前有意义。
     /// </remarks>
-    void AddScoped<TContract>(Func<IVivContainer, TContract> factory) where TContract : class;
+    void AddScoped<TContract>(Func<IVivContainer, TContract> factory, bool allowOverride = false) where TContract : class;
+
+    /// <summary>
+    /// 注册作用域服务，契约就是实现类型自身。
+    /// </summary>
+    /// <typeparam name="TImpl">服务的具体实现类型，同时用作契约。</typeparam>
+    /// <remarks>
+    /// 省掉把同一个类型写两遍。约束只有 <c>class</c>，没有双参版那条可赋值性要求 ——
+    /// 契约本来就等于实现自己。
+    /// </remarks>
+    void AddScoped<TImpl>() where TImpl : class;
+
+    /// <summary>
+    /// 注册作用域服务，契约就是实现类型自身，使用运行时 <see cref="Type"/>。
+    /// </summary>
+    /// <param name="impl">服务的具体实现类型，同时用作契约。</param>
+    /// <remarks>
+    /// 用于无法使用泛型的反射或动态注册场景。
+    /// </remarks>
+    void AddScoped(Type impl);
 
     /// <summary>
     /// 注册瞬时服务，使用泛型指定契约与实现类型。
     /// </summary>
     /// <typeparam name="TContract">服务契约类型。</typeparam>
     /// <typeparam name="TImpl">服务的具体实现类型，必须可赋值给 <typeparamref name="TContract"/>。</typeparam>
+    /// <param name="allowOverride">是否允许顶掉该契约上先前的注册，默认 <c>false</c>（重复注册抛异常）。</param>
     /// <remarks>
     /// 每次解析都会创建新的实例，由调用方负责释放。
     /// </remarks>
-    void AddTransient<TContract, TImpl>() where TImpl : class, TContract;
+    void AddTransient<TContract, TImpl>(bool allowOverride = false) where TImpl : class, TContract;
 
     /// <summary>
     /// 注册瞬时服务，使用运行时 <see cref="Type"/> 指定契约与实现类型。
     /// </summary>
     /// <param name="contract">服务契约类型。</param>
     /// <param name="impl">服务的具体实现类型，必须可赋值给 <paramref name="contract"/>。</param>
+    /// <param name="allowOverride">是否允许顶掉该契约上先前的注册，默认 <c>false</c>（重复注册抛异常）。</param>
     /// <remarks>
     /// 用于无法使用泛型的反射或动态注册场景。
     /// </remarks>
-    void AddTransient(Type contract, Type impl);
+    void AddTransient(Type contract, Type impl, bool allowOverride = false);
 
     /// <summary>
     /// 注册瞬时服务，使用工厂委托创建实例。
     /// </summary>
     /// <typeparam name="TContract">服务契约类型。</typeparam>
     /// <param name="factory">工厂委托，接收当前解析上下文容器作为参数并返回服务实例。</param>
+    /// <param name="allowOverride">是否允许顶掉该契约上先前的注册，默认 <c>false</c>（重复注册抛异常）。</param>
     /// <remarks>
     /// 每次解析都会调用工厂创建一个新实例。
     /// </remarks>
-    void AddTransient<TContract>(Func<IVivContainer, TContract> factory) where TContract : class;
+    void AddTransient<TContract>(Func<IVivContainer, TContract> factory, bool allowOverride = false) where TContract : class;
+
+    /// <summary>
+    /// 注册瞬时服务，契约就是实现类型自身。
+    /// </summary>
+    /// <typeparam name="TImpl">服务的具体实现类型，同时用作契约。</typeparam>
+    /// <remarks>
+    /// 省掉把同一个类型写两遍。约束只有 <c>class</c>，没有双参版那条可赋值性要求 ——
+    /// 契约本来就等于实现自己。
+    /// </remarks>
+    void AddTransient<TImpl>() where TImpl : class;
+
+    /// <summary>
+    /// 注册瞬时服务，契约就是实现类型自身，使用运行时 <see cref="Type"/>。
+    /// </summary>
+    /// <param name="impl">服务的具体实现类型，同时用作契约。</param>
+    /// <remarks>
+    /// 用于无法使用泛型的反射或动态注册场景。
+    /// </remarks>
+    void AddTransient(Type impl);
 
     /// <summary>
     /// 解析指定契约类型的服务实例。

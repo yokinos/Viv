@@ -144,29 +144,29 @@ namespace Viv.Aoi.Paradox
         public IServiceProvider? Fallback => _fallback;
 
         /// <inheritdoc />
-        public void AddSingleton<TContract, TImpl>() where TImpl : class, TContract
-            => AddSingleton(typeof(TContract), typeof(TImpl));
+        public void AddSingleton<TContract, TImpl>(bool allowOverride = false) where TImpl : class, TContract
+            => AddSingleton(typeof(TContract), typeof(TImpl), allowOverride);
 
         /// <inheritdoc />
-        public void AddSingleton(Type contract, Type impl)
+        public void AddSingleton(Type contract, Type impl, bool allowOverride = false)
         {
             ArgumentNullException.ThrowIfNull(contract);
             ArgumentNullException.ThrowIfNull(impl);
-            AddDescriptor(new ServiceDescriptor(contract, impl, ServiceLifetime.Singleton));
+            AddDescriptor(new ServiceDescriptor(contract, impl, ServiceLifetime.Singleton), allowOverride);
         }
 
         /// <inheritdoc />
-        public void AddSingleton<TContract>(TContract instance) where TContract : class
+        public void AddSingleton<TContract>(TContract instance, bool allowOverride = false) where TContract : class
         {
             ArgumentNullException.ThrowIfNull(instance);
-            AddDescriptor(new ServiceDescriptor(typeof(TContract), instance, ServiceLifetime.Singleton));
+            AddDescriptor(new ServiceDescriptor(typeof(TContract), instance, ServiceLifetime.Singleton), allowOverride);
         }
 
         /// <inheritdoc />
-        public void AddSingleton<TContract>(Func<IVivContainer, TContract> factory) where TContract : class
+        public void AddSingleton<TContract>(Func<IVivContainer, TContract> factory, bool allowOverride = false) where TContract : class
         {
             ArgumentNullException.ThrowIfNull(factory);
-            AddDescriptor(new ServiceDescriptor(typeof(TContract), c => factory(c)!, ServiceLifetime.Singleton));
+            AddDescriptor(new ServiceDescriptor(typeof(TContract), c => factory(c)!, ServiceLifetime.Singleton), allowOverride);
         }
 
         /// <inheritdoc />
@@ -178,22 +178,22 @@ namespace Viv.Aoi.Paradox
 
 
         /// <inheritdoc />
-        public void AddScoped<TContract, TImpl>() where TImpl : class, TContract
-            => AddScoped(typeof(TContract), typeof(TImpl));
+        public void AddScoped<TContract, TImpl>(bool allowOverride = false) where TImpl : class, TContract
+            => AddScoped(typeof(TContract), typeof(TImpl), allowOverride);
 
         /// <inheritdoc />
-        public void AddScoped(Type contract, Type impl)
+        public void AddScoped(Type contract, Type impl, bool allowOverride = false)
         {
             ArgumentNullException.ThrowIfNull(contract);
             ArgumentNullException.ThrowIfNull(impl);
-            AddDescriptor(new ServiceDescriptor(contract, impl, ServiceLifetime.Scoped));
+            AddDescriptor(new ServiceDescriptor(contract, impl, ServiceLifetime.Scoped), allowOverride);
         }
 
         /// <inheritdoc />
-        public void AddScoped<TContract>(Func<IVivContainer, TContract> factory) where TContract : class
+        public void AddScoped<TContract>(Func<IVivContainer, TContract> factory, bool allowOverride = false) where TContract : class
         {
             ArgumentNullException.ThrowIfNull(factory);
-            AddDescriptor(new ServiceDescriptor(typeof(TContract), c => factory(c)!, ServiceLifetime.Scoped));
+            AddDescriptor(new ServiceDescriptor(typeof(TContract), c => factory(c)!, ServiceLifetime.Scoped), allowOverride);
         }
 
         /// <inheritdoc />
@@ -205,22 +205,22 @@ namespace Viv.Aoi.Paradox
 
 
         /// <inheritdoc />
-        public void AddTransient<TContract, TImpl>() where TImpl : class, TContract
-            => AddTransient(typeof(TContract), typeof(TImpl));
+        public void AddTransient<TContract, TImpl>(bool allowOverride = false) where TImpl : class, TContract
+            => AddTransient(typeof(TContract), typeof(TImpl), allowOverride);
 
         /// <inheritdoc />
-        public void AddTransient(Type contract, Type impl)
+        public void AddTransient(Type contract, Type impl, bool allowOverride = false)
         {
             ArgumentNullException.ThrowIfNull(contract);
             ArgumentNullException.ThrowIfNull(impl);
-            AddDescriptor(new ServiceDescriptor(contract, impl, ServiceLifetime.Transient));
+            AddDescriptor(new ServiceDescriptor(contract, impl, ServiceLifetime.Transient), allowOverride);
         }
 
         /// <inheritdoc />
-        public void AddTransient<TContract>(Func<IVivContainer, TContract> factory) where TContract : class
+        public void AddTransient<TContract>(Func<IVivContainer, TContract> factory, bool allowOverride = false) where TContract : class
         {
             ArgumentNullException.ThrowIfNull(factory);
-            AddDescriptor(new ServiceDescriptor(typeof(TContract), c => factory(c)!, ServiceLifetime.Transient));
+            AddDescriptor(new ServiceDescriptor(typeof(TContract), c => factory(c)!, ServiceLifetime.Transient), allowOverride);
         }
 
         /// <inheritdoc />
@@ -230,7 +230,12 @@ namespace Viv.Aoi.Paradox
         /// <inheritdoc />
         public void AddTransient(Type impl) => AddTransient(impl, impl);
 
-        private void AddDescriptor(ServiceDescriptor descriptor)
+        /// <summary>
+        /// 把一个描述符登记进表。同一个契约只留一个实现，重复注册默认抛异常。
+        /// </summary>
+        /// <param name="descriptor">要登记的描述符。</param>
+        /// <param name="allowOverride">是否允许后来的顶掉先前的。</param>
+        private void AddDescriptor(ServiceDescriptor descriptor, bool allowOverride)
         {
             ThrowIfDisposed();
 
@@ -246,17 +251,39 @@ namespace Viv.Aoi.Paradox
 
             lock (_root._sync)
             {
-                if (_descriptors.ContainsKey(descriptor.ServiceType))
+                _descriptors.TryGetValue(descriptor.ServiceType, out var existing);
+
+                if (existing is not null)
                 {
-                    throw new InvalidOperationException(
-                        $"服务 {descriptor.ServiceType.FullName} 已注册。同一个契约只能有一个实现，" +
-                        "要换实现请换一个契约类型，或先把容器建成新的。");
+                    if (!allowOverride)
+                    {
+                        throw new InvalidOperationException(
+                            $"服务 {descriptor.ServiceType.FullName} 已注册。同一个契约只能有一个实现，" +
+                            "要换实现请换一个契约类型、把容器建成新的，或者注册时传 allowOverride: true。");
+                    }
+
+                    // 已经建出过实例的契约覆盖不动 —— 解析走的是单例缓存里的那份，只换描述符
+                    // 等于新注册永远不生效，而编译和测试都不会吭声。判据不能只看缓存里有没有：
+                    // 实例注册从登记那刻就压在那儿，它本来就现成，顶掉没有构造过程可言。
+                    if (existing.Instance is null && _singletons.ContainsKey(descriptor.ServiceType))
+                    {
+                        throw new InvalidOperationException(
+                            $"服务 {descriptor.ServiceType.FullName} 已经解析过了，不能再覆盖。" +
+                            "覆盖只应该在装配期做 —— 一旦有人解析过，注册就该冻结。");
+                    }
                 }
 
                 if (descriptor.Instance is not null)
                 {
                     _singletons[descriptor.ServiceType] = descriptor.Instance;
                     TrackDisposable(descriptor.Instance);
+                }
+                else if (existing?.Instance is not null)
+                {
+                    // 被顶掉的那份是实例注册，它还压在单例缓存里 —— 不摘掉的话解析先撞上它，
+                    // 新的描述符根本没机会被看到。旧实例仍留在释放清单里：登记那刻所有权就
+                    // 转移给容器了，半路摘掉等于让它没人管。
+                    _singletons.Remove(descriptor.ServiceType);
                 }
 
                 _descriptors[descriptor.ServiceType] = descriptor;
