@@ -67,10 +67,12 @@ namespace Viv.Aoi.Paradox
         /// <summary>是否为作用域实例。</summary>
         private readonly bool _isScope;
 
-        /// <summary>是否拒绝从根容器解析 Scoped，等价于 MS DI 的 ValidateScopes。</summary>
+        /// <summary>是否拒绝从根容器解析 Scoped。默认 <c>false</c>。</summary>
         /// <remarks>
-        /// 默认不拒：根容器也是容器自己的一层合法作用域。要挡的是间接那条路 —— 从根解析的
-        /// Transient 依赖了 Scoped，而它又被单例或静态字段留下来，那个 Scoped 就成了事实单例。
+        /// 只管 Viv 自己注册的描述符。要挡的是间接那条路 —— 从根解析的 Transient 依赖了 Scoped，
+        /// 而它又被单例或静态字段留下来，那个 Scoped 就成了事实单例。
+        ///
+        /// 经 fallback 转交的不在其列：那条路上连描述符都没有、生命周期无从得知，拦就是猜。
         /// </remarks>
         private readonly bool _validateScopes;
 
@@ -150,7 +152,9 @@ namespace Viv.Aoi.Paradox
         /// 本容器没有的服务转交给它，通常传宿主自己的 <see cref="IServiceProvider"/>。为 <c>null</c> 表示不桥接。
         /// </param>
         /// <param name="validateScopes">
-        /// 拒绝从根容器解析 Scoped，相当于 MS DI 的 <c>ValidateScopes</c>。默认 <c>false</c>。
+        /// 拒绝从根容器解析 Scoped，默认 <c>false</c>。与 MS DI 的 <c>ValidateScopes</c> 形似而范围不同：
+        /// 那个是整个 provider 统一校验，这个只管 Viv 自己注册的描述符 —— 经 fallback 转交的服务照旧
+        /// 透传，拦不拦由 fallback 自己决定。
         /// </param>
         /// <remarks>
         /// fallback 由调用方持有，容器释放时不会释放它，只释放从它上面开的那些子作用域。

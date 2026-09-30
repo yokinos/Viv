@@ -23,7 +23,8 @@ namespace Viv.Aoi.Paradox;
 ///
 /// 根容器本身也是一层合法的作用域，从根解析 Scoped 是允许的。要拒掉它（<see cref="VivContainer"/>
 /// 构造参数 <c>validateScopes</c>，默认关）的场景是：从根解析的 Transient 依赖了 Scoped，
-/// 而它又被单例或静态字段留下来，那个 Scoped 就成了事实单例。
+/// 而它又被单例或静态字段留下来，那个 Scoped 就成了事实单例。该开关只管 Viv 自己注册的描述符，
+/// 转交给 fallback 的照旧透传。
 /// </remarks>
 public interface IVivContainer : IServiceProvider, IServiceProviderIsService, ISupportRequiredService, IServiceScope, IDisposable, IAsyncDisposable
 {
@@ -80,8 +81,8 @@ public interface IVivContainer : IServiceProvider, IServiceProviderIsService, IS
     /// 省掉把同一个类型写两遍。约束只有 <c>class</c>，没有双参版那条可赋值性要求 ——
     /// 契约本来就等于实现自己。
     ///
-    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，覆盖没有语义；要换实现
-    /// 必然换契约，走双参版。
+    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，顶着它再来一次还是同一个类型，
+    /// 覆盖没有语义。要换实现改用双参重载，那组有 <c>allowOverride</c>。
     /// </remarks>
     void AddSingleton<TImpl>() where TImpl : class;
 
@@ -136,8 +137,8 @@ public interface IVivContainer : IServiceProvider, IServiceProviderIsService, IS
     /// 省掉把同一个类型写两遍。约束只有 <c>class</c>，没有双参版那条可赋值性要求 ——
     /// 契约本来就等于实现自己。
     ///
-    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，覆盖没有语义；要换实现
-    /// 必然换契约，走双参版。
+    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，顶着它再来一次还是同一个类型，
+    /// 覆盖没有语义。要换实现改用双参重载，那组有 <c>allowOverride</c>。
     /// </remarks>
     void AddScoped<TImpl>() where TImpl : class;
 
@@ -191,8 +192,8 @@ public interface IVivContainer : IServiceProvider, IServiceProviderIsService, IS
     /// 省掉把同一个类型写两遍。约束只有 <c>class</c>，没有双参版那条可赋值性要求 ——
     /// 契约本来就等于实现自己。
     ///
-    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，覆盖没有语义；要换实现
-    /// 必然换契约，走双参版。
+    /// 这一组刻意没有 <c>allowOverride</c>：契约就是实现自己，顶着它再来一次还是同一个类型，
+    /// 覆盖没有语义。要换实现改用双参重载，那组有 <c>allowOverride</c>。
     /// </remarks>
     void AddTransient<TImpl>() where TImpl : class;
 
