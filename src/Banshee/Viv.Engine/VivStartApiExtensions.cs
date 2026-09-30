@@ -156,9 +156,6 @@ namespace Viv.Engine
             var app = builder.Build();
             VivLocator.Initialize(app.Services);
 
-            // 尝试同步表结构
-            VivStartupSchemaSync.Run(app.Services);
-
             // 网关代理场景：信任 YARP 透传的 X-Forwarded-Proto/Host/For。
             // Aspire/YARP 网关不在 loopback，必须清空默认 KnownProxies，否则转发头被丢掉。
             app.UseForwardedHeaders(VivForwardedHeaders.Create(VivEngine.VivOptions?.EnvOption));

@@ -66,7 +66,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Generators` | 应用专用源生成器（netstandard2.0，继承 `Viv.Forge` 基类，字符串全名匹配特性） |
 | `Viv.Meta` | 生成代码宿主（net10.0，挂 Viv.Forge + Viv.Generators 两个 Analyzer，业务引它拿生成类型） |
 | `Viv.ServiceProxy` | **业务侧 gRPC 实现层（服务自行 ProjectReference 挂 proto/示例，框架级装配走配置驱动）**：`Protos/tenant_grpc.proto` 契约（4 RPC 覆盖 unary/server-streaming/client-streaming/bidi）+ `Examples/TenantGrpcService` 示例实现 + `TenantGrpcClientDemo` 客户端用法示意；框架级能力（`AddVivGrpcServer`/`AddVivGrpcClient`/服务端租户拦截器/`AddVivGrpcKestrel`）已收进 `Viv.Echo`，宿主配 `EchoOption.GrpcOption` 后示例经 `VivGrpcDiscovery` 自动发现托管 |
-| `Viv.Toolbox` | **业务侧通用工具箱（控制台）**：`VivAppBuilder` 的第一个真实宿主，跑 `VivCliHost` 的 REPL。走 Apex 域的配置（`DIOption` 扫 `Viv.Apex.Core`、`EntityTypeOptions` 指 `Viv.Entity.Database.Apex`、库是 `viv_apex_master`），但 `NanaOption` / `OutboxOption` 都为 null —— 工具既不消费 MQ 也不该跟 Worker 抢发件箱；`SyncTableOnStartup: false` 且 `InboxOption.RetentionDays: 0`，启动路径不碰库。`Program.cs` 里 `VivCliHost` 先于 `AddVivApp` 构造、`StartAsync` 之后才 `UseContainer`，先后顺序是有意的（见 `### Startup: one-liner API & Worker & Gateway`）|
+| `Viv.Toolbox` | **业务侧通用工具箱（控制台）**：`VivAppBuilder` 的第一个真实宿主，跑 `VivCliHost` 的 REPL。走 Apex 域的配置（`DIOption` 扫 `Viv.Apex.Core`、`EntityTypeOptions` 指 `Viv.Entity.Database.Apex`、库是 `viv_apex_master`），但 `NanaOption` / `OutboxOption` 都为 null —— 工具既不消费 MQ 也不该跟 Worker 抢发件箱；`InboxOption.RetentionDays: 0`，启动路径不碰库 —— 改表结构要靠它自己的 `initviv` 命令（`Cmd_InitViv`），不由启动触发（见 `### Schema sync`）。`Program.cs` 里 `VivCliHost` 先于 `AddVivApp` 构造、`StartAsync` 之后才 `UseContainer`，先后顺序是有意的（见 `### Startup: one-liner API & Worker & Gateway`）|
 
 **REST + gRPC 明文端口约束**：gRPC 需要 HTTP/2。明文下 `Http1AndHttp2` 只认 TLS/ALPN，不认 h2c prior-knowledge 前缀（Grpc.Net.Client 明文即发前缀）→ 回 `HTTP_1_1_REQUIRED`；严格 `Http2` 会把 HTTP/1.1 REST 打挂（400）。故 REST 与 gRPC 必须**分开端口**。**配置驱动（宿主零手工接线）**：appsettings.json 的 `VivOptions.EchoOption.GrpcOption`（`EnableServer` + `Port`）启用时，`AddVivApi` 自动调 `AddVivGrpcKestrel(port)`（`Viv.Echo.Grpc`：gRPC 端口绑严格 HTTP/2，并把 urls——`--urls`/`ASPNETCORE_URLS`/launchSettings——显式 `Listen` 回 HTTP/1.1；显式 `Listen` 会顶掉 urls 生成的端点，必须重绑，无 urls 回落 Kestrel 默认 5000；声明端口即自动调 `AddVivGrpcServer` 含租户上下文恢复拦截器）+ `VivGrpcDiscovery` 自动发现注册 gRPC 服务，`RunVivApi` 在 `MapControllers()` 后自动 `MapGrpcService<T>`。**自动发现约定**：grpc_csharp_plugin 生成的基类（如 `TenantGrpcServiceBase`）**不继承 `ServiceBase`**，以基类上的 `[BindServiceMethod]` 特性沿基类链判定（`VivGrpcDiscovery.FindServices` 先 `TypeScanMagic.ForceLoadReferencedAssemblies()` 强制加载懒加载程序集）。**Apex.Api 已配 7001、Herta.Api 配 7002**，示例 `TenantGrpcService` 自动托管（保留 ServiceProxy ProjectReference）；非 gRPC 宿主服务 `EchoOption.GrpcOption: null`（死属性 `EnableGrpc` 已移除）。测试用严格 Http2 的 Kestrel in-process server 验证。 |
 
@@ -144,13 +144,13 @@ try { /* 跑 UI 或 REPL */ }
 finally { await app.StopAsync(); }
 ```
 
-- `VivAppBuilder`（`Viv.Engine/VivAppBuilder.cs`）是第四种宿主，给 API / Worker / Gateway 之外的场景用。它是实例门面而不是 starter：`Create(args)` → `AddVivApp()` → `StartAsync()` / `StopAsync()`，暴露 `Services` / `Configuration` / `Options` / `Provider`。`AddVivApp` 干的是 `AddVivApi` 里除 MVC 之外的那几件事（`AddVivConfig` → Autofac 根容器 → `AddViv` → Serilog → 编码注册）；`StartAsync` 是 Build → `VivLocator.Initialize` → `VivStartupSchemaSync.Run` → `IHost.StartAsync`。仓库里的实例是 `Viv.Toolbox`。
+- `VivAppBuilder`（`Viv.Engine/VivAppBuilder.cs`）是第四种宿主，给 API / Worker / Gateway 之外的场景用。它是实例门面而不是 starter：`Create(args)` → `AddVivApp()` → `StartAsync()` / `StopAsync()`，暴露 `Services` / `Configuration` / `Options` / `Provider`。`AddVivApp` 干的是 `AddVivApi` 里除 MVC 之外的那几件事（`AddVivConfig` → Autofac 根容器 → `AddViv` → Serilog → 编码注册）；`StartAsync` 是 Build → `VivLocator.Initialize` → `IHost.StartAsync`。仓库里的实例是 `Viv.Toolbox`。
 - **两个方向都开**：`Services`（MS DI，Build 之前登记普通服务）与 `ConfigureContainer(Action<ContainerBuilder>)`（Autofac 那一层，模块 / 装饰器 / 泛型注册这些 MS DI 表达不了的）。容器是 `AutofacServiceProviderFactory` 自己 `new` 的，回调那一刻才拿得到，所以 `ConfigureContainer` 登记的东西攒在列表里、到 Build 时才回放。**`StartAsync` 之后容器已经建好了，再登记不会生效 —— 那种情况直接抛**，别让它变成无声失效。
 - `Provider` 是 `StartAsync` 之后的宿主容器，给 `new` 出来的窗体和控件用（构造注入够不着它们，只能回头找容器）。**要 Scoped 服务（`IMomoDbContext` / `IVivContext`）得自己 `CreateScope()`** —— 从根 provider 直接解析拿到的会是进程级那一份。
 - ⚠️ 桌面宿主必须显式 `ContentRootPath = AppContext.BaseDirectory`（`VivAppBuilder` 构造里已写）：从快捷方式启动时 cwd 是随机的，不指程序目录的话 `appsettings.json` 静默读不到，全部配置回落默认值。反过来说，**测试进程的输出目录里只要有被引用项目带过来的 `appsettings.json`，`VivAppBuilder` 就会加载它** —— 用例要断言配置得先 `Configuration.Sources.Clear()`。
 - ⚠️ `VivLocator.Initialize` 的 `_initialized` 是永不重置的静态量，第二次调用直接抛 `请勿重复初始化！`，所以一个进程只允许 `StartAsync` 一次。`VivAppBuilder` 自己也挡了第二次 `StartAsync`。测试因此不起真宿主（与仓库既有的启动期测试同一口径），端到端验证靠真跑 `Viv.Toolbox`。
 - `SetVivContext` / `ClearVivContext` 给桌面程序的登录流程用：写的是 **Singleton** 的 `IVivContextAccessor` 上的 `AsyncLocal`，不是 Scoped 的 `IVivContext`（后者从根 provider 解析在 `ValidateScopes` 下直接抛）。值随 ExecutionContext 往下流，哪个线程调就只对那条线程的后续可见 —— 登录成功后要在主线程调一次。没 `StartAsync` 就调会抛 `InvalidOperationException`。
-- 控制台工具不想在启动时碰库：`InboxOption.RetentionDays` 配 0（`InboxDispatcher.ExecuteAsync` 开局就先跑一轮清理，配 0 时直接返回），`DatabaseOption.SyncTableOnStartup` 保持 `false`，工具就不该改表结构。
+- 控制台工具不想在启动时碰库：`InboxOption.RetentionDays` 配 0（`InboxDispatcher.ExecuteAsync` 开局就先跑一轮清理，配 0 时直接返回），启动路径就不该改表结构。
 - `AddVivApi` / `AddVivWorker` handle config load, Autofac setup, `AddViv()`, MVC/filters, CORS, Swagger, and encoding registration.
 - `RunVivApi` handles Build → VivLocator → **`UseForwardedHeaders`**（信任网关透传的 `X-Forwarded-Proto/Host/For`，避免 `UseHttpsRedirection` 把浏览器 302 甩出网关直连下游）→ Swagger UI (dev) → middleware pipeline → Run. Accepts an `Action<WebApplication>? configure` for custom endpoints (`UseTickerQ()`, `MapHub()`, etc.).
 - `RunVivWorker` handles Build → VivLocator → Run.
@@ -186,7 +186,7 @@ Every API / Worker / 工具箱 project carries a `VivOptions` node in its `appse
 | `DIOption` | Type-scanning rules for Service/Repository auto-registration |
 | `LogOption` | Logging backend (Serilog → Seq) |
 | `CacheOption` | Redis connection + memory cache toggle |
-| `DatabaseOption` | Database type, read-write split, entity scan targets, `SyncTableOnStartup`（启动时按实体同步表结构，默认关）, `SlowQueryThresholdMs`（慢查询阈值，默认 1000，0 = 关，见 `### 慢查询与指标`） |
+| `DatabaseOption` | Database type, read-write split, entity scan targets, `SlowQueryThresholdMs`（慢查询阈值，默认 1000，0 = 关，见 `### 慢查询与指标`） |
 | `NanaOption` | RabbitMQ host/port/credentials, consumer type list, retry count, Saga DB |
 | `OutboxOption` | 发件箱：投递器开关、轮询间隔、批大小、重试上限、租约、建表、保留期。**为 null = 不启用**（见下） |
 | `InboxOption` | Inbox 清理：保留期（默认 7 天）、批大小（默认 1000）、清理间隔。**与别的子配置不同 —— 为 null 不是「不启用」**：Inbox 只看 `DatabaseOption`，节点缺席就用默认值照常清理，要关掉把保留期配成 0（见下） |
@@ -511,7 +511,13 @@ var everything = await _db.FindListAsync<Order>(x => x.Status == 1);
 
 入口是 `IMomoDbContext.SyncTableAsync(allowDrop, allowAlterColumn)` —— **两个门都默认关**，所以默认行为只有「建缺失的表、加缺失的列」，不改不删。
 
-**启动钩子（配置驱动）**：`DatabaseOptions.SyncTableOnStartup`（默认 `false`）打开时，`RunVivApi` / `RunVivWorker` 在 `VivLocator.Initialize` 之后、开始接请求之前调一次（`VivStartupSchemaSync`）。`RunVivGateway` 不调（网关无库）。**已给 6 个有实体的服务打开**：Apex.Api / Apex.Worker / DeepRed.Api / DeepRed.Worker / Herta.Api / Herta.Link —— 开发期实体是唯一事实来源，DB 跟着走，不必手写 DDL。同步失败只记 Error 不阻塞启动（与 `OutboxDispatcher.StartupAsync` 同取舍）。生产期建议关掉，交给迁移脚本控制变更时机。
+**同步不由启动触发，改由 Toolbox 的 `initviv` 命令执行**（`Viv.Toolbox/Commands/Basic/Cmd_InitViv.cs`）。`RunVivApi` / `RunVivWorker` / `VivAppBuilder.StartAsync` 一概不碰表结构 —— 原先那个由 `DatabaseOptions.SyncTableOnStartup` 门控的启动钩子 `VivStartupSchemaSync` 已删除，配置项也一并删了，所以仓库里现在**没有「服务启动时自动改表」这条路径**。
+
+工具连的是 `viv_apex_master`（`EntityTypeOptions` 指 `Viv.Entity.Database.Apex`），所以这条命令同步的是 Apex 域的表；换库要改 Toolbox 的 `appsettings.json`。
+
+命令失败会打印错误并返回退出码 1。启动钩子那版是吞掉异常只记日志（怕把启动拽下来），命令是你主动敲的，得看得见结果。
+
+开发期实体仍是唯一事实来源、DB 跟着走，只是触发时机从「服务启动」挪到了「手工敲一条命令」。生产期改表结构照旧交给迁移脚本。
 
 - **🔴 主键判定必须含 `Id` 约定**（`IsPrimaryKeyProperty`）：全仓实体一律继承 `EntityBase`，`[Key]` 只标在基类的 `long Id` 上（EF 也靠约定认主键）。**只认特性、或只认约定，都不可取**：约定那条不能省，否则一旦有实体脱离 `EntityBase` 就生成出**一个主键都没有**的表，而 `_primaryKeys = ["Id"]` 那套 Id 定位全靠它；特性那条也不能省，否则显式 `[Key]` 的非 `Id` 主键（如 `SyncAttributedRow`）会漏。**刻意不实现 EF 的 `{类名}Id` 约定** —— `AtUserRoleRelation.UserId` 这类是外键，按那个约定认会把外键标成主键。
 - **🔴 `GenerateDdl` 默认不发 `ALTER COLUMN`**（`DiffType.Modified`，需构造时显式 `allowAlterColumn: true`）：这个判据对现有库**几乎全是误报** —— 预期侧按 `nonPkNullable = true` 认为「除主键外全 NULL」、string 无 `[StringLength]` 就是 `nvarchar(max)`，一比对就把有长度约束的字符串列判成要放宽成 `max`、把 NOT NULL 列判成要去掉。**而 `allowDrop` 那条门管不到这里**（它只清 `Deleted`，不清 `Modified`）。`SyncTableAsync` 会把跳过的 ALTER 逐条记日志（静默跳过 = 被当成「同步成功了」）。
@@ -536,7 +542,7 @@ var everything = await _db.FindListAsync<Order>(x => x.Status == 1);
   - **Apex 24 个 —— 按「实体现有字段」逐个标**：21 个完整四件套；`AtFileRecord` 只有 `CreatedAt` → 仅 `ICreatedAt`；`AtUserRoleRelation` 只有 `CreatedAt` + `CreatedBy` → 仅这两个（**这两个偏门实体正是「拆四个接口」而非一个大 `IAudited` 的理由**）；`AtUserBind` 一个审计字段都没有 → **不标**。
   - **Herta 16 个 `Et*` —— 原先一列都没有，本次整体新增四件套**（属性 + 接口）。它们都实现 `ITenant` / `ISoftDeleted`，是唯一会被 `CopyProtectedValues` 的租户保护照到的实体（Apex 一个都不实现 `ITenant`）。
   - **DeepRed 只有 `VtUser` 一个实体，同样没有审计列，本次未动。**
-- **Herta 那 16 个实体「加了属性就等于加了列」**：EF 把公开属性全部映射成列，DB 里没有对应列时**每次读写都直接 `Invalid column name 'CreatedAt'`**（不是降级、不是忽略）。**Herta 的表还没建过**，`SyncTableOnStartup` 已打开 → 下次启动 16 张 `Et*` 表连那 4 列一起建出来，不用手写 DDL。**Apex 才是真正的风险面**（23 个实体带审计列）：若它的表**已经建过**（建表时还没有这些字段），启动同步会走 `ADD COLUMN` 补上 —— 补列属于默认路径，不需要额外放宽 `allowAlterColumn`。反过来，**表已存在时改实体的列类型 / 可空性**属于 `Modified`，默认被拒。
+- **Herta 那 16 个实体「加了属性就等于加了列」**：EF 把公开属性全部映射成列，DB 里没有对应列时**每次读写都直接 `Invalid column name 'CreatedAt'`**（不是降级、不是忽略）。**Herta 的表还没建过**，跑一次 `initviv` 就能把 16 张 `Et*` 表连那 4 列一起建出来，不用手写 DDL。**Apex 才是真正的风险面**（23 个实体带审计列）：若它的表**已经建过**（建表时还没有这些字段），同步会走 `ADD COLUMN` 补上 —— 补列属于默认路径，不需要额外放宽 `allowAlterColumn`。反过来，**表已存在时改实体的列类型 / 可空性**属于 `Modified`，默认被拒。
 - **⚠️ 测试覆盖的边界**：`AutoSetInsertValue` / `AutoSetUpdateValue` / `CopyProtectedValues` 是纯内存逻辑，有单测钉死（`Viv.Momo.Tests/AuditValueTests.cs`，探针 `MomoAuditSut` 在 `Viv.Fakes/Audit.cs`）。但**真正的落库路径（`SetValues` + `SaveChanges`）需要数据库，CI 没有** —— 那一段没有被自动化覆盖，别把这些单测当成端到端验证。
 
 ### Multi-tenancy

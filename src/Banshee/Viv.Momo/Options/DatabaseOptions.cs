@@ -40,12 +40,6 @@ namespace Viv.Momo.Options
         public List<FilterTypeOptions> EntityTypeOptions { get; set; } = [];
 
         /// <summary>
-        /// 启动时按实体同步表结构（建缺失的表、加缺失的列）。默认关。
-        /// 只加不改不删，对已有库安全。开发期打开，生产期交给迁移脚本。
-        /// </summary>
-        public bool SyncTableOnStartup { get; set; }
-
-        /// <summary>
         /// 慢查询阈值（毫秒）。超过则记一条 Warning 并计入 viv.momo.query.slow，0 或负数 = 关。
         ///
         /// 作用于全部库访问，手写的大 SQL 也在内。判的是单条命令：批量写与 ExecuteSqlList

@@ -106,7 +106,7 @@ namespace Viv.Engine
         }
 
         /// <summary>
-        /// Build → VivLocator.Initialize → 表结构同步 → 启动宿主，返回根 provider 供业务自建作用域
+        /// Build → VivLocator.Initialize → 启动宿主，返回根 provider 供业务自建作用域
         /// </summary>
         public async Task<IServiceProvider> StartAsync(CancellationToken cancellationToken = default)
         {
@@ -120,7 +120,6 @@ namespace Viv.Engine
             Provider = _host.Services;
 
             VivLocator.Initialize(_host.Services);
-            VivStartupSchemaSync.Run(_host.Services);
 
             await _host.StartAsync(cancellationToken).ConfigureAwait(false);
             return _host.Services;

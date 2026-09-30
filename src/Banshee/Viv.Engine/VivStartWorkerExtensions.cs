@@ -50,9 +50,6 @@ namespace Viv.Engine
             var host = builder.Build();
             VivLocator.Initialize(host.Services);
 
-            // 尝试同步表结构
-            VivStartupSchemaSync.Run(host.Services);
-
             host.Run();
         }
     }
