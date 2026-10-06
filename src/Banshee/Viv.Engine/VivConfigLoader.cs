@@ -92,7 +92,6 @@ namespace Viv.Engine
             services.Configure<EchoOptions>(configuration.GetSection("VivOptions:EchoOption"));
             services.Configure<GrpcOptions>(configuration.GetSection("VivOptions:EchoOption:GrpcOption"));
             services.Configure<CorsOptions>(configuration.GetSection("VivOptions:CorsOption"));
-            services.Configure<OpenAIOptions>(configuration.GetSection("VivOptions:OpenAIOption"));
             services.Configure<S3Options>(configuration.GetSection("VivOptions:S3Option"));
 
             // VivInternalTokenOptions 与静态模式保持一致，从 EnvOption 派生
@@ -195,10 +194,6 @@ namespace Viv.Engine
             // CorsOption
             if (options.CorsOption != null)
                 RegisterOption(services, options.CorsOption);
-
-            // OpenAIOption
-            if (options.OpenAIOption != null)
-                RegisterOption(services, options.OpenAIOption);
 
             // S3Option
             if (options.S3Option != null)

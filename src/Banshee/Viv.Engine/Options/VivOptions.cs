@@ -85,11 +85,6 @@ namespace Viv.Engine.Options
         public CorsOptions CorsOption { get; set; }
 
         /// <summary>
-        /// 默认的OpenAI配置（用于调用OpenAI API）
-        /// </summary>
-        public OpenAIOptions OpenAIOption { get; set; }
-
-        /// <summary>
         /// S3 配置（用于存储和检索文件）
         /// </summary>
         public S3Options S3Option { get; set; }
