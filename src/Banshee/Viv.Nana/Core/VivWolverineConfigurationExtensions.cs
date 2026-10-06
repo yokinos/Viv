@@ -1,6 +1,7 @@
 using JasperFx.CodeGeneration.Model;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
+using Viv.Contracts.Interface;
 using Viv.Delusion.Magic;
 using Viv.Nana.Options;
 using Wolverine;
@@ -15,19 +16,39 @@ namespace Viv.Nana.Core
     /// <summary>
     /// Wolverine 消息总线配置扩展 — 在 <c>AddViv()</c> 中通过 <c>services.AddVivWolverine(...)</c> 调用。
     /// 职责：RabbitMQ 传输 + 消费方队列监听 + 发布方路由 + 全局失败策略 + EF Saga 持久化。
-    /// 替代 MassTransit 的 AddVivMassTransit（License 限制），对外抽象 IVivEventPublisher / VivConsumer 不变。
     /// </summary>
     public static class VivWolverineConfigurationExtensions
     {
-        public static IServiceCollection AddVivWolverine(this IServiceCollection services, NanaOptions nanaOptions, List<Type>? sagaTypes)
+        /// <summary>
+        /// 服务定位白名单的默认项。
+        ///
+        /// 这几个契约的实现是 internal，生成的 handler 代码在另一个程序集里编译，
+        /// 写不出 <c>new LocalEventBus(...)</c> 这类构造，只能从作用域容器取，所以逐条列在这里。
+        /// 本程序集之外的同类实现（如 <c>Viv.Outbox</c> 的 <c>IVivOutbox</c>）由调用方经
+        /// <c>extraServiceLocationTypes</c> 传入 —— <c>Viv.Outbox → Viv.Nana</c> 是单向引用，这里写不出来。
+        /// </summary>
+        private static readonly Type[] DefaultServiceLocationTypes =
+        [
+            typeof(IVivLocalEventBus),
+            typeof(IVivUnitOfWork),
+            typeof(IVivInbox)
+        ];
+
+        public static IServiceCollection AddVivWolverine(this IServiceCollection services, NanaOptions nanaOptions, List<Type>? sagaTypes, IReadOnlyList<Type>? extraServiceLocationTypes = null)
         {
             services.AddWolverine(opts =>
             {
-                // 0) 放行 service location。消费者依赖注入的那几个实现类都是 internal，
-                //    Wolverine 没法在生成的 handler 代码里直接 new，只能从作用域容器取 ——
-                //    而这正是它们要的：LocalEventBus / UnitOfWorkManager / InboxStore 全是 Scoped，
-                //    必须和本次消费的 IMomoDbContext 同作用域。
-                opts.ServiceLocationPolicy = ServiceLocationPolicy.AllowedButWarn;
+                // 0) 服务定位白名单。Wolverine 默认 ServiceLocationPolicy.NotAllowed：
+                //    生成代码构造不出来的依赖直接报错，不再退回服务定位。
+                //    上面那三个契约的实现是 internal，只能从作用域容器取，所以逐条点名放行。
+                //    名单必须齐：漏一个，该 handler 的消息会全部进死信，异常里会写出缺哪个类型，照着补一行即可。
+                //    其余项目里的同类实现由 extraServiceLocationTypes 传进来。
+                opts.ServiceLocationPolicy = ServiceLocationPolicy.NotAllowed;
+                foreach (var serviceType in DefaultServiceLocationTypes)
+                    opts.CodeGeneration.AlwaysUseServiceLocationFor(serviceType);
+                if (extraServiceLocationTypes is not null)
+                    foreach (var serviceType in extraServiceLocationTypes)
+                        opts.CodeGeneration.AlwaysUseServiceLocationFor(serviceType);
 
                 // 1) RabbitMQ 传输：连接配置 + 自动声明队列/交换机
                 //    UseRabbitMq(Uri) 由 URI 内部构建 ConnectionFactory（避免 ConfigureConnection 拿到空实例）
@@ -66,7 +87,8 @@ namespace Viv.Nana.Core
                     transport.BindExchange(exchangeName, ExchangeType.Fanout).ToQueue(queueName);
 
                     // 消费并发/预取调优：直接写 RabbitMqQueue 属性。
-                    // 注意：官方包的 fluent PreFetchCount/ListenerCount/QueueType/MaximumParallelMessages 都是空壳（2026-09-30 在 WolverineFx 6.42.0 实测：调用不抛异常、队列属性纹丝不动），必须直写。
+                    // 官方包的 fluent PreFetchCount/ListenerCount/QueueType/MaximumParallelMessages 都是空壳
+                    // （6.42.0 实测：调用不抛异常，队列属性不变），必须直写。
                     // 默认 prefetch=20（比 Wolverine 原生 100 更低的重投放大）、队列 Quorum（多副本防丢消息）；
                     // ConsumerCount/MaximumParallelMessages 由 [NanaConsumer] 特性显式指定。
                     var attr = consumerType.GetCustomAttribute<NanaConsumerAttribute>();

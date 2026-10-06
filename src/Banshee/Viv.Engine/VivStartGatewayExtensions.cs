@@ -73,7 +73,9 @@ namespace Viv.Engine
 
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
             {
-                builder.Host.UseSerilog();
+                // 同 AddVivApi：用追加而不是替换，否则 OTel 日志 Provider 被顶掉，
+                // Aspire 面板的 Structured logs 永远为空（原因与实测见 VivStartApiExtensions）
+                builder.Logging.AddSerilog(dispose: false);
             }
 
             builder.Services.AddHttpContextAccessor();

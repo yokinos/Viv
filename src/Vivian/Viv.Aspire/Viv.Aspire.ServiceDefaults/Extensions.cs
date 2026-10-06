@@ -4,8 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.ServiceDiscovery;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Viv.Contracts;
@@ -59,6 +59,10 @@ public static class Extensions
             logging.IncludeFormattedMessage = true;
             logging.IncludeScopes = true;
         });
+
+        // Serilog 那边全局门槛是 Debug，全量转发会把面板刷屏；只给 OTLP 这条 Provider 单独加门槛。
+        // 不能用 Logging.SetMinimumLevel —— 那是所有 Provider 的，会把 Serilog 的 Debug 一起砍掉。
+        builder.Logging.AddFilter<OpenTelemetryLoggerProvider>("*", LogLevel.Information);
 
         builder.Services.AddOpenTelemetry()
             .WithMetrics(metrics =>

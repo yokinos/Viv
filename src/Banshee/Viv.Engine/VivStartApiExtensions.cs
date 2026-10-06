@@ -56,7 +56,7 @@ namespace Viv.Engine
 
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
             {
-                builder.Host.UseSerilog();
+                builder.Logging.AddSerilog(dispose: false);
             }
 
             // 基础服务

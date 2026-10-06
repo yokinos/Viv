@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Reflection;
@@ -158,7 +158,7 @@ namespace Viv.Engine
             }
 
             // 注册 Wolverine + RabbitMQ（Saga 类型传进去；VivWolverineConfigurationExtensions 内部含队列路由/失败策略）
-            services.AddVivWolverine(options.NanaOption, enableSaga ? sagaTypes : null);
+            services.AddVivWolverine(options.NanaOption, enableSaga ? sagaTypes : null, [typeof(IVivOutbox)]);
             services.AddScoped<IVivEventPublisher, NanaEventPublisher>();
             // 本地事件发布器（进程内本地队列），与上面跨进程那条是平行的两条线，互不引用
             services.AddScoped<IVivLocalEventPublisher, NanaLocalEventPublisher>();
