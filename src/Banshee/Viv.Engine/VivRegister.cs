@@ -332,7 +332,9 @@ namespace Viv.Engine
 
         public static void RegisterOtherServices(IServiceCollection services, VivOptions options)
         {
-            services.AddScoped<IAiClientFactory, AiClientFactory>();
+            // 单例：只依赖配置；Agent 是长生命周期对象，可能在后台线程/流式回调里取用，
+            // Scoped 在那个时机已经释放（实测过：Scoped 会在后台场景随机解析失败）
+            services.AddSingleton<IAiClientFactory, AiClientFactory>();
             services.AddSingleton<IS3Service, VivS3Service>();
         }
 
