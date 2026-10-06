@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Viv.Contracts.Interface;
 using Yarp.ReverseProxy.Configuration;
+using Yarp.ReverseProxy.Forwarder;
 
 namespace Viv.Engine
 {
@@ -33,6 +35,13 @@ namespace Viv.Engine
                     Destinations = new Dictionary<string, DestinationConfig>
                     {
                         ["d1"] = new DestinationConfig { Address = service.Uri.ToString() }
+                    },
+                    // 流式接口（SSE）与长回答：YARP 默认活动超时 100 秒，空闲超了就直接掐断连接；
+                    // 这里放宽到 30 分钟，并显式关闭响应缓冲，保证逐帧转发而不是攒完再发。
+                    HttpRequest = new ForwarderRequestConfig
+                    {
+                        ActivityTimeout = TimeSpan.FromMinutes(30),
+                        AllowResponseBuffering = false
                     }
                 });
 

@@ -13,6 +13,7 @@ using Viv.Engine;
 using Viv.Entity.Enums;
 using Viv.EventContracts.Apex.Logging;
 using Viv.Fakes;
+using Viv.Nana;
 
 namespace Viv.Elysia.Tests
 {
@@ -36,11 +37,21 @@ namespace Viv.Elysia.Tests
         private static ControllerActionDescriptor DescriptorFor(string methodName)
             => new() { MethodInfo = typeof(SampleController).GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance)! };
 
+        /// <summary>
+        /// 最小 IServiceProvider：只解析发布器，其它类型返回 null。
+        /// 发布器是可选依赖（不配消息队列时容器里没有它），所以测试也按"给或不给"两种形态构造。
+        /// </summary>
+        private sealed class PublisherOnlyProvider(IVivEventPublisher? publisher) : IServiceProvider
+        {
+            public object? GetService(Type serviceType)
+                => serviceType == typeof(IVivEventPublisher) ? publisher : null;
+        }
+
         private static (OperationLogFilterAttribute filter, ActionExecutingContext ctx, ActionExecutionDelegate next, RecordingEventPublisher publisher)
             Create(ActionDescriptor descriptor, VivApiResult? result, Action? inAction = null)
         {
             var publisher = new RecordingEventPublisher();
-            var filter = new OperationLogFilterAttribute(publisher, new TestContext());
+            var filter = new OperationLogFilterAttribute(new PublisherOnlyProvider(publisher), new TestContext());
             var actionContext = new ActionContext(new DefaultHttpContext(), new RouteData(), descriptor);
             var filters = new List<IFilterMetadata>();
             var ctx = new ActionExecutingContext(actionContext, filters, new Dictionary<string, object?>(), null!);

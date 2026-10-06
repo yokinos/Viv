@@ -1,6 +1,7 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -8,22 +9,28 @@ using Viv.Contracts.Interface;
 using Viv.Elysia.Attributes;
 using Viv.Engine;
 using Viv.EventContracts.Apex.Logging;
+using Viv.Log;
 using Viv.Nana;
 
 namespace Viv.Elysia.Filter
 {
     /// <summary>
-    /// 操作日志过滤器
+    /// 操作日志过滤器。
+    ///
+    /// 事件发布器是**可选依赖**：只在配了消息队列（NanaOption）时才注册 IVivEventPublisher。
+    /// 早先构造函数里直接要求它，导致"不配 MQ 的服务 + AddElysiaFilter"每个请求都 500
+    /// （Unable to resolve service for type 'IVivEventPublisher'）。这里改成从容器惰性取：
+    /// 取不到就只记一条本地 Warning，请求照常走完 —— 操作日志本来就不该决定请求成败。
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
     public class OperationLogFilterAttribute : Attribute, IAsyncActionFilter
     {
-        private readonly IVivEventPublisher _eventPublisher;
+        private readonly IServiceProvider _services;
         private readonly IVivContext _vivContext;
 
-        public OperationLogFilterAttribute(IVivEventPublisher eventPublisher, IVivContext vivContext)
+        public OperationLogFilterAttribute(IServiceProvider services, IVivContext vivContext)
         {
-            _eventPublisher = eventPublisher;
+            _services = services;
             _vivContext = vivContext;
         }
 
@@ -77,7 +84,16 @@ namespace Viv.Elysia.Filter
                 var requestBody = await ReadRequestBodyAsync(context.HttpContext.Request);
                 var responseBody = await ReadResponseBodyAsync(context.HttpContext.Response);
 
-                await _eventPublisher.PublishAsync(new UserOperationLogEvent()
+                // 可选依赖：没配消息队列时没有发布器，记一条 Warning 就收工，别让请求 500
+                var eventPublisher = _services.GetService<IVivEventPublisher>();
+                if (eventPublisher is null)
+                {
+                    _services.GetService<ILoggerContract>()?
+                        .Warning("操作日志未发送：未配置消息队列（NanaOption），模块 {0} / 操作 {1}", opCtx.Module, opCtx.Operation);
+                    return;
+                }
+
+                await eventPublisher.PublishAsync(new UserOperationLogEvent()
                 {
                     Description = opCtx.Description,
                     Module = opCtx.Module,
