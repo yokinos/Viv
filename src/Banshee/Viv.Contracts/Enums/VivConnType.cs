@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -13,5 +13,6 @@ namespace Viv.Contracts.Enums
         MySql,
         Oracle,
         MongoDB,
+        Mqtt,
     }
 }

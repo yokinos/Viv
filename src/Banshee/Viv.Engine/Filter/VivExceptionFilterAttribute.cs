@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Hosting;
@@ -100,6 +100,7 @@ namespace Viv.Engine.Filter
                 {
                     VivConnType.Redis => ApiResultCode.CacheError,
                     VivConnType.RabbitMQ => ApiResultCode.MqError,
+                    VivConnType.Mqtt => ApiResultCode.MqError,
                     _ => ApiResultCode.DatabaseError
                 };
                 // 详情已在 OnExceptionAsync 记日志；客户端只回枚举固定文案，避免实体 JSON / 底层异常泄漏

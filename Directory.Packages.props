@@ -46,6 +46,9 @@
     <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.42.0" />
     <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.42.0" />
     <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.42.0" />
+    <!-- ── MQTT（设备接入，EMQX）。两个包必须同一个 MQTTnet 大版本 ── -->
+    <PackageVersion Include="MQTTnet" Version="4.1.4.563" />
+    <PackageVersion Include="MQTTnet.Extensions.ManagedClient" Version="4.1.4.563" />
     <!-- ── 认证 / 云 / 通信 ───────────────────────────────── -->
     <PackageVersion Include="AWSSDK.S3" Version="4.0.103.4" />
     <PackageVersion Include="Google.Protobuf" Version="3.36.2" />

@@ -23,6 +23,7 @@ using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Nana;
 using Viv.Nana.Core;
+using Viv.Nana.Mqtt;
 using Viv.Nana.Saga;
 using Viv.Outbox;
 using Viv.Redis;
@@ -60,6 +61,8 @@ namespace Viv.Engine
             RegisterCache(services, options);
             // 注册消息队列
             RegisterNana(services, options);
+            // 注册 MQTT 接入（设备）—— 与 Nana 独立，没配 MqttOption 就完全不启用
+            RegisterMqtt(services, options);
             // 注册数据库
             RegisterDatabase(services, options);
             // 健康检查（依赖数据库与缓存两项配置）
@@ -232,6 +235,20 @@ namespace Viv.Engine
             {
                 builder.AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
             }
+
+            if (options.MqttOption != null)
+            {
+                builder.AddCheck<MqttHealthCheck>("mqtt", tags: ["ready"]);
+            }
+        }
+
+        #endregion
+
+        #region MQTT（设备接入）
+
+        private static void RegisterMqtt(IServiceCollection services, VivOptions options)
+        {
+            services.AddVivMqtt(options.MqttOption);
         }
 
         #endregion

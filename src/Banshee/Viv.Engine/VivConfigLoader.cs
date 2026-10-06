@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -159,6 +159,10 @@ namespace Viv.Engine
             // OutboxOption
             if (options.OutboxOption != null)
                 RegisterOption(services, options.OutboxOption);
+
+            // MqttOption —— 与 Outbox 同语义：null = 不启用
+            if (options.MqttOption != null)
+                RegisterOption(services, options.MqttOption);
 
             // InboxOption —— 与别的子配置不同，这个节点允许缺席：
             // Inbox 的启用条件是「配了 DatabaseOption」。缺席时不在这里注册，

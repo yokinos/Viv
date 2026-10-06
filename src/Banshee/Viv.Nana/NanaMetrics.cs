@@ -35,5 +35,33 @@ namespace Viv.Nana
             Consumed.Add(1, tags);
             ConsumeDuration.Record(elapsedMs, tags);
         }
+
+        #region MQTT（设备接入）
+
+        public const string MqttPublishedInstrument = "viv.nana.mqtt.published";
+        public const string MqttReceivedInstrument = "viv.nana.mqtt.received";
+        public const string MqttErrorInstrument = "viv.nana.mqtt.errors";
+
+        internal static readonly Counter<long> MqttPublished = Meter.CreateCounter<long>(MqttPublishedInstrument);
+        internal static readonly Counter<long> MqttReceived = Meter.CreateCounter<long>(MqttReceivedInstrument);
+        internal static readonly Counter<long> MqttErrors = Meter.CreateCounter<long>(MqttErrorInstrument);
+
+        // 标签只取 topic 的第一段：设备 topic 里带 machineId，整串进标签会炸成几千条时间序列
+        private static string MqttRoot(string topic)
+        {
+            var i = topic.IndexOf('/');
+            return i > 0 ? topic[..i] : topic;
+        }
+
+        internal static void RecordMqttPublish(string topic)
+            => MqttPublished.Add(1, new TagList { { "mqtt.root", MqttRoot(topic) } });
+
+        internal static void RecordMqttReceive(string topic)
+            => MqttReceived.Add(1, new TagList { { "mqtt.root", MqttRoot(topic) } });
+
+        internal static void RecordMqttError(string reason)
+            => MqttErrors.Add(1, new TagList { { "reason", reason } });
+
+        #endregion
     }
 }

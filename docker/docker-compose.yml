@@ -51,6 +51,28 @@ services:
       - viv-net
     restart: unless-stopped
 
+  emqx:
+    image: emqx/emqx:5.8
+    container_name: Viv_EMQX
+    environment:
+      # Dashboard 管理员密码（EMQX 默认 public，必须改）
+      - EMQX_DASHBOARD__DEFAULT_PASSWORD=viv_emqx_77
+      # 文件授权源：每台设备只允许读写自己 clientId 的 topic 前缀，见 emqx/acl.conf
+      # 注：这两条环境变量没生效时，在 Dashboard → 访问控制 → 授权 里手动加 File 数据源（同一个文件）
+      - 'EMQX_AUTHORIZATION__SOURCES=[{"type":"file","enable":true,"path":"/opt/emqx/etc/acl.conf"}]'
+      - EMQX_AUTHORIZATION__NO_MATCH=deny
+    ports:
+      - "1883:1883"   # MQTT
+      - "8883:8883"   # MQTT over TLS
+      - "8083:8083"   # MQTT over WebSocket
+      - "18083:18083" # Dashboard
+    volumes:
+      - ./emqx/acl.conf:/opt/emqx/etc/acl.conf:ro
+      - emqx_data:/opt/emqx/data
+    networks:
+      - viv-net
+    restart: unless-stopped
+
   caddy:
     image: caddy:latest
     container_name: Viv-Caddy
@@ -74,5 +96,6 @@ networks:
 volumes:
   seq_data:
   sqlserver_data:
+  emqx_data:
   caddy_data:
   caddy_config:
