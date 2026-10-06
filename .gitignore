@@ -82,6 +82,9 @@ $RECYCLE.BIN/
 # ========================
 # 日志文件
 *.log
+# 例外：Viv.Log 是框架项目目录，不是日志文件。
+# Windows 大小写不敏感，*.log 会把该目录一起忽略 —— 那样它下面新增的文件会被静默漏掉
+!Viv.Log/
 # 本地配置文件（密钥/环境变量）
 appsettings.Development.json
 appsettings.Local.json
