@@ -8,6 +8,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="appsettings.Development.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="appsettings.Development.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\Banshee\Viv.Cli\Viv.Cli.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
     <!-- DIOption 扫描与 EntityTypeOptions 都按程序集名找，业务程序集必须在引用图里 -->
