@@ -19,6 +19,7 @@
     <ProjectReference Include="..\..\Viv.DeepRed.Worker\Viv.DeepRed.Worker.csproj" />
     <ProjectReference Include="..\..\Viv.Herta.Api\Viv.Herta.Api.csproj" />
     <ProjectReference Include="..\..\Viv.Herta.Link\Viv.Herta.Link.csproj" />
+    <ProjectReference Include="..\..\Viv.Ouroboros.Api\Viv.Ouroboros.Api.csproj" />
     <ProjectReference Include="..\..\Viv.SakuMai.Api\Viv.SakuMai.Api.csproj" />
     <ProjectReference Include="..\Viv.Aspire.Gateway\Viv.Aspire.Gateway.csproj" />
   </ItemGroup>
