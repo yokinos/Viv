@@ -20,10 +20,11 @@ namespace Viv.Log
                 try
                 {
                     var config = new LoggerConfiguration()
-                        .MinimumLevel.Debug()
-                        .Enrich.FromLogContext()
-                        .WriteTo.Console()
-                        .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day);
+                        .MinimumLevel.Is(options.MinimumLevel)
+                        .Enrich.FromLogContext();
+
+                    if (options.IsUseConsole) config.WriteTo.Console();
+                    if (options.IsUseFile) config.WriteTo.File(options.LogFilePath, rollingInterval: RollingInterval.Day);
 
                     if (options.IsUseSeq)
                     {
@@ -38,7 +39,7 @@ namespace Viv.Log
                 {
                     Serilog.Debugging.SelfLog.WriteLine($"日志初始化失败: {ex}");
                     Serilog.Log.Logger = new LoggerConfiguration()
-                        .MinimumLevel.Debug()
+                        .MinimumLevel.Is(options.MinimumLevel)
                         .WriteTo.Console()
                         .CreateLogger();
                 }

@@ -8,6 +8,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 using Serilog;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -73,7 +75,9 @@ namespace Viv.Engine
 
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
             {
+                // 同 AddVivApi：不能替换管道、也不能 ClearProviders，否则 OTel 日志 Provider 失效
                 builder.Logging.AddSerilog(dispose: false);
+                builder.Logging.AddFilter<ConsoleLoggerProvider>(null, LogLevel.None);
             }
 
             builder.Services.AddHttpContextAccessor();

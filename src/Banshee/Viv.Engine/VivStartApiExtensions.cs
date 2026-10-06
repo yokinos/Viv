@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 using Microsoft.OpenApi;
 using Serilog;
 using System.Diagnostics.CodeAnalysis;
@@ -57,6 +59,7 @@ namespace Viv.Engine
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
             {
                 builder.Logging.AddSerilog(dispose: false);
+                builder.Logging.AddFilter<ConsoleLoggerProvider>(null, LogLevel.None);
             }
 
             // 基础服务

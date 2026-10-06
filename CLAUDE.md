@@ -184,7 +184,7 @@ Every API / Worker / 工具箱 project carries a `VivOptions` node in its `appse
 |---|---|
 | `EnvOption` | Environment (`Env`/`ServiceName`/`MachineId`/`ServiceType`) + `InternalToken`（x-request-token 内部签名共享密钥，网关与所有服务同值） |
 | `DIOption` | Type-scanning rules for Service/Repository auto-registration |
-| `LogOption` | Logging backend (Serilog → Seq) |
+| `LogOption` | Logging backend（Serilog）：`LogType` / `MinimumLevel`（默认 Information）/ `IsUseConsole`·`IsUseFile`·`IsUseSeq` / `LogFilePath` / `SeqUrl`·`SeqApiKey` |
 | `CacheOption` | Redis connection + memory cache toggle |
 | `DatabaseOption` | Database type, read-write split, entity scan targets, `SlowQueryThresholdMs`（慢查询阈值，默认 1000，0 = 关，见 `### 慢查询与指标`） |
 | `NanaOption` | RabbitMQ host/port/credentials, consumer type list, retry count, Saga DB |

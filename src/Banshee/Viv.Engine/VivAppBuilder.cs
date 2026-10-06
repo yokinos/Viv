@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 using Serilog;
 using System.Text;
 using Viv.Aoi;
@@ -97,8 +98,9 @@ namespace Viv.Engine
 
             if (vivOptions.LogOption?.LogType == Log.LogType.Serilog)
             {
-                _builder.Logging.ClearProviders();
+                // 同 AddVivWorker：ClearProviders 会连 OTel 日志 Provider 一起清掉
                 _builder.Logging.AddSerilog(dispose: false);
+                _builder.Logging.AddFilter<ConsoleLoggerProvider>(null, LogLevel.None);
             }
 
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);

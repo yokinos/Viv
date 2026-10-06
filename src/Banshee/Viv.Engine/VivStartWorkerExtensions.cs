@@ -3,6 +3,7 @@ using Autofac.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 using Serilog;
 using System.Text;
 using Viv.Aoi;
@@ -33,9 +34,10 @@ namespace Viv.Engine
 
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
             {
-                // Serilog 替换宿主 ILogger
-                builder.Logging.ClearProviders();
+                // 不能 ClearProviders：它会把 AddServiceDefaults 注册的 OTel 日志 Provider 一起清掉，
+                // 于是 Aspire 面板没有日志。改成只关 MS 自带控制台，全量放行给 Serilog。
                 builder.Logging.AddSerilog(dispose: false);
+                builder.Logging.AddFilter<ConsoleLoggerProvider>(null, LogLevel.None);
             }
 
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
