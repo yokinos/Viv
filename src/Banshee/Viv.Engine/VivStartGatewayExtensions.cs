@@ -75,7 +75,6 @@ namespace Viv.Engine
 
             if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
             {
-                // 同 AddVivApi：不能替换管道、也不能 ClearProviders，否则 OTel 日志 Provider 失效
                 builder.Logging.AddSerilog(dispose: false);
                 builder.Logging.AddFilter<ConsoleLoggerProvider>(null, LogLevel.None);
             }
