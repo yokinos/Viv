@@ -7,12 +7,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- appsettings.Development.json 被 .gitignore 忽略：本地有就复制，
+       CI 全新检出时没有这个文件，不能让复制动作报 MSB3030 把整次构建打断 -->
   <ItemGroup>
-    <None Remove="appsettings.Development.json" />
+    <None Remove="appsettings.Development.json" Condition="Exists('appsettings.Development.json')" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="appsettings.Development.json">
+    <Content Include="appsettings.Development.json" Condition="Exists('appsettings.Development.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
