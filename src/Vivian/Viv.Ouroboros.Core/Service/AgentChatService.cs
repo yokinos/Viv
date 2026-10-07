@@ -13,7 +13,9 @@ using Viv.Entity.Database.Ouroboros;
 using Viv.Entity.Enums;
 using Viv.EventContracts.Ouroboros;
 using Viv.Log;
+using Viv.Momo;
 using Viv.Nana;
+using Viv.Outbox;
 using Viv.Ouroboros.Core.Entity.Dto.Agent;
 using Viv.Ouroboros.Core.Entity.Vo.Agent;
 using Viv.Ouroboros.Core.IService;
@@ -38,7 +40,8 @@ namespace Viv.Ouroboros.Core.Service
         private readonly IVivContext _context;
         private readonly IServiceProvider _services;
         private readonly TokenUsageRecorder _usage;
-        private readonly IVivEventPublisher _publisher;
+        private readonly IVivOutbox _outbox;
+        private readonly IMomoDbContext _db;
         private readonly ILoggerContract _logger;
 
         public AgentChatService(
@@ -47,7 +50,8 @@ namespace Viv.Ouroboros.Core.Service
             IVivContext context,
             IServiceProvider services,
             TokenUsageRecorder usage,
-            IVivEventPublisher publisher,
+            IVivOutbox outbox,
+            IMomoDbContext db,
             ILoggerContract logger)
         {
             _store = store;
@@ -55,7 +59,8 @@ namespace Viv.Ouroboros.Core.Service
             _context = context;
             _services = services;
             _usage = usage;
-            _publisher = publisher;
+            _outbox = outbox;
+            _db = db;
             _logger = logger;
         }
 
@@ -211,32 +216,14 @@ namespace Viv.Ouroboros.Core.Service
             }
 
             var text = request.Text;
-            var seq = await _store.NextSeqAsync(conversation!.Id);
-
-            var userMessage = new OtMessage
+            var acceptError = await AcceptTurnAsync(conversation!, conversationKey, text, cancellationToken);
+            if (acceptError is not null)
             {
-                ConversationId = conversation.Id,
-                Seq = seq,
-                Role = EmMessageRole.User,
-                Content = text,
-                ContentType = EmMessageContentType.Text,
-                AgentKey = conversation.MainAgentKey
-            };
-            await _store.InsertMessageAsync(userMessage);
-
-            var published = await _publisher.PublishAsync(new OuroborosTurnEvent
-            {
-                ConversationKey = conversationKey,
-                UserMessageId = userMessage.Id,
-                Text = text
-            }, cancellationToken);
-
-            if (!published)
-            {
-                yield return "[错误] 投递跑轮事件失败";
+                yield return $"[错误] {acceptError}";
                 yield break;
             }
 
+            var seq = await _store.NextSeqAsync(conversation!.Id) - 1;
             // 等 Worker 跑完这一幕（默认最多等 3 分钟）；客户端断开时 Task.Delay 抛取消，
             // 迭代器随之结束 —— 但队列里那一轮不受影响，照跑并把回复落库。
             var deadline = DateTime.UtcNow.AddMinutes(3);
@@ -251,6 +238,55 @@ namespace Viv.Ouroboros.Core.Service
                 }
 
                 await Task.Delay(500, cancellationToken);
+            }
+        }
+
+        /// <summary>
+        /// 受理一轮：**在同一个本地事务里**落用户消息 + 写发件箱（<see cref="IVivOutbox"/>）。
+        /// 一起提交意味着中间崩溃不会出现"消息落了、事件没发"——投递交给后台投递器，
+        /// 所以也不需要额外的补偿扫描；消费端靠 <c>IVivInbox</c> 去重。
+        /// 返回 null 表示受理成功，否则为错误文案。
+        /// </summary>
+        private async Task<string?> AcceptTurnAsync(OtConversation conversation, Guid conversationKey, string text,
+            CancellationToken cancellationToken)
+        {
+            var seq = await _store.NextSeqAsync(conversation.Id);
+
+            var userMessage = new OtMessage
+            {
+                ConversationId = conversation.Id,
+                Seq = seq,
+                Role = EmMessageRole.User,
+                Content = text,
+                ContentType = EmMessageContentType.Text,
+                AgentKey = conversation.MainAgentKey
+            };
+
+            await _db.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                await _store.InsertMessageAsync(userMessage);
+
+                var enqueued = await _outbox.EnqueueAsync(new OuroborosTurnEvent
+                {
+                    ConversationKey = conversationKey,
+                    UserMessageId = userMessage.Id,
+                    Text = text
+                }, cancellationToken);
+
+                if (!enqueued)
+                {
+                    await _db.RollbackTransactionAsync(cancellationToken);
+                    return "写发件箱失败";
+                }
+
+                await _db.CommitTransactionAsync(cancellationToken);
+                return null;
+            }
+            catch
+            {
+                await _db.RollbackTransactionAsync(cancellationToken);
+                throw;
             }
         }
 
