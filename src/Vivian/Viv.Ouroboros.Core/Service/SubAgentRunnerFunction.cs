@@ -64,14 +64,15 @@ namespace Viv.Ouroboros.Core.Service
             var session = await _agent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
             var response = await _agent.RunAsync(query, session, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            return new SubAgentRunOutcome(response.Text,
-                (int?)response.Usage?.InputTokenCount,
-                (int?)response.Usage?.OutputTokenCount);
+            return new SubAgentRunOutcome(response.Text, response.Usage);
         }
     }
 
     /// <summary>
-    /// 子 Agent 一次调用的结果：Text 回给模型，token 用量只用于 OtSubAgentCall 留痕
+    /// 子 Agent 一次调用的结果：Text 回给模型，用量只用于 OtSubAgentCall 留痕与 token 用量聚合，
+    /// 不进模型上下文。
     /// </summary>
-    public sealed record SubAgentRunOutcome(string Text, int? InputTokens, int? OutputTokens);
+    /// <param name="Text">子 Agent 的结论正文</param>
+    /// <param name="Usage">子 Agent 那几次模型调用的用量；供应商不给时为 null</param>
+    public sealed record SubAgentRunOutcome(string Text, UsageDetails? Usage);
 }

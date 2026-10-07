@@ -22,6 +22,7 @@ namespace Viv.Ouroboros.Core.Service
     ///
     /// 缓存：按 AgentKey 缓存装配好的 <see cref="AITool"/> 列表 60 秒（与 AgentFactory、档位同一节奏），
     /// 因为外层 AgentFactory 也只缓存 60 秒 —— 两边一起过期才不会出现"工具换了、Agent 还是旧的"。
+    /// 例外是"有需审批绑定"的 Agent：它只缓存 <see cref="ApprovalSensitiveCacheTime"/>，理由见那个常量的注释。
     ///
     /// 本阶段只实现两种工具类型：内置（<see cref="EmToolTransport.Builtin"/>）与 HTTP（<see cref="EmToolTransport.Http"/>）。
     /// MCP（<see cref="EmToolTransport.Mcp"/>）以及将来可能出现的其它类型一律跳过并记 Warning —— **留待后续**。
@@ -38,6 +39,17 @@ namespace Viv.Ouroboros.Core.Service
     {
         private static readonly TimeSpan CacheTime = TimeSpan.FromSeconds(60);
 
+        /// <summary>
+        /// 有"需审批"绑定的 Agent，其装配结果只缓存 3 秒。套不套审批壳是**装配期**定的
+        /// （MAF 只看工具链里有没有 ApprovalRequiredAIFunction，不会先调用工具），而它取决于库里的
+        /// AllowedSubjectIds —— 不点 refresh 时只能靠 TTL 收敛。3 秒留出对 5 秒验收窗口的余量，
+        /// 代价只是这类 Agent × 主体每 3 秒重查一次绑定表（条目数有界、SQL 很轻）。
+        ///
+        /// 不能改成"调用时现查白名单再决定套不套壳"：MAF 的判定发生在装配结果上，装配期定不下来
+        /// 就只能给所有主体都套壳，白名单外的主体会被人白问一次审批（批准后才知道无权限）。
+        /// </summary>
+        private static readonly TimeSpan ApprovalSensitiveCacheTime = TimeSpan.FromSeconds(3);
+
         /// <summary>主体分键的分隔符：只有"需审批 + 配了白名单"的 Agent 才会写出带主体的键</summary>
         private const char SubjectSeparator = '#';
 
@@ -53,6 +65,12 @@ namespace Viv.Ouroboros.Core.Service
         /// </summary>
         private static readonly ConcurrentDictionary<string, byte> SubjectScopedAgents = new(StringComparer.Ordinal);
 
+        /// <summary>
+        /// 已确认"有需审批绑定"的 AgentKey。只增不减（清缓存时才重置）：多算一个只是缓存短一点，
+        /// 少算一个却会让白名单改动等到 60 秒 TTL 才生效。
+        /// </summary>
+        private static readonly ConcurrentDictionary<string, byte> ApprovalSensitiveAgents = new(StringComparer.Ordinal);
+
         /// <summary>本进程已用上的配置版本号；与闸门给的版本对不上就说明别处改过配置（见 ConfigVersionGate）</summary>
         private static long _seenGeneration;
 
@@ -64,6 +82,7 @@ namespace Viv.Ouroboros.Core.Service
         private readonly HttpToolExecutor _http;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IConfigVersionGate _version;
+        private readonly IOuroborosConfig _config;
 
         /// <summary>
         /// 构造函数
@@ -73,6 +92,7 @@ namespace Viv.Ouroboros.Core.Service
         /// <param name="scopeFactory">作用域工厂（留痕与主体白名单校验都要现开作用域，见 ToolCallRecorder）</param>
         /// <param name="cache">内存缓存</param>
         /// <param name="version">配置版本闸门（跨实例失效）</param>
+        /// <param name="config">配置读取（工具结果截断上限）</param>
         /// <param name="logger">日志</param>
         public ToolRegistry(
             IAgentStore store,
@@ -80,6 +100,7 @@ namespace Viv.Ouroboros.Core.Service
             IServiceScopeFactory scopeFactory,
             IMemoryCacheService cache,
             IConfigVersionGate version,
+            IOuroborosConfig config,
             ILoggerContract logger)
         {
             _store = store;
@@ -88,6 +109,7 @@ namespace Viv.Ouroboros.Core.Service
             _logger = logger;
             _scopeFactory = scopeFactory;
             _version = version;
+            _config = config;
             _recorder = new ToolCallRecorder(scopeFactory, logger);
             _http = new HttpToolExecutor(logger, scopeFactory);
         }
@@ -110,11 +132,12 @@ namespace Viv.Ouroboros.Core.Service
             var subjectKey = BuildSubjectCacheKey(plainKey, subjectId);
             if (_cache.TryGet<IList<AITool>>(subjectKey, out var own) && own is not null) return own;
 
-            var (tools, subjectScoped) = await BuildAsync(agentKey, subjectId);
+            var (tools, subjectScoped, approvalSensitive) = await BuildAsync(agentKey, subjectId);
             if (subjectScoped) SubjectScopedAgents[agentKey] = 0;
+            if (approvalSensitive) ApprovalSensitiveAgents[agentKey] = 0;
 
             var storeKey = subjectScoped ? subjectKey : plainKey;
-            _cache.Set(storeKey, tools, CacheTime);
+            _cache.Set(storeKey, tools, approvalSensitive ? ApprovalSensitiveCacheTime : CacheTime);
             CachedKeys[storeKey] = 0;
 
             return tools;
@@ -135,6 +158,7 @@ namespace Viv.Ouroboros.Core.Service
             }
 
             SubjectScopedAgents.TryRemove(agentKey, out _);
+            ApprovalSensitiveAgents.TryRemove(agentKey, out _);
         }
 
         /// <inheritdoc />
@@ -143,11 +167,16 @@ namespace Viv.Ouroboros.Core.Service
             foreach (var key in CachedKeys.Keys) _cache.Remove(key);
             CachedKeys.Clear();
             SubjectScopedAgents.Clear();
+            ApprovalSensitiveAgents.Clear();
         }
 
         /// <inheritdoc />
         public bool IsSubjectScoped(string agentKey)
             => !string.IsNullOrWhiteSpace(agentKey) && SubjectScopedAgents.ContainsKey(agentKey);
+
+        /// <inheritdoc />
+        public bool IsApprovalSensitive(string agentKey)
+            => !string.IsNullOrWhiteSpace(agentKey) && ApprovalSensitiveAgents.ContainsKey(agentKey);
 
         private static string BuildCacheKey(string agentKey) => $"ouroboros:tools:{agentKey}";
 
@@ -181,28 +210,35 @@ namespace Viv.Ouroboros.Core.Service
         /// <summary>
         /// 装配工具列表。<paramref name="subjectId"/> 只对"需审批 + 配了主体白名单"的绑定起作用
         /// —— 那种绑定要靠它决定要不要套审批壳（见 <see cref="BuildTool"/>）。
+        /// 后两个返回值分别指出"列表随主体变"与"有需审批绑定"，供上层决定缓存键与缓存时长。
         /// </summary>
-        private async Task<(IList<AITool> Tools, bool SubjectScoped)> BuildAsync(string agentKey, long subjectId)
+        private async Task<(IList<AITool> Tools, bool SubjectScoped, bool ApprovalSensitive)> BuildAsync(
+            string agentKey, long subjectId)
         {
             var definitions = await _store.ListEnabledToolsAsync(agentKey);
             var tools = new List<AITool>(definitions.Count);
             var subjectScoped = false;
+            var approvalSensitive = false;
 
             foreach (var definition in definitions)
             {
                 if (NeedsSubject(definition)) subjectScoped = true;
+                if (NeedsApproval(definition)) approvalSensitive = true;
 
                 var tool = BuildTool(agentKey, definition, subjectId);
                 if (tool is not null) tools.Add(tool);
             }
 
-            return (tools, subjectScoped);
+            return (tools, subjectScoped, approvalSensitive);
         }
+
+        /// <summary>这条绑定要不要套审批壳：绑定上的 RequiresApproval 覆盖工具自身的，取非空的那个</summary>
+        private static bool NeedsApproval(AgentToolDefinition definition)
+            => definition.Binding.RequiresApproval ?? definition.Tool.RequiresApproval;
 
         /// <summary>这条绑定会不会让同一份工具列表对不同主体不一样：需审批 + 配了非空白名单</summary>
         private static bool NeedsSubject(AgentToolDefinition definition)
-            => (definition.Binding.RequiresApproval ?? definition.Tool.RequiresApproval)
-               && !string.IsNullOrWhiteSpace(definition.Binding.AllowedSubjectIds);
+            => NeedsApproval(definition) && !string.IsNullOrWhiteSpace(definition.Binding.AllowedSubjectIds);
 
         private AITool? BuildTool(string agentKey, AgentToolDefinition definition, long subjectId)
         {
@@ -296,6 +332,7 @@ namespace Viv.Ouroboros.Core.Service
                 definition.Binding.AllowedSubjectIds,
                 _recorder,
                 _scopeFactory,
+                _config,
                 _logger);
 
         /// <summary>OtTool.ParamsSchema 是字符串，转成 JsonElement 给模型看；坏 JSON 退回工厂推断的 schema</summary>

@@ -35,6 +35,7 @@ namespace Viv.Ouroboros.Core.Service
         private readonly IAgentFactory _agents;
         private readonly IVivContext _context;
         private readonly IServiceProvider _services;
+        private readonly TokenUsageRecorder _usage;
         private readonly ILoggerContract _logger;
 
         public AgentChatService(
@@ -42,12 +43,14 @@ namespace Viv.Ouroboros.Core.Service
             IAgentFactory agents,
             IVivContext context,
             IServiceProvider services,
+            TokenUsageRecorder usage,
             ILoggerContract logger)
         {
             _store = store;
             _agents = agents;
             _context = context;
             _services = services;
+            _usage = usage;
             _logger = logger;
         }
 
@@ -271,6 +274,9 @@ namespace Viv.Ouroboros.Core.Service
             await _store.UpdateConversationAsync(conversation);
 
             await SaveSessionAsync(agent, session, conversation.Id, conversation.MainAgentKey);
+
+            // 用量出账放在消息与会话都落完之后：出账失败不该回滚已经跑完的这一轮
+            await _usage.RecordAsync(conversation.MainAgentKey, response.Usage, cancellationToken);
 
             // 模型要求人工审批 → 落单并把 RequestId 交给前端
             var pending = response.Messages.SelectMany(m => m.Contents).OfType<ToolApprovalRequestContent>().FirstOrDefault();

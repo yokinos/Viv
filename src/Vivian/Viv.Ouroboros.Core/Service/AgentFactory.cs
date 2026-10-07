@@ -21,6 +21,7 @@ namespace Viv.Ouroboros.Core.Service
     ///
     /// 缓存：按 AgentKey 缓存装配好的 <see cref="AIAgent"/> 60 秒（与档位同一节奏），
     /// 避免每次请求都查三张表 + 重建 Agent。配置变更靠 TTL 生效，需要立即生效就调 Invalidate。
+    /// 例外是"有需审批能力"的 Agent：它（连同它子 Agent 里的审批壳）只缓存 <see cref="ApprovalSensitiveCacheTime"/>。
     ///
     /// 工具：能力绑定 → 工具定义 → AIFunction 这一段在 <see cref="IToolRegistry"/> 里，
     /// 这里只把结果塞进 ChatOptions.Tools。两者缓存时长一致，不会出现"工具换了、Agent 还是旧的"。
@@ -36,6 +37,13 @@ namespace Viv.Ouroboros.Core.Service
     public class AgentFactory : IAgentFactory, IDependency
     {
         private static readonly TimeSpan CacheTime = TimeSpan.FromSeconds(60);
+
+        /// <summary>
+        /// 有"需审批"能力的 Agent，装配结果只缓存 3 秒 —— 与 <see cref="ToolRegistry"/> 同一理由：
+        /// "套不套审批壳"是装配期定的、又取决于库里的主体白名单，不点 refresh 时只能靠 TTL 收敛。
+        /// 工具列表嵌在这份 Agent 里，所以两边必须用同一个时长，否则工具换了、Agent 还是旧的。
+        /// </summary>
+        private static readonly TimeSpan ApprovalSensitiveCacheTime = TimeSpan.FromSeconds(3);
 
         /// <summary>主体分键的分隔符，与 ToolRegistry 同一手法</summary>
         private const char SubjectSeparator = '#';
@@ -61,6 +69,8 @@ namespace Viv.Ouroboros.Core.Service
         private readonly ToolCallRecorder _recorder;
         private readonly SubAgentCallRecorder _subAgentRecorder;
         private readonly IConfigVersionGate _version;
+        private readonly IOuroborosConfig _config;
+        private readonly TokenUsageRecorder _usage;
 
         public AgentFactory(
             IAgentRepository repository,
@@ -69,6 +79,8 @@ namespace Viv.Ouroboros.Core.Service
             IServiceScopeFactory scopeFactory,
             IMemoryCacheService cache,
             IConfigVersionGate version,
+            IOuroborosConfig config,
+            TokenUsageRecorder usage,
             ILoggerContract logger)
         {
             _repository = repository;
@@ -82,6 +94,8 @@ namespace Viv.Ouroboros.Core.Service
             // 主体白名单校验要现开作用域取 IVivContext（Scoped），所以工厂自己也留着工厂
             _scopeFactory = scopeFactory;
             _version = version;
+            _config = config;
+            _usage = usage;
         }
 
         public async Task<AIAgent?> GetAgentAsync(string agentKey)
@@ -103,11 +117,11 @@ namespace Viv.Ouroboros.Core.Service
             if (_cache.TryGet<AIAgent>(subjectKey, out var own) && own is not null) return own;
 
             IReadOnlySet<string> chain = new HashSet<string>(StringComparer.Ordinal) { agentKey };
-            var (agent, subjectScoped) = await BuildAsync(agentKey, subjectId, null, chain, CancellationToken.None);
+            var (agent, subjectScoped, approvalSensitive) = await BuildAsync(agentKey, subjectId, null, chain, CancellationToken.None);
             if (agent is null) return null;
 
             var storeKey = subjectScoped ? subjectKey : plainKey;
-            _cache.Set(storeKey, agent, CacheTime);
+            _cache.Set(storeKey, agent, approvalSensitive ? ApprovalSensitiveCacheTime : CacheTime);
             CachedKeys[storeKey] = 0;
 
             return agent;
@@ -166,36 +180,37 @@ namespace Viv.Ouroboros.Core.Service
         /// <summary>
         /// 装配一个 Agent。<paramref name="ancestors"/> 是"正在装配的 AgentKey 链"（**含自己**），
         /// 环检测与深度上限都靠它；<paramref name="known"/> 是调用方已经读到的定义，避免子 Agent 重复查库。
-        /// 第二个返回值指出这份装配是否随主体不同 —— 决定上层缓存要不要按主体分键。
+        /// 第二个返回值指出这份装配是否随主体不同 —— 决定上层缓存要不要按主体分键；
+        /// 第三个返回值指出这份装配里有没有审批壳 —— 决定上层缓存能用多久。
         /// </summary>
-        private async ValueTask<(AIAgent? Agent, bool SubjectScoped)> BuildAsync(string agentKey, long subjectId,
-            OtAgent? known, IReadOnlySet<string> ancestors, CancellationToken token)
+        private async ValueTask<(AIAgent? Agent, bool SubjectScoped, bool ApprovalSensitive)> BuildAsync(string agentKey,
+            long subjectId, OtAgent? known, IReadOnlySet<string> ancestors, CancellationToken token)
         {
             var definition = known ?? await _repository.GetByKeyAsync(agentKey);
             if (definition is null)
             {
                 _logger.Warning("Agent 未定义：{0}", agentKey);
-                return (null, false);
+                return (null, false, false);
             }
 
             if (!definition.IsEnabled)
             {
                 _logger.Warning("Agent 未启用：{0}", agentKey);
-                return (null, false);
+                return (null, false, false);
             }
 
             var instructions = await _repository.GetPromptContentAsync(agentKey, definition.ActivePromptVersion);
             if (string.IsNullOrWhiteSpace(instructions))
             {
                 _logger.Error("Agent 没有可用提示词（ActivePromptVersion={0}）：{1}", definition.ActivePromptVersion, agentKey);
-                return (null, false);
+                return (null, false, false);
             }
 
             var client = await _profiles.GetChatClientAsync(definition.ModelProfile);
             if (client is null)
             {
                 _logger.Error("Agent 的模型档位不可用：{0} → {1}", agentKey, definition.ModelProfile);
-                return (null, false);
+                return (null, false, false);
             }
 
             var capabilities = await _repository.GetCapabilitiesAsync(agentKey);
@@ -203,16 +218,20 @@ namespace Viv.Ouroboros.Core.Service
 
             // 工具列表随主体变（有"需审批 + 白名单"的绑定）时，这份 Agent 也不能跨主体复用
             var subjectScoped = _tools.IsSubjectScoped(agentKey);
+
+            // 子 Agent 里只要有审批壳，它也被包在这份 Agent 里冻结住，所以敏感度要往上传染
+            var approvalSensitive = _tools.IsApprovalSensitive(agentKey);
             var subAgentCount = 0;
 
             // 子 Agent 与工具一样是"能力"：绑定才有，没绑定模型看不到也就调不到
             foreach (var binding in capabilities.Where(x => x.CapabilityType == EmCapabilityType.SubAgent))
             {
-                var (tool, subScoped) = await BuildSubAgentToolAsync(agentKey, binding, subjectId, ancestors, token);
+                var (tool, subScoped, subApproval) = await BuildSubAgentToolAsync(agentKey, binding, subjectId, ancestors, token);
                 if (tool is null) continue;
 
                 tools.Add(tool);
                 if (subScoped) subjectScoped = true;
+                if (subApproval) approvalSensitive = true;
                 subAgentCount++;
             }
 
@@ -232,21 +251,21 @@ namespace Viv.Ouroboros.Core.Service
 
             _logger.Info("Agent 已装配：{0}（档位 {1}，能力绑定 {2} 条，可用工具 {3} 个，其中子 Agent {4} 个）",
                 agentKey, definition.ModelProfile, capabilities.Count, tools.Count, subAgentCount);
-            return (agent, subjectScoped);
+            return (agent, subjectScoped, approvalSensitive);
         }
 
         /// <summary>
         /// 把一条 SubAgent 能力绑定装配成工具。三种情况跳过并记 Warning，不让一条坏配置把整个 Agent 打死：
         /// 能力键为空 / 成环或超过深度上限 / 子 Agent 未定义、未启用或没提示词（递归里已经记过）。
         /// </summary>
-        private async ValueTask<(AITool? Tool, bool SubjectScoped)> BuildSubAgentToolAsync(string callerKey,
-            OtCapabilityBinding binding, long subjectId, IReadOnlySet<string> ancestors, CancellationToken token)
+        private async ValueTask<(AITool? Tool, bool SubjectScoped, bool ApprovalSensitive)> BuildSubAgentToolAsync(
+            string callerKey, OtCapabilityBinding binding, long subjectId, IReadOnlySet<string> ancestors, CancellationToken token)
         {
             var subKey = binding.CapabilityKey;
             if (string.IsNullOrWhiteSpace(subKey))
             {
                 _logger.Warning("子 Agent 能力绑定的 CapabilityKey 为空，已跳过：{0}", callerKey);
-                return (null, false);
+                return (null, false, false);
             }
 
             // 环检测：待装配的子 Agent 已经在"正在装配"的链上（A→B→A），再下去就是无限递归
@@ -254,30 +273,30 @@ namespace Viv.Ouroboros.Core.Service
             {
                 _logger.Warning("子 Agent 绑定成环，已跳过：{0} → {1}（装配链 {2}）",
                     callerKey, subKey, string.Join(" → ", ancestors));
-                return (null, false);
+                return (null, false, false);
             }
 
             if (ancestors.Count >= MaxSubAgentDepth)
             {
                 _logger.Warning("子 Agent 装配深度超过上限 {0}，已跳过：{1} → {2}（装配链 {3}）",
                     MaxSubAgentDepth, callerKey, subKey, string.Join(" → ", ancestors));
-                return (null, false);
+                return (null, false, false);
             }
 
             var definition = await _repository.GetByKeyAsync(subKey);
             if (definition is null || !definition.IsEnabled)
             {
                 _logger.Warning("能力绑定指向的子 Agent 不存在或未启用，已跳过：{0} → {1}", callerKey, subKey);
-                return (null, false);
+                return (null, false, false);
             }
 
             // 链上加上"子 Agent 自己"再下潜：它的档位、提示词、它自己的工具全部走同一套装配逻辑
             var next = new HashSet<string>(ancestors, StringComparer.Ordinal) { subKey };
-            var (child, childScoped) = await BuildAsync(subKey, subjectId, definition, next, token);
+            var (child, childScoped, childApproval) = await BuildAsync(subKey, subjectId, definition, next, token);
             if (child is null)
             {
                 _logger.Warning("子 Agent 装配失败，已跳过：{0} → {1}", callerKey, subKey);
-                return (null, false);
+                return (null, false, false);
             }
 
             // 暴露名/暴露描述刻意用来消重名，优先级高于子 Agent 自身
@@ -289,24 +308,25 @@ namespace Viv.Ouroboros.Core.Service
             var function = new SubAgentRunnerFunction(child, name, description);
 
             // 由内到外：子 Agent 留痕（OtSubAgentCall）→ 工具留痕 + 主体白名单外壳（OtToolCall）→ 需要时再套审批
-            var recorded = new SubAgentToolFunction(function, _subAgentRecorder, callerKey, subKey, definition.OwnerDomain);
+            var recorded = new SubAgentToolFunction(function, _subAgentRecorder, _usage, callerKey, subKey, definition.OwnerDomain);
             var registered = new RegisteredToolFunction(recorded, callerKey, name,
-                binding.RequiresApproval ?? false, null, binding.AllowedSubjectIds, _recorder, _scopeFactory, _logger);
+                binding.RequiresApproval ?? false, null, binding.AllowedSubjectIds, _recorder, _scopeFactory, _config, _logger);
 
             var requiresApproval = binding.RequiresApproval == true;
             var subjectScoped = requiresApproval && !string.IsNullOrWhiteSpace(binding.AllowedSubjectIds)
                                 || childScoped;
+            var approvalSensitive = requiresApproval || childApproval;
 
             // 与工具那条同一个道理：MAF 只看工具链里有没有审批壳，不看调用结果，
             // 所以白名单不通过时不能套壳，否则人会被白问一次，批准后才知道无权限。
-            if (!requiresApproval) return (registered, subjectScoped);
+            if (!requiresApproval) return (registered, subjectScoped, approvalSensitive);
 
             if (SubjectAllowList.IsAllowed(binding.AllowedSubjectIds, subjectId, subKey, _logger))
-                return (new ApprovalRequiredAIFunction(registered), subjectScoped);
+                return (new ApprovalRequiredAIFunction(registered), subjectScoped, approvalSensitive);
 
             _logger.Info("主体不在白名单内，该子 Agent 能力不套审批壳（模型会直接收到无权限）：{0} → {1}",
                 callerKey, subKey);
-            return (registered, subjectScoped);
+            return (registered, subjectScoped, approvalSensitive);
         }
     }
 }

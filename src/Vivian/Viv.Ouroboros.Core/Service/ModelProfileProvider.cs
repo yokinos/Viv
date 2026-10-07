@@ -31,12 +31,14 @@ namespace Viv.Ouroboros.Core.Service
         private readonly IAiClientFactory _clientFactory;
         private readonly IMemoryCacheService _cache;
         private readonly ILoggerContract _logger;
+        private readonly IChatReducer _reducer;
 
         public ModelProfileProvider(
             IModelProfileRepository repository,
             IApiKeyProtector protector,
             IAiClientFactory clientFactory,
             IMemoryCacheService cache,
+            IChatReducer reducer,
             ILoggerContract logger)
         {
             _repository = repository;
@@ -44,6 +46,7 @@ namespace Viv.Ouroboros.Core.Service
             _clientFactory = clientFactory;
             _cache = cache;
             _logger = logger;
+            _reducer = reducer;
         }
 
         /// <summary>档位与客户端绑在一起缓存，避免两者来自不同版本</summary>
@@ -111,7 +114,8 @@ namespace Viv.Ouroboros.Core.Service
 
             try
             {
-                return new Resolved(profile, _clientFactory.CreateClient(profile));
+                // 供应商客户端外面套一层上下文裁剪：会话再长，送出去的也只有最近若干轮
+                return new Resolved(profile, new ReducerChatClient(_clientFactory.CreateClient(profile), _reducer));
             }
             catch (Exception ex)
             {

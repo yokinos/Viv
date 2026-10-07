@@ -29,5 +29,11 @@ namespace Viv.Ouroboros.Core.IService
         /// AgentFactory 的缓存把工具嵌在 Agent 里，得跟着一起按主体分键，所以要有这个出口。
         /// </summary>
         bool IsSubjectScoped(string agentKey);
+
+        /// <summary>
+        /// 该 Agent 是否有"需审批"的能力绑定。有的话"套不套审批壳"取决于库里的主体白名单，
+        /// 而壳是装配期定的，所以这类 Agent 的装配缓存只能短时复用（AgentFactory 也得跟着短缓存）。
+        /// </summary>
+        bool IsApprovalSensitive(string agentKey);
     }
 }

@@ -21,6 +21,8 @@ namespace Viv.Ouroboros.Core.Service
     /// 把"无权限"当工具结果交回模型，并留痕成失败 —— 闭包被缓存 60 秒，所以校验必须每次调用现算。</description></item>
     /// <item><description>调用前后落 <c>OtToolCall</c> 留痕（入参、耗时、成功与否、错误信息）。HTTP 工具把执行器
     /// 报的耗时装在 <see cref="HttpToolResult"/> 里带上来，留痕优先用它，模型则只看到里面的正文。</description></item>
+    /// <item><description>交回模型的正文按 <c>Tool.ResultMaxChars</c> 截断（HTTP 响应与子 Agent 的结论长度都不可控），
+    /// 成功与失败的正文都过这一层，截断处显式标注"已截断"。留痕仍记原文：排查"对端到底回了什么"时那才是证据。</description></item>
     /// </list>
     /// 名字与描述不在这里管：<c>AIFunctionFactory.Create</c> 那一层已经按工具定义显式指定过了。
     /// </summary>
@@ -33,6 +35,7 @@ namespace Viv.Ouroboros.Core.Service
         private readonly string? _allowedSubjectIds;
         private readonly ToolCallRecorder _recorder;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IOuroborosConfig _config;
         private readonly ILoggerContract _logger;
 
         /// <summary>
@@ -46,10 +49,11 @@ namespace Viv.Ouroboros.Core.Service
         /// <param name="allowedSubjectIds">绑定上的主体白名单原文（空 = 不限制）</param>
         /// <param name="recorder">留痕器</param>
         /// <param name="scopeFactory">作用域工厂：IVivContext 是 Scoped，只能每次调用现开作用域取</param>
+        /// <param name="config">配置读取（工具结果截断上限）</param>
         /// <param name="logger">日志</param>
         public RegisteredToolFunction(AIFunction inner, string agentKey, string toolKey, bool requiresApproval,
             JsonElement? declaredSchema, string? allowedSubjectIds, ToolCallRecorder recorder,
-            IServiceScopeFactory scopeFactory, ILoggerContract logger) : base(inner)
+            IServiceScopeFactory scopeFactory, IOuroborosConfig config, ILoggerContract logger) : base(inner)
         {
             _agentKey = agentKey;
             _toolKey = toolKey;
@@ -58,6 +62,7 @@ namespace Viv.Ouroboros.Core.Service
             _allowedSubjectIds = allowedSubjectIds;
             _recorder = recorder;
             _scopeFactory = scopeFactory;
+            _config = config;
             _logger = logger;
         }
 
@@ -92,18 +97,22 @@ namespace Viv.Ouroboros.Core.Service
                 if (result is HttpToolResult http)
                 {
                     await RecordAsync(serialized, http.Text, EmToolCallStatus.Succeeded, null, http.LatencyMs);
-                    return http.Text;
+                    return await LimitAsync(http.Text, cancellationToken);
                 }
 
-                await RecordAsync(serialized, result?.ToString(), EmToolCallStatus.Succeeded, null, Elapsed(startedAt));
-                return result;
+                var text = result as string;
+                await RecordAsync(serialized, text ?? result?.ToString(), EmToolCallStatus.Succeeded, null, Elapsed(startedAt));
+
+                // 只收敛字符串结果（HTTP 正文、子 Agent 结论）；内置工具返回的结构化对象保持原样
+                return text is null ? result : await LimitAsync(text, cancellationToken);
             }
             catch (ToolExecutionException ex)
             {
-                // "跑通了但业务失败"（HTTP 非 2xx）：留痕记失败，但把原因当结果交回模型
+                // "跑通了但业务失败"（HTTP 非 2xx）：留痕记失败，但把原因当结果交回模型。
+                // 失败正文里往往整段塞着对端的响应体，同样要按上限收敛
                 await RecordAsync(serialized, ex.Message, EmToolCallStatus.Failed, ex.Reason ?? ex.Message,
                     ex.LatencyMs ?? Elapsed(startedAt));
-                return ex.Message;
+                return await LimitAsync(ex.Message, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -120,6 +129,18 @@ namespace Viv.Ouroboros.Core.Service
         {
             using var scope = _scopeFactory.CreateScope();
             return scope.ServiceProvider.GetService<IVivContext>()?.SubjectId ?? 0;
+        }
+
+        /// <summary>按配置的上限收敛交回模型的正文；截断处标明原文长度，别让模型以为这就是全部</summary>
+        private async Task<string> LimitAsync(string? text, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
+
+            var maxChars = await _config.GetToolResultMaxCharsAsync(cancellationToken).ConfigureAwait(false);
+            if (maxChars <= 0 || text.Length <= maxChars) return text;
+
+            _logger.Info("工具结果超上限已截断：{0} → {1} 字符（原文 {2} 字符）", _toolKey, maxChars, text.Length);
+            return $"{text[..maxChars]}\n…[结果已截断：原文 {text.Length} 字符，仅保留前 {maxChars} 字符]";
         }
 
         /// <summary>外壳自己的掐表，只在执行器报不出耗时时兜底</summary>

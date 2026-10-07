@@ -9,12 +9,14 @@ namespace Viv.Ouroboros.Core.Service
 {
     /// <summary>
     /// 子 Agent 工具的 <see cref="AIFunction"/> 外壳：套在 <see cref="SubAgentRunnerFunction"/> 外面，
-    /// 调用前后落一行 <c>OtSubAgentCall</c>（谁调的、调的谁、任务、结论、token 用量、成败、耗时）。
+    /// 调用前后落一行 <c>OtSubAgentCall</c>（谁调的、调的谁、任务、结论、token 用量、成败、耗时），
+    /// 并把这次调用的用量累加进 <c>OtTokenUsageDaily</c>（按子 Agent 的维度单独出账）。
     /// 结果只把正文交回模型 —— 子 Agent 的回话就是模型该看到的工具结果，用量不进模型上下文。
     /// </summary>
     public sealed class SubAgentToolFunction : DelegatingAIFunction
     {
         private readonly SubAgentCallRecorder _recorder;
+        private readonly TokenUsageRecorder _usage;
         private readonly string _callerAgentKey;
         private readonly string _subAgentKey;
         private readonly string? _ownerDomain;
@@ -24,13 +26,15 @@ namespace Viv.Ouroboros.Core.Service
         /// </summary>
         /// <param name="inner">子 Agent 的实体函数（<see cref="SubAgentRunnerFunction"/>，唯一入参 query）</param>
         /// <param name="recorder">子 Agent 调用留痕器</param>
+        /// <param name="usage">token 用量日聚合写入器</param>
         /// <param name="callerAgentKey">调用方主 Agent 业务键</param>
         /// <param name="subAgentKey">被调用的子 Agent 业务键</param>
         /// <param name="ownerDomain">子 Agent 归属域</param>
-        public SubAgentToolFunction(AIFunction inner, SubAgentCallRecorder recorder, string callerAgentKey,
-            string subAgentKey, string? ownerDomain) : base(inner)
+        public SubAgentToolFunction(AIFunction inner, SubAgentCallRecorder recorder, TokenUsageRecorder usage,
+            string callerAgentKey, string subAgentKey, string? ownerDomain) : base(inner)
         {
             _recorder = recorder;
+            _usage = usage;
             _callerAgentKey = callerAgentKey;
             _subAgentKey = subAgentKey;
             _ownerDomain = ownerDomain;
@@ -46,12 +50,14 @@ namespace Viv.Ouroboros.Core.Service
             {
                 var result = await base.InvokeCoreAsync(arguments, cancellationToken);
 
-                // 实体函数把用量装在信封里带上来：留痕用上它，模型只看到正文
+                // 实体函数把用量装在信封里带上来：留痕与出账都用它，模型只看到正文
                 if (result is SubAgentRunOutcome outcome)
                 {
                     await _recorder.WriteAsync(_callerAgentKey, _subAgentKey, _ownerDomain, task, outcome.Text,
                         EmSubAgentCallStatus.Succeeded, Elapsed(startedAt), null,
-                        outcome.InputTokens, outcome.OutputTokens);
+                        (int?)outcome.Usage?.InputTokenCount, (int?)outcome.Usage?.OutputTokenCount);
+
+                    await _usage.RecordAsync(_subAgentKey, outcome.Usage, cancellationToken);
 
                     return outcome.Text;
                 }
