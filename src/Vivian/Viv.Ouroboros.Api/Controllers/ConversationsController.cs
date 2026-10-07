@@ -122,7 +122,7 @@ namespace Viv.Ouroboros.Api.Controllers
         public async Task StreamAsync(Guid conversationKey, [FromBody] SendMessageRequest request, CancellationToken cancellationToken)
         {
             await Response.WriteSseStreamAsync(
-                _chat.StreamAsync(conversationKey, request, cancellationToken),
+                _chat.StreamQueuedTurnAsync(conversationKey, request, cancellationToken),
                 traceId: _context.TraceId,
                 cancellationToken: cancellationToken);
         }

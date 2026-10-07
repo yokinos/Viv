@@ -22,6 +22,15 @@ namespace Viv.Ouroboros.Core.IService
         IAsyncEnumerable<string> StreamAsync(Guid conversationKey, SendMessageRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 受理一轮并流式返回（队列路径）：落库 + 投递事件后等 Worker 跑完，推出最终文本；
+        /// 客户端断开不影响那一轮继续执行（这是切队列的意义）。
+        /// </summary>
+        /// <param name="conversationKey">会话标识</param>
+        /// <param name="request">消息内容</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        IAsyncEnumerable<string> StreamQueuedTurnAsync(Guid conversationKey, SendMessageRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 跑一条**已落库**的用户消息对应的那一轮（消息队列消费用）：不再新建用户消息，只补助手回复与会话快照
         /// </summary>
         /// <param name="conversationKey">会话标识</param>

@@ -11,7 +11,9 @@ using Viv.Contracts.Interface;
 using Viv.Engine;
 using Viv.Entity.Database.Ouroboros;
 using Viv.Entity.Enums;
+using Viv.EventContracts.Ouroboros;
 using Viv.Log;
+using Viv.Nana;
 using Viv.Ouroboros.Core.Entity.Dto.Agent;
 using Viv.Ouroboros.Core.Entity.Vo.Agent;
 using Viv.Ouroboros.Core.IService;
@@ -36,6 +38,7 @@ namespace Viv.Ouroboros.Core.Service
         private readonly IVivContext _context;
         private readonly IServiceProvider _services;
         private readonly TokenUsageRecorder _usage;
+        private readonly IVivEventPublisher _publisher;
         private readonly ILoggerContract _logger;
 
         public AgentChatService(
@@ -44,6 +47,7 @@ namespace Viv.Ouroboros.Core.Service
             IVivContext context,
             IServiceProvider services,
             TokenUsageRecorder usage,
+            IVivEventPublisher publisher,
             ILoggerContract logger)
         {
             _store = store;
@@ -51,6 +55,7 @@ namespace Viv.Ouroboros.Core.Service
             _context = context;
             _services = services;
             _usage = usage;
+            _publisher = publisher;
             _logger = logger;
         }
 
@@ -184,6 +189,69 @@ namespace Viv.Ouroboros.Core.Service
             await _store.UpdateConversationAsync(conversation);
 
             await SaveSessionAsync(agent, session, conversation.Id, conversation.MainAgentKey);
+        }
+
+        /// <summary>
+        /// 受理一轮并流式返回结果（队列路径）：落好用户消息、投递跑轮事件后立刻开始等结果，
+        /// **真正的模型执行在 Worker 里** —— 所以客户端断开不会中断那一轮（这是切队列的全部意义）。
+        ///
+        /// 一轮内的逐字增量不落库，所以这里只能等**最终文本**一次性推出；
+        /// 要打字机效果得另加增量通道（Redis 短命键），本阶段先不做。
+        /// 投递必须走 <see cref="IVivEventPublisher"/>：只有它会把当前上下文打进信封，
+        /// 少了这段 Worker 侧主体就是 0，会话越权校验会拒掉每一轮。
+        /// </summary>
+        public async IAsyncEnumerable<string> StreamQueuedTurnAsync(Guid conversationKey, SendMessageRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var (conversation, _, error) = await PrepareAsync(conversationKey);
+            if (error is not null)
+            {
+                yield return $"[错误] {error}";
+                yield break;
+            }
+
+            var text = request.Text;
+            var seq = await _store.NextSeqAsync(conversation!.Id);
+
+            var userMessage = new OtMessage
+            {
+                ConversationId = conversation.Id,
+                Seq = seq,
+                Role = EmMessageRole.User,
+                Content = text,
+                ContentType = EmMessageContentType.Text,
+                AgentKey = conversation.MainAgentKey
+            };
+            await _store.InsertMessageAsync(userMessage);
+
+            var published = await _publisher.PublishAsync(new OuroborosTurnEvent
+            {
+                ConversationKey = conversationKey,
+                UserMessageId = userMessage.Id,
+                Text = text
+            }, cancellationToken);
+
+            if (!published)
+            {
+                yield return "[错误] 投递跑轮事件失败";
+                yield break;
+            }
+
+            // 等 Worker 跑完这一幕（默认最多等 3 分钟）；客户端断开时 Task.Delay 抛取消，
+            // 迭代器随之结束 —— 但队列里那一轮不受影响，照跑并把回复落库。
+            var deadline = DateTime.UtcNow.AddMinutes(3);
+            while (DateTime.UtcNow < deadline)
+            {
+                var messages = await _store.ListMessagesAsync(conversation.Id, afterSeq: seq);
+                var reply = messages.FirstOrDefault(x => x.Role == EmMessageRole.Assistant && !string.IsNullOrEmpty(x.Content));
+                if (reply is not null)
+                {
+                    yield return reply.Content!;
+                    yield break;
+                }
+
+                await Task.Delay(500, cancellationToken);
+            }
         }
 
         /// <summary>
