@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Viv.Momo.Enums;
 using Viv.Outbox.Core;
 
@@ -200,6 +201,30 @@ public class OutboxSqlTests
         var ex = Assert.Throws<InvalidOperationException>(() => OutboxSql.ReadResource("Viv.Outbox.Sql.NoSuch.sql"));
 
         Assert.Contains("Viv.Outbox.Sql.NoSuch.sql", ex.Message);
+    }
+
+    /// <summary>
+    /// 入队语句里的每个 <c>@参数</c> 都必须由 <see cref="OutboxRepository.BuildInsertParameters"/> 给出。
+    ///
+    /// Dapper 不会替我们补参：SQL 里写了、参数对象里没有，就是**每次入队都抛**
+    /// （SqlServer「必须声明标量变量"@X"」/ PG 参数不存在），而不是某一列写空。
+    /// 仓库里没有连真库的测试基座，所以这条只能在字符串层面钉死 ——
+    /// TraceId / RequestTraceId 两列后加时就漏过一次，`OutboxStoreTests` 走的是替身仓储，抓不到。
+    /// </summary>
+    [Fact]
+    public void 入队语句里的参数_参数对象一个都不能少()
+    {
+        var required = Regex.Matches(OutboxSql.Insert, @"@(\w+)")
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var supplied = OutboxRepository.BuildInsertParameters(new OutboxMessage())
+            .GetType()
+            .GetProperties()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.Empty(required.Except(supplied));
     }
 
     /// <summary>

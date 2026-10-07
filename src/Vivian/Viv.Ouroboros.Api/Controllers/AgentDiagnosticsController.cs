@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Viv.Engine.Power;
 using Viv.Ouroboros.Core.Entity.Dto.Agent;
 using Viv.Ouroboros.Core.Entity.Vo.Agent;
 using Viv.Ouroboros.Core.IService;
@@ -12,7 +11,7 @@ namespace Viv.Ouroboros.Api.Controllers
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
-    [AllowAnonymous]
+    [Authorize]
     public class AgentDiagnosticsController : ControllerBase
     {
         private readonly IAgentDiagnosticsService _diagnostics;
@@ -73,10 +72,9 @@ namespace Viv.Ouroboros.Api.Controllers
         [ProducesResponseType(typeof(QueueTurnOutput), StatusCodes.Status200OK)]
         public async Task<IActionResult> QueueTurnAsync([FromBody] QueueTurnRequest request, CancellationToken cancellationToken)
         {
-            // 本控制器是 [AllowAnonymous]，VivContextMiddleware 不会水合身份；身份是传输层的事，
-            // 由这里从当前请求的 JWT 取一次（UseAuthentication 已跑过，与认证端点同一个 Resolver）
-            var identity = await RequestTokenResolver.GetContextFromTokenAsync(HttpContext);
-            return await _diagnostics.QueueTurnAsync(request, identity, cancellationToken);
+            // 身份由 VivContextMiddleware 按 [Authorize] 水合进 IVivContext（再没有匿名逃生的那条旁路），
+            // Service 侧直接读 _context 做越权校验即可
+            return await _diagnostics.QueueTurnAsync(request, cancellationToken);
         }
 
         /// <summary>

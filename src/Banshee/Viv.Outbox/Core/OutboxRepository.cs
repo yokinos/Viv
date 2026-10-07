@@ -44,17 +44,28 @@ namespace Viv.Outbox.Core
         }
 
         public Task<bool> InsertAsync(OutboxMessage message, CancellationToken cancellationToken = default)
-            => _db.ExecuteSqlAsync(OutboxSql.Insert, new
-            {
-                message.Id,
-                message.MessageId,
-                message.EventType,
-                message.Payload,
-                Status = (int)message.Status,
-                message.RetryCount,
-                message.NextRetryAt,
-                message.OccurredAt,
-            });
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return _db.ExecuteSqlAsync(OutboxSql.Insert, BuildInsertParameters(message));
+        }
+
+        /// <summary>
+        /// 入队语句的参数对象。单独一个方法是为了让「SQL 里写了 <c>@Foo</c>、参数对象里没有 <c>Foo</c>」
+        /// 这件事能被测试在字符串层面钉死 —— 那是入队必炸的静默失效（跑不到真库的测试基座上看不见）。
+        /// </summary>
+        internal static object BuildInsertParameters(OutboxMessage message) => new
+        {
+            message.Id,
+            message.MessageId,
+            message.EventType,
+            message.Payload,
+            Status = (int)message.Status,
+            message.RetryCount,
+            message.NextRetryAt,
+            message.OccurredAt,
+            message.TraceId,
+            message.RequestTraceId,
+        };
 
         public async Task ReleaseExpiredLeasesAsync(DateTime now, CancellationToken cancellationToken = default)
         {

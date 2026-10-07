@@ -7,10 +7,10 @@ using Viv.Engine;
 using Viv.Entity.Database.Ouroboros;
 using Viv.Entity.Enums;
 using Viv.EventContracts.Ouroboros;
-using Viv.Nana;
 using Viv.Ouroboros.Core.Entity.Dto.Agent;
 using Viv.Ouroboros.Core.Entity.Vo.Agent;
 using Viv.Ouroboros.Core.IService;
+using Viv.Outbox;
 
 namespace Viv.Ouroboros.Core.Service
 {
@@ -24,7 +24,7 @@ namespace Viv.Ouroboros.Core.Service
         private readonly IConfigChangeNotifier _notifier;
         private readonly IAgentStore _store;
         private readonly IVivContext _context;
-        private readonly IVivEventPublisher _publisher;
+        private readonly IVivOutbox _outbox;
 
         /// <summary>
         /// 构造函数
@@ -34,16 +34,16 @@ namespace Viv.Ouroboros.Core.Service
         /// <param name="notifier">配置变更通知</param>
         /// <param name="store">会话与消息库访问</param>
         /// <param name="context">请求上下文（取主体做越权校验）</param>
-        /// <param name="publisher">跨进程事件发布器（自动带上上下文快照）</param>
+        /// <param name="outbox">发件箱（入队时打上下文快照，投递交给 Worker）</param>
         public AgentDiagnosticsService(IModelProfileProvider profiles, IAgentFactory agents, IConfigChangeNotifier notifier,
-            IAgentStore store, IVivContext context, IVivEventPublisher publisher)
+            IAgentStore store, IVivContext context, IVivOutbox outbox)
         {
             _profiles = profiles;
             _agents = agents;
             _notifier = notifier;
             _store = store;
             _context = context;
-            _publisher = publisher;
+            _outbox = outbox;
         }
 
         /// <summary>
@@ -100,21 +100,17 @@ namespace Viv.Ouroboros.Core.Service
         }
 
         /// <summary>
-        /// 落一条用户消息并投递跑轮事件：这里不跑模型，跑模型的是 Worker 消费者。
-        /// 投递用 IVivEventPublisher 而不是裸 IMessageBus —— 只有它会把当前上下文打进信封，
-        /// 少了这段 Worker 侧主体就是 0，会话越权校验会拒掉每一轮。
+        /// 落一条用户消息并入发件箱：这里不跑模型，跑模型的是 Worker 消费者。
+        /// 走 IVivOutbox 而不是 IVivEventPublisher —— 后者要本进程配齐 NanaOption、起一个 MQ 宿主，
+        /// 而 Api 只写不投（OutboxOption.EnableDispatcher = false，投递交给 Worker），配 MQ 纯属多余；
+        /// 发件箱入队只用业务主库，投递由 Worker 的投递器统一发出去。
+        /// 上下文快照同样由入队那条路打进信封，Worker 侧主体不会丢。
         /// 请求带 UserMessageId 时不新建消息，只把同一条事件重投一次（幂等验证用）。
         /// </summary>
-        public async Task<VivApiResult> QueueTurnAsync(QueueTurnRequest request, VivContextContent? identity,
+        public async Task<VivApiResult> QueueTurnAsync(QueueTurnRequest request,
             CancellationToken cancellationToken = default)
         {
             if (request.ConversationKey == Guid.Empty) return VivApiResult.Failed("conversationKey 不能为空");
-
-            // 端点挂在 [AllowAnonymous] 控制器上：VivContextMiddleware 对匿名端点整个跳过水合，
-            // 到这儿 IVivContext 全是 0。身份由控制器从当前请求的 JWT 取来，这里先盖上再往下走 ——
-            // 后面的 NanaEventPublisher 才会把主体打进信封，Worker 侧才有主体可用。
-            if (identity is null || identity.IsEmpty()) return VivApiResult.Failed("匿名自检端点没有主体：请携带有效 token 调用");
-            _context.SetSnapshot(identity);
 
             var conversation = await _store.GetConversationAsync(request.ConversationKey);
             if (conversation is null) return VivApiResult.Failed("会话不存在");
@@ -154,14 +150,14 @@ namespace Viv.Ouroboros.Core.Service
                 text = request.Text;
             }
 
-            var published = await _publisher.PublishAsync(new OuroborosTurnEvent
+            var enqueued = await _outbox.EnqueueAsync(new OuroborosTurnEvent
             {
                 ConversationKey = request.ConversationKey,
                 UserMessageId = userMessageId,
                 Text = text
             }, cancellationToken);
 
-            if (!published) return VivApiResult.Failed("投递跑轮事件失败");
+            if (!enqueued) return VivApiResult.Failed("写入发件箱失败");
 
             return VivApiResult.Success(new QueueTurnOutput { Ok = true, UserMessageId = userMessageId });
         }

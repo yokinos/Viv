@@ -263,12 +263,14 @@ namespace Viv.Engine
         {
             if (options.OutboxOption == null) return;
 
-            // 发件箱投的是 NanaEvent（复用跨进程那族的 fanout 拓扑），且待发消息存在业务主库里。
-            // 缺任何一边都不是「降级运行」而是彻底不工作，所以在这里就把话说死 ——
-            // 否则表现成投递时 IVivEventPublisher 解析不到，或者表根本不存在。
-            if (options.NanaOption == null)
+            // 待发消息存在业务主库里，所以 DatabaseOption 两边都要。
+            // MQ 则只有**投递**才需要 —— 入队走 ExecuteSqlAsync，全程不碰 MQ。
+            // 故 NanaOption 的硬校验只对真的跑投递器的宿主成立：只写不投的宿主
+            // （EnableDispatcher = false，把投递交给 Worker）配齐它等于平白多开一个 MQ 宿主，
+            // 而跑投递器却没有 MQ 不是「降级运行」而是彻底不工作，照样在这里把话说死。
+            if (options.OutboxOption.EnableDispatcher && options.NanaOption == null)
             {
-                throw new Exception("配置了 OutboxOption 却没有 NanaOption：发件箱投递的是跨进程事件，缺少 MQ 配置无法工作");
+                throw new Exception("OutboxOption.EnableDispatcher 为 true 却没有 NanaOption：投递器要把待发消息发上 MQ，缺少 MQ 配置无法工作；本进程只写不投请配 EnableDispatcher = false");
             }
 
             if (options.DatabaseOption == null)
