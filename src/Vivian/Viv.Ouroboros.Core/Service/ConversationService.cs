@@ -5,6 +5,7 @@ using System.Text;
 using Viv.Contracts.Interface;
 using Viv.Engine;
 using Viv.Entity.Database.Ouroboros;
+using Viv.Entity.Enums;
 using Viv.Log;
 using Viv.Ouroboros.Core.Entity.Dto.Agent;
 using Viv.Ouroboros.Core.Entity.Vo.Agent;
@@ -51,7 +52,7 @@ namespace Viv.Ouroboros.Core.Service
                 UserId = _context.UserId,
                 MainAgentKey = request.MainAgentKey,
                 Title = request.Title,
-                Status = 1,
+                Status = EmConversationStatus.Active,
                 CreatedAt = DateTime.Now
             };
 
@@ -87,7 +88,7 @@ namespace Viv.Ouroboros.Core.Service
                 ConversationKey = conversation.ConversationKey,
                 MainAgentKey = conversation.MainAgentKey,
                 Title = conversation.Title,
-                Status = conversation.Status,
+                Status = (int)conversation.Status,
                 Messages = messages.Select(ToItem).ToList()
             });
         }
@@ -112,7 +113,7 @@ namespace Viv.Ouroboros.Core.Service
             var conversation = await LoadOwnedAsync(conversationKey);
             if (conversation is null) return VivApiResult.Failed("会话不存在");
 
-            conversation.Status = 2;
+            conversation.Status = EmConversationStatus.Closed;
             return await _store.UpdateConversationAsync(conversation)
                 ? VivApiResult.Success()
                 : VivApiResult.Failed("结束会话失败");
@@ -135,7 +136,7 @@ namespace Viv.Ouroboros.Core.Service
             ConversationKey = x.ConversationKey,
             MainAgentKey = x.MainAgentKey,
             Title = x.Title,
-            Status = x.Status,
+            Status = (int)x.Status,
             MessageCount = x.MessageCount,
             LastMessageAt = x.LastMessageAt,
             TotalInputTokens = x.TotalInputTokens,

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -19,9 +20,9 @@ namespace Viv.Entity.Database.Ouroboros
         public string AgentKey { get; set; } = string.Empty;
 
         /// <summary>
-        /// 能力类型：1=工具 2=子 Agent 3=MCP 服务
+        /// 能力类型，取 <see cref="EmCapabilityType"/>
         /// </summary>
-        public int CapabilityType { get; set; }
+        public EmCapabilityType CapabilityType { get; set; }
 
         /// <summary>
         /// 能力键：工具为 OtTool.ToolKey，子 Agent 为 OtAgent.AgentKey，MCP 为 OtMcpServer.ServerName

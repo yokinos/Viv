@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -33,9 +34,9 @@ namespace Viv.Entity.Database.Ouroboros
         public string? ParamsSchema { get; set; }
 
         /// <summary>
-        /// 传输方式：1=进程内方法 2=HTTP 接口 3=MCP 工具
+        /// 传输方式，取 <see cref="EmToolTransport"/>
         /// </summary>
-        public int Transport { get; set; }
+        public EmToolTransport Transport { get; set; }
 
         /// <summary>
         /// 非进程内时的调用地址

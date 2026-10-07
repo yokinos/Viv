@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -19,9 +20,9 @@ namespace Viv.Entity.Database.Ouroboros
         public string ServerName { get; set; } = string.Empty;
 
         /// <summary>
-        /// 传输方式：1=HTTP(SSE) 2=stdio 3=进程内
+        /// 传输方式，取 <see cref="EmMcpTransport"/>
         /// </summary>
-        public int Transport { get; set; }
+        public EmMcpTransport Transport { get; set; }
 
         /// <summary>
         /// 服务地址（HTTP/SSE 时）
@@ -44,17 +45,17 @@ namespace Viv.Entity.Database.Ouroboros
         public string? Headers { get; set; }
 
         /// <summary>
-        /// 审批模式：0=不审 1=全部要审 2=按名单
+        /// 审批模式，取 <see cref="EmMcpApprovalMode"/>
         /// </summary>
-        public int ApprovalMode { get; set; }
+        public EmMcpApprovalMode ApprovalMode { get; set; }
 
         /// <summary>
-        /// ApprovalMode=2 时，必须审批的工具名清单（JSON 数组）
+        /// 审批模式取 <see cref="EmMcpApprovalMode.ByList"/> 时，必须审批的工具名清单（JSON 数组）
         /// </summary>
         public string? AlwaysRequireToolNames { get; set; }
 
         /// <summary>
-        /// ApprovalMode=2 时，免审批的工具名清单（JSON 数组）
+        /// 审批模式取 <see cref="EmMcpApprovalMode.ByList"/> 时，免审批的工具名清单（JSON 数组）
         /// </summary>
         public string? NeverRequireToolNames { get; set; }
 

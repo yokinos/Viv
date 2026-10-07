@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -18,7 +19,7 @@ namespace Viv.Entity.Database.Ouroboros
         public long ConversationId { get; set; }
 
         /// <summary>
-        /// 主 Agent 那条触发调用的助手消息（OtMessage.Id）
+        /// 主 Agent 那条触发调用的用户消息（OtMessage.Id）。子 Agent 回调发生在助手消息落库之前，那一刻助手消息还不存在；审批续跑那一轮为空
         /// </summary>
         public long? ParentMessageId { get; set; }
 
@@ -48,9 +49,9 @@ namespace Viv.Entity.Database.Ouroboros
         public string? ResultSummary { get; set; }
 
         /// <summary>
-        /// 调用状态：1=成功 2=失败 3=超时 4=降级返回
+        /// 调用状态，取 <see cref="EmSubAgentCallStatus"/>
         /// </summary>
-        public int Status { get; set; }
+        public EmSubAgentCallStatus Status { get; set; }
 
         /// <summary>
         /// 子 Agent 会话消耗的输入 token

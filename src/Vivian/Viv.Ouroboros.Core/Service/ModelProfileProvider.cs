@@ -98,7 +98,7 @@ namespace Viv.Ouroboros.Core.Service
             var profile = new AiModelProfile
             {
                 ProfileKey = row.ProfileKey,
-                ProviderType = row.ProviderType,
+                ProviderType = (int)row.ProviderType,
                 ApiUrl = row.ApiUrl,
                 ApiKey = apiKey,
                 Model = row.Model,

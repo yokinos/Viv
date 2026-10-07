@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Text;
 using Viv.Entity.Database.Ouroboros;
 
+using Viv.Ouroboros.Core.Entity.Model.Agent;
+
 namespace Viv.Ouroboros.Core.IService
 {
     /// <summary>
@@ -56,6 +58,22 @@ namespace Viv.Ouroboros.Core.IService
         Task<List<OtApproval>> ListPendingApprovalsAsync(long? subjectId);
 
         Task<bool> UpdateApprovalAsync(OtApproval approval);
+
+        #endregion
+
+        #region 工具
+
+        /// <summary>
+        /// 取该 Agent 下启用的工具定义（OtCapabilityBinding 关联 OtTool，绑定与工具都必须启用）。
+        /// 绑定指向了不存在/未启用的工具时该条直接丢弃（实现里记 Warning）。
+        /// </summary>
+        Task<List<AgentToolDefinition>> ListEnabledToolsAsync(string agentKey);
+
+        /// <summary>工具调用留痕（OtToolCall）</summary>
+        Task<bool> InsertToolCallAsync(OtToolCall toolCall);
+
+        /// <summary>子 Agent 调用留痕（OtSubAgentCall）</summary>
+        Task<bool> InsertSubAgentCallAsync(OtSubAgentCall subAgentCall);
 
         #endregion
     }

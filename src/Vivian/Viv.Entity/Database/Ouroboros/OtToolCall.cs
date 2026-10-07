@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -17,7 +18,7 @@ namespace Viv.Entity.Database.Ouroboros
         public long ConversationId { get; set; }
 
         /// <summary>
-        /// 触发这次调用的助手消息（OtMessage.Id）
+        /// 触发这次调用的用户消息（OtMessage.Id）。工具回调发生在助手消息落库之前，那一刻助手消息还不存在；审批续跑那一轮没有用户消息，故为空
         /// </summary>
         public long? MessageId { get; set; }
 
@@ -42,9 +43,9 @@ namespace Viv.Entity.Database.Ouroboros
         public string? ResultSummary { get; set; }
 
         /// <summary>
-        /// 调用状态：1=成功 2=失败 3=待审批 4=被拒 5=超时
+        /// 调用状态，取 <see cref="EmToolCallStatus"/>
         /// </summary>
-        public int Status { get; set; }
+        public EmToolCallStatus Status { get; set; }
 
         /// <summary>
         /// 本次调用是否走了人工审批

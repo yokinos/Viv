@@ -16,5 +16,8 @@ namespace Viv.Ouroboros.Core.IService
 
         /// <summary>清掉某个 Agent 的装配缓存（配置改动后调用）</summary>
         void Invalidate(string agentKey);
+
+        /// <summary>清掉全部 Agent 的装配缓存（改的配置会影响哪些 Agent 说不准时用）</summary>
+        void InvalidateAll();
     }
 }

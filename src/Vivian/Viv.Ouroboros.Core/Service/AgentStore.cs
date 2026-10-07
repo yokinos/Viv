@@ -4,9 +4,12 @@ using System.Linq;
 using System.Text;
 using Viv.Contracts.Interface;
 using Viv.Entity.Database.Ouroboros;
+using Viv.Entity.Enums;
 using Viv.Log;
 using Viv.Momo;
 using Viv.Ouroboros.Core.IService;
+
+using Viv.Ouroboros.Core.Entity.Model.Agent;
 
 namespace Viv.Ouroboros.Core.Service
 {
@@ -120,7 +123,7 @@ namespace Viv.Ouroboros.Core.Service
 
         public async Task<List<OtApproval>> ListPendingApprovalsAsync(long? subjectId)
         {
-            var rows = await _dbContext.FindListAsync<OtApproval>(x => x.SubjectId == subjectId && x.Status == 1);
+            var rows = await _dbContext.FindListAsync<OtApproval>(x => x.SubjectId == subjectId && x.Status == EmApprovalStatus.Pending);
             return rows.OrderBy(x => x.RequestedAt).ToList();
         }
 
@@ -128,6 +131,52 @@ namespace Viv.Ouroboros.Core.Service
         {
             approval.UpdatedAt = DateTime.Now;
             return await _dbContext.UpdateAsync(approval);
+        }
+
+        #endregion
+
+        #region 工具
+
+        public async Task<List<AgentToolDefinition>> ListEnabledToolsAsync(string agentKey)
+        {
+            if (string.IsNullOrWhiteSpace(agentKey)) return [];
+
+            var bindings = await _dbContext.FindListAsync<OtCapabilityBinding>(
+                x => x.AgentKey == agentKey && x.IsEnabled && x.CapabilityType == EmCapabilityType.Tool);
+
+            if (bindings.Count == 0) return [];
+
+            // OtTool 没有软删列（那是 OtAgent 才有的），所以"未删除"在这里只体现为 IsEnabled
+            var toolKeys = bindings.Select(x => x.CapabilityKey).Distinct().ToList();
+            var tools = await _dbContext.FindListAsync<OtTool>(x => x.IsEnabled && toolKeys.Contains(x.ToolKey));
+
+            var result = new List<AgentToolDefinition>();
+            foreach (var binding in bindings.OrderBy(x => x.Priority))
+            {
+                var tool = tools.FirstOrDefault(x => x.ToolKey == binding.CapabilityKey);
+                if (tool is null)
+                {
+                    // 绑定还在、工具没了或停了：说清楚是哪一条，别让它表现成"模型莫名其妙看不到工具"
+                    _logger.Warning("能力绑定指向的工具不存在或未启用，已跳过：{0} → {1}", agentKey, binding.CapabilityKey);
+                    continue;
+                }
+
+                result.Add(new AgentToolDefinition(binding, tool));
+            }
+
+            return result;
+        }
+
+        public async Task<bool> InsertToolCallAsync(OtToolCall toolCall)
+        {
+            toolCall.CreatedAt = DateTime.Now;
+            return await _dbContext.InsertAsync(toolCall);
+        }
+
+        public async Task<bool> InsertSubAgentCallAsync(OtSubAgentCall subAgentCall)
+        {
+            subAgentCall.CreatedAt = DateTime.Now;
+            return await _dbContext.InsertAsync(subAgentCall);
         }
 
         #endregion

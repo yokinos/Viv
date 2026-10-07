@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -39,9 +40,9 @@ namespace Viv.Entity.Database.Ouroboros
         public string? Title { get; set; }
 
         /// <summary>
-        /// 会话状态：1=进行中 2=已结束 3=挂起待审批
+        /// 会话状态，取 <see cref="EmConversationStatus"/>
         /// </summary>
-        public int Status { get; set; } = 1;
+        public EmConversationStatus Status { get; set; } = EmConversationStatus.Active;
 
         /// <summary>
         /// 消息条数（冗余计数，列表展示用）

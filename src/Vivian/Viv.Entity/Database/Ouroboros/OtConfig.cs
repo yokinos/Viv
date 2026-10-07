@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -24,9 +25,9 @@ namespace Viv.Entity.Database.Ouroboros
         public string? ConfigValue { get; set; }
 
         /// <summary>
-        /// 值类型提示：1=字符串 2=整数 3=小数 4=布尔 5=JSON
+        /// 值类型提示，取 <see cref="EmConfigValueType"/>
         /// </summary>
-        public int ValueType { get; set; } = 1;
+        public EmConfigValueType ValueType { get; set; } = EmConfigValueType.Text;
 
         /// <summary>
         /// 备注：这项配置的作用与建议取值

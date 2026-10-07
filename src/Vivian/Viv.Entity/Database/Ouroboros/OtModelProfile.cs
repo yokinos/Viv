@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -20,9 +21,9 @@ namespace Viv.Entity.Database.Ouroboros
         public string ProfileKey { get; set; } = string.Empty;
 
         /// <summary>
-        /// 供应商类型：1=OpenAI 兼容（DeepSeek 等）2=Azure OpenAI 3=其它
+        /// 供应商类型，取 <see cref="EmProviderType"/>
         /// </summary>
-        public int ProviderType { get; set; }
+        public EmProviderType ProviderType { get; set; }
 
         /// <summary>
         /// 接口地址，如 https://api.deepseek.com/v1

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -19,9 +20,9 @@ namespace Viv.Entity.Database.Ouroboros
         public string AgentKey { get; set; } = string.Empty;
 
         /// <summary>
-        /// Agent 类型：1=主 Agent 2=子 Agent
+        /// Agent 类型，取 <see cref="EmAgentType"/>
         /// </summary>
-        public int AgentType { get; set; }
+        public EmAgentType AgentType { get; set; }
 
         /// <summary>
         /// 归属域：ouroboros / apex / herta / deepred / sakumai

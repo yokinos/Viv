@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Viv.Contracts.Interface;
 using Viv.Engine;
 using Viv.Entity.Database.Ouroboros;
+using Viv.Entity.Enums;
 using Viv.Log;
 using Viv.Ouroboros.Core.Entity.Dto.Agent;
 using Viv.Ouroboros.Core.Entity.Vo.Agent;
@@ -104,7 +105,7 @@ namespace Viv.Ouroboros.Core.Service
             var session = await RestoreSessionAsync(agent!, conversation!.Id, conversation.MainAgentKey);
             var seq = await _store.NextSeqAsync(conversation.Id);
 
-            await _store.InsertMessageAsync(new OtMessage
+            var userMessage = new OtMessage
             {
                 ConversationId = conversation.Id,
                 Seq = seq,
@@ -112,8 +113,11 @@ namespace Viv.Ouroboros.Core.Service
                 Content = text,
                 ContentType = "text",
                 AgentKey = conversation.MainAgentKey
-            });
+            };
+            await _store.InsertMessageAsync(userMessage);
 
+            // 流式这一轮也要带上会话上下文：工具/子 Agent 留痕从 AsyncLocal 读，退出即还原
+            using var turn = AgentTurnContext.Enter(conversation.Id, userMessage.Id, conversation.MainAgentKey);
             var full = new StringBuilder();
 
             await foreach (var update in agent!.RunStreamingAsync(text, session, cancellationToken: cancellationToken))
@@ -152,9 +156,9 @@ namespace Viv.Ouroboros.Core.Service
             var approval = await _store.GetApprovalAsync(request.ApprovalId);
             if (approval is null) return VivApiResult.Failed("审批请求不存在");
             if (approval.SubjectId != _context.SubjectId) return VivApiResult.Failed("无权处理该审批");
-            if (approval.Status != 1) return VivApiResult.Failed("该审批已处理");
+            if (approval.Status != EmApprovalStatus.Pending) return VivApiResult.Failed("该审批已处理");
 
-            approval.Status = approved ? 2 : 3;
+            approval.Status = approved ? EmApprovalStatus.Approved : EmApprovalStatus.Rejected;
             approval.DecidedBy = _context.UserId;
             approval.DecidedAt = DateTime.Now;
             approval.DecisionRemark = remark;
@@ -178,6 +182,8 @@ namespace Viv.Ouroboros.Core.Service
                 new(ChatRole.User, [new ToolApprovalResponseContent(approval.ExternalRequestId, approved, toolCall)])
             };
 
+            // 续跑也是"跑一轮"：工具留痕同样要认得会话（续跑没有用户消息，MessageId 传 null）
+            using var turn = AgentTurnContext.Enter(conversation.Id, null, conversation.MainAgentKey);
             var response = await agent.RunAsync(messages, session, cancellationToken: cancellationToken);
             return ToResult(await PersistTurnAsync(conversation, agent, session, response, cancellationToken));
         }
@@ -205,7 +211,7 @@ namespace Viv.Ouroboros.Core.Service
 
             // 越权防线：subjectId 只认上下文，不认请求参数
             if (conversation.SubjectId != _context.SubjectId) return (null, null, "无权访问该会话");
-            if (conversation.Status != 1) return (null, null, "会话已结束");
+            if (conversation.Status != EmConversationStatus.Active) return (null, null, "会话已结束");
 
             var agent = await _agents.GetAgentAsync(conversation.MainAgentKey);
             if (agent is null) return (null, null, $"Agent 未就绪：{conversation.MainAgentKey}");
@@ -219,7 +225,7 @@ namespace Viv.Ouroboros.Core.Service
             var session = await RestoreSessionAsync(agent, conversation.Id, conversation.MainAgentKey);
             var seq = await _store.NextSeqAsync(conversation.Id);
 
-            await _store.InsertMessageAsync(new OtMessage
+            var userMessage = new OtMessage
             {
                 ConversationId = conversation.Id,
                 Seq = seq,
@@ -227,7 +233,12 @@ namespace Viv.Ouroboros.Core.Service
                 Content = text,
                 ContentType = "text",
                 AgentKey = conversation.MainAgentKey
-            });
+            };
+            await _store.InsertMessageAsync(userMessage);
+
+            // 工具回调由 MAF 在 RunAsync 内部发起，且可能在别的线程上续跑：
+            // 会话上下文只能靠 AsyncLocal 随 ExecutionContext 流过去，退出（Dispose）即还原
+            using var turn = AgentTurnContext.Enter(conversation.Id, userMessage.Id, conversation.MainAgentKey);
 
             var response = await agent.RunAsync(text, session, cancellationToken: cancellationToken);
             return await PersistTurnAsync(conversation, agent, session, response, cancellationToken, seq);
@@ -279,7 +290,7 @@ namespace Viv.Ouroboros.Core.Service
                 SubjectId = _context.SubjectId,
                 ToolKey = toolCall?.Name ?? "unknown",
                 Arguments = toolCall is null ? null : JsonSerializer.Serialize(toolCall.Arguments),
-                Status = 1,
+                Status = EmApprovalStatus.Pending,
                 RequestedAt = DateTime.Now,
                 ExpiresAt = DateTime.Now.AddHours(24)
             };

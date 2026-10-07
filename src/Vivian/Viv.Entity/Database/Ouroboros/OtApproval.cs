@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -56,9 +57,9 @@ namespace Viv.Entity.Database.Ouroboros
         public string? Arguments { get; set; }
 
         /// <summary>
-        /// 审批状态：1=待审 2=已批准 3=已拒绝 4=已超时
+        /// 审批状态，取 <see cref="EmApprovalStatus"/>
         /// </summary>
-        public int Status { get; set; } = 1;
+        public EmApprovalStatus Status { get; set; } = EmApprovalStatus.Pending;
 
         /// <summary>
         /// 发起审批的时间

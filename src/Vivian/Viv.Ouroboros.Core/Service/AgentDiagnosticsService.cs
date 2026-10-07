@@ -15,11 +15,13 @@ namespace Viv.Ouroboros.Core.Service
     {
         private readonly IModelProfileProvider _profiles;
         private readonly IAgentFactory _agents;
+        private readonly IToolRegistry _tools;
 
-        public AgentDiagnosticsService(IModelProfileProvider profiles, IAgentFactory agents)
+        public AgentDiagnosticsService(IModelProfileProvider profiles, IAgentFactory agents, IToolRegistry tools)
         {
             _profiles = profiles;
             _agents = agents;
+            _tools = tools;
         }
 
         /// <summary>
@@ -76,11 +78,23 @@ namespace Viv.Ouroboros.Core.Service
         }
 
         /// <summary>
-        /// 清缓存：改完库里的档位或 Agent 定义后调用，不必等 TTL
+        /// 清缓存：改完库里的档位、Agent 定义或工具绑定时调用，不必等 TTL
         /// </summary>
         public VivApiResult Refresh(string? agentKey, string? profileKey)
         {
-            if (!string.IsNullOrWhiteSpace(agentKey)) _agents.Invalidate(agentKey);
+            if (!string.IsNullOrWhiteSpace(agentKey))
+            {
+                _agents.Invalidate(agentKey);
+                _tools.Invalidate(agentKey);
+            }
+            else
+            {
+                // 没指定 Agent 就两边全清：Agent 装配里含着提示词与工具列表，只清工具会留下"Agent 还是旧的"
+                // —— 那条路径下改了提示词/档位必须重启才生效，等于 refresh 没做事
+                _agents.InvalidateAll();
+                _tools.InvalidateAll();
+            }
+
             if (!string.IsNullOrWhiteSpace(profileKey)) _profiles.Invalidate(profileKey);
 
             return VivApiResult.Success();
