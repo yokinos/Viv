@@ -15,16 +15,13 @@ namespace Viv.Ouroboros.Core.Service
     {
         private readonly IModelProfileProvider _profiles;
         private readonly IAgentFactory _agents;
-        private readonly IToolRegistry _tools;
-        private readonly IConfigVersionGate _version;
+        private readonly IConfigChangeNotifier _notifier;
 
-        public AgentDiagnosticsService(IModelProfileProvider profiles, IAgentFactory agents, IToolRegistry tools,
-            IConfigVersionGate version)
+        public AgentDiagnosticsService(IModelProfileProvider profiles, IAgentFactory agents, IConfigChangeNotifier notifier)
         {
             _profiles = profiles;
             _agents = agents;
-            _tools = tools;
-            _version = version;
+            _notifier = notifier;
         }
 
         /// <summary>
@@ -81,28 +78,14 @@ namespace Viv.Ouroboros.Core.Service
         }
 
         /// <summary>
-        /// 清缓存：改完库里的档位、Agent 定义或工具绑定时调用，不必等 TTL
+        /// 清缓存：改完库里的档位、Agent 定义或工具绑定时调用，不必等 TTL。
+        /// 与各管理接口的写操作走同一个失效入口（<see cref="IConfigChangeNotifier"/>），口径只有一份。
         /// </summary>
         public VivApiResult Refresh(string? agentKey, string? profileKey)
         {
-            if (!string.IsNullOrWhiteSpace(agentKey))
-            {
-                _agents.Invalidate(agentKey);
-                _tools.Invalidate(agentKey);
-            }
-            else
-            {
-                // 没指定 Agent 就两边全清：Agent 装配里含着提示词与工具列表，只清工具会留下"Agent 还是旧的"
-                // —— 那条路径下改了提示词/档位必须重启才生效，等于 refresh 没做事
-                _agents.InvalidateAll();
-                _tools.InvalidateAll();
-            }
-
-            if (!string.IsNullOrWhiteSpace(profileKey)) _profiles.Invalidate(profileKey);
-
-            // 本进程上面已经清完了；这一步是给**其它实例**看的：写共享版本戳，它们在节流窗口内自行清缓存。
-            // 版本戳只有一个（不带 agentKey），所以带 agentKey 的 refresh 在别处会退化成全清 —— 宁可多清一次。
-            _version.Publish();
+            // 本进程先按范围清；不带 agentKey 时它内部会两边全清（Agent 装配里含着提示词与工具列表），
+            // 再写共享版本戳让其它实例在节流窗口内自行清缓存
+            _notifier.Notify(agentKey, profileKey);
 
             return VivApiResult.Success();
         }

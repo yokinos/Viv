@@ -37,6 +37,14 @@ namespace Viv.Ouroboros.Core.Service
         }
 
         /// <summary>
+        /// 写接口用的校验：白名单文本是不是"合法主体 Id 数组"。
+        /// 判定口径与 <see cref="IsAllowed"/> 完全一致，避免写进去的东西运行时按"不限制"处理。
+        /// </summary>
+        /// <param name="allowedSubjectIds">绑定上的 AllowedSubjectIds 原文（空白 = 不限制，合法）</param>
+        public static bool IsValid(string? allowedSubjectIds)
+            => string.IsNullOrWhiteSpace(allowedSubjectIds) || TryParse(allowedSubjectIds, out _);
+
+        /// <summary>
         /// 拒绝时回给模型（并写进留痕 ErrorMessage）的文案
         /// </summary>
         /// <param name="subjectId">当前请求的主体 Id</param>

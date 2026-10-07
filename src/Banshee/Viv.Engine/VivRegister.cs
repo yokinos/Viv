@@ -11,6 +11,7 @@ using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
 using Viv.Echo;
 using Viv.Engine.HealthChecks;
+using Viv.Engine.HostedServices;
 using Viv.Engine.LocalEvents;
 using Viv.Engine.Metrics;
 using Viv.Engine.Options;
@@ -129,6 +130,9 @@ namespace Viv.Engine
 
                 services.AddSingleton<IRedisService, RedisService>();
                 services.AddSingleton<IDistributedLock, DistributedLockAccessor>();
+
+                // 预热：没有它，开机到第一次有人用缓存之间 /health 的 redis 项会报"配置未初始化"这个假故障
+                services.AddHostedService<RedisPreheatHostedService>();
             }
 
             // 内存缓存
