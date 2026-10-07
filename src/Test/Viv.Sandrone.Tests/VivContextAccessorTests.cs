@@ -4,7 +4,7 @@ using Viv.Sandrone.Impl;
 namespace Viv.Sandrone.Tests;
 
 /// <summary>
-/// VivContextAccessor —— AsyncLocal 存放的唯一位置。
+/// VivContextAccessor —— VivContext（请求上下文）存放的唯一位置。
 /// 验证首次访问生成、同执行流复用、可清除、可流入 Task.Run（与 Redis LockHolderContext 同构）。
 /// </summary>
 public class VivContextAccessorTests
