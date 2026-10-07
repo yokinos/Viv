@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Viv.Ouroboros.Core\Viv.Ouroboros.Core.csproj" />
+    <ProjectReference Include="..\Viv.EventContracts\Viv.EventContracts.csproj" />
     <ProjectReference Include="..\Viv.Aspire\Viv.Aspire.ServiceDefaults\Viv.Aspire.ServiceDefaults.csproj" />
   </ItemGroup>
 </Project>

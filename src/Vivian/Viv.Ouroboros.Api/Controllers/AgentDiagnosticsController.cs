@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Viv.Engine.Power;
+using Viv.Ouroboros.Core.Entity.Dto.Agent;
 using Viv.Ouroboros.Core.Entity.Vo.Agent;
 using Viv.Ouroboros.Core.IService;
 
@@ -59,6 +61,22 @@ namespace Viv.Ouroboros.Api.Controllers
         public async Task<IActionResult> ChatAsync([FromQuery] string agentKey, [FromQuery] string text)
         {
             return await _diagnostics.ChatAsync(agentKey, text);
+        }
+
+        /// <summary>
+        /// 投递一轮到队列（只落用户消息 + 发事件，跑模型的是 Worker）
+        /// </summary>
+        /// <param name="request">会话标识与用户输入</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>用户消息 Id</returns>
+        [HttpPost("queueTurn")]
+        [ProducesResponseType(typeof(QueueTurnOutput), StatusCodes.Status200OK)]
+        public async Task<IActionResult> QueueTurnAsync([FromBody] QueueTurnRequest request, CancellationToken cancellationToken)
+        {
+            // 本控制器是 [AllowAnonymous]，VivContextMiddleware 不会水合身份；身份是传输层的事，
+            // 由这里从当前请求的 JWT 取一次（UseAuthentication 已跑过，与认证端点同一个 Resolver）
+            var identity = await RequestTokenResolver.GetContextFromTokenAsync(HttpContext);
+            return await _diagnostics.QueueTurnAsync(request, identity, cancellationToken);
         }
 
         /// <summary>

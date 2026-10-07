@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -24,9 +25,9 @@ namespace Viv.Entity.Database.Ouroboros
         public int Seq { get; set; }
 
         /// <summary>
-        /// 角色：user / assistant / tool / system
+        /// 角色，取 <see cref="EmMessageRole"/>
         /// </summary>
-        public string Role { get; set; } = string.Empty;
+        public EmMessageRole Role { get; set; } = EmMessageRole.User;
 
         /// <summary>
         /// 正文（按业务决定是否脱敏，当前直接存明文）
@@ -34,9 +35,9 @@ namespace Viv.Entity.Database.Ouroboros
         public string? Content { get; set; }
 
         /// <summary>
-        /// 内容类型：text / function_call / function_result
+        /// 内容类型，取 <see cref="EmMessageContentType"/>
         /// </summary>
-        public string? ContentType { get; set; }
+        public EmMessageContentType? ContentType { get; set; }
 
         /// <summary>
         /// 产生这条消息的 Agent（主 Agent 或子 Agent 的业务键）

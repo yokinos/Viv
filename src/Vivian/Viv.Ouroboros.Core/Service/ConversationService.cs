@@ -6,6 +6,7 @@ using Viv.Contracts.Interface;
 using Viv.Engine;
 using Viv.Entity.Database.Ouroboros;
 using Viv.Entity.Enums;
+using Viv.Entity.Enums;
 using Viv.Log;
 using Viv.Ouroboros.Core.Entity.Dto.Agent;
 using Viv.Ouroboros.Core.Entity.Vo.Agent;
@@ -149,7 +150,14 @@ namespace Viv.Ouroboros.Core.Service
         private static MessageItemOutput ToItem(OtMessage m) => new()
         {
             Seq = m.Seq,
-            Role = m.Role,
+            Role = m.Role switch
+            {
+                EmMessageRole.User => "user",
+                EmMessageRole.Assistant => "assistant",
+                EmMessageRole.Tool => "tool",
+                EmMessageRole.System => "system",
+                _ => "unknown"
+            },
             Content = m.Content,
             AgentKey = m.AgentKey,
             InputTokens = m.InputTokens,

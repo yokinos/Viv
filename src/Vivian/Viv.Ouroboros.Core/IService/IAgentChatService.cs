@@ -22,6 +22,14 @@ namespace Viv.Ouroboros.Core.IService
         IAsyncEnumerable<string> StreamAsync(Guid conversationKey, SendMessageRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 跑一条**已落库**的用户消息对应的那一轮（消息队列消费用）：不再新建用户消息，只补助手回复与会话快照
+        /// </summary>
+        /// <param name="conversationKey">会话标识</param>
+        /// <param name="userMessageId">已落库的用户消息 Id（OtMessage.Id）</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        Task<VivApiResult> RunQueuedTurnAsync(Guid conversationKey, long userMessageId, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 当前主体下的待审批列表
         /// </summary>
         Task<VivApiResult> ListPendingApprovalsAsync();

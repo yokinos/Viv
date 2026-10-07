@@ -94,6 +94,43 @@ namespace Viv.Ouroboros.Core.Service
             }).ToList());
         }
 
+        /// <summary>
+        /// 跑一条已落库的用户消息对应的那一轮（消息队列消费路径）。
+        /// 与 <see cref="SendAsync"/> 共用同一把会话锁与同一段落库/快照逻辑，区别只在**不新建用户消息** ——
+        /// 用户消息是投递方先落好的，这里按 Id 认领它，所以重投递不会多出一条 user 消息。
+        /// </summary>
+        public async Task<VivApiResult> RunQueuedTurnAsync(Guid conversationKey, long userMessageId,
+            CancellationToken cancellationToken = default)
+        {
+            var (conversation, agent, error) = await PrepareAsync(conversationKey);
+            if (error is not null) return VivApiResult.Failed(error);
+
+            var messages = await _store.ListMessagesAsync(conversation!.Id);
+            var userMessage = messages.FirstOrDefault(x => x.Id == userMessageId);
+            if (userMessage is null) return VivApiResult.Failed($"用户消息不存在：{userMessageId}");
+            if (userMessage.Role != EmMessageRole.User) return VivApiResult.Failed($"消息 {userMessageId} 不是用户消息");
+
+            var distributedLock = _services.GetService<IDistributedLock>();
+            ChatTurnResult result;
+
+            if (distributedLock is null)
+            {
+                _logger.Warning("未配置 Redis，会话未加锁：并发两轮会互相覆盖会话状态");
+                result = await RunExistingTurnAsync(conversation, agent!, userMessage, cancellationToken);
+            }
+            else
+            {
+                result = await distributedLock.AcquireLockWithExecuteAsync(
+                    $"ouroboros:chat:{conversationKey}",
+                    LockExpire,
+                    () => RunExistingTurnAsync(conversation, agent!, userMessage, cancellationToken),
+                    () => Task.FromResult(new ChatTurnResult(null, null, null, null, "该会话正在处理上一条消息，请稍后再发")),
+                    cancellationToken: cancellationToken);
+            }
+
+            return ToResult(result);
+        }
+
         public async IAsyncEnumerable<string> StreamAsync(Guid conversationKey, SendMessageRequest request,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
@@ -112,9 +149,9 @@ namespace Viv.Ouroboros.Core.Service
             {
                 ConversationId = conversation.Id,
                 Seq = seq,
-                Role = "user",
+                Role = EmMessageRole.User,
                 Content = text,
-                ContentType = "text",
+                ContentType = EmMessageContentType.Text,
                 AgentKey = conversation.MainAgentKey
             };
             await _store.InsertMessageAsync(userMessage);
@@ -136,9 +173,9 @@ namespace Viv.Ouroboros.Core.Service
             {
                 ConversationId = conversation.Id,
                 Seq = seq + 1,
-                Role = "assistant",
+                Role = EmMessageRole.Assistant,
                 Content = reply,
-                ContentType = "text",
+                ContentType = EmMessageContentType.Text,
                 AgentKey = conversation.MainAgentKey
             });
 
@@ -232,9 +269,9 @@ namespace Viv.Ouroboros.Core.Service
             {
                 ConversationId = conversation.Id,
                 Seq = seq,
-                Role = "user",
+                Role = EmMessageRole.User,
                 Content = text,
-                ContentType = "text",
+                ContentType = EmMessageContentType.Text,
                 AgentKey = conversation.MainAgentKey
             };
             await _store.InsertMessageAsync(userMessage);
@@ -247,6 +284,20 @@ namespace Viv.Ouroboros.Core.Service
             return await PersistTurnAsync(conversation, agent, session, response, cancellationToken, seq);
         }
 
+        /// <summary>
+        /// 跑一轮：用户消息已经落库（队列消费路径），只跑模型并落助手回复与会话快照
+        /// </summary>
+        private async Task<ChatTurnResult> RunExistingTurnAsync(OtConversation conversation, AIAgent agent,
+            OtMessage userMessage, CancellationToken cancellationToken)
+        {
+            var session = await RestoreSessionAsync(agent, conversation.Id, conversation.MainAgentKey);
+
+            using var turn = AgentTurnContext.Enter(conversation.Id, userMessage.Id, conversation.MainAgentKey);
+
+            var response = await agent.RunAsync(userMessage.Content ?? string.Empty, session, cancellationToken: cancellationToken);
+            return await PersistTurnAsync(conversation, agent, session, response, cancellationToken, userMessage.Seq);
+        }
+
         private async Task<ChatTurnResult> PersistTurnAsync(OtConversation conversation, AIAgent agent, AgentSession session,
             AgentResponse response, CancellationToken cancellationToken, int userSeq = 0)
         {
@@ -256,9 +307,9 @@ namespace Viv.Ouroboros.Core.Service
             {
                 ConversationId = conversation.Id,
                 Seq = seq,
-                Role = "assistant",
+                Role = EmMessageRole.Assistant,
                 Content = response.Text,
-                ContentType = "text",
+                ContentType = EmMessageContentType.Text,
                 AgentKey = conversation.MainAgentKey,
                 ModelProfile = null,
                 InputTokens = response.Usage?.InputTokenCount is { } i ? (int)i : null,
