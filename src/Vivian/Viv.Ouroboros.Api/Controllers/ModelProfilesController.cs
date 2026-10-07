@@ -101,5 +101,18 @@ namespace Viv.Ouroboros.Api.Controllers
         {
             return await _profiles.SetEnabledAsync(id, false, force);
         }
+
+        /// <summary>
+        /// 用当前主钥匙重新加密库里已有的档位密钥（换 VivOptions.EnvOption.AiKeySecret 时的迁移入口）。
+        /// 会改写每一行密文，必须 force=true 确认；返回数量与解不开的档位键，不回密钥与密文。
+        /// </summary>
+        /// <param name="force">是否确认执行</param>
+        /// <returns>重加密结果</returns>
+        [HttpPost("reencrypt")]
+        [ProducesResponseType(typeof(ModelProfileReencryptOutput), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ReencryptAsync([FromQuery] bool force = false)
+        {
+            return await _profiles.ReencryptAsync(force);
+        }
     }
 }

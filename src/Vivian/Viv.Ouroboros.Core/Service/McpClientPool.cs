@@ -68,8 +68,19 @@ namespace Viv.Ouroboros.Core.Service
         /// <summary>按服务名的连接条目（含"刚失败、正在退避"的占位条目）</summary>
         private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
 
-        /// <summary>按服务名的建连闸门：同一服务的并发装配只允许一个真去连，其余等结果</summary>
-        private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new(StringComparer.Ordinal);
+        /// <summary>
+        /// 按服务名的建连闸门：同一服务的并发装配只允许一个真去连，其余等结果。
+        /// 服务被停用/删除后闸门必须能回收，否则长跑进程里这张字典只增不减（服务数无界）。
+        /// </summary>
+        private readonly ConcurrentDictionary<string, Gate> _gates = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// 闸门字典的锁：<b>取闸门与回收闸门都必须持它</b>。取的时候把使用者计数加一，
+        /// 回收的时候只有"没有使用者、且没有连接条目"才摘掉并释放。不持锁的话，
+        /// 刚 GetOrAdd 到、还没 WaitAsync 的那一方会拿到一个已被 Dispose 的闸门，
+        /// WaitAsync/Release 抛 ObjectDisposedException；而且同一服务会短暂存在两把闸门。
+        /// </summary>
+        private readonly object _gateSync = new();
 
         private int _disposed;
 
@@ -170,6 +181,9 @@ namespace Viv.Ouroboros.Core.Service
         {
             if (string.IsNullOrWhiteSpace(serverName)) return;
             if (_entries.TryRemove(serverName, out var entry) && entry.Client is not null) Release(entry.Client, serverName);
+
+            // 条目没了，闸门也就没有存在的理由了：顺手回收（没有条目的服务不会再有人来等它）
+            ReclaimGates();
         }
 
         /// <summary>清空整池（配置全量失效时走这条）</summary>
@@ -182,6 +196,10 @@ namespace Viv.Ouroboros.Core.Service
                 count++;
                 if (entry.Client is not null) Release(entry.Client, key);
             }
+
+            // 整池清空后，所有闸门都没有对应条目了 —— 这是回收残留闸门的主要时机
+            // （服务被删/停用，此后不会再有请求走到它的 EnsureAsync，谁来都不清理它）
+            ReclaimGates();
 
             if (count > 0) _logger.Info("MCP 连接已全部释放（{0} 个服务）", count);
         }
@@ -205,12 +223,57 @@ namespace Viv.Ouroboros.Core.Service
                 }
             }
 
-            foreach (var gate in _gates.Values) gate.Dispose();
-            _gates.Clear();
+            // 闸门：摘掉字典后只释放没人在用的那把。正被 EnsureAsync 持有的闸门不能在这里 Dispose ——
+            // 它的 finally 还要 Release，当场释放会把 ObjectDisposedException 抛在收尾路径上；
+            // 宿主已在停机，那把闸门随引用一起变成垃圾，Release 仍然正常。
+            lock (_gateSync)
+            {
+                foreach (var name in _gates.Keys.ToList())
+                {
+                    if (!_gates.TryRemove(name, out var gate) || gate.InUse) continue;
+                    gate.Dispose();
+                }
+            }
         }
 
         /// <inheritdoc />
         public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+        /// <summary>
+        /// 取闸门并登记使用者。两件事必须在同一把锁里完成 —— 回收方正是靠那个计数判断"现在摘掉它安不安全"。
+        /// </summary>
+        private Gate AcquireGate(string serverName)
+        {
+            lock (_gateSync)
+            {
+                var gate = _gates.GetOrAdd(serverName, _ => new Gate());
+                gate.Enter();
+                return gate;
+            }
+        }
+
+        /// <summary>
+        /// 回收"已无对应连接条目"的闸门（摘出字典 + Dispose）。
+        ///
+        /// 只收没有使用者的那把：正在被 <see cref="EnsureAsync(OtMcpServer, CancellationToken)"/> 持有的闸门
+        /// 一旦被摘掉并释放，持锁线程的 <c>Release</c> 会抛 ObjectDisposedException，而且同一服务会短暂
+        /// 出现两把闸门（两个线程同时真连，失败那次的连接没人释放）。持有中的那把留到下一次失效再来收，
+        /// 或者由随后退出字典的 <see cref="DisposeAsync"/> 处理 —— 闸门数量只受"服务数"约束，不构成泄漏。
+        /// </summary>
+        private void ReclaimGates()
+        {
+            lock (_gateSync)
+            {
+                foreach (var name in _gates.Keys.ToList())
+                {
+                    if (_entries.ContainsKey(name)) continue;
+                    if (!_gates.TryGetValue(name, out var gate) || gate.InUse) continue;
+
+                    // 锁内 TryRemove 必成功（Enter 与回收都在本锁里，没人能在两步之间把它拿走）
+                    if (_gates.TryRemove(name, out gate)) gate.Dispose();
+                }
+            }
+        }
 
         /// <summary>
         /// 拿一个可用的连接：已连上且配置指纹对得上就直接复用；否则（含退避结束后的重连）现连一次。
@@ -222,30 +285,38 @@ namespace Viv.Ouroboros.Core.Service
 
             if (TryGetUsable(server.ServerName, fingerprint, out var ready)) return ready;
 
-            var gate = _gates.GetOrAdd(server.ServerName, _ => new SemaphoreSlim(1, 1));
-            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            var gate = AcquireGate(server.ServerName);
             try
             {
-                if (TryGetUsable(server.ServerName, fingerprint, out ready)) return ready;
-
-                if (_entries.TryGetValue(server.ServerName, out var stale))
+                await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
                 {
-                    if (string.Equals(stale.Fingerprint, fingerprint, StringComparison.Ordinal) && DateTime.UtcNow < stale.NextAttemptAt)
+                    if (TryGetUsable(server.ServerName, fingerprint, out ready)) return ready;
+
+                    if (_entries.TryGetValue(server.ServerName, out var stale))
                     {
-                        var wait = (int)Math.Ceiling((stale.NextAttemptAt - DateTime.UtcNow).TotalSeconds);
-                        throw new ToolExecutionException(
-                            $"MCP 服务 {server.ServerName} 连续连接失败，{wait} 秒内不再重试：{stale.LastError}", "MCP 服务不可用");
+                        if (string.Equals(stale.Fingerprint, fingerprint, StringComparison.Ordinal) && DateTime.UtcNow < stale.NextAttemptAt)
+                        {
+                            var wait = (int)Math.Ceiling((stale.NextAttemptAt - DateTime.UtcNow).TotalSeconds);
+                            throw new ToolExecutionException(
+                                $"MCP 服务 {server.ServerName} 连续连接失败，{wait} 秒内不再重试：{stale.LastError}", "MCP 服务不可用");
+                        }
+
+                        // 指纹不同 = 配置改过，旧连接作废；退避已过 = 该再试一次了
+                        Invalidate(server.ServerName);
                     }
 
-                    // 指纹不同 = 配置改过，旧连接作废；退避已过 = 该再试一次了
-                    Invalidate(server.ServerName);
+                    return await ConnectAsync(server, fingerprint, cancellationToken).ConfigureAwait(false);
                 }
-
-                return await ConnectAsync(server, fingerprint, cancellationToken).ConfigureAwait(false);
+                finally
+                {
+                    gate.Release();
+                }
             }
             finally
             {
-                gate.Release();
+                // 使用者计数在锁内减回去：此后回收方才允许摘掉并释放这把闸门
+                gate.Exit();
             }
         }
 
@@ -260,7 +331,13 @@ namespace Viv.Ouroboros.Core.Service
                 .ConfigureAwait(false);
 
             if (server is null)
+            {
+                // 停用/删除后旧连接（stdio 还挂着子进程）不能等到下次 InvalidateAll 才回收：
+                // 这条路径本来就不该执行，顺手作废掉缓存里的那条连接，失败语义不变（照旧抛"服务未注册"）
+                Invalidate(serverName);
+
                 throw new ToolExecutionException($"MCP 服务不存在或未启用：{serverName}（请检查 api/McpServers 注册与绑定）", "服务未注册");
+            }
 
             return await EnsureAsync(server, cancellationToken).ConfigureAwait(false);
         }
@@ -540,6 +617,32 @@ namespace Viv.Ouroboros.Core.Service
                 parts.Add(structured.GetRawText());
 
             return string.Join("\n", parts.Where(x => !string.IsNullOrEmpty(x)));
+        }
+
+        /// <summary>
+        /// 建连闸门：一个 <see cref="SemaphoreSlim"/> 加一个使用者计数。
+        /// 计数只允许在 <see cref="McpClientPool._gateSync"/> 里改（取闸门时加一、EnsureAsync 退出时减一），
+        /// 回收方据此判断"现在摘掉它安不安全" —— 没有这个计数就只能靠猜，而猜错就是 ObjectDisposedException。
+        /// </summary>
+        private sealed class Gate : IDisposable
+        {
+            private readonly SemaphoreSlim _semaphore = new(1, 1);
+            private int _users;
+
+            /// <summary>当前有多少个调用方已取到本闸门（含正在排队与正在持锁的）</summary>
+            public bool InUse => _users > 0;
+
+            /// <summary>取到闸门后立刻登记（必须在 _gateSync 内调用）</summary>
+            public void Enter() => _users++;
+
+            /// <summary>用完退出：计数归零后，回收方才被允许摘掉并 Dispose 这把闸门</summary>
+            public void Exit() => _users--;
+
+            public Task WaitAsync(CancellationToken cancellationToken) => _semaphore.WaitAsync(cancellationToken);
+
+            public void Release() => _semaphore.Release();
+
+            public void Dispose() => _semaphore.Dispose();
         }
 
         /// <summary>

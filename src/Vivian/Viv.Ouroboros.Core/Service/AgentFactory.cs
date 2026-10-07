@@ -36,7 +36,6 @@ namespace Viv.Ouroboros.Core.Service
     /// </summary>
     public class AgentFactory : IAgentFactory, IDependency
     {
-        private static readonly TimeSpan CacheTime = TimeSpan.FromSeconds(60);
 
         /// <summary>
         /// 有"需审批"能力的 Agent，装配结果只缓存 3 秒 —— 与 <see cref="ToolRegistry"/> 同一理由：
@@ -121,7 +120,9 @@ namespace Viv.Ouroboros.Core.Service
             if (agent is null) return null;
 
             var storeKey = subjectScoped ? subjectKey : plainKey;
-            _cache.Set(storeKey, agent, approvalSensitive ? ApprovalSensitiveCacheTime : CacheTime);
+            // 一律用短 TTL：理由同 ToolRegistry —— 裸改库不会 Publish 版本戳，
+            // 用 60 秒会让「装配时还不需要审批」的 Agent（含它子 Agent 里的审批壳）继续免审批执行（评审 Bug 2）。
+            _cache.Set(storeKey, agent, ApprovalSensitiveCacheTime);
             CachedKeys[storeKey] = 0;
 
             return agent;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -144,6 +144,46 @@ namespace Viv.Ouroboros.Core.Service
 
             _notifier.Notify(profileKey: row.ProfileKey);
             return VivApiResult.Success(ToDetail(row));
+        }
+
+        /// <inheritdoc />
+        public async Task<VivApiResult> ReencryptAsync(bool force)
+        {
+            // 会改写每一行的密文，属不可逆动作：不确认就只回一句提示，别顺手跑
+            if (!force)
+                return VivApiResult.Failed("重加密会把库里所有档位密钥换成当前主钥匙加密，请确认后加 force=true 再调");
+
+            var rows = await _db.FindListAsync<OtModelProfile>(x => x.ApiKeyCipher != null);
+            var result = new ModelProfileReencryptOutput { DedicatedKeyConfigured = _protector.DedicatedKeyConfigured };
+
+            foreach (var row in rows)
+            {
+                if (string.IsNullOrEmpty(row.ApiKeyCipher)) continue;
+                result.Total++;
+
+                // 迁移前统计"还有多少行是旧钥匙"：迁移完这个数该掉到 0（专用钥匙没配时恒为 0）
+                if (_protector.IsLegacyCipher(row.ApiKeyCipher)) result.LegacyBefore++;
+
+                var plain = _protector.Decrypt(row.ApiKeyCipher);
+                if (string.IsNullOrEmpty(plain))
+                {
+                    // 解不开的行原样留在库里，点名报出来 —— 隐式跳过等于让人以为迁完了
+                    result.FailedKeys.Add(row.ProfileKey);
+                    continue;
+                }
+
+                row.ApiKeyCipher = _protector.Encrypt(plain);
+                row.UpdatedAt = DateTime.Now;
+
+                if (await _db.UpdateAsync(row)) result.Reencrypted++;
+                else result.FailedKeys.Add(row.ProfileKey);
+            }
+
+            // 明文没变，缓存里的客户端继续可用（重加密只换密文），所以不清档位缓存。
+            // 走一次 Notify 是为了把版本推高一格：别的实例若正在重读库，让它们看到新的密文
+            if (result.Reencrypted > 0) _notifier.Notify();
+
+            return VivApiResult.Success(result);
         }
 
         /// <summary>

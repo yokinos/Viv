@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Contracts.Enums;
@@ -27,6 +27,15 @@ namespace Viv.Engine.Options
         /// （holder-id 仍然不信）。只允许 <see cref="VivEnv.Development"/>；其它环境启动即抛。
         /// </summary>
         public bool AllowUnsignedInternalTrust { get; set; }
+
+        /// <summary>
+        /// 档位密钥（OtModelProfile.ApiKeyCipher）的专用 AES 主钥匙。**与 InternalToken 解耦**：
+        /// InternalToken 明文写在入库的 appsettings.json 里，拿它加密等于"能读仓库就能解全部档位密钥"，
+        /// 且轮换它会把已加密的档位密钥一起作废。本项只放不入库的文件（appsettings.Development.json）
+        /// 或环境变量 VivOptions__EnvOption__AiKeySecret；不配则回退 InternalToken 并在启动/首次使用时告警。
+        /// 换钥匙后用 <c>POST api/ModelProfiles/reencrypt?force=true</c> 把已有密文迁移过来。
+        /// </summary>
+        public string? AiKeySecret { get; set; }
 
         /// <summary>
         /// 信任的转发代理（IP 或 CIDR）。空 = 清空 ASP.NET 默认的 loopback 限制，
