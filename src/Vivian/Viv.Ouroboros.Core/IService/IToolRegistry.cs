@@ -23,5 +23,11 @@ namespace Viv.Ouroboros.Core.IService
 
         /// <summary>清掉全部 Agent 的工具缓存</summary>
         void InvalidateAll();
+
+        /// <summary>
+        /// 该 Agent 的工具列表是否随主体变（有"需审批 + 配了主体白名单"的绑定才会）。
+        /// AgentFactory 的缓存把工具嵌在 Agent 里，得跟着一起按主体分键，所以要有这个出口。
+        /// </summary>
+        bool IsSubjectScoped(string agentKey);
     }
 }

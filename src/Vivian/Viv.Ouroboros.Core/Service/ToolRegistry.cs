@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,16 +29,32 @@ namespace Viv.Ouroboros.Core.Service
     /// 需要人工审批的工具（绑定的 RequiresApproval 覆盖工具自身的，取非空的那个）会包一层
     /// <see cref="ApprovalRequiredAIFunction"/>：模型调用它会产出 <c>ToolApprovalRequestContent</c>，
     /// 从而接上 AgentChatService 里那条既有的"落 OtApproval → 前端批准 → 续跑"链路。
+    ///
+    /// 缓存键：默认与主体无关。只有绑定既需要审批、又配了主体白名单时，工具列表才随主体不同
+    /// （白名单不通过的不套审批壳，见 <see cref="BuildTool"/>），那种 Agent 改按"AgentKey + subjectId"分键，
+    /// 并由 <see cref="IsSubjectScoped"/> 告知 AgentFactory 一起分键。
     /// </summary>
     public class ToolRegistry : IToolRegistry, IDependency
     {
         private static readonly TimeSpan CacheTime = TimeSpan.FromSeconds(60);
+
+        /// <summary>主体分键的分隔符：只有"需审批 + 配了白名单"的 Agent 才会写出带主体的键</summary>
+        private const char SubjectSeparator = '#';
 
         /// <summary>
         /// 已经缓存过的 key。<see cref="IMemoryCacheService"/> 没有"按前缀清"的能力，
         /// InvalidateAll 只能靠自己记账（条目数 = Agent 数，有界）。
         /// </summary>
         private static readonly ConcurrentDictionary<string, byte> CachedKeys = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// 已确认"工具列表随主体变"的 AgentKey。只有"需审批 + 配了主体白名单"的绑定会这样，
+        /// 而 AgentFactory 把工具嵌在 Agent 里缓存，所以要能读出去跟着一起按主体分键。
+        /// </summary>
+        private static readonly ConcurrentDictionary<string, byte> SubjectScopedAgents = new(StringComparer.Ordinal);
+
+        /// <summary>本进程已用上的配置版本号；与闸门给的版本对不上就说明别处改过配置（见 ConfigVersionGate）</summary>
+        private static long _seenGeneration;
 
         private readonly IAgentStore _store;
         private readonly IEnumerable<IBuiltinToolProvider> _builtinProviders;
@@ -46,6 +63,7 @@ namespace Viv.Ouroboros.Core.Service
         private readonly ToolCallRecorder _recorder;
         private readonly HttpToolExecutor _http;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IConfigVersionGate _version;
 
         /// <summary>
         /// 构造函数
@@ -54,12 +72,14 @@ namespace Viv.Ouroboros.Core.Service
         /// <param name="builtinProviders">内置工具提供者（业务侧登记；框架一个都不内置）</param>
         /// <param name="scopeFactory">作用域工厂（留痕与主体白名单校验都要现开作用域，见 ToolCallRecorder）</param>
         /// <param name="cache">内存缓存</param>
+        /// <param name="version">配置版本闸门（跨实例失效）</param>
         /// <param name="logger">日志</param>
         public ToolRegistry(
             IAgentStore store,
             IEnumerable<IBuiltinToolProvider> builtinProviders,
             IServiceScopeFactory scopeFactory,
             IMemoryCacheService cache,
+            IConfigVersionGate version,
             ILoggerContract logger)
         {
             _store = store;
@@ -67,6 +87,7 @@ namespace Viv.Ouroboros.Core.Service
             _cache = cache;
             _logger = logger;
             _scopeFactory = scopeFactory;
+            _version = version;
             _recorder = new ToolCallRecorder(scopeFactory, logger);
             _http = new HttpToolExecutor(logger, scopeFactory);
         }
@@ -76,12 +97,25 @@ namespace Viv.Ouroboros.Core.Service
         {
             if (string.IsNullOrWhiteSpace(agentKey)) return new List<AITool>();
 
-            var cacheKey = BuildCacheKey(agentKey);
-            if (_cache.TryGet<IList<AITool>>(cacheKey, out var cached) && cached is not null) return cached;
+            RefreshIfConfigChanged();
 
-            var tools = await BuildAsync(agentKey);
-            _cache.Set(cacheKey, tools, CacheTime);
-            CachedKeys[cacheKey] = 0;
+            var plainKey = BuildCacheKey(agentKey);
+
+            // 命中"与主体无关"的那份就说明这个 Agent 的工具列表不随主体变
+            // —— 随主体变的那份从不往这个键上写，所以命中即正确
+            if (_cache.TryGet<IList<AITool>>(plainKey, out var plain) && plain is not null) return plain;
+
+            // 走到这里只有两种可能：冷启动，或这个 Agent 有"需审批 + 白名单"的绑定 → 改按主体取
+            var subjectId = ResolveSubjectId();
+            var subjectKey = BuildSubjectCacheKey(plainKey, subjectId);
+            if (_cache.TryGet<IList<AITool>>(subjectKey, out var own) && own is not null) return own;
+
+            var (tools, subjectScoped) = await BuildAsync(agentKey, subjectId);
+            if (subjectScoped) SubjectScopedAgents[agentKey] = 0;
+
+            var storeKey = subjectScoped ? subjectKey : plainKey;
+            _cache.Set(storeKey, tools, CacheTime);
+            CachedKeys[storeKey] = 0;
 
             return tools;
         }
@@ -90,7 +124,17 @@ namespace Viv.Ouroboros.Core.Service
         public void Invalidate(string agentKey)
         {
             if (string.IsNullOrWhiteSpace(agentKey)) return;
-            _cache.Remove(BuildCacheKey(agentKey));
+
+            var prefix = BuildCacheKey(agentKey);
+            foreach (var key in CachedKeys.Keys)
+            {
+                if (!IsKeyOf(key, prefix)) continue;
+
+                _cache.Remove(key);
+                CachedKeys.TryRemove(key, out _);
+            }
+
+            SubjectScopedAgents.TryRemove(agentKey, out _);
         }
 
         /// <inheritdoc />
@@ -98,25 +142,69 @@ namespace Viv.Ouroboros.Core.Service
         {
             foreach (var key in CachedKeys.Keys) _cache.Remove(key);
             CachedKeys.Clear();
+            SubjectScopedAgents.Clear();
         }
+
+        /// <inheritdoc />
+        public bool IsSubjectScoped(string agentKey)
+            => !string.IsNullOrWhiteSpace(agentKey) && SubjectScopedAgents.ContainsKey(agentKey);
 
         private static string BuildCacheKey(string agentKey) => $"ouroboros:tools:{agentKey}";
 
-        private async Task<IList<AITool>> BuildAsync(string agentKey)
+        private static string BuildSubjectCacheKey(string plainKey, long subjectId)
+            => $"{plainKey}{SubjectSeparator}{subjectId}";
+
+        /// <summary>键是不是这个 Agent 的（本体键或它的主体分键）</summary>
+        private static bool IsKeyOf(string key, string prefix)
+            => key.Equals(prefix, StringComparison.Ordinal)
+               || (key.Length > prefix.Length && key[prefix.Length] == SubjectSeparator
+                   && key.StartsWith(prefix, StringComparison.Ordinal));
+
+        /// <summary>别的实例 refresh 过就清掉本进程的工具缓存（节流在闸门里，这里不额外记账）</summary>
+        private void RefreshIfConfigChanged()
+        {
+            var generation = _version.EnsureFresh();
+            if (generation == Interlocked.Read(ref _seenGeneration)) return;
+
+            InvalidateAll();
+            Interlocked.Exchange(ref _seenGeneration, generation);
+            _logger.Info("配置版本已更新（第 {0} 版），工具缓存已清", generation);
+        }
+
+        /// <summary>取当前请求的主体 Id：IVivContext 是 Scoped，只能现开作用域解析</summary>
+        private long ResolveSubjectId()
+        {
+            using var scope = _scopeFactory.CreateScope();
+            return scope.ServiceProvider.GetService<IVivContext>()?.SubjectId ?? 0;
+        }
+
+        /// <summary>
+        /// 装配工具列表。<paramref name="subjectId"/> 只对"需审批 + 配了主体白名单"的绑定起作用
+        /// —— 那种绑定要靠它决定要不要套审批壳（见 <see cref="BuildTool"/>）。
+        /// </summary>
+        private async Task<(IList<AITool> Tools, bool SubjectScoped)> BuildAsync(string agentKey, long subjectId)
         {
             var definitions = await _store.ListEnabledToolsAsync(agentKey);
             var tools = new List<AITool>(definitions.Count);
+            var subjectScoped = false;
 
             foreach (var definition in definitions)
             {
-                var tool = BuildTool(agentKey, definition);
+                if (NeedsSubject(definition)) subjectScoped = true;
+
+                var tool = BuildTool(agentKey, definition, subjectId);
                 if (tool is not null) tools.Add(tool);
             }
 
-            return tools;
+            return (tools, subjectScoped);
         }
 
-        private AITool? BuildTool(string agentKey, AgentToolDefinition definition)
+        /// <summary>这条绑定会不会让同一份工具列表对不同主体不一样：需审批 + 配了非空白名单</summary>
+        private static bool NeedsSubject(AgentToolDefinition definition)
+            => (definition.Binding.RequiresApproval ?? definition.Tool.RequiresApproval)
+               && !string.IsNullOrWhiteSpace(definition.Binding.AllowedSubjectIds);
+
+        private AITool? BuildTool(string agentKey, AgentToolDefinition definition, long subjectId)
         {
             // 绑定上的暴露名/暴露描述是刻意用来消重名的，优先级高于工具自身
             var name = string.IsNullOrWhiteSpace(definition.Binding.ExposedName)
@@ -135,10 +223,19 @@ namespace Viv.Ouroboros.Core.Service
             };
 
             if (function is null) return null;
+            if (!(definition.Binding.RequiresApproval ?? definition.Tool.RequiresApproval)) return function;
 
-            var requiresApproval = definition.Binding.RequiresApproval ?? definition.Tool.RequiresApproval;
-            return requiresApproval ? new ApprovalRequiredAIFunction(function) : function;
+            // MAF 判定"这个工具要不要审批"只看工具链里有没有 ApprovalRequiredAIFunction，**不会先调用工具**，
+            // 所以把白名单放在外壳里已经太晚：人先被问一次，批准之后才被告知无权限。
+            // 放行与否只能在装配期定 —— 不通过的不套审批壳，模型照常调到工具，由外壳当场回"无权限"。
+            if (SubjectAllowList.IsAllowed(definition.Binding.AllowedSubjectIds, subjectId, definition.Tool.ToolKey, _logger))
+                return new ApprovalRequiredAIFunction(function);
+
+            _logger.Info("主体不在白名单内，该能力不套审批壳（模型会直接收到无权限）：{0} → {1}",
+                agentKey, definition.Tool.ToolKey);
+            return function;
         }
+
 
         /// <summary>
         /// 内置工具：按 ToolKey 查业务侧登记的实现。查不到只跳过这一个并记 Warning，

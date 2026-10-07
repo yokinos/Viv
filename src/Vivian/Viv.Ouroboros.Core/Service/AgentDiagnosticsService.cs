@@ -16,12 +16,15 @@ namespace Viv.Ouroboros.Core.Service
         private readonly IModelProfileProvider _profiles;
         private readonly IAgentFactory _agents;
         private readonly IToolRegistry _tools;
+        private readonly IConfigVersionGate _version;
 
-        public AgentDiagnosticsService(IModelProfileProvider profiles, IAgentFactory agents, IToolRegistry tools)
+        public AgentDiagnosticsService(IModelProfileProvider profiles, IAgentFactory agents, IToolRegistry tools,
+            IConfigVersionGate version)
         {
             _profiles = profiles;
             _agents = agents;
             _tools = tools;
+            _version = version;
         }
 
         /// <summary>
@@ -96,6 +99,10 @@ namespace Viv.Ouroboros.Core.Service
             }
 
             if (!string.IsNullOrWhiteSpace(profileKey)) _profiles.Invalidate(profileKey);
+
+            // 本进程上面已经清完了；这一步是给**其它实例**看的：写共享版本戳，它们在节流窗口内自行清缓存。
+            // 版本戳只有一个（不带 agentKey），所以带 agentKey 的 refresh 在别处会退化成全清 —— 宁可多清一次。
+            _version.Publish();
 
             return VivApiResult.Success();
         }
