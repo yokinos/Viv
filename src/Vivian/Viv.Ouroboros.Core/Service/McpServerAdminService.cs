@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -15,8 +15,10 @@ using Viv.Ouroboros.Core.IService;
 namespace Viv.Ouroboros.Core.Service
 {
     /// <summary>
-    /// MCP 服务管理实现。只做注册：OtMcpServer 目前没有任何代码去连它（MCP 工具执行尚未实现），
-    /// 所以本类不碰 ToolRegistry 的装配结果，只让配置能被管理后台维护。
+    /// MCP 服务管理实现：注册 + 改配置 + 启停。工具的发现与调用在
+    /// <see cref="ToolRegistry"/>（装配）与 <see cref="McpClientPool"/>（长连接）里，本类不碰连接。
+    /// 任何写操作都会 <see cref="IConfigChangeNotifier.Notify"/> → 版本戳抬高 →
+    /// 工具缓存与 MCP 连接池一起失效，改完不必等 60 秒 TTL。
     ///
     /// Headers 只进不出：那一列按注释就是放内部令牌的地方，读接口只回 hasHeaders，
     /// 与模型档位只回 hasKey 同一口径；要改就整体重传，null 表示不动。

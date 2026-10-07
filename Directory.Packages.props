@@ -21,6 +21,8 @@
     <!-- ── Microsoft Agent Framework（MAF，构建于 Microsoft.Extensions.AI 之上）── -->
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.23.0" />
     <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.23.0" />
+    <!-- MCP 官方 .NET SDK：McpClientTool 自身就是 AIFunction，MCP 工具因此能直接进 MAF 的工具回环 -->
+    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />

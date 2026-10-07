@@ -8,7 +8,7 @@ using Viv.Ouroboros.Core.IService;
 namespace Viv.Ouroboros.Api.Controllers
 {
     /// <summary>
-    /// MCP 服务管理接口：管理后台用。只做注册，MCP 工具执行仍未实现。
+    /// MCP 服务管理接口：管理后台用。写操作会抬配置版本戳，工具装配与 MCP 连接随之失效。
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]

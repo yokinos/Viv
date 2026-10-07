@@ -27,6 +27,12 @@ namespace Viv.Ouroboros.Core.Service
     /// 本阶段只实现两种工具类型：内置（<see cref="EmToolTransport.Builtin"/>）与 HTTP（<see cref="EmToolTransport.Http"/>）。
     /// MCP（<see cref="EmToolTransport.Mcp"/>）以及将来可能出现的其它类型一律跳过并记 Warning —— **留待后续**。
     ///
+    /// MCP 只从"绑定整个服务"这条入口进来（<see cref="EmCapabilityType.McpServer"/>，见
+    /// <see cref="BuildMcpServerAsync"/>）：连接、列工具、按 AllowedTools 过滤、逐个包成工具。
+    /// 单条 <c>OtTool</c> 写 <see cref="EmToolTransport.Mcp"/> 的那条入口**没有实现**：
+    /// OtTool 上没有任何一列能唯一指认"这个工具属于哪个 MCP 服务"，硬拿 Endpoint 当服务名
+    /// 就成了一条只存在于代码里的隐式约定（详见 <see cref="SkipUnsupported"/>）。
+    ///
     /// 需要人工审批的工具（绑定的 RequiresApproval 覆盖工具自身的，取非空的那个）会包一层
     /// <see cref="ApprovalRequiredAIFunction"/>：模型调用它会产出 <c>ToolApprovalRequestContent</c>，
     /// 从而接上 AgentChatService 里那条既有的"落 OtApproval → 前端批准 → 续跑"链路。
@@ -52,6 +58,13 @@ namespace Viv.Ouroboros.Core.Service
 
         /// <summary>主体分键的分隔符：只有"需审批 + 配了白名单"的 Agent 才会写出带主体的键</summary>
         private const char SubjectSeparator = '#';
+
+        /// <summary>
+        /// MCP 工具名的分隔符：模型看到的是 <c>{服务前缀}__{服务侧工具名}</c>。
+        /// 选双下划线是因为 MCP 的工具名里不会出现它（协议允许的字符集里没有连着两个下划线的惯例），
+        /// 所以与内置/HTTP 工具的 ToolKey 不会撞车。
+        /// </summary>
+        private const string McpNameSeparator = "__";
 
         /// <summary>
         /// 已经缓存过的 key。<see cref="IMemoryCacheService"/> 没有"按前缀清"的能力，
@@ -80,6 +93,7 @@ namespace Viv.Ouroboros.Core.Service
         private readonly ILoggerContract _logger;
         private readonly ToolCallRecorder _recorder;
         private readonly HttpToolExecutor _http;
+        private readonly McpClientPool _mcp;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IConfigVersionGate _version;
         private readonly IOuroborosConfig _config;
@@ -93,6 +107,7 @@ namespace Viv.Ouroboros.Core.Service
         /// <param name="cache">内存缓存</param>
         /// <param name="version">配置版本闸门（跨实例失效）</param>
         /// <param name="config">配置读取（工具结果截断上限）</param>
+        /// <param name="mcp">MCP 连接池（单例；MCP 工具调用与发现都走它）</param>
         /// <param name="logger">日志</param>
         public ToolRegistry(
             IAgentStore store,
@@ -101,6 +116,7 @@ namespace Viv.Ouroboros.Core.Service
             IMemoryCacheService cache,
             IConfigVersionGate version,
             IOuroborosConfig config,
+            McpClientPool mcp,
             ILoggerContract logger)
         {
             _store = store;
@@ -110,6 +126,7 @@ namespace Viv.Ouroboros.Core.Service
             _scopeFactory = scopeFactory;
             _version = version;
             _config = config;
+            _mcp = mcp;
             _recorder = new ToolCallRecorder(scopeFactory, logger);
             _http = new HttpToolExecutor(logger, scopeFactory);
         }
@@ -168,6 +185,11 @@ namespace Viv.Ouroboros.Core.Service
             CachedKeys.Clear();
             SubjectScopedAgents.Clear();
             ApprovalSensitiveAgents.Clear();
+
+            // 配置全量失效（改 MCP 服务、停用、删除都走这条）时顺手把 MCP 连接也放掉：
+            // 连接本身按"传输+地址+请求头"指纹复用，改配置不改指纹也不会认错连接；这里丢掉是为了
+            // 不让停用/删除后的服务还占着一条连接或一个 stdio 子进程。条目数 = MCP 服务数，有界。
+            _mcp.InvalidateAll();
         }
 
         /// <inheritdoc />
@@ -227,6 +249,17 @@ namespace Viv.Ouroboros.Core.Service
 
                 var tool = BuildTool(agentKey, definition, subjectId);
                 if (tool is not null) tools.Add(tool);
+            }
+
+            // MCP 是"一个服务出一批工具"，装配期要真连一次；重名检测要看得见上面那些工具的名字，
+            // 所以放在后面。用过的名字记账（MCP 工具名 = 前缀 + 服务侧工具名，与其他工具同处一个命名空间）。
+            var usedNames = new HashSet<string>(tools.Select(x => x.Name), StringComparer.Ordinal);
+            foreach (var mcp in await _store.ListEnabledMcpServersAsync(agentKey))
+            {
+                var built = await BuildMcpServerAsync(agentKey, mcp, subjectId, usedNames);
+                tools.AddRange(built.Tools);
+                if (built.SubjectScoped) subjectScoped = true;
+                if (built.ApprovalSensitive) approvalSensitive = true;
             }
 
             return (tools, subjectScoped, approvalSensitive);
@@ -321,6 +354,116 @@ namespace Viv.Ouroboros.Core.Service
             return Wrap(agentKey, definition, new HttpToolFunction(executor, tool, name, description));
         }
 
+        /// <summary>
+        /// 一条 MCP 服务绑定 → 一批工具。
+        ///
+        /// 命名：<c>{前缀}__{服务侧工具名}</c>，前缀取 <c>OtCapabilityBinding.ExposedName</c>（留空则取服务名）。
+        /// 双下划线是刻意的：MCP 自己的工具名里不会出现它，所以与内置/HTTP 工具的 ToolKey 不会撞车；
+        /// 同时前缀可被 ExposedName 覆盖，正是那一列"避免重名"的用途（一个服务出 N 个工具，覆盖的只能是前缀）。
+        /// 重名（本次装配里已经有同名工具）就跳过这一个并记 Warning：同名工具交给模型只会派发歧义。
+        ///
+        /// 暴露范围：<c>AllowedTools</c> 非空时只放行名单里的服务侧工具名（拿原名比，不是加前缀后的名字）。
+        /// 审批与白名单口径与普通工具完全一致：<c>RequiresApproval</c> 见 <see cref="McpServerPolicy.RequiresApproval"/>，
+        /// 主体白名单装配期只决定"套不套审批壳"，真正的拒绝在 <see cref="RegisteredToolFunction"/> 里按请求现算。
+        ///
+        /// 连不上/列不出工具只跳过这条绑定并记 Warning，绝不让一条坏配置把整个 Agent 打死 ——
+        /// 此时模型看不到该服务的工具（而不是收到一堆报错工具）。
+        /// </summary>
+        private async Task<(IReadOnlyList<AITool> Tools, bool SubjectScoped, bool ApprovalSensitive)> BuildMcpServerAsync(
+            string agentKey, AgentMcpServerDefinition definition, long subjectId, HashSet<string> usedNames)
+        {
+            var binding = definition.Binding;
+            var server = definition.Server;
+            var tools = new List<AITool>();
+
+            IReadOnlyList<McpToolDescriptor> discovered;
+            try
+            {
+                discovered = await _mcp.ListToolsAsync(server, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning("MCP 服务连接或列工具失败，本次装配跳过该绑定：{0} → {1}，{2}", agentKey, server.ServerName, ex.Message);
+                return (tools, false, false);
+            }
+
+            if (!string.IsNullOrWhiteSpace(binding.ExposedDescription))
+                _logger.Info("MCP 服务绑定的 ExposedDescription 不适用（一个服务有多个工具，无法用一句描述覆盖），已忽略：{0} → {1}",
+                    agentKey, server.ServerName);
+
+            var allowed = McpServerPolicy.ParseNames(server.AllowedTools, server.ServerName, nameof(server.AllowedTools), _logger);
+            var always = McpServerPolicy.ParseNames(server.AlwaysRequireToolNames, server.ServerName, nameof(server.AlwaysRequireToolNames), _logger);
+            var never = McpServerPolicy.ParseNames(server.NeverRequireToolNames, server.ServerName, nameof(server.NeverRequireToolNames), _logger);
+
+            var prefix = string.IsNullOrWhiteSpace(binding.ExposedName) ? server.ServerName : binding.ExposedName;
+            var subjectScoped = false;
+            var approvalSensitive = false;
+
+            foreach (var descriptor in discovered.OrderBy(x => x.Name, StringComparer.Ordinal))
+            {
+                if (allowed.Count > 0 && !allowed.Contains(descriptor.Name))
+                {
+                    _logger.Info("MCP 工具不在 AllowedTools 名单内，未暴露：{0} → {1}", server.ServerName, descriptor.Name);
+                    continue;
+                }
+
+                var name = $"{prefix}{McpNameSeparator}{descriptor.Name}";
+                if (!usedNames.Add(name))
+                {
+                    _logger.Warning("MCP 工具名与已有工具重名，已跳过：{0}（来源 {1}）", name, server.ServerName);
+                    continue;
+                }
+
+                // 服务没给 schema 就交 null，让外壳退回框架推断的那份（别把 Undefined 顶给模型）
+                JsonElement? schema = descriptor.Schema.ValueKind == JsonValueKind.Undefined ? null : descriptor.Schema;
+                var description = string.IsNullOrWhiteSpace(descriptor.Description)
+                    ? $"MCP 服务 {server.ServerName} 提供的工具：{descriptor.Name}"
+                    : descriptor.Description;
+
+                var requiresApproval = McpServerPolicy.RequiresApproval(server.ApprovalMode, binding.RequiresApproval,
+                    descriptor.Name, always, never, server.ServerName, _logger);
+
+                // 与 BuildHttp 同一理由：只把单例的池传进闭包，不碰 this
+                var function = new McpToolFunction(_mcp, server.ServerName, descriptor.Name, name, description, schema);
+
+                var registered = new RegisteredToolFunction(
+                    function,
+                    agentKey,
+                    name,
+                    requiresApproval,
+                    schema,
+                    binding.AllowedSubjectIds,
+                    _recorder,
+                    _scopeFactory,
+                    _config,
+                    _logger);
+
+                if (!requiresApproval)
+                {
+                    tools.Add(registered);
+                    continue;
+                }
+
+                approvalSensitive = true;
+                if (!string.IsNullOrWhiteSpace(binding.AllowedSubjectIds)) subjectScoped = true;
+
+                // 与工具/子 Agent 同一条口径：白名单不通过就不套审批壳，否则人先被白问一次
+                if (SubjectAllowList.IsAllowed(binding.AllowedSubjectIds, subjectId, name, _logger))
+                {
+                    tools.Add(new ApprovalRequiredAIFunction(registered));
+                }
+                else
+                {
+                    _logger.Info("主体不在白名单内，该 MCP 工具不套审批壳（模型会直接收到无权限）：{0} → {1}",
+                        agentKey, name);
+                    tools.Add(registered);
+                }
+            }
+
+            // 有工具要审批但没有工具套上壳（白名单全不通过）时不算"敏感"，与 NeedsSubject 的口径保持一致即可
+            return (tools, subjectScoped, approvalSensitive);
+        }
+
         /// <summary>套上统一外壳：ParamsSchema 顶 schema + 主体白名单校验 + 调用留痕</summary>
         private AIFunction Wrap(string agentKey, AgentToolDefinition definition, AIFunction inner)
             => new RegisteredToolFunction(
@@ -352,10 +495,17 @@ namespace Viv.Ouroboros.Core.Service
             }
         }
 
-        /// <summary>本阶段不实现的传输方式（MCP 等）。留待后续：接 MCP 客户端后在这里换成工具发现结果。</summary>
+        /// <summary>
+        /// 单条工具写 MCP 传输时跳过。**这是刻意的，不是没做完**：
+        /// <c>OtTool</c> 上没有一列能唯一指认"这个工具属于哪个 MCP 服务"（Endpoint 的注释是"调用地址"，
+        /// ToolKey 是模型可见名、不保证等于服务侧工具名），硬把 Endpoint 当服务名就成了一条
+        /// 只存在于代码里的隐式约定，还会绕开 OtMcpServer 上的 Headers / ApprovalMode / AllowedTools。
+        /// 要单点暴露 MCP 工具，请改成"绑定整个服务"再配 <c>AllowedTools</c>。
+        /// </summary>
         private AIFunction? SkipUnsupported(OtTool tool)
         {
-            _logger.Warning("工具类型暂不支持，已跳过（MCP / 其它类型留待后续）：{0}（Transport={1}）", tool.ToolKey, tool.Transport.ToString());
+            _logger.Warning("单条工具写 MCP 传输无法唯一确定所属 MCP 服务，已跳过（请改用「绑定整个 MCP 服务 + AllowedTools」）：{0}（Transport={1}）",
+                tool.ToolKey, tool.Transport.ToString());
             return null;
         }
     }

@@ -69,6 +69,12 @@ namespace Viv.Ouroboros.Core.IService
         /// </summary>
         Task<List<AgentToolDefinition>> ListEnabledToolsAsync(string agentKey);
 
+        /// <summary>
+        /// 取该 Agent 下启用的 MCP 服务绑定（OtCapabilityBinding 关联 OtMcpServer，绑定与服务都必须启用）。
+        /// 与 <see cref="ListEnabledToolsAsync"/> 同一手法：绑定指向了不存在/未启用的服务时该条直接丢弃（实现里记 Warning）。
+        /// </summary>
+        Task<List<AgentMcpServerDefinition>> ListEnabledMcpServersAsync(string agentKey);
+
         /// <summary>工具调用留痕（OtToolCall）</summary>
         Task<bool> InsertToolCallAsync(OtToolCall toolCall);
 

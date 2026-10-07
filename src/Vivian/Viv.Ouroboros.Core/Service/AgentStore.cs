@@ -167,6 +167,35 @@ namespace Viv.Ouroboros.Core.Service
             return result;
         }
 
+        public async Task<List<AgentMcpServerDefinition>> ListEnabledMcpServersAsync(string agentKey)
+        {
+            if (string.IsNullOrWhiteSpace(agentKey)) return [];
+
+            var bindings = await _dbContext.FindListAsync<OtCapabilityBinding>(
+                x => x.AgentKey == agentKey && x.IsEnabled && x.CapabilityType == EmCapabilityType.McpServer);
+
+            if (bindings.Count == 0) return [];
+
+            // 与 OtTool 一样，OtMcpServer 也没有软删列，"未删除"同样只体现为 IsEnabled
+            var serverNames = bindings.Select(x => x.CapabilityKey).Distinct().ToList();
+            var servers = await _dbContext.FindListAsync<OtMcpServer>(x => x.IsEnabled && serverNames.Contains(x.ServerName));
+
+            var result = new List<AgentMcpServerDefinition>();
+            foreach (var binding in bindings.OrderBy(x => x.Priority))
+            {
+                var server = servers.FirstOrDefault(x => x.ServerName == binding.CapabilityKey);
+                if (server is null)
+                {
+                    _logger.Warning("能力绑定指向的 MCP 服务不存在或未启用，已跳过：{0} → {1}", agentKey, binding.CapabilityKey);
+                    continue;
+                }
+
+                result.Add(new AgentMcpServerDefinition(binding, server));
+            }
+
+            return result;
+        }
+
         public async Task<bool> InsertToolCallAsync(OtToolCall toolCall)
         {
             toolCall.CreatedAt = DateTime.Now;

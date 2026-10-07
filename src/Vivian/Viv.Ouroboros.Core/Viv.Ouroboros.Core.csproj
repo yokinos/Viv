@@ -10,6 +10,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Agents.AI" />
+		<PackageReference Include="ModelContextProtocol" />
 	</ItemGroup>
 
 	<ItemGroup>
