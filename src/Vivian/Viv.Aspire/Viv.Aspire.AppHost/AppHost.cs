@@ -32,4 +32,6 @@ builder.AddProject<Projects.Viv_Apex_Worker>("viv-apex-worker");
 
 builder.AddProject<Projects.Viv_DeepRed_Worker>("viv-deepred-worker");
 
+builder.AddProject<Projects.Viv_Ouroboros_Worker>("viv-ouroboros-worker");
+
 builder.Build().Run();

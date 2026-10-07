@@ -58,6 +58,7 @@
   <Folder Name="/src/Vivian/Ouroboros/">
     <Project Path="src/Vivian/Viv.Ouroboros.Api/Viv.Ouroboros.Api.csproj" />
     <Project Path="src/Vivian/Viv.Ouroboros.Core/Viv.Ouroboros.Core.csproj" Id="7c465fc3-6e57-4ad8-9fbd-728fc67ab807" />
+    <Project Path="src/Vivian/Viv.Ouroboros.Worker/Viv.Ouroboros.Worker.csproj" />
   </Folder>
   <Folder Name="/src/Vivian/SakuMai/">
     <Project Path="src/Vivian/Viv.SakuMai.Api/Viv.SakuMai.Api.csproj" />
