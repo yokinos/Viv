@@ -76,7 +76,8 @@ namespace Viv.Ouroboros.Worker.Consumers
                 return SubscribeResult.Success();
             }
 
-            var result = await chat.RunQueuedTurnAsync(content.ConversationKey, content.UserMessageId, cancellationToken);
+            // 带上信封的 MessageId：落库段会用它向 IVivInbox 认领消息级幂等键（与助手消息同事务）
+            var result = await chat.RunQueuedTurnAsync(content.ConversationKey, content.UserMessageId, envelope.MessageId, cancellationToken);
             if (result.Code != (int)ApiResultCode.Success)
             {
                 // 抛出去交给 Wolverine 的 RetryWithCooldown 重试、耗尽进死信；

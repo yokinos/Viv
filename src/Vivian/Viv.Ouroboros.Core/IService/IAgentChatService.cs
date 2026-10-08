@@ -35,8 +35,9 @@ namespace Viv.Ouroboros.Core.IService
         /// </summary>
         /// <param name="conversationKey">会话标识</param>
         /// <param name="userMessageId">已落库的用户消息 Id（OtMessage.Id）</param>
+        /// <param name="messageId">消息级去重键（信封的 NanaEnvelope.MessageId）；0 表示不做消息级去重</param>
         /// <param name="cancellationToken">取消令牌</param>
-        Task<VivApiResult> RunQueuedTurnAsync(Guid conversationKey, long userMessageId, CancellationToken cancellationToken = default);
+        Task<VivApiResult> RunQueuedTurnAsync(Guid conversationKey, long userMessageId, long messageId = 0, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 当前主体下的待审批列表
