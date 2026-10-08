@@ -26,7 +26,7 @@ namespace Viv.SakuMai.Api.Jobs
             {
                 await _eventPublisher.PublishDelayAsync(TimeSpan.FromSeconds(15), new TestApexEvent()
                 {
-                    IsJob = true,
+                    DeliverySource = DeliverySource.Job,
                     TestTime = DateTime.UtcNow,
                 }, cancellationToken);
             }, cancellationToken);

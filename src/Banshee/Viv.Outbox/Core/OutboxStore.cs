@@ -34,6 +34,7 @@ namespace Viv.Outbox.Core
             if (content is null) return false;
             cancellationToken.ThrowIfCancellationRequested();
 
+            content.DeliverySource = DeliverySource.Outbox;
             var envelope = new NanaEnvelope<T>
             {
                 Content = content,

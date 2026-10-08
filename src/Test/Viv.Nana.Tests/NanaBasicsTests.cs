@@ -131,7 +131,7 @@ namespace Viv.Nana.Tests
         {
             Assert.Null(typeof(NanaEvent).GetProperty("LockFailShouldRetryDeliver"));
             Assert.Null(typeof(NanaEvent).GetProperty("Priority"));
-            Assert.NotNull(typeof(NanaEvent).GetProperty(nameof(NanaEvent.IsJob)));
+            Assert.NotNull(typeof(NanaEvent).GetProperty(nameof(NanaEvent.DeliverySource)));
         }
     }
 

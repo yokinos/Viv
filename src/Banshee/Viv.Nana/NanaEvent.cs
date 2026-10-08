@@ -7,8 +7,8 @@ namespace Viv.Nana
     public abstract class NanaEvent
     {
         /// <summary>
-        /// 是否由定时任务作业发出（业务载荷，框架不读）。
+        /// 投递来源：直接发出 / 发件箱投递器 / 定时任务作业
         /// </summary>
-        public bool IsJob { get; set; }
+        public DeliverySource DeliverySource { get; set; } = DeliverySource.Direct;
     }
 }
