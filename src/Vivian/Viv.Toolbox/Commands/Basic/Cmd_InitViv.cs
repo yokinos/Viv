@@ -2,81 +2,15 @@ using Microsoft.Extensions.Configuration;
 using Spectre.Console.Cli;
 using Viv.Cli;
 using Viv.Delusion.Magic;
-using Viv.Entity.Database.Apex;
 using Viv.Entity.Enums;
 using Viv.Momo;
 using Viv.Momo.Enums;
 using Viv.Momo.Options;
 using Viv.Momo.Sync;
+using Viv.Toolbox.CommandSetting.Basic;
 
 namespace Viv.Toolbox.Commands.Basic
 {
-    /// <summary>
-    /// initviv 的参数：全部给了就不问，缺什么问什么
-    /// </summary>
-    public class InitVivSettings : CommandSettings
-    {
-        /// <summary>
-        /// 数据库地址（含端口），如 43.228.79.205,1433
-        /// </summary>
-        [CommandOption("--conn <SERVER>")]
-        public string? Server { get; set; }
-
-        /// <summary>
-        /// 数据库账号
-        /// </summary>
-        [CommandOption("--dbuser <ACCOUNT>")]
-        public string? DbUser { get; set; }
-
-        /// <summary>
-        /// 数据库密码
-        /// </summary>
-        [CommandOption("--dbpwd <PASSWORD>")]
-        public string? DbPassword { get; set; }
-
-        /// <summary>
-        /// 初始操作员用户名
-        /// </summary>
-        [CommandOption("--user <NAME>")]
-        public string? UserName { get; set; }
-
-        /// <summary>
-        /// 初始操作员昵称
-        /// </summary>
-        [CommandOption("--nick <NICKNAME>")]
-        public string? NickName { get; set; }
-
-        /// <summary>
-        /// 初始操作员手机号（必填）
-        /// </summary>
-        [CommandOption("--phone <PHONE>")]
-        public string? Phone { get; set; }
-
-        /// <summary>
-        /// 初始操作员密码
-        /// </summary>
-        [CommandOption("--pwd <PASSWORD>")]
-        public string? Password { get; set; }
-
-        /// <summary>
-        /// 免确认（自动化用），必须同时给全上面各值
-        /// </summary>
-        [CommandOption("--yes")]
-        public bool Yes { get; set; }
-
-        /// <summary>
-        /// 重新生成：先删掉该库中本域的表，再按实体重建
-        /// </summary>
-        [CommandOption("--drop")]
-        public bool Drop { get; set; }
-
-        /// <summary>
-        /// 只打印将要执行的 SQL（删表），不实际执行
-        /// </summary>
-        [CommandOption("--sql-only")]
-        public bool SqlOnly { get; set; }
-    }
-
     /// <summary>
     /// 初始化 Viv 全部数据库：交互问数据库地址与初始操作员 → 建库 → 逐库同步表结构 → 播种超级管理员。
     /// 库清单硬编码在本命令里；没有实体的框架库只建库，表由框架自己建。
