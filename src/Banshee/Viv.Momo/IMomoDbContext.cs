@@ -71,7 +71,6 @@ namespace Viv.Momo
         Task<bool> BeginTransactionAsync(CancellationToken cancellationToken = default);
         Task CommitTransactionAsync(CancellationToken cancellationToken = default);
         Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
-        IMomoDbContext? CreateContext(DatabaseOptions options);
         void ChangeTenant(long tenantId);
         void IsAutoSetDefaultValue(bool flag);
         EFAppContext GetEFContext(DbReadWriteType readWriteType = DbReadWriteType.Read);

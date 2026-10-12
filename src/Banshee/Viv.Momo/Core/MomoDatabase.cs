@@ -68,7 +68,7 @@ namespace Viv.Momo.Core
             SetOptions(_optionsProvider.GetRealOptions());
         }
 
-        protected void SetOptions(DatabaseOptions? options)
+        public void SetOptions(DatabaseOptions? options)
         {
             ArgumentNullException.ThrowIfNull(options);
             _databaseOptions = options;

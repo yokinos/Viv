@@ -5,6 +5,7 @@ using Viv.Delusion.Magic;
 using Viv.Entity.Enums;
 using Viv.Momo;
 using Viv.Momo.Enums;
+using Viv.Momo.Interface;
 using Viv.Momo.Options;
 using Viv.Momo.Sync;
 using Viv.Toolbox.CommandSetting.Basic;
@@ -47,13 +48,13 @@ namespace Viv.Toolbox.Commands.Basic
         /// </summary>
         private const string AdminClientAppId = "viv-rootadmin-app";
 
-        private readonly IMomoDbContext _dbContext;
+        private readonly IMomoDbContextFactory _dbContextFactory;
 
         private readonly IConfiguration _configuration;
 
-        public Cmd_InitViv(IMomoDbContext dbContext, IConfiguration configuration)
+        public Cmd_InitViv(IMomoDbContextFactory dbContextFactory, IConfiguration configuration)
         {
-            _dbContext = dbContext;
+            _dbContextFactory = dbContextFactory;
             _configuration = configuration;
         }
 
@@ -116,7 +117,7 @@ namespace Viv.Toolbox.Commands.Basic
                     }
 
                     var options = BuildOptions(connection, database, entityNamespace);
-                    using var db = _dbContext.CreateContext(options);
+                    using var db = _dbContextFactory.Create(options);
                     if (db is null)
                     {
                         failed++;
@@ -423,7 +424,7 @@ namespace Viv.Toolbox.Commands.Basic
         private async Task<bool> CreateDatabaseIfMissingAsync(string connection, string database, CancellationToken cancellationToken)
         {
             var masterOptions = BuildOptions(connection, "master", null);
-            using var master = _dbContext.CreateContext(masterOptions);
+            using var master = _dbContextFactory.Create(masterOptions);
             if (master is null)
             {
                 throw new InvalidOperationException("无法连接到 master 库");

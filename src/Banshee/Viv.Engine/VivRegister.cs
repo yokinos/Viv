@@ -201,6 +201,7 @@ namespace Viv.Engine
             if (options.DatabaseOption == null) return;
 
             services.AddScoped<IDatabaseOptionsProvider, DefaultDatabaseOptionsProvider>();
+            services.AddScoped<IMomoDbContextFactory, MomoDbContextFactory>();
             services.AddScoped<IMomoDbContext, MomoDatabaseContext>();
 
             // 数据过滤器开关。实例无状态，状态在静态 AsyncLocal 里，与 IVivContextAccessor 同一形状。

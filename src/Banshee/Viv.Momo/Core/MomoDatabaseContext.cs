@@ -1533,14 +1533,6 @@ namespace Viv.Momo.Core
 
         #region Other
 
-        public IMomoDbContext? CreateContext(DatabaseOptions options)
-        {
-            if (options == null) return null;
-            var dataContext = new MomoDatabaseContext(_vivContext, _logger, _optionsProvider);
-            dataContext.SetOptions(options);
-            return dataContext;
-        }
-
         public void ChangeTenant(long tenantId)
         {
             if (tenantId > 0)
