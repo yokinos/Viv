@@ -1,3 +1,4 @@
+using System.Reflection;
 using Viv.Delusion;
 using Viv.Delusion.Magic;
 using Viv.Nana.Options;
@@ -72,6 +73,93 @@ namespace Viv.Nana.Tests
             Assert.Equal(
                 "TestApexQueue.viv.apex.worker",
                 NanaRegister.GetConsumerQueueName(typeof(TestApexEvent), "viv.apex.worker"));
+        }
+
+        [Fact]
+        public void GetConsumerQueueName_非广播不带实例段()
+        {
+            // 默认拓扑的队列名必须与改造前逐字一致，否则全仓所有服务都在换队列
+            Assert.Equal(
+                "TestApexQueue.viv.apex.worker",
+                NanaRegister.GetConsumerQueueName(typeof(TestApexEvent), "viv.apex.worker", broadcast: false, instanceId: "link-01"));
+        }
+
+        [Fact]
+        public void GetConsumerQueueName_广播追加实例段()
+        {
+            Assert.Equal(
+                "TestApexQueue.viv.apex.worker.link-01",
+                NanaRegister.GetConsumerQueueName(typeof(TestApexEvent), "viv.apex.worker", broadcast: true, instanceId: "link-01"));
+        }
+
+        [Fact]
+        public void GetConsumerQueueName_广播与默认只差最后一段()
+        {
+            const string service = "viv.herta.link";
+            var normal = NanaRegister.GetConsumerQueueName(typeof(TestApexEvent), service);
+            var broadcast = NanaRegister.GetConsumerQueueName(typeof(TestApexEvent), service, broadcast: true, instanceId: "pod-a");
+
+            Assert.Equal(normal + ".pod-a", broadcast);
+        }
+
+        [Fact]
+        public void GetConsumerQueueName_两个实例得到不同队列()
+        {
+            // 同名 = 两个副本抢一条队列，表现是随机漏推，没有异常也没有日志
+            const string service = "viv.herta.link";
+            var a = NanaRegister.GetConsumerQueueName(typeof(TestApexEvent), service, broadcast: true, instanceId: "pod-a");
+            var b = NanaRegister.GetConsumerQueueName(typeof(TestApexEvent), service, broadcast: true, instanceId: "pod-b");
+
+            Assert.NotEqual(a, b);
+        }
+
+        [Theory]
+        [InlineData("my host", "my-host")]
+        [InlineData("a/b:c", "a-b-c")]
+        [InlineData("pod_1.2", "pod_1.2")]
+        [InlineData("--x--", "x")]
+        public void NormalizeInstanceId_净化非法字符(string raw, string expected)
+        {
+            Assert.Equal(expected, NanaRegister.NormalizeInstanceId(raw));
+        }
+
+        [Fact]
+        public void NormalizeInstanceId_全非法回退instance()
+        {
+            Assert.Equal("instance", NanaRegister.NormalizeInstanceId("!!!"));
+        }
+
+        [Fact]
+        public void NormalizeInstanceId_截断到64()
+        {
+            Assert.Equal(64, NanaRegister.NormalizeInstanceId(new string('a', 100)).Length);
+        }
+
+        [Fact]
+        public void RecordBroadcastQueues_覆盖静态快照()
+        {
+            NanaRegister.RecordBroadcastQueues(new[] { "AQueue.svc.a", "BQueue.svc.a" });
+
+            Assert.Equal(new[] { "AQueue.svc.a", "BQueue.svc.a" }, NanaRegister.BroadcastQueues);
+        }
+
+        [Fact]
+        public void NanaConsumerAttribute_Topology默认共享()
+        {
+            // Shared 必须是 0：特性不写参数时用的就是它
+            Assert.Equal(0, (int)ConsumerTopology.Shared);
+            Assert.Equal(ConsumerTopology.Shared, new NanaConsumerAttribute().Topology);
+        }
+
+        [Fact]
+        public void NanaConsumerAttribute_只能标类且不继承()
+        {
+            // Inherited = false：子类不能顺带继承父类的接线方式
+            var usage = typeof(NanaConsumerAttribute).GetCustomAttribute<AttributeUsageAttribute>()!;
+
+            Assert.Equal(AttributeTargets.Class, usage.ValidOn);
+            Assert.False(usage.Inherited);
+            Assert.False(usage.AllowMultiple);
         }
 
         [Fact]

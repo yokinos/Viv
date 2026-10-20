@@ -36,6 +36,10 @@ namespace Viv.Nana.Core
 
         public static IServiceCollection AddVivWolverine(this IServiceCollection services, NanaOptions nanaOptions, List<Type>? sagaTypes, IReadOnlyList<Type>? extraServiceLocationTypes = null)
         {
+            // 实例标识要在 opts 配置闭包读它之前定下来：广播队列名（{EventName}Queue.{Service}.{InstanceId}）
+            // 在这个闭包里生成，晚一步就会用上默认推导值。
+            NanaRegister.SetInstanceId(nanaOptions.InstanceId);
+
             services.AddWolverine(opts =>
             {
                 // 0) 服务定位白名单。Wolverine 默认 ServiceLocationPolicy.NotAllowed：
@@ -59,19 +63,32 @@ namespace Viv.Nana.Core
                 var transport = opts.UseRabbitMq(rabbitUri)
                     .AutoProvision();
 
-                // 2) 消费方：发布订阅拓扑——每服务一条独立队列绑到 {EventName}Exchange（fanout 广播）
-                //    每个订阅服务各收一份；同服务只执行一次由 VivConsumer 基类取 Redis 锁（拿到进业务，拿不到丢弃）
+                // 2) 消费方：队列绑到 {EventName}Exchange（fanout）
+                //    默认每服务一条队列，多实例共享、竞争消费，同服务只执行一次由消费锁保证；
+                //    Topology = PerInstance 时每实例一条，消息复制 N 份；此时不能有消费锁。
                 // 本地队列消费者（VivLocalConsumer<T>）：事件类型 → 消费者类型。
                 // 供 3b) 查 [NanaConsumer] 与判定孤儿事件用，不在这里注册 RabbitMQ 拓扑。
                 var localConsumers = new Dictionary<Type, Type>();
+
+                // 注册期拿不到 logger，广播队列名先存下来（与 RecordLocalQueueScan 同一手法）
+                var broadcastQueues = new List<string>();
 
                 foreach (var consumerType in NanaRegister.ScanConsumerTypes(nanaOptions.ConsumerTypes))
                 {
                     opts.Discovery.IncludeType(consumerType);
 
+                    var attr = consumerType.GetCustomAttribute<NanaConsumerAttribute>();
+                    var broadcast = attr?.Topology == ConsumerTopology.PerInstance;
+
                     var messageType = NanaRegister.ExtractMessageType(consumerType);
                     if (messageType == null)
                     {
+                        // PerInstance 是 RabbitMQ 拓扑，标在本地队列消费者上不会生效，注册期直接抛
+                        if (broadcast)
+                            throw new InvalidOperationException(
+                                $"{consumerType.Name} 的 [NanaConsumer] 指定了 Topology = PerInstance，" +
+                                "但它不是 VivConsumer<T> 子类（本地队列消费者）。PerInstance 只适用于 RabbitMQ 消费者。");
+
                         // 不是 RabbitMQ 消费者。若是 VivLocalConsumer<T>，登记给 3b)。
                         // 注意 Discovery.IncludeType 在上面已经调过，Wolverine 照样能发现它的 HandleAsync ——
                         // 本地消费者的发现路径与 RabbitMQ 消费者完全一致，只有队列拓扑不同。
@@ -80,26 +97,51 @@ namespace Viv.Nana.Core
                         continue;
                     }
 
+                    // 广播消费者必须单监听 + 单并行，否则单连接上的消息会乱序
+                    if (broadcast && (attr!.ConsumerCount > 0 || attr.MaximumParallelMessages > 0))
+                        throw new InvalidOperationException(
+                            $"{consumerType.Name} 的 [NanaConsumer] 同时指定了 Topology = PerInstance 与 " +
+                            "ConsumerCount / MaximumParallelMessages。PerInstance 固定单监听 + 单并行，不能覆盖。");
+
                     var exchangeName = NanaRegister.GetExchangeName(messageType);
-                    var queueName = NanaRegister.GetConsumerQueueName(messageType, NanaRegister.CurrentServiceName);
+                    var queueName = NanaRegister.GetConsumerQueueName(messageType, NanaRegister.CurrentServiceName, broadcast);
 
                     var listener = opts.ListenToRabbitQueue(queueName);
                     transport.BindExchange(exchangeName, ExchangeType.Fanout).ToQueue(queueName);
 
+                    if (broadcast)
+                        broadcastQueues.Add(queueName);
+
                     // 消费并发/预取调优：直接写 RabbitMqQueue 属性。
                     // 官方包的 fluent PreFetchCount/ListenerCount/QueueType/MaximumParallelMessages 都是空壳
                     // （6.42.0 实测：调用不抛异常，队列属性不变），必须直写。
-                    // 默认 prefetch=20（比 Wolverine 原生 100 更低的重投放大）、队列 Quorum（多副本防丢消息）；
-                    // ConsumerCount/MaximumParallelMessages 由 [NanaConsumer] 特性显式指定。
-                    var attr = consumerType.GetCustomAttribute<NanaConsumerAttribute>();
                     if (listener.Endpoint is RabbitMqQueue queue)
                     {
-                        queue.PreFetchCount = attr?.PrefetchCount > 0 ? attr.PrefetchCount : NanaConsumerAttribute.DefaultPrefetchCount;
-                        queue.QueueType = QueueType.quorum;
-                        if (attr?.ConsumerCount > 0) queue.ListenerCount = attr.ConsumerCount;
-                        if (attr?.MaximumParallelMessages > 0) queue.MaxDegreeOfParallelism = attr.MaximumParallelMessages;
+                        if (broadcast)
+                        {
+                            // quorum 要求 durable / 非 exclusive / 非 auto-delete，与实例回收互斥
+                            queue.QueueType = QueueType.classic;
+                            queue.IsDurable = false;
+                            queue.AutoDelete = true;
+                            queue.ListenerCount = 1;
+                            // Wolverine 默认并行度 12，不设成 1 的话队列再 FIFO 也会被打乱
+                            queue.MaxDegreeOfParallelism = 1;
+                            // 预取不影响单并行派发的顺序，照常可调
+                            queue.PreFetchCount = attr!.PrefetchCount > 0 ? attr.PrefetchCount : NanaConsumerAttribute.DefaultPrefetchCount;
+                        }
+                        else
+                        {
+                            // 默认：prefetch=20（比 Wolverine 原生 100 更低的重投放大）、队列 Quorum（多副本防丢消息）；
+                            // ConsumerCount/MaximumParallelMessages 由 [NanaConsumer] 特性显式指定。
+                            queue.PreFetchCount = attr?.PrefetchCount > 0 ? attr.PrefetchCount : NanaConsumerAttribute.DefaultPrefetchCount;
+                            queue.QueueType = QueueType.quorum;
+                            if (attr?.ConsumerCount > 0) queue.ListenerCount = attr.ConsumerCount;
+                            if (attr?.MaximumParallelMessages > 0) queue.MaxDegreeOfParallelism = attr.MaximumParallelMessages;
+                        }
                     }
                 }
+
+                NanaRegister.RecordBroadcastQueues(broadcastQueues);
 
                 // 3) 发布路由：所有 NanaEnvelope<T> → {EventName}Exchange（fanout 交换机）
                 //    发布侧同样显式声明 fanout 类型，与消费侧 BindExchange 一致（避免 406 PRECONDITION_FAILED）

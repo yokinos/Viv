@@ -1,4 +1,4 @@
-﻿using StackExchange.Redis;
+using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -70,6 +70,20 @@ namespace Viv.Redis
         /// <param name="key">Redis键</param>
         /// <returns>存在 true，不存在 false。Redis 不可用时抛连接异常。</returns>
         bool Exist(string key);
+
+        /// <summary>
+        /// 原子自增，键不存在时按 0 起算
+        /// </summary>
+        /// <param name="value">增量，递减传负数</param>
+        /// <returns>自增后的值</returns>
+        long Increment(string key, long value = 1);
+
+        /// <summary>
+        /// 异步原子自增，键不存在时按 0 起算
+        /// </summary>
+        /// <param name="value">增量，递减传负数</param>
+        /// <returns>自增后的值</returns>
+        Task<long> IncrementAsync(string key, long value = 1);
 
         /// <summary>
         /// 异步检查指定键是否存在

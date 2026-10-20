@@ -36,6 +36,11 @@ namespace Viv.Nana.Options
         public int RetryCount { get; set; } = 3;
 
         /// <summary>
+        /// 实例标识，<see cref="ConsumerTopology.PerInstance"/> 队列名的最后一段。
+        /// </summary>
+        public string? InstanceId { get; set; }
+
+        /// <summary>
         /// 要注册的消费者类型
         /// </summary>
         public List<FilterTypeOptions> ConsumerTypes { get; set; } = [];

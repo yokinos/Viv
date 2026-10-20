@@ -1,59 +1,36 @@
-using Microsoft.AspNetCore.SignalR;
-using Viv.Entity.Enums;
 using Viv.EventContracts.Herta;
-using Viv.Herta.Core.Entity.Message;
-using Viv.Herta.Core.Magic;
-using Viv.Herta.Link.Hubs;
+using Viv.Herta.Link.Dispatch;
 using Viv.Nana;
 
 namespace Viv.Herta.Link.Consumers
 {
+    /// <summary>
+    /// 聊天消息推送。每个副本都收到全量消息（<see cref="ConsumerTopology.PerInstance"/>），
+    /// 只推自己连接表里有的连接，单聊跨副本不漏推靠的就是这一点。
+    ///
+    /// 构造依赖必须注册在 IServiceCollection 里：Wolverine 内联构造 handler，解析不到的依赖会让消息进死信。
+    /// </summary>
+    [NanaConsumer(Topology = ConsumerTopology.PerInstance)]
     public class SendMessageConsumer : VivConsumer<SendMessageEvent>
     {
-        private readonly IHubContext<ChatHub> _hubContext;
-        private readonly IConnectionPool _connectionPool;
+        private readonly IMessageDispatcher _dispatcher;
 
-        public SendMessageConsumer(VivConsumerDependency dependency, IHubContext<ChatHub> hubContext, IConnectionPool connectionPool)
+        public SendMessageConsumer(VivConsumerDependency dependency, IMessageDispatcher dispatcher)
             : base(dependency)
         {
-            _hubContext = hubContext;
-            _connectionPool = connectionPool;
+            _dispatcher = dispatcher;
         }
 
-        public override async Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<SendMessageEvent> envelope, CancellationToken cancellationToken = default)
+        protected override object? GetConsumeLockKey(NanaEnvelope<SendMessageEvent> envelope) => null;
+
+        /// <inheritdoc />
+        public override Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<SendMessageEvent> envelope, CancellationToken cancellationToken = default)
         {
             var evt = envelope.Content;
             if (evt == null)
-                return new SubscribeResult(false, false, "Message content is null");
+                return Task.FromResult(SubscribeResult.Failed(false, "Message content is null"));
 
-            var body = HertaMagic.GetChatMessage(evt.MessageType, evt.Message);
-
-            var chatMessage = new HertaChatMessage
-            {
-                Id = envelope.MessageId,
-                AppId = envelope.Context?.AppId,
-                FromUserId = evt.FromUserId,
-                ToUserId = evt.TargetId,
-                Body = body,
-                SentAt = DateTimeOffset.UtcNow
-            };
-
-            var tenantId = envelope.Context?.SubjectId ?? 0;
-            if (evt.ReceiverType == EmChatReceiverType.Group)
-            {
-                var groupName = HertaLinkGroups.GetGroupName(tenantId, evt.TargetId);
-                await _hubContext.Clients.Group(groupName).SendAsync(HertaLinkClientMethods.ReceiveMessage, chatMessage, cancellationToken);
-            }
-            else
-            {
-                var connectionIds = _connectionPool.GetConnectionIds(tenantId, evt.TargetId);
-                if (connectionIds.Count > 0)
-                {
-                    await _hubContext.Clients.Clients(connectionIds).SendAsync(HertaLinkClientMethods.ReceiveMessage, chatMessage, cancellationToken);
-                }
-            }
-
-            return new SubscribeResult(true, false, "OK");
+            return _dispatcher.DispatchAsync(envelope, evt, cancellationToken);
         }
     }
 }

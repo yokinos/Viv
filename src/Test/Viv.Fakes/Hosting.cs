@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Viv.Elysia.Interface;
+using Viv.Herta.Core.IService;
 using Viv.Herta.Link.Hubs;
 
 namespace Viv.Fakes;
@@ -108,44 +109,85 @@ public sealed class FakeClientProxy : IClientProxy
 
 public sealed class FakeGroupManager : IGroupManager
 {
+    /// <summary>记录加组 (connectionId, groupName)</summary>
+    public List<(string ConnectionId, string Group)> Added { get; } = new();
+
+    /// <summary>记录退组 (connectionId, groupName)</summary>
+    public List<(string ConnectionId, string Group)> Removed { get; } = new();
+
     public Task AddToGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
+    {
+        Added.Add((connectionId, groupName));
+        return Task.CompletedTask;
+    }
 
     public Task RemoveFromGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
+    {
+        Removed.Add((connectionId, groupName));
+        return Task.CompletedTask;
+    }
 }
 
-/// <summary>可预设 GetConnectionIds 返回值的连接池替身，并记录最近一次查询参数。</summary>
+/// <summary>可预设群列表的 <see cref="IGroupService"/> 替身，并记录最近一次查询参数。</summary>
+public sealed class StubGroupService : IGroupService
+{
+    public List<long> GroupIds { get; set; } = new();
+
+    public long? LastSubjectId { get; private set; }
+
+    public long? LastUserId { get; private set; }
+
+    public Task<List<long>> GetUserGroupIdsAsync(long tenantId, long userId)
+    {
+        LastSubjectId = tenantId;
+        LastUserId = userId;
+        return Task.FromResult(GroupIds);
+    }
+}
+
+/// <summary>
+/// 可预设 GetConnectionIds 返回值的连接池替身，并记录最近一次查询参数。
+/// 参数顺序跟着被测接口走：<c>AppId, SubjectId, UserId</c>。
+/// </summary>
 public sealed class StubConnectionPool : IConnectionPool
 {
     public List<string> ConnectionIds { get; set; } = new();
 
-    public long? LastTenantId { get; private set; }
+    public long? LastSubjectId { get; private set; }
 
     public long? LastUserId { get; private set; }
 
-    public void Add(string connectionId, long tenantId, long userId, long appId) { }
+    public void Add(string connectionId, long appId, long subjectId, long userId) { }
 
     public void Remove(string connectionId) { }
 
-    public List<string> GetConnectionIds(long tenantId, long userId)
+    public List<string> GetConnectionIds(long subjectId, long userId)
     {
-        LastTenantId = tenantId;
+        LastSubjectId = subjectId;
         LastUserId = userId;
         return ConnectionIds;
     }
 
-    public List<string> GetConnectionIds(long tenantId, long userId, long appId) => ConnectionIds;
+    public List<string> GetConnectionIds(long appId, long subjectId, long userId) => ConnectionIds;
 
-    public List<ConnectionInfo> GetConnections(long tenantId) => new();
+    public List<ConnectionInfo> GetConnections(long subjectId) => new();
+
+    /// <summary>TryGet 的返回值</summary>
+    public ConnectionInfo? Info { get; set; }
+
+    public ConnectionInfo? TryGet(string connectionId) => Info;
+
+    public void Touch(string connectionId) { }
+
+    public List<string> SweepExpired(TimeSpan ttl) => new();
 
     public Task ForceDisconnectAsync(string connectionId, CancellationToken cancellationToken = default)
         => Task.CompletedTask;
 
-    public Task ForceDisconnectUserAsync(long tenantId, long userId, CancellationToken cancellationToken = default)
+    public Task ForceDisconnectUserAsync(long subjectId, long userId, CancellationToken cancellationToken = default)
         => Task.CompletedTask;
 
-    public Task ForceDisconnectTenantAsync(long tenantId, CancellationToken cancellationToken = default)
+    public Task ForceDisconnectSubjectAsync(long subjectId, CancellationToken cancellationToken = default)
         => Task.CompletedTask;
 
     public void Clear() { }

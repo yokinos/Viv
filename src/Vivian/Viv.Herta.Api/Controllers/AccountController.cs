@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Viv.Engine;
@@ -17,6 +17,13 @@ namespace Viv.Herta.Api.Controllers
         public AccountController(IAccountService accountService)
         {
             _accountService = accountService;
+        }
+
+        [AllowAnonymous]
+        [HttpPost("register")]
+        public async Task<VivApiResult> RegisterAsync(HertaRegisterRequest request)
+        {
+            return await _accountService.RegisterAsync(request);
         }
 
         [AllowAnonymous]

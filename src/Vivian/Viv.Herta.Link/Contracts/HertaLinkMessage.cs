@@ -1,0 +1,47 @@
+using Viv.Entity.Enums;
+
+namespace Viv.Herta.Link.Contracts
+{
+    /// <summary>
+    /// 下发给客户端的完整消息体（<c>ReceiveMessage</c> 载荷）。
+    /// 字段注释只写非显而易见的部分。
+    /// </summary>
+    public sealed record HertaLinkMessage
+    {
+        /// <summary>协议版本，破坏性变更时 +1</summary>
+        public int V { get; init; } = 1;
+
+        /// <summary>落库后的消息行Id：客户端的幂等键，也是拉取接口的游标</summary>
+        public long MessageId { get; init; }
+
+        /// <summary>会话内自增序号。本期恒 null：它要在落库时分配，而 Herta.Core 还不落库</summary>
+        public long? Seq { get; init; }
+
+        public long TenantId { get; init; }
+
+        public long? AppId { get; init; }
+
+        /// <summary>0 = 系统消息</summary>
+        public long FromUserId { get; init; }
+
+        /// <summary>单聊为对方用户Id；群聊恒为 0，群标识见 <see cref="GroupId"/></summary>
+        public long ToUserId { get; init; }
+
+        public long? GroupId { get; init; }
+
+        public EmChatReceiverType ReceiverType { get; init; }
+
+        public EmChatMessageType MessageType { get; init; }
+
+        /// <summary>
+        /// 必须声明成 object：System.Text.Json 按声明类型选契约，声明成接口只序列化接口成员，
+        /// <c>TextMessage.Text</c> 会整个丢掉。
+        /// </summary>
+        public object? Body { get; init; }
+
+        /// <summary>落库时间，与拉取接口返回的 SentAt 同源</summary>
+        public DateTimeOffset SentAt { get; init; }
+
+        public string? TraceId { get; init; }
+    }
+}

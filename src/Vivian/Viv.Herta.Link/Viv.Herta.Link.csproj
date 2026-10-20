@@ -10,7 +10,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" />
+    <!-- 不再引用 Microsoft.AspNetCore.SignalR.StackExchangeRedis：
+         实例广播拓扑下每个副本只推自己的本地连接，不需要跨进程背板（见 docs/chat-framework-redesign.md 附录 A） -->
   </ItemGroup>
 
   <ItemGroup>

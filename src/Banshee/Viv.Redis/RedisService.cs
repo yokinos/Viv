@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
@@ -71,6 +71,16 @@ namespace Viv.Redis
         public async Task<bool> ExistAsync(string key)
         {
             return await ExecuteRedisAsync(key, async x => await x.KeyExistsAsync(key).ConfigureAwait(false)).ConfigureAwait(false);
+        }
+
+        public long Increment(string key, long value = 1)
+        {
+            return ExecuteRedis(key, x => x.StringIncrement(key, value));
+        }
+
+        public async Task<long> IncrementAsync(string key, long value = 1)
+        {
+            return await ExecuteRedisAsync(key, async x => await x.StringIncrementAsync(key, value).ConfigureAwait(false)).ConfigureAwait(false);
         }
 
         public object Get(string key)

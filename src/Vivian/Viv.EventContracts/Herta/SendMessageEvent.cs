@@ -32,6 +32,16 @@ namespace Viv.EventContracts.Herta
         public long TargetId { get; set; }
 
         /// <summary>
+        /// 落库后的消息行Id
+        /// </summary>
+        public long MessageId { get; set; }
+
+        /// <summary>
+        /// 落库时间。与拉取返回的 SentAt 同源，客户端排序不会因为两条通道不同而抖动
+        /// </summary>
+        public DateTimeOffset SentAt { get; set; } = DateTimeOffset.UtcNow;
+
+        /// <summary>
         /// 接收方的类型
         /// </summary>
         public EmChatReceiverType ReceiverType { get; set; }

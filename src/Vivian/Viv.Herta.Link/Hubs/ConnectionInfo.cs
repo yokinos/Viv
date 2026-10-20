@@ -1,6 +1,12 @@
 namespace Viv.Herta.Link.Hubs
 {
-    public readonly record struct ConnectionKey(long TenantId, long UserId, long AppId);
+    /// <summary>
+    /// 连接身份
+    /// </summary>
+    public readonly record struct ConnectionKey(long AppId, long SubjectId, long UserId);
 
-    public readonly record struct ConnectionInfo(string ConnectionId, long TenantId, long UserId, long AppId);
+    /// <summary>
+    /// 连接快照
+    /// </summary>
+    public readonly record struct ConnectionInfo(string ConnectionId, long AppId, long SubjectId, long UserId);
 }

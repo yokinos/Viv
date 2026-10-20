@@ -50,14 +50,83 @@ namespace Viv.Nana
         }
 
         /// <summary>
-        /// 生成消费方队列名称：{EventName}Queue.{ServiceName}
-        /// 发布订阅拓扑：每个消费服务建一条独立队列绑到 {EventName}Exchange，各自收一份；
-        /// 同一服务多实例共享同一队列（RabbitMQ 轮询分派）。同服务只执行一次由
-        /// <see cref="VivConsumer{T}"/> 基类按 <see cref="GetConsumerLockKey"/> 取锁保证。
+        /// 生成消费方队列名。默认 <c>{EventName}Queue.{ServiceName}</c>，同服务多实例共享、竞争消费；
+        /// broadcast 时追加 <c>.{InstanceId}</c>，每实例一条，fanout 复制 N 份。
         /// </summary>
-        public static string GetConsumerQueueName(Type messageType, string serviceName)
+        /// <param name="instanceId">null = 用 <see cref="InstanceId"/>；显式传入是为了让名字生成可单测</param>
+        public static string GetConsumerQueueName(Type messageType, string serviceName, bool broadcast = false, string? instanceId = null)
         {
-            return $"{GetQueueName(messageType)}.{serviceName}";
+            var baseName = $"{GetQueueName(messageType)}.{serviceName}";
+            if (!broadcast) return baseName;
+
+            var id = string.IsNullOrWhiteSpace(instanceId) ? InstanceId : NormalizeInstanceId(instanceId);
+            return $"{baseName}.{id}";
+        }
+
+        private static string? _instanceIdOverride;
+
+        private static string? _instanceId;
+
+        /// <summary>设置实例标识覆盖值（由 <c>AddVivWolverine</c> 从 <c>NanaOptions.InstanceId</c> 灌入；null = 回到环境推导）</summary>
+        public static void SetInstanceId(string? instanceId)
+        {
+            _instanceIdOverride = instanceId;
+            _instanceId = null;
+        }
+
+        /// <summary>
+        /// 实例标识，广播队列名的最后一段。
+        /// 优先级：显式配置 → POD_NAME → HOSTNAME → {MachineName}-{ProcessId}。
+        /// 不能用 EnvOption.MachineId：那是配置里的常量，多副本会撞成同一个队列名。
+        /// </summary>
+        public static string InstanceId
+        {
+            get
+            {
+                if (_instanceId is not null) return _instanceId;
+
+                var resolved = NormalizeInstanceId(
+                    _instanceIdOverride
+                    ?? NonEmptyOrNull(Environment.GetEnvironmentVariable("POD_NAME"))
+                    ?? NonEmptyOrNull(Environment.GetEnvironmentVariable("HOSTNAME"))
+                    ?? $"{Environment.MachineName}-{Environment.ProcessId}");
+
+                _instanceId = resolved;
+                return resolved;
+            }
+        }
+
+        private static string? NonEmptyOrNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+        /// <summary>
+        /// 队列名净化：只允许 ASCII 字母数字与 <c>. _ -</c>，截到 64 字节（主机名可能带 Unicode，队列名有长度约束）。
+        /// </summary>
+        internal static string NormalizeInstanceId(string raw)
+        {
+            var chars = new char[raw.Length];
+            for (var i = 0; i < raw.Length; i++)
+            {
+                var ch = raw[i];
+                var keep = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+                        || (ch >= '0' && ch <= '9') || ch is '.' or '_' or '-';
+                chars[i] = keep ? ch : '-';
+            }
+
+            var name = new string(chars).Trim('-', '.');
+            if (name.Length == 0) name = "instance";
+            return name.Length <= 64 ? name : name[..64];
+        }
+
+        /// <summary>
+        /// 注册期扫到的广播队列名。注册期 <c>VivLocator</c> 未初始化、拿不到 logger，先存下来由宿主启动后输出；
+        /// 两个副本的队列名相同就说明实例标识撞了。
+        /// </summary>
+        public static IReadOnlyList<string> BroadcastQueues { get; private set; } = [];
+
+        /// <summary>记录广播队列名（只由 <c>AddVivWolverine</c> 的消费方注册段调用）</summary>
+        public static void RecordBroadcastQueues(IReadOnlyList<string> broadcastQueues)
+        {
+            BroadcastQueues = broadcastQueues;
         }
 
         /// <summary>

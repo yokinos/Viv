@@ -1,9 +1,7 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Viv.Engine;
-using Viv.Herta.Core.IService;
+using Viv.Herta.Link.Dispatch;
 using Viv.Herta.Link.Hubs;
 using Viv.Herta.Link.Options;
-using Viv.Herta.Link.Services;
 
 namespace Viv.Herta.Link.Extensions
 {
@@ -15,14 +13,17 @@ namespace Viv.Herta.Link.Extensions
 
             services.Configure<HertaLinkOptions>(configuration.GetSection(nameof(HertaLinkOptions)));
             services.TryAddSingleton<IConnectionPool, ConnectionPool>();
-            services.TryAddScoped<IGroupService, DefaultGroupService>();
+            services.TryAddSingleton<IFanoutPlanner, FanoutPlanner>();
+            services.TryAddScoped<IMessageDispatcher, SignalRMessageDispatcher>();
+            services.TryAddScoped<IConnectionCoordinator, ConnectionCoordinator>();
+            services.TryAddScoped<IMembershipSync, MembershipSync>();
+            services.AddHostedService<ConnectionLeaseSweeper>();
 
-            var signalR = services.AddSignalR(o =>
+            services.AddSignalR(o =>
             {
                 o.EnableDetailedErrors = options.EnableDetailedErrors;
             });
 
-            signalR.AddStackExchangeRedis(VivEngine.VivOptions.CacheOption.RedisOptions.ConnectionString);
             return services;
         }
     }
