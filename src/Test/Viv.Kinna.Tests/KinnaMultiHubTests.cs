@@ -40,6 +40,9 @@ namespace Viv.Kinna.Tests
             services.AddSingleton<IHubContext<HubA>>(new FakeHubContext<HubA>());
             services.AddSingleton<IHubContext<HubB>>(new FakeHubContext<HubB>());
 
+            // 宿主里由 AddViv 注册，这里补一份，否则清扫器解析不出来
+            services.AddSingleton<Viv.Log.ILoggerContract>(new RecordingLogger());
+
             var configuration = Configuration();
             services.AddKinna<HubA>(configuration);
             services.AddKinna<HubB>(configuration);

@@ -98,7 +98,8 @@ namespace Viv.Herta.Tests
         {
             // 模拟发送、机器人代发：署名可以不是调用者，投递照常，只记一条审计
             var sender = new RecordingKinnaClientSender();
-            var (consumer, logger) = CreateConsumer(sender, new StubKinnaConnectionPool());
+            var pool = new StubKinnaConnectionPool { ConnectionIds = ["c1"] };
+            var (consumer, logger) = CreateConsumer(sender, pool);
 
             var result = await consumer.ReceiveMessageAsync(
                 CreateEnvelope(EmChatReceiverType.User, 5, fromUserId: 999));
@@ -163,7 +164,8 @@ namespace Viv.Herta.Tests
         {
             // 升级窗口内的在途消息：落库前的旧事件没有 MessageId，只能退回信封 Id，至少不丢推
             var sender = new RecordingKinnaClientSender();
-            var (consumer, _) = CreateConsumer(sender, new StubKinnaConnectionPool());
+            var pool = new StubKinnaConnectionPool { ConnectionIds = ["c1"] };
+            var (consumer, _) = CreateConsumer(sender, pool);
 
             var result = await consumer.ReceiveMessageAsync(
                 CreateEnvelope(EmChatReceiverType.User, 5, persistedMessageId: 0));
