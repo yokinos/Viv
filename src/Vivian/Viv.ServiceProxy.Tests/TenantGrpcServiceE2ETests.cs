@@ -1,10 +1,10 @@
-using Grpc.Core;
+﻿using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
 using Viv.Contracts.Models;
 using Viv.Echo.Grpc;
 using Viv.Sandrone.Impl;
-using Viv.ServiceProxy.Protos;
+using Viv.ServiceProxy.Tests.Protos;
 using Viv.ServiceProxy.Tests.Grpc;
 
 namespace Viv.ServiceProxy.Tests

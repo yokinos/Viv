@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -7,13 +7,12 @@ using Microsoft.Extensions.Hosting;
 using Viv.Contracts.Interface;
 using Viv.Echo.Grpc;
 using Viv.Sandrone.Impl;
-using Viv.ServiceProxy.Examples;
 
 namespace Viv.ServiceProxy.Tests.Grpc
 {
     /// <summary>
     /// 真实 Kestrel in-process gRPC 服务端（随机端口，HTTP/2），复用框架级
-    /// AddVivGrpcServer（含租户上下文恢复拦截器）+ 示例 TenantGrpcService 作实现桩。
+    /// AddVivGrpcServer（含租户上下文恢复拦截器）+ 示例 TenantGrpcStub 作实现桩。
     /// </summary>
     public sealed class GrpcTestServer : IAsyncLifetime
     {
@@ -32,12 +31,12 @@ namespace Viv.ServiceProxy.Tests.Grpc
             builder.Services.AddVivGrpcServer();
             builder.Services.AddSingleton<IVivContextAccessor, VivContextAccessor>();
             builder.Services.AddScoped<IVivContext, VivContext>();
-            builder.Services.AddScoped<TenantGrpcService>();
+            builder.Services.AddScoped<TenantGrpcStub>();
             builder.Services.AddSingleton(GrpcTestToken.Options);
 
             _app = builder.Build();
             _app.UseRouting();
-            _app.MapGrpcService<TenantGrpcService>();
+            _app.MapGrpcService<TenantGrpcStub>();
 
             await _app.StartAsync();
             Address = _app.Urls.First();

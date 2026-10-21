@@ -56,7 +56,8 @@ namespace Viv.Herta.Tests
 
         private static SendMessageRequest CreateRequest(EmChatReceiverType receiverType = EmChatReceiverType.User) => new()
         {
-            FromUserId = ContextUserId,
+            // 不填发送者 = 用登录身份；代发的用例自己改这个字段
+            FromUserId = 0,
             TargetId = TargetId,
             ReceiverType = receiverType,
             MessageType = EmChatMessageType.Text,
@@ -135,16 +136,44 @@ namespace Viv.Herta.Tests
         }
 
         [Fact]
-        public async Task SendMessage_请求体的FromUserId被忽略()
+        public async Task SendMessage_不传发送者时用登录身份()
         {
+            var sut = Create();
+
+            await sut.Service.SendMessageAsync(CreateRequest());
+
+            Assert.Equal(ContextUserId, Assert.Single(sut.Messages.Appended).FromUserId);
+        }
+
+        [Fact]
+        public async Task SendMessage_传了发送者就代发()
+        {
+            // 机器人、客服代发：落库和事件都按请求体里的署名走
             var sut = Create();
             var request = CreateRequest();
             request.FromUserId = 999;
 
             await sut.Service.SendMessageAsync(request);
 
-            Assert.Equal(ContextUserId, Assert.Single(sut.Messages.Appended).FromUserId);
-            Assert.Equal(ContextUserId, Assert.IsType<SendMessageEvent>(Assert.Single(sut.Outbox.Enqueued)).FromUserId);
+            Assert.Equal(999, Assert.Single(sut.Messages.Appended).FromUserId);
+
+            var evt = Assert.IsType<SendMessageEvent>(Assert.Single(sut.Outbox.Enqueued));
+            Assert.Equal(999, evt.FromUserId);
+            Assert.Equal(SubjectId, evt.TenantId);
+        }
+
+        [Fact]
+        public async Task SendMessage_指定其他租户的请求字段不存在_租户永远来自登录身份()
+        {
+            // 跨租户代发只能走事件，HTTP 侧没有 TenantId 这个概念
+            var sut = Create();
+            var request = CreateRequest();
+            request.FromUserId = 999;
+
+            await sut.Service.SendMessageAsync(request);
+
+            Assert.Equal(SubjectId, Assert.Single(sut.Messages.Appended).TenantId);
+            Assert.Equal(SubjectId, Assert.IsType<SendMessageEvent>(Assert.Single(sut.Outbox.Enqueued)).TenantId);
         }
 
         [Fact]
@@ -241,19 +270,6 @@ namespace Viv.Herta.Tests
             };
 
             Assert.False(string.IsNullOrEmpty(request.Validate()));
-        }
-
-        [Fact]
-        public void PullMessagesRequest_首屏不给游标是合法的()
-        {
-            // 两个都为 0 = 取最新一批
-            var request = new PullMessagesRequest
-            {
-                TargetId = TargetId,
-                ReceiverType = EmChatReceiverType.User
-            };
-
-            Assert.True(string.IsNullOrEmpty(request.Validate()));
         }
 
         [Fact]

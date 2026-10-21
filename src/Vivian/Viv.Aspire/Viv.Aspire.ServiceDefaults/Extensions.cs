@@ -74,7 +74,7 @@ public static class Extensions
                     .AddMeter("Viv.Nana")
                     .AddMeter("Viv.Redis")
                     .AddMeter("Viv.Momo")
-                    .AddMeter("Viv.Herta.Link");
+                    .AddMeter("Viv.Kinna");
             })
             .WithTracing(tracing =>
             {

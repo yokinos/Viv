@@ -9,16 +9,28 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="logs\**" />
+    <Content Remove="logs\**" />
+    <EmbeddedResource Remove="logs\**" />
+    <None Remove="logs\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <!-- 不再引用 Microsoft.AspNetCore.SignalR.StackExchangeRedis：
          实例广播拓扑下每个副本只推自己的本地连接，不需要跨进程背板（见 docs/chat-framework-redesign.md 附录 A） -->
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Banshee\Viv.Echo\Viv.Echo.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
+    <!-- 长连接推送框架层：连接表 / 租约 / 踢人 / 发送端口 -->
+    <ProjectReference Include="..\..\Banshee\Viv.Kinna\Viv.Kinna.csproj" />
     <ProjectReference Include="..\Viv.Aspire\Viv.Aspire.ServiceDefaults\Viv.Aspire.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Viv.EventContracts\Viv.EventContracts.csproj" />
     <ProjectReference Include="..\Viv.Herta.Core\Viv.Herta.Core.csproj" />
+    <!-- gRPC 契约与客户端：Apex 的客户端应用查询 -->
+    <ProjectReference Include="..\Viv.ServiceProxy\Viv.ServiceProxy.csproj" />
   </ItemGroup>
 
 </Project>

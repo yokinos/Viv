@@ -16,7 +16,7 @@
 | D4 | 广播队列固定 `classic` + `AutoDelete` + 非持久 + `ListenerCount=1` + `MaxDegreeOfParallelism=1` | `quorum` 与 `auto-delete` 互斥；串行处理是「单连接有序」的前提 |
 | D5 | 实例标识取 `POD_NAME` / `HOSTNAME` / `MachineName+Pid`，**禁止用 `EnvOption.MachineId`** | 现 `appsettings.json` 里 `MachineId: 5` 是写死的，两副本会撞成同一个队列名 → 静默退回竞争消费 |
 | D6 | 跨实例协调**全部走 MQ 广播**（消息、成员变更、踢人），Redis 退出实时链路 | 一个机制解决全部跨副本问题，少一个 SPOF |
-| D7 | 发送者身份**以信封 `Context` 为准**，`evt.FromUserId` 只做一致性校验 | `FromUserId` 由请求体直传，任何登录用户可冒充他人 |
+| D7 | 署名与调用者分离：`evt.FromUserId` 就是署名，可代发；调用者只进审计 | 运营、机器人、系统消息需要以他人名义发（见 §26） |
 | D8 | 下行方法名即事件类型，payload 为强类型 record + `V` 版本字段 | SignalR 已有一层方法名，不再套第二层 `type` |
 | D9 | `Resync` 只说诚实话：返回本副本水位 + `NeedBackfill`，缺口由客户端走 HTTP 补拉 | Link 不存消息，不能假装能补 |
 | D10 | 指标 `Meter("Viv.Herta.Link")` | 与 `MomoMetrics` / `RedisMetrics` 同构 |
@@ -57,7 +57,7 @@
 |---|---|---|---|
 | **P0** | 同服务多副本共享一条队列（竞争消费），但投递时按**本机字典**查 connectionId | `NanaRegister.GetConsumerQueueName` + `ConnectionPool` | 多副本下**单聊静默漏推**，概率约 `(N-1)/N` |
 | **P0** | 消费锁 key 含 `ServiceName`，全副本相同 | `VivConsumer.HandleAsync` | 即使改成广播，也**只有 1/N 生效** |
-| **P0** | `FromUserId` 取自请求体 | `SendMessageRequest.FromUserId` | 任何人可**冒充他人**发消息 |
+| **P0** | ~~`FromUserId` 取自请求体~~ | `SendMessageRequest.FromUserId` | 已按 §26 改为「显式代发 + 审计」，不再是漏洞 |
 | **P0** | 群成员来源恒为空 | `DefaultGroupService` | 群消息**永远推不到人**，且静默 |
 | **P1** | 无本地租约，`OnDisconnectedAsync` 是唯一下线信号 | `ChatHub` | 进程被 kill 后连接表残留，踢人/在线清点失效 |
 | **P2** | `SentAt` 在消费端 `UtcNow` 现造 | `SendMessageConsumer` | 重投时间漂移，多端时间线不一致 |
@@ -105,7 +105,7 @@
 │    IFanoutPlanner     : (ReceiverType, target) → UserKey/GroupName│
 │                                                                  │
 │  Hubs/                                                           │
-│    ChatHub            : 连接生命周期 / Ping / Ack / Resync        │
+│    ChatHub            : 连接生命周期 / Ping                       │
 │    IConnectionPool    : 本地连接表（**唯一投递依据**）             │
 │    IKickList          : 本地踢出标记（TTL）                       │
 │                                                                  │
@@ -420,23 +420,21 @@ UserKey(tenant, user)     = $"herta:{tenant}:user:{user}"
 GroupName(tenant, group)  = $"herta:{tenant}:group:{group}"
 ```
 
-### 7.2 身份校验（防冒充）
+### 7.2 署名与调用者是两件事
 
-```csharp
-var ctx = envelope.Context;
-if (ctx is null || ctx.SubjectId <= 0 || ctx.UserId <= 0)
-    return new SubscribeResult(false, false, "缺少可信上下文");
+投递需要的身份分两类，不要混：
 
-if (evt.FromUserId != 0 && evt.FromUserId != ctx.UserId)
-{
-    _logger.Error($"发送者身份与信封不符：evt={evt.FromUserId} ctx={ctx.UserId} msg={envelope.MessageId}");
-    return new SubscribeResult(false, false, "发送者身份不符");   // 丢弃 + 告警，不回队
-}
+| 身份 | 来源 | 用途 |
+|---|---|---|
+| **谁发的这条事件**（调用者） | 信封 `Context`，发布端从 `IVivContext` 盖章 | 仅用于审计日志，不参与投递 |
+| **消息以谁的名义发**（署名） | 事件体 `evt.FromUserId`，0 表示系统消息 | 进消息体、决定客户端怎么显示 |
+| **消息属于哪个租户** | 事件体 `evt.TenantId` > 0 优先，否则信封 `Context.SubjectId` | 查连接表、拼群名 |
 
-var fromUserId = evt.FromUserId == 0 ? 0 : ctx.UserId;   // 0 保留给系统消息
-```
+优先级是「事件体 > 信封」，原因就是要支持模拟：机器人代发、系统消息、运营侧以某个用户的名义推一条，都靠事件体指定租户和署名。这类事件由内网服务直接投 MQ 产生，不经过 `ChatService`。
 
-**这是纵深防御，不是修复。** 真正的修复在 `ChatService`：`FromUserId` 必须用 `IVivContext.UserId` 覆盖（1 行，列在 P0）。
+署名与调用者不一致时**照常投递**，只记一条审计（`以他人名义发送`）并累加 `kinna.identity.override` 指标。这里不再是"防冒充"的关口 —— MQ 是内网可信域，能发事件的服务本来就能代表任何人。
+
+HTTP 入口也能代发，但只限**同租户**：`SendMessageRequest.FromUserId > 0` 就用它，否则用 `IVivContext.UserId`；租户永远取 `IVivContext.SubjectId`，请求体里没有租户字段。跨租户只能走事件，见 §26。
 
 ### 7.3 幂等
 
@@ -513,28 +511,34 @@ public sealed record HertaLinkMessage
 | 方法 | 参数 | 说明 |
 |---|---|---|
 | `Ping` | 无 | 返回 `HertaLinkPong { serverTime, leaseExpiresAt }`，同时续租 |
-| `Ack` | `long[] messageIds` | 投递确认（本期只做统计，不落库） |
-| `Typing` | `HertaLinkTyping` | 输入中（可丢，不进可靠语义） |
-| `Resync` | `long? lastMessageId` | 重连对齐 |
+| `Ack` | `long[] messageIds` | 投递确认，记该用户已确认到的最大 MessageId，返回水位 |
+| `Resync` | `long? lastMessageId` | 重连对齐，返回服务端水位 + 是否需要补拉 |
 
 **不做**：hub 内发消息。发送一律走 HTTP（可审计、可限流、可入发件箱）。hub 只承担会话级瞬态信号。
 
-### 8.4 `Resync`（诚实版）
+### 8.4 `Ack` 与 `Resync`
+
+两者共用一份状态：**每个用户「已确认的消息 Id」+ 一条水位**。
 
 ```csharp
-public sealed record HertaLinkResyncResult
+public sealed record KinnaResyncResult : KinnaPayload
 {
-    public int V { get; init; } = 1;
-    public long? LastDeliveredMessageId { get; init; }  // 本副本记忆，可能为 null
-    public bool NeedBackfill { get; init; }             // true = 请走 HTTP 增量拉取
-    public int OfflineSeconds { get; init; }
+    public long? LastDeliveredMessageId { get; init; }  // 水位，没记录为 null
+    public long[] DeliveredMessageIds { get; init; }    // 逐个记下的 Id，记满后为空
+    public bool NeedBackfill { get; init; }
+    public DateTimeOffset ServerTime { get; init; }
 }
 ```
 
 规则：
-- 客户端**每次**重连都应 `Resync`；`NeedBackfill == true` 时按 `lastMessageId` 向 `Herta.Api` 拉取
-- 服务端**永远不假设**自己知道全部历史；`LastDeliveredMessageId` 只是优化提示
-- Core 提供 `Seq` 后，`Resync` 升级为按 seq 对齐，**协议不用改**（`Seq` 字段已在载荷里）
+
+- `Ack(long[] messageIds)` 逐条记 Id。**记到 `KinnaOptions.DeliveryIdLimit` 条就全清，只留水位**，等价于「全部标记已收到」；上限的意义是别让活跃用户的集合无限涨。配 `0` 表示从不记 Id，只留水位。配置按 Hub 归属，`KinnaOptions:<Hub 类型名>` 可单独覆盖。
+- 水位只进不退。客户端乱序补报、或重连后重放旧消息，都不会往回拨。
+- 身份从连接表取，不接受客户端自报 `userId`，否则可以替别人确认。
+- 存储走 `IKinnaDeliveryStore<THub>` 端口，Kinna 不绑实现；Herta 落 Redis：一个 Hash，字段 `w` 是水位，其余字段名就是消息 Id（`{prefix}:{subjectId}:delivered:{userId}`，保留 7 天）。
+- `Resync` 的判断只有一条：**水位比客户端持有的还大 → 需要补拉**。没有水位记录时保守返回 `NeedBackfill = true`，增量拉取幂等，多拉一次比漏消息便宜。`DeliveredMessageIds` 交给客户端在补拉时跳过。
+- Redis 挂了：`Ack` 吞掉异常并记 Warning（返回旧水位），`Resync` 读到空状态从而要求补拉。客户端不会因为缓存故障拿不到连接。
+- 不记明细。明细级确认（哪条消息读了）走 HTTP 的已读接口，落在核心库。
 
 ### 8.5 版本化
 
@@ -728,7 +732,7 @@ appsettings.json / appsettings.Development.json     补 HertaLinkOptions 节点
 1. `Viv.Nana`：实例广播队列（命名 + 属性 + 实例标识）
 2. `SendMessageConsumer`：`Topology = PerInstance` + `GetConsumeLockKey → null`
 3. **移除** `AddStackExchangeRedis`
-4. `ChatService`：`FromUserId` 用 `IVivContext.UserId` 覆盖（**Core 1 行，但这是真漏洞**）
+4. ~~`ChatService`：`FromUserId` 用 `IVivContext.UserId` 覆盖~~ —— 已按 §26 改为「不填用登录身份，填了代发」
 5. `SendMessageConsumer`：身份一致性校验
 6. 载荷修正（`HertaLinkMessage`）
 7. 运维：删旧队列、确认新队列按副本数生成
@@ -862,8 +866,8 @@ Viv.Herta.Core/Service/GroupService.cs                        实现 IGroupServi
 | 下行 | `ReceiveMessage` | `HertaLinkMessage` | 新消息 |
 | 下行 | `ForceDisconnect` | — | 保留 |
 | 上行 | `Ping()` | 返回 `HertaLinkPong` | 续租 + 返回 serverTime / LeaseExpiresAt |
-| 上行 | `Ack(long[])` | — | 只记 Debug，落库的已读回执属于 Core |
-| 上行 | `Resync(long?)` | 返回 `HertaLinkResyncResult` | **恒 `NeedBackfill = true`** —— Link 不存消息，不假装能补 |
+| 上行 | `Ack(long[])` | 返回当前水位 `long` | 记录已确认的最大 MessageId（Redis，7 天） |
+| 上行 | `Resync(long?)` | 返回 `KinnaResyncResult` | 用已确认水位判断要不要补拉（见 §8.4） |
 
 `Connected` 的 `ResumeHint` 本期恒 null（本副本不记投递水位，记它要写放大，先不做）。
 
@@ -1069,13 +1073,13 @@ EF 的 `FindListAsync(predicate)` 只能捞全量，想「按 Id 排序 + 只取
 
 ### 22.2 指标
 
-`Meter("Viv.Herta.Link")`，`AddMeter` 已加进 `Viv.Aspire.ServiceDefaults`（那份名单是手写死的，漏了就上不了 OTLP）。
+`Meter("Viv.Kinna")`（原 `Viv.Herta.Link`，抽到框架层后改名），`AddMeter` 已加进 `Viv.Aspire.ServiceDefaults`（那份名单是手写死的，漏了就上不了 OTLP）。指标都带 `hub` 标签。
 
 | 指标 | 类型 | 标签 |
 |---|---|---|
-| `herta.link.connections` | UpDownCounter | 本实例活跃连接，进出配对记 |
-| `herta.link.dispatch` | Counter | `kind` = user / group / recall，`result` = ok / skipped / failed |
-| `herta.link.identity.mismatch` | Counter | 发送者身份与信封不符，正常应恒为 0 |
+| `kinna.connections` | UpDownCounter | 本实例活跃连接，进出配对记 |
+| `kinna.dispatch` | Counter | `kind` = user / group / recall，`result` = ok / skipped / failed |
+| `kinna.identity.override` | Counter | 事件署名与调用者不一致。代发、机器人会出现，不是异常 |
 
 `skipped` 是「目标不在本实例」，每个副本都会大量产生，属于正常值。
 
@@ -1203,3 +1207,197 @@ IM 自己签发 JWT，claims 与平台 token 同形（`sub` = ChatUserId、`AppI
 - 消费侧按分片订阅，每分片单监听 + 单并行
 
 **B2 不是 B**：它保住了有序性，也拿到了扩展性；代价是发布侧要知道分片规则，比 A 复杂。A 是它的「副本数少」特例。
+
+---
+
+## 25. 通用能力抽取到 `Viv.Kinna`（P1 已落地）
+
+> 范围：只搬「与聊天语义无关」的那部分，**行为零变化**。消息体、会话、已读、群管理仍在 `Herta.Core`。
+
+### 25.1 移走的
+
+| 原位置（`Viv.Herta.Link`） | 新位置（`Viv.Kinna`） | 改名 |
+|---|---|---|
+| `Hubs/ConnectionPool.cs` + `IConnectionPool` | `Connections/KinnaConnectionPool.cs` + `IKinnaConnectionPool` | `ConnectionInfo` → `KinnaConnectionInfo` |
+| `Hubs/ConnectionCoordinator.cs` + `IConnectionCoordinator` | `Connections/KinnaConnectionCoordinator.cs` + `IKinnaConnectionCoordinator` | 新增 `KickAsync` / `KickUserAsync` / `KickSubjectAsync` |
+| `Hubs/ConnectionLeaseSweeper.cs` | `Connections/KinnaConnectionLeaseSweeper.cs` | — |
+| `Hubs/HertaLinkClientMethods.cs` | `Contracts/KinnaClientMethods.cs` | — |
+| `Contracts/HertaLinkKeys.cs`（+ `HertaLinkGroups`） | `Contracts/IKinnaKeys` + `KinnaKeys` | 前缀来自 `KinnaOptions.Prefix`，不再是静态 `"herta"` |
+| `Contracts/HertaLinkConnected/Pong/ResyncResult` | `Contracts/KinnaConnected/KinnaPong/KinnaResyncResult` | 都继承 `KinnaPayload`（`V` 统一到基类） |
+| `Metrics/HertaLinkMetrics.cs` | `Metrics/KinnaMetrics.cs` | Meter `Viv.Herta.Link` → **`Viv.Kinna`**，指标名 `herta.link.*` → `kinna.*` |
+| `Options/HertaLinkOptions.cs` | `Options/KinnaOptions.cs` | 4 项全通用，原类删除；`appsettings.json` 新增 `KinnaOptions` 节点 |
+
+### 25.2 留在 Herta 的（判据：与聊天语义 / Herta 事件契约绑定）
+
+`ChatHub`（身份解析 8 行，依赖 `Viv.Engine.Power`）、`HertaLinkMessage` / `HertaLinkRecall`（`Em*` 枚举）、`IFanoutPlanner` / `FanoutPlanner`（入参是 `SendMessageEvent`）、`IMessageDispatcher` / `SignalRMessageDispatcher`（造 `HertaLinkMessage` 与 `HertaMagic` 多态体）、`MembershipSync`（入参是 `MembershipChangedEvent`）、3 个 `Consumer`、两个端口适配器 `Adapters/HertaGroupSource` / `HertaPresenceSink`。
+
+### 25.3 新增的两个端口（框架不认识的域数据）
+
+```csharp
+IKinnaGroupSource   // GetUserGroupIdsAsync(subjectId, userId) —— 成员权威数据在 Herta.Core
+IKinnaPresenceSink  // Online/Offline/Renew —— 可选，默认 Noop，不进投递路径
+```
+
+两个都是**可选构造参数**（Autofac 回落默认值）。不注册群端口时连接照常建立，只是群消息投不到人 —— 比「静默返回空列表」更好的选择是不假装。
+
+### 25.4 关键改动：`IHubContext<THub>` 不再硬编码
+
+`IHubContext<T>` 只能按具体类型解析，所以：
+
+```
+AddKinna<ChatHub>()  →  全进程唯一一次把 KinnaClientSender<THub> 闭合到 ChatHub
+其余所有代码          →  只依赖 IKinnaClientSender（发连接 / 发多条 / 发组 / 加组 / 退组）
+MapKinnaHub<ChatHub>() → 读 KinnaOptions.HubPath
+```
+
+`KinnaClientSender<THub>` 是 `internal`，只对 `Viv.Kinna.Tests` 开 `InternalsVisibleTo` —— 业务看到具体类型就会绕过接口。
+
+### 25.5 依赖方向的硬约束
+
+`Viv.Kinna` 只引 `FrameworkReference Microsoft.AspNetCore.App` + `Viv.Contracts` + `Viv.Log`。**刻意不引**：`Viv.Engine`（身份解析留在业务 Hub）、`Viv.Nana`（框架不认识 MQ，`KinnaPushOutcome` 那类返回值由业务映射）、`Viv.Redis`（A 路线零 Redis）。
+
+顺带的收益：`Viv.Fakes` 不再引用 `Viv.Herta.Link`，信号替身改成泛型 `FakeHubContext<THub>`，另加 `RecordingKinnaClientSender` 等（`Kinna.cs`）。
+
+### 25.7 一个进程托管多个 Hub（后续修正）
+
+第一版把连接表 / 发送器 / 键注册成**无标签单例**，`AddKinna<THub>()` 里用 `TryAdd` —— 第二个 Hub 的注册被静默忽略。症状是「两个 Hub 共用一张连接表，A 的 connectionId 被 B 的 sender 去发」，SignalR 侧只留一条查无此连接的日志，编译期与运行期都不报错。
+
+改成「每个 Hub 一套 Session」之后：
+
+```csharp
+services.AddKinna<ChatHub>(configuration, o => { o.HubPath = "/chat";  o.Prefix = "herta"; });
+services.AddKinna<AdminHub>(configuration, o => { o.HubPath = "/admin"; o.Prefix = "admin"; });
+```
+
+| 能力 | 多 Hub 下的形状 |
+|---|---|
+| 连接表 / 发送器 / 键 / 配置 | 每个 Hub 一个 `IKinnaSession<THub>`，业务注入 `IKinnaSession<自己的Hub>` |
+| 协调器 | `IKinnaConnectionCoordinator<THub>`（Scoped） |
+| 租约清扫 | `KinnaConnectionLeaseSweeper<THub>`，每个 Hub 一个宿主服务 |
+| 两个端口 | `IKinnaGroupSource<THub>` / `IKinnaPresenceSink<THub>`（多 Hub 的数据源本来就是两套） |
+| 配置 | 先读共享 `KinnaOptions`，再读 `KinnaOptions:<Hub 类型名>` 覆盖，最后 `configure` 回调覆盖 |
+| 指标 | 全部带 `hub` 标签，否则分不清是哪一路 |
+
+`Viv.Kinna.Tests/KinnaMultiHubTests` 用真容器的 `ServiceCollection` 钉住这条：两个 Hub 的池互不可见、配置各取各的、各有一个清扫循环。
+
+### 25.6 投递流程已下沉（原 P2，已完成）
+
+`IKinnaPusher<TEvent>` + `KinnaMessageDispatcher<THub, TEvent>` 落地后，四件事从 Herta 收进了框架：
+
+| 规则 | 现在的位置 |
+|---|---|
+| 目标不在本机 = `Skipped`，调用方按成功处理 | `KinnaMessageDispatcher` |
+| 发送异常 = `Failed`，不重投 | 同上 |
+| 署名与调用者不一致 = 只记审计 + 指标，照常投递 | 同上 |
+| 计划非法（缺租户/群名）= `Dropped` | 同上 |
+
+Herta 只剩两个推送计划：`ChatMessagePusher`（造 `HertaLinkMessage` + 选目标）、`ChatRecallPusher`。`IFanoutPlanner` / `FanoutDecision` / `IMessageDispatcher` / `SignalRMessageDispatcher` 全部删掉，`DispatchAsync` 与 `DispatchRecallAsync` 之间那份重复也消失了。
+
+消费者现在只做两件事：把信封转成 `KinnaPushContext`，把 `KinnaPushOutcome` 映射回 `SubscribeResult`（`Success`/`Skipped` → 成功）。
+
+**还没做**：
+
+- **P3**：接一个**非 IM 域**验证通用性 —— 新域只写 `Hub + Pusher + Consumer + AddKinna<THub>()`，Kinna 一行不改。
+- **P4**：上行限流、`MaxConnectionsPerUser`、presence 进协议、按 userId 分片队列。
+- `MembershipSync` 的入参仍绑 `MembershipChangedEvent`，泛化成 `KinnaMembershipChange` 也还没做。
+- 一处**遗留**：`KinnaConnectionPool.GetConnectionIds(subjectId, userId)` 仍是全表遍历（穷举 `_userConnections`），优化单独做。
+
+---
+
+## 26. 代发（以他人名义发消息）
+
+### 26.1 规则
+
+| 入口 | 署名 | 租户 | 是否落库 |
+|---|---|---|---|
+| HTTP `POST /api/chat/sendMessage` | `FromUserId > 0` 用它，否则 `IVivContext.UserId` | 固定 `IVivContext.SubjectId`，请求体没有租户字段 | 是 |
+| MQ `SendMessageEvent` | `evt.FromUserId`（0 = 系统消息） | `evt.TenantId > 0` 用它，否则信封 `Context.SubjectId` | 否 |
+
+一句话：**租户只在事件里体现**。HTTP 请求不开放租户，它永远写到登录身份自己的租户下；要跨租户只能直接发事件。
+
+署名与调用者不一致时照常投递，记一条 `以他人名义发送` 的 Info，并累加 `kinna.identity.override`。
+
+### 26.2 为什么 HTTP 不放租户
+
+`TenantDataFilter` 按 `IVivContext.SubjectId` 过滤所有 `ITenant` 实体的查询。如果请求体能指定别的租户，发送路径上的会话查询、群成员校验会被过滤器挡在登录租户外面 —— 不报错，只是"查不到"，于是每条消息都新建一行会话，数据慢慢烂掉。要修就得在发送路径上关过滤器，再逐个接口审一遍。
+
+代价和收益不成比例：跨租户代发是低频运营动作，直接发事件就够了。
+
+### 26.3 跨租户代发的已知缺口
+
+事件侧跨租户只负责**实时推送**，不写库：
+
+- 消息不会出现在对方的会话列表和历史拉取里（`GET /api/chat/messages` 查不到）；
+- 客户端断线期间这条消息就没了，补拉也补不回来。
+
+如果运营需要"某个租户的历史里真的有这条消息"，那就得走 HTTP（同租户），或者补一条"代写入库"的服务端流程 —— 目前没做。
+
+### 26.4 谁能连、谁能代发
+
+两个问题的答案不在同一个地方：
+
+| 问题 | 依据 |
+|---|---|
+| 这个客户端能不能连 Hub | 问 Apex：`AtClientApp` 里存在且 `Status = Enabled`（见 §27） |
+| 这个请求能不能代发 | 没有限制，能调 `sendMessage` 就允许带 `FromUserId` |
+
+要把代发也收紧，可以复用同一份 Apex 校验：ChatService 拿到 `IClientAppQuery`，`AppId` 不是"允许代发"的客户端就忽略请求里的 `FromUserId`。这一步还没做。
+
+---
+
+## 27. 连接准入：AppId 问 Apex，不写配置文件
+
+### 27.1 为什么
+
+客户端 AppId 的权威数据在 Apex 的 `AtClientApp`（`Id` 就是 AppId，`Status` 是 `EmStatus`）。在 IM 这边抄一份白名单意味着：Apex 新增客户端要改两处、禁用客户端要重启 Link，而且两边不同步时**不报错**，只是有人连不上或该拒绝的没拒绝。
+
+### 27.2 放在哪
+
+整套东西都在 `Viv.ServiceProxy`（业务侧 gRPC 层），不放 Herta：AppId 是平台级概念，DeepRed、Ouroboros 以后要用同一份判定，不该各写一遍。
+
+| 件 | 位置 |
+|---|---|
+| 契约 | `Viv.ServiceProxy/Protos/apex_app.proto` |
+| 端口 | `Viv.ServiceProxy/Apex/IClientAppQuery` + `ClientAppCheck` |
+| 客户端实现 | `Viv.ServiceProxy/Apex/ApexClientAppQuery`（gRPC + 缓存） |
+| 缓存 | `Viv.ServiceProxy/Apex/ClientAppCheckCache`（单例） |
+| 注册 | `Viv.ServiceProxy/Apex/ApexClientAppExtensions.AddApexClientAppQuery(configuration)` |
+| 服务端 | `Viv.Apex.Api/Grpc/ApexAppQueryService`，查 `IClientAppRepository.GetAppAsync(appId)`，由 `VivGrpcDiscovery` 自动注册映射 |
+
+Herta 侧只剩一句 `services.AddApexClientAppQuery(configuration)` 和一个 `HertaLinkAdmission`。
+
+```proto
+service ApexAppQuery {
+  rpc ValidateClientApp (ValidateClientAppRequest) returns (ValidateClientAppReply);
+}
+// reply: exists / enabled / name / message（不可用原因，直接进日志）
+```
+
+### 27.3 生命周期：查询 Scoped，缓存 Singleton
+
+`IClientAppQuery` 是 Scoped 的。gRPC 客户端带的 `VivGrpcInterceptor` 要读当前请求的 `IVivContext`，注册成单例会把那份上下文捕获在根作用域上。
+
+缓存是另一回事，必须跨连接共用，所以单独一个 Singleton 的 `ClientAppCheckCache` 注入进 Scoped 查询里。
+
+### 27.4 缓存与失败策略
+
+每条连接都问一次 gRPC 太重，结果在进程内缓存 `CacheSeconds`（默认 300 秒，正负结果都缓存）。代价是 Apex 禁用某个客户端后，最多 300 秒才在 Link 侧生效。
+
+Apex 不可达时**不放行**：返回「客户端校验服务不可用」并记 Error。宁可连不上，也不要让未知客户端混进来。
+
+### 27.5 配置
+
+```jsonc
+"ApexClientAppOption": {
+  "ServiceName": "viv-apex-api",   // 服务发现填服务名，直连填完整地址
+  "UseServiceDiscovery": true,
+  "CacheSeconds": 300
+}
+```
+
+`AppHost` 里 `viv-herta-link` 必须 `WithReference(apexApi)`，否则拿不到 `services__viv-apex-api` 环境变量。本地直连可以把 `UseServiceDiscovery` 关掉、`ServiceName` 填 `http://localhost:7001`。
+
+另外 `VivOptions.EchoOption.GrpcOption` 要给一个非 null 值（`EnableServer: false` 即可）：`VivGrpcInterceptor` 只在 `GrpcOption != null` 时注册，没有它客户端发不出带租户头的请求。
+
+
+

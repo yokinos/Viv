@@ -22,9 +22,16 @@ namespace Viv.EventContracts.Herta
         }
 
         /// <summary>
-        /// 发送方的Id 如果为0则为系统消息
+        /// 消息署名的发送者。0 表示系统消息。
+        /// 与发布者是谁无关：模拟发送、机器人代发时这里可以填别人，投递按这个值送，审计另记。
         /// </summary>
         public long FromUserId { get; set; }
+
+        /// <summary>
+        /// 消息所属租户。大于 0 时以它为准，用于模拟其他租户或系统代发；
+        /// 0 表示用信封上下文里的租户。
+        /// </summary>
+        public long TenantId { get; set; }
 
         /// <summary>
         /// 接收方的Id
@@ -55,6 +62,6 @@ namespace Viv.EventContracts.Herta
         /// 消息[Json]
         /// <see cref="IHertaChatMessage"/>
         /// </summary>
-        public string Message { get; private set; }
+        public string Message { get; private set; } = string.Empty;
     }
 }

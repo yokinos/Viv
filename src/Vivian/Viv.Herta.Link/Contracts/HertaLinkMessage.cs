@@ -1,20 +1,15 @@
 using Viv.Entity.Enums;
+using Viv.Kinna.Contracts;
 
 namespace Viv.Herta.Link.Contracts
 {
-    /// <summary>
-    /// 下发给客户端的完整消息体（<c>ReceiveMessage</c> 载荷）。
-    /// 字段注释只写非显而易见的部分。
-    /// </summary>
-    public sealed record HertaLinkMessage
+    /// <summary>下发客户端的消息体，ReceiveMessage 的载荷。版本字段 V 继承自 KinnaPayload。</summary>
+    public sealed record HertaLinkMessage : KinnaPayload
     {
-        /// <summary>协议版本，破坏性变更时 +1</summary>
-        public int V { get; init; } = 1;
-
-        /// <summary>落库后的消息行Id：客户端的幂等键，也是拉取接口的游标</summary>
+        /// <summary>落库后的消息行 Id。客户端的幂等键，也是拉取接口的游标</summary>
         public long MessageId { get; init; }
 
-        /// <summary>会话内自增序号。本期恒 null：它要在落库时分配，而 Herta.Core 还不落库</summary>
+        /// <summary>会话内自增序号。本期恒 null：它要在落库时分配 </summary>
         public long? Seq { get; init; }
 
         public long TenantId { get; init; }
@@ -34,8 +29,8 @@ namespace Viv.Herta.Link.Contracts
         public EmChatMessageType MessageType { get; init; }
 
         /// <summary>
-        /// 必须声明成 object：System.Text.Json 按声明类型选契约，声明成接口只序列化接口成员，
-        /// <c>TextMessage.Text</c> 会整个丢掉。
+        /// 声明成 object 而不是接口：System.Text.Json 按声明类型选契约，
+        /// 接口只会序列化 MessageType，正文整个丢掉。
         /// </summary>
         public object? Body { get; init; }
 

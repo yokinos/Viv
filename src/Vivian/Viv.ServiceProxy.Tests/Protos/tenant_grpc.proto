@@ -1,0 +1,50 @@
+// 测试夹具契约：gRPC 四种调用形态（unary / server-streaming / client-streaming / bidi）。
+// 只被 Viv.ServiceProxy.Tests 使用，不进产品程序集 —— 之前放在 ServiceProxy 里，
+// 任何引用它的宿主都会把示例服务经 VivGrpcDiscovery 自动映射出去。
+syntax = "proto3";
+
+package Viv.ServiceProxy.Tests.Protos;
+
+option csharp_namespace = "Viv.ServiceProxy.Tests.Protos";
+
+message GetTenantRequest {
+  int64 subject_id = 1;
+}
+
+message TenantInfo {
+  int64 subject_id = 1;
+  string subject_name = 2;
+  int64 app_id = 3;
+  int64 user_id = 4;
+}
+
+message GetTenantResponse {
+  bool success = 1;
+  string message = 2;
+  TenantInfo tenant = 3;
+}
+
+message ListTenantUsersRequest {
+  int64 subject_id = 1;
+}
+
+message UserInfo {
+  int64 user_id = 1;
+  string user_name = 2;
+}
+
+message UploadTenantUsersResponse {
+  int32 count = 1;
+}
+
+message ChatMessage {
+  int64 user_id = 1;
+  string content = 2;
+}
+
+service TenantGrpcService {
+  rpc GetTenant (GetTenantRequest) returns (GetTenantResponse);
+  rpc ListTenantUsers (ListTenantUsersRequest) returns (stream UserInfo);
+  rpc UploadTenantUsers (stream UserInfo) returns (UploadTenantUsersResponse);
+  rpc Chat (stream ChatMessage) returns (stream ChatMessage);
+}

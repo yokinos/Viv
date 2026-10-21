@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
@@ -11,7 +11,8 @@ namespace Viv.Herta.Core.Entity.Dto.Chat
     public class SendMessageRequest : VivApiRequest
     {
         /// <summary>
-        /// [可选]发送方的Id 不选默认为当前登录人的Id
+        /// [可选]以谁的名义发。传了就按这个人落库和推送（机器人、客服代发），不传用登录用户。
+        /// 租户不从请求里取，永远是登录身份所属的租户
         /// </summary>
         [DisplayName("发送方")]
         public long FromUserId { get; set; }

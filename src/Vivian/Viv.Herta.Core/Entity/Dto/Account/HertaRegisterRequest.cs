@@ -11,9 +11,6 @@ namespace Viv.Herta.Core.Entity.Dto.Account
         [DisplayName("租户")]
         public long SubjectId { get; set; }
 
-        [DisplayName("客户端AppId")]
-        public long AppId { get; set; }
-
         [Required]
         [StringLength(50, MinimumLength = 3)]
         [DisplayName("登录账号")]

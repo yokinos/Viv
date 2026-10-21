@@ -9,6 +9,7 @@
     <Project Path="src/Banshee/Viv.Echo/Viv.Echo.csproj" />
     <Project Path="src/Banshee/Viv.Engine/Viv.Engine.csproj" Id="be371f7c-f2e3-4fd5-b0f0-8122cc7c565c" />
     <Project Path="src/Banshee/Viv.Forge/Viv.Forge.csproj" />
+    <Project Path="src/Banshee/Viv.Kinna/Viv.Kinna.csproj" Id="13cafd73-d458-40d8-8aaf-090e4bfe1823" />
     <Project Path="src/Banshee/Viv.Log/Viv.Log.csproj" Id="7d692cdd-d7df-4ad5-a468-c917fb419aef" />
     <Project Path="src/Banshee/Viv.Momo/Viv.Momo.csproj" Id="51d56628-8714-42f2-bcb7-b7606977eb48" />
     <Project Path="src/Banshee/Viv.Nana/Viv.Nana.csproj" Id="e894e65e-43a7-465b-8fb4-53e30e86eba2" />
@@ -21,6 +22,7 @@
     <Project Path="src/Test/Viv.Delusion.Tests/Viv.Delusion.Tests.csproj" Id="67f775ab-833f-4333-89d1-d0cbd10d69c0" />
     <Project Path="src/Test/Viv.Engine.Tests/Viv.Engine.Tests.csproj" Id="52a5b0c1-9c22-4387-a45c-52ffc0a21a23" />
     <Project Path="src/Test/Viv.Fakes/Viv.Fakes.csproj" />
+    <Project Path="src/Test/Viv.Kinna.Tests/Viv.Kinna.Tests.csproj" />
     <Project Path="src/Test/Viv.Momo.Tests/Viv.Momo.Tests.csproj" Id="248fec67-3ed0-42ea-b2b1-fc65fdd4faa7" />
     <Project Path="src/Test/Viv.Nana.Tests/Viv.Nana.Tests.csproj" Id="b16aac01-c8a3-4e62-b95c-34cc7a5dc3fe" />
     <Project Path="src/Test/Viv.Outbox.Tests/Viv.Outbox.Tests.csproj" />

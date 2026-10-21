@@ -1,19 +1,28 @@
 using Microsoft.AspNetCore.SignalR;
 using Viv.Engine.Power;
-using Viv.Herta.Link.Contracts;
+using Viv.Kinna.Connections;
+using Viv.Kinna.Contracts;
+using Viv.Log;
 
 namespace Viv.Herta.Link.Hubs
 {
     /// <summary>
-    /// 实时连接入口。协议逻辑在 <see cref="IConnectionCoordinator"/>，这里只做身份解析与转发。
+    /// 实时连接入口。身份解析留在这里，因为走网关和直连是两套取法；其余动作都转给协调器。
     /// </summary>
     public class ChatHub : Hub
     {
-        private readonly IConnectionCoordinator _coordinator;
+        private readonly IKinnaConnectionCoordinator<ChatHub> _coordinator;
+        private readonly HertaLinkAdmission _admission;
+        private readonly ILoggerContract _logger;
 
-        public ChatHub(IConnectionCoordinator coordinator)
+        public ChatHub(
+            IKinnaConnectionCoordinator<ChatHub> coordinator,
+            HertaLinkAdmission admission,
+            ILoggerContract logger)
         {
             _coordinator = coordinator;
+            _admission = admission;
+            _logger = logger;
         }
 
         public override async Task OnConnectedAsync()
@@ -26,20 +35,22 @@ namespace Viv.Herta.Link.Hubs
             if (identity == null && httpContext != null)
                 identity = await RequestTokenResolver.GetContextFromTokenAsync(httpContext);
 
-            if (identity == null || identity.AppId <= 0 || identity.SubjectId <= 0 || identity.UserId <= 0)
+            var check = await _admission.CheckAsync(identity, Context.ConnectionAborted);
+            if (!check.Allowed)
             {
+                _logger.Warning($"拒绝建立连接: {check.Reason} connection={Context.ConnectionId}");
                 Context.Abort();
                 return;
             }
 
-            var connected = await _coordinator.RegisterAsync(Context.ConnectionId, identity);
+            var connected = await _coordinator.RegisterAsync(Context.ConnectionId, identity!);
             if (connected == null)
             {
                 Context.Abort();
                 return;
             }
 
-            await Clients.Caller.SendAsync(HertaLinkClientMethods.Connected, connected);
+            await Clients.Caller.SendAsync(KinnaClientMethods.Connected, connected);
             await base.OnConnectedAsync();
         }
 
@@ -50,13 +61,13 @@ namespace Viv.Herta.Link.Hubs
         }
 
         /// <summary>心跳 + 续租。客户端据此校时，并知道租约何时到期</summary>
-        public Task<HertaLinkPong> Ping() => _coordinator.PingAsync(Context.ConnectionId);
+        public Task<KinnaPong> Ping() => _coordinator.PingAsync(Context.ConnectionId);
 
-        /// <summary>投递确认（本期只统计）</summary>
-        public void Ack(long[] messageIds) => _coordinator.Ack(Context.ConnectionId, messageIds);
+        /// <summary>投递确认。客户端收到消息后上报，服务端记已确认水位，返回当前水位</summary>
+        public Task<long> Ack(long[] messageIds) => _coordinator.AckAsync(Context.ConnectionId, messageIds);
 
-        /// <summary>重连对齐：告诉客户端要不要去 Herta.Api 补拉</summary>
-        public HertaLinkResyncResult Resync(long? lastMessageId = null)
-            => _coordinator.Resync(Context.ConnectionId, lastMessageId);
+        /// <summary>重连对齐。返回服务端水位，NeedBackfill 为 true 时客户端走 HTTP 增量拉取</summary>
+        public Task<KinnaResyncResult> Resync(long? lastMessageId = null)
+            => _coordinator.ResyncAsync(Context.ConnectionId, lastMessageId);
     }
 }

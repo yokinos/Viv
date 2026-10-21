@@ -1,0 +1,25 @@
+// Apex 客户端应用查询契约。
+// 其他服务在建立长连接等场景用它核对 AppId 是不是 Apex 里存在且启用的客户端，
+// 避免把「允许的客户端」抄成各服务自己的配置文件。
+syntax = "proto3";
+
+package Viv.ServiceProxy.Protos;
+
+option csharp_namespace = "Viv.ServiceProxy.Protos";
+
+message ValidateClientAppRequest {
+  // 客户端应用 Id，对应 AtClientApp.Id
+  int64 app_id = 1;
+}
+
+message ValidateClientAppReply {
+  bool exists = 1;
+  bool enabled = 2;
+  string name = 3;
+  // 不可用时的原因，可直接写进日志
+  string message = 4;
+}
+
+service ApexAppQuery {
+  rpc ValidateClientApp (ValidateClientAppRequest) returns (ValidateClientAppReply);
+}

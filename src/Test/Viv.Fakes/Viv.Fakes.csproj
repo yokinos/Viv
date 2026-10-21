@@ -41,13 +41,19 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Banshee\Viv.Contracts\Viv.Contracts.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
+    <!-- 长连接推送层的替身（RecordingKinnaClientSender / StubKinnaConnectionPool / 两个端口）
+         只需要框架层，不需要 Viv.Herta.Link：业务 Hub 的具体类型留在各测试项目里 -->
+    <ProjectReference Include="..\..\Banshee\Viv.Kinna\Viv.Kinna.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Log\Viv.Log.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Momo\Viv.Momo.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Nana\Viv.Nana.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Outbox\Viv.Outbox.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Redis\Viv.Redis.csproj" />
     <ProjectReference Include="..\..\Vivian\Viv.Elysia\Viv.Elysia.csproj" />
-    <ProjectReference Include="..\..\Vivian\Viv.Herta.Link\Viv.Herta.Link.csproj" />
+    <!-- Chat.cs 的 Herta 仓储替身（StubPresenceStore 等） -->
+    <ProjectReference Include="..\..\Vivian\Viv.Herta.Core\Viv.Herta.Core.csproj" />
+    <!-- StubClientAppQuery：Apex 客户端应用查询的替身 -->
+    <ProjectReference Include="..\..\Vivian\Viv.ServiceProxy\Viv.ServiceProxy.csproj" />
   </ItemGroup>
 
 </Project>

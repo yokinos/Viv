@@ -1,7 +1,9 @@
 using Viv.EventContracts.Herta;
 using Viv.Fakes;
-using Viv.Herta.Link.Contracts;
 using Viv.Herta.Link.Hubs;
+using Viv.Kinna.Connections;
+using Viv.Kinna.Contracts;
+using Viv.Kinna.Options;
 
 namespace Viv.Herta.Tests
 {
@@ -11,17 +13,19 @@ namespace Viv.Herta.Tests
         private const long GroupId = 50;
         private const long UserId = 2;
 
-        private static MembershipSync Create(ConnectionPool pool, FakeHubContext hub)
-            => new(pool, hub, new RecordingLogger());
+        private static MembershipSync Create(KinnaConnectionPool pool, RecordingKinnaClientSender sender)
+            => new(
+                new StubKinnaSession<ChatHub>(pool, sender, new KinnaKeys("herta"), new KinnaOptions()),
+                new RecordingLogger());
 
         [Fact]
         public async Task Joined_把本进程该用户的连接加进组()
         {
-            var hub = new FakeHubContext();
-            var pool = new ConnectionPool(hub);
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
             pool.Add("c1", appId: 3, subjectId: TenantId, userId: UserId);
 
-            await Create(pool, hub).ApplyAsync(new MembershipChangedEvent
+            await Create(pool, sender).ApplyAsync(new MembershipChangedEvent
             {
                 TenantId = TenantId,
                 GroupId = GroupId,
@@ -29,19 +33,19 @@ namespace Viv.Herta.Tests
                 ChangeType = MembershipChangeType.Joined
             });
 
-            var added = Assert.Single(((FakeGroupManager)hub.Groups).Added);
+            var added = Assert.Single(sender.Added);
             Assert.Equal("c1", added.ConnectionId);
-            Assert.Equal(HertaLinkKeys.GetGroupName(TenantId, GroupId), added.Group);
+            Assert.Equal("herta:1:group:50", added.Group);
         }
 
         [Fact]
         public async Task Left_把本进程该用户的连接移出组()
         {
-            var hub = new FakeHubContext();
-            var pool = new ConnectionPool(hub);
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
             pool.Add("c1", appId: 3, subjectId: TenantId, userId: UserId);
 
-            await Create(pool, hub).ApplyAsync(new MembershipChangedEvent
+            await Create(pool, sender).ApplyAsync(new MembershipChangedEvent
             {
                 TenantId = TenantId,
                 GroupId = GroupId,
@@ -49,18 +53,18 @@ namespace Viv.Herta.Tests
                 ChangeType = MembershipChangeType.Left
             });
 
-            var removed = Assert.Single(((FakeGroupManager)hub.Groups).Removed);
+            var removed = Assert.Single(sender.Removed);
             Assert.Equal("c1", removed.ConnectionId);
-            Assert.Equal(HertaLinkKeys.GetGroupName(TenantId, GroupId), removed.Group);
+            Assert.Equal("herta:1:group:50", removed.Group);
         }
 
         [Fact]
         public async Task 用户不在本进程_不动任何连接()
         {
-            var hub = new FakeHubContext();
-            var pool = new ConnectionPool(hub);
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
 
-            await Create(pool, hub).ApplyAsync(new MembershipChangedEvent
+            await Create(pool, sender).ApplyAsync(new MembershipChangedEvent
             {
                 TenantId = TenantId,
                 GroupId = GroupId,
@@ -68,7 +72,7 @@ namespace Viv.Herta.Tests
                 ChangeType = MembershipChangeType.Joined
             });
 
-            Assert.Empty(((FakeGroupManager)hub.Groups).Added);
+            Assert.Empty(sender.Added);
         }
     }
 }

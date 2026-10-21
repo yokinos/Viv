@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <!--
+    长连接推送框架层：连接表 / 租约 / 踢人 / 本地投递 / 下行协议。
+    依赖 ASP.NET Core 共享框架（SignalR 在共享框架里，不需要 NuGet 包），
+    但**不得引用任何 Vivian 项目** —— 业务契约、消息模型、存储全部留在业务层。
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- IVivContext / VivContextContent -->
+    <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
+    <!-- ILoggerContract -->
+    <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
+    <!-- 刻意不引：Viv.Engine（身份解析留在业务 Hub）、Viv.Nana（框架不认识 MQ）、Viv.Redis -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- KinnaClientSender<THub> 是 internal：只放给单测，不放给业务，避免有人写 KinnaClientSender<ChatHub> -->
+    <InternalsVisibleTo Include="Viv.Kinna.Tests" />
+  </ItemGroup>
+
+</Project>

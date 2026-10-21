@@ -7,6 +7,8 @@ var hertaApi = builder.AddProject<Projects.Viv_Herta_Api>("viv-herta-api")
     .WithDeveloperCertificateTrust(true);
 
 var hertaLink = builder.AddProject<Projects.Viv_Herta_Link>("viv-herta-link")
+    // 连接准入要问 Apex 这个 AppId 是不是有效客户端（gRPC），不引用就拿不到服务发现地址
+    .WithReference(apexApi)
     .WithDeveloperCertificateTrust(true);
 
 var deepRedApi = builder.AddProject<Projects.Viv_DeepRed_Api>("viv-deepred-api")

@@ -54,6 +54,10 @@ namespace Viv.Herta.Core.Service
 
         public async Task<VivApiResult<HertaLoginOutput>> HertaLoginAsync(HertaLoginRequest request)
         {
+            // 校验过滤器已经挡过一次，这里再挡一次：AppId 会进 token，后面按它认客户端
+            if (request.AppId <= 0)
+                return VivApiResult<HertaLoginOutput>.Failed("缺少客户端标识");
+
             var loginCode = request.LoginCode?.Trim();
             if (string.IsNullOrEmpty(loginCode))
                 return VivApiResult<HertaLoginOutput>.Failed("登录账号不能为空");

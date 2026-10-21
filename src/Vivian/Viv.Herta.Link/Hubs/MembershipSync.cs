@@ -1,20 +1,20 @@
-using Microsoft.AspNetCore.SignalR;
 using Viv.EventContracts.Herta;
-using Viv.Herta.Link.Contracts;
+using Viv.Kinna.Connections;
 using Viv.Log;
 
 namespace Viv.Herta.Link.Hubs
 {
+    /// <summary>
+    /// 成员变更只作用于本进程持有的连接。入参暂时还是 Herta 自己的事件类型，泛化留到后面。
+    /// </summary>
     public class MembershipSync : IMembershipSync
     {
-        private readonly IConnectionPool _pool;
-        private readonly IHubContext<ChatHub> _hubContext;
+        private readonly IKinnaSession<ChatHub> _session;
         private readonly ILoggerContract _logger;
 
-        public MembershipSync(IConnectionPool pool, IHubContext<ChatHub> hubContext, ILoggerContract logger)
+        public MembershipSync(IKinnaSession<ChatHub> session, ILoggerContract logger)
         {
-            _pool = pool;
-            _hubContext = hubContext;
+            _session = session;
             _logger = logger;
         }
 
@@ -23,19 +23,19 @@ namespace Viv.Herta.Link.Hubs
             if (evt.TenantId <= 0 || evt.GroupId <= 0 || evt.UserIds.Count == 0)
                 return;
 
-            var groupName = HertaLinkKeys.GetGroupName(evt.TenantId, evt.GroupId);
+            var groupName = _session.Keys.GroupName(evt.TenantId, evt.GroupId);
             var changed = 0;
 
             foreach (var userId in evt.UserIds)
             {
                 // 只处理本进程持有的连接，其他副本各管自己的
-                var connectionIds = _pool.GetConnectionIds(evt.TenantId, userId);
+                var connectionIds = _session.Pool.GetConnectionIds(evt.TenantId, userId);
                 foreach (var connectionId in connectionIds)
                 {
                     if (evt.ChangeType == MembershipChangeType.Joined)
-                        await _hubContext.Groups.AddToGroupAsync(connectionId, groupName, cancellationToken).ConfigureAwait(false);
+                        await _session.Sender.AddToGroupAsync(connectionId, groupName, cancellationToken).ConfigureAwait(false);
                     else
-                        await _hubContext.Groups.RemoveFromGroupAsync(connectionId, groupName, cancellationToken).ConfigureAwait(false);
+                        await _session.Sender.RemoveFromGroupAsync(connectionId, groupName, cancellationToken).ConfigureAwait(false);
 
                     changed++;
                 }

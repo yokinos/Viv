@@ -9,7 +9,7 @@ using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Echo.Grpc;
 using Viv.Sandrone.Impl;
-using Viv.ServiceProxy.Protos;
+using Viv.ServiceProxy.Tests.Protos;
 
 namespace Viv.ServiceProxy.Tests.Grpc
 {
@@ -20,11 +20,11 @@ namespace Viv.ServiceProxy.Tests.Grpc
     public class VivGrpcDiscoveryTests
     {
         [Fact]
-        public void FindServices_返回TenantGrpcService()
+        public void FindServices_返回TenantGrpcStub()
         {
             var services = VivGrpcDiscovery.FindServices();
 
-            Assert.Contains(services, t => t.Name == "TenantGrpcService");
+            Assert.Contains(services, t => t.Name == "TenantGrpcStub");
         }
 
         [Fact]
@@ -39,12 +39,12 @@ namespace Viv.ServiceProxy.Tests.Grpc
             builder.Services.AddSingleton<IVivContextAccessor, VivContextAccessor>();
             builder.Services.AddScoped<IVivContext, VivContext>();
             builder.Services.AddSingleton(GrpcTestToken.Options);
-            // 配置驱动接线：自动发现 + 注册，宿主不再手工 AddScoped<TenantGrpcService>()
+            // 配置驱动接线：自动发现 + 注册，宿主不再手工 AddScoped<TenantGrpcStub>()
             VivGrpcDiscovery.RegisterServices(builder.Services);
 
             var app = builder.Build();
             app.UseRouting();
-            // 配置驱动接线：自动映射，宿主不再手工 MapGrpcService<TenantGrpcService>()
+            // 配置驱动接线：自动映射，宿主不再手工 MapGrpcService<TenantGrpcStub>()
             VivGrpcDiscovery.MapServices(app);
 
             await app.StartAsync();

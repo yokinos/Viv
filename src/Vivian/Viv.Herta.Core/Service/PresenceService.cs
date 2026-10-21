@@ -63,6 +63,11 @@ namespace Viv.Herta.Core.Service
 
             try
             {
+                // 键可能已经过期（连接表与 Redis 的清理不同步），这时续期是空操作。
+                // 重新建一份，否则这条还活着的连接会一直显示离线。
+                if (!await _redis.ExistAsync(key).ConfigureAwait(false))
+                    await _redis.IncrementAsync(key).ConfigureAwait(false);
+
                 await _redis.SetKeyExpireAsync(key, LeaseTtl).ConfigureAwait(false);
             }
             catch (Exception ex)

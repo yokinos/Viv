@@ -19,10 +19,12 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Banshee\Viv.Contracts\Viv.Contracts.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Echo\Viv.Echo.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Log\Viv.Log.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Protobuf Include="Protos\*.proto" GrpcServices="Both" />
+    <!-- 契约都放 Contracts/ 下，按域分子目录；生成类型的命名空间由 proto 里的 csharp_namespace 决定 -->
+    <Protobuf Include="Contracts\**\*.proto" GrpcServices="Both" />
   </ItemGroup>
 
 </Project>

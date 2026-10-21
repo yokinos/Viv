@@ -2,8 +2,6 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Viv.Elysia.Interface;
-using Viv.Herta.Core.IService;
-using Viv.Herta.Link.Hubs;
 
 namespace Viv.Fakes;
 
@@ -40,14 +38,15 @@ public class FakeRequest : IApiRequest
 public sealed record ProxyCall(string TargetKind, string TargetId, string Method, object?[] Args);
 
 /// <summary>
-/// <c>IHubContext&lt;ChatHub&gt;</c> 替身 —— 把每一次「发给谁」记进 <see cref="Calls"/>。
+/// <c>IHubContext&lt;THub&gt;</c> 替身 —— 把每一次「发给谁」记进 <see cref="Calls"/>。
+/// 泛型是为了把「具体 Hub 类型」留在各测试项目里：Fakes 不该认识任何一个业务 Hub。
 ///
 /// <see cref="Clients"/> 的各个重载只实现被测代码真正用到的那几个
 /// （<c>All</c> / <c>Client</c> / <c>Clients</c> / <c>Group</c> / <c>Groups</c>），
 /// 其余（<c>AllExcept</c> / <c>User</c> / …）保持 <c>NotImplementedException</c> ——
 /// 真被走到说明被测代码换了发送目标，那是需要立刻知道的事，不该静默放过。
 /// </summary>
-public sealed class FakeHubContext : IHubContext<ChatHub>
+public sealed class FakeHubContext<THub> : IHubContext<THub> where THub : Hub
 {
     public List<ProxyCall> Calls { get; } = new();
 
@@ -128,67 +127,3 @@ public sealed class FakeGroupManager : IGroupManager
     }
 }
 
-/// <summary>可预设群列表的 <see cref="IGroupService"/> 替身，并记录最近一次查询参数。</summary>
-public sealed class StubGroupService : IGroupService
-{
-    public List<long> GroupIds { get; set; } = new();
-
-    public long? LastSubjectId { get; private set; }
-
-    public long? LastUserId { get; private set; }
-
-    public Task<List<long>> GetUserGroupIdsAsync(long tenantId, long userId)
-    {
-        LastSubjectId = tenantId;
-        LastUserId = userId;
-        return Task.FromResult(GroupIds);
-    }
-}
-
-/// <summary>
-/// 可预设 GetConnectionIds 返回值的连接池替身，并记录最近一次查询参数。
-/// 参数顺序跟着被测接口走：<c>AppId, SubjectId, UserId</c>。
-/// </summary>
-public sealed class StubConnectionPool : IConnectionPool
-{
-    public List<string> ConnectionIds { get; set; } = new();
-
-    public long? LastSubjectId { get; private set; }
-
-    public long? LastUserId { get; private set; }
-
-    public void Add(string connectionId, long appId, long subjectId, long userId) { }
-
-    public void Remove(string connectionId) { }
-
-    public List<string> GetConnectionIds(long subjectId, long userId)
-    {
-        LastSubjectId = subjectId;
-        LastUserId = userId;
-        return ConnectionIds;
-    }
-
-    public List<string> GetConnectionIds(long appId, long subjectId, long userId) => ConnectionIds;
-
-    public List<ConnectionInfo> GetConnections(long subjectId) => new();
-
-    /// <summary>TryGet 的返回值</summary>
-    public ConnectionInfo? Info { get; set; }
-
-    public ConnectionInfo? TryGet(string connectionId) => Info;
-
-    public void Touch(string connectionId) { }
-
-    public List<string> SweepExpired(TimeSpan ttl) => new();
-
-    public Task ForceDisconnectAsync(string connectionId, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task ForceDisconnectUserAsync(long subjectId, long userId, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public Task ForceDisconnectSubjectAsync(long subjectId, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
-
-    public void Clear() { }
-}

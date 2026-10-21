@@ -56,13 +56,17 @@ namespace Viv.Herta.Core.Service
         [VivUnitOfWork]
         public virtual async Task<VivApiResult> SendMessageAsync(SendMessageRequest request)
         {
+            if (string.IsNullOrWhiteSpace(request.Message))
+                return VivApiResult.Failed("消息内容不能为空");
+
             // 消息体按客户端传来的 JSON 原样入库，解析只为校验
             var message = HertaMagic.GetChatMessage(request.MessageType, request.Message);
             if (message == null)
                 return VivApiResult.Failed("消息错误");
 
-            // 发送者只取登录上下文，请求体的 FromUserId 不可信
-            var fromUserId = _context.UserId;
+            // 发送者：请求体给了 FromUserId 就是代发，没给用登录身份。
+            // 租户不从请求里取，永远是登录身份的租户；跨租户代发只走事件（见 §26）
+            var fromUserId = request.FromUserId > 0 ? request.FromUserId : _context.UserId;
             var tenantId = _context.SubjectId;
             if (fromUserId <= 0 || tenantId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
@@ -109,7 +113,9 @@ namespace Viv.Herta.Core.Service
                 fromUserId, request.TargetId, message, request.ReceiverType, request.MessageType)
             {
                 MessageId = messageId,
-                SentAt = sentAt
+                SentAt = sentAt,
+                // 普通发送时事件体的租户与信封一致；模拟其他租户的生产者自己填
+                TenantId = tenantId
             });
 
             return VivApiResult<SendMessageOutput>.Success(new SendMessageOutput

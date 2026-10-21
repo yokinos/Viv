@@ -1,4 +1,4 @@
-using Google.Protobuf;
+﻿using Google.Protobuf;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Viv.Contracts;
@@ -7,7 +7,7 @@ using Viv.Contracts.Models;
 using Viv.Echo.Grpc;
 using Viv.Fakes;
 using Viv.Sandrone.Impl;
-using Viv.ServiceProxy.Protos;
+using Viv.ServiceProxy.Tests.Protos;
 
 namespace Viv.ServiceProxy.Tests.Grpc
 {
