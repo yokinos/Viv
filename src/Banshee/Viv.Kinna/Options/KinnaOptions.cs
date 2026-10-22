@@ -38,5 +38,12 @@ namespace Viv.Kinna.Options
 
         /// <summary>是否注册连接数健康检查。</summary>
         public bool EnableHealthCheck { get; set; } = true;
+
+        /// <summary>
+        /// 同一个客户端（租户 + 用户 + AppId）只保留一条连接。新连接进来时踢掉旧的，
+        /// 避免重装、重连在连接表里留下幽灵连接。只在本副本内生效——旧连接在别的副本上
+        /// 时需要广播踢人，暂不支持。配 false 关闭。
+        /// </summary>
+        public bool SingleConnectionPerApp { get; set; } = true;
     }
 }

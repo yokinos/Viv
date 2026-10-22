@@ -22,13 +22,18 @@ namespace Viv.Kinna.Tests
             StubKinnaPresenceSink<TestHub>? presence = null,
             StubKinnaDeliveryStore<TestHub>? delivery = null,
             KinnaUplinkLimiter<TestHub>? limiter = null,
+            bool singleConnectionPerApp = true,
             int entryTtlSeconds = 90)
         {
             var session = new StubKinnaSession<TestHub>(
                 pool,
                 sender,
                 new KinnaKeys("kinna"),
-                new KinnaOptions { EntryTtlSeconds = entryTtlSeconds });
+                new KinnaOptions
+                {
+                    EntryTtlSeconds = entryTtlSeconds,
+                    SingleConnectionPerApp = singleConnectionPerApp
+                });
 
             return new KinnaConnectionCoordinator<TestHub>(session, new RecordingLogger(), groups, presence, delivery, limiter);
         }
@@ -53,6 +58,51 @@ namespace Viv.Kinna.Tests
                 sender.Added.Select(x => x.Group));
 
             Assert.Equal((SubjectId, UserId), Assert.Single(presence.OnlineUsers));
+        }
+
+        [Fact]
+        public async Task RegisterAsync_同客户端重复登录_踢掉旧连接()
+        {
+            // 重装/断线重连会带新 connectionId 进来，旧的那条必须让位
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var presence = new StubKinnaPresenceSink<TestHub>();
+            var coordinator = Create(pool, sender, presence: presence);
+
+            await coordinator.RegisterAsync("c1", Identity());
+            await coordinator.RegisterAsync("c2", Identity());
+
+            Assert.Equal(new[] { "c2" }, pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Contains(sender.Calls, x => x.Method == KinnaClientMethods.ForceDisconnect && x.TargetId == "c1");
+            // 旧连接下线、新连接上线，在线态先减后加
+            Assert.Single(presence.OfflineUsers);
+            Assert.Equal(2, presence.OnlineUsers.Count);
+        }
+
+        [Fact]
+        public async Task RegisterAsync_不同客户端互不顶替()
+        {
+            var pool = new KinnaConnectionPool();
+            var coordinator = Create(pool, new RecordingKinnaClientSender());
+
+            await coordinator.RegisterAsync("phone", Identity());
+            await coordinator.RegisterAsync("pc", new VivContextContent { AppId = 9, SubjectId = SubjectId, UserId = UserId });
+
+            Assert.Equal(new[] { "phone" }, pool.GetConnectionIds(AppId, SubjectId, UserId));
+            Assert.Equal(new[] { "pc" }, pool.GetConnectionIds(9, SubjectId, UserId));
+            Assert.Equal(2, pool.GetConnectionIds(SubjectId, UserId).Count);
+        }
+
+        [Fact]
+        public async Task RegisterAsync_关掉单连接策略时两条都留着()
+        {
+            var pool = new KinnaConnectionPool();
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), singleConnectionPerApp: false);
+
+            await coordinator.RegisterAsync("c1", Identity());
+            await coordinator.RegisterAsync("c2", Identity());
+
+            Assert.Equal(2, pool.GetConnectionIds(AppId, SubjectId, UserId).Count);
         }
 
         [Fact]

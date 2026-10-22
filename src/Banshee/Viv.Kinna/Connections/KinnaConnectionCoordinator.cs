@@ -46,6 +46,18 @@ namespace Viv.Kinna.Connections
             if (identity.SubjectId <= 0 || identity.UserId <= 0)
                 return null;
 
+            // 同一个客户端只留一条连接：新连接顶掉旧的，否则重装/重连会留下幽灵连接，
+            // 推送时同一条消息会被发到已经死掉的连接上
+            if (_session.Options.SingleConnectionPerApp)
+            {
+                var existing = _session.Pool.GetConnectionIds(identity.AppId, identity.SubjectId, identity.UserId);
+                foreach (var oldConnectionId in existing)
+                {
+                    if (oldConnectionId == connectionId) continue;
+                    await ReplaceAsync(oldConnectionId, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
             _session.Pool.Add(connectionId, identity.AppId, identity.SubjectId, identity.UserId);
             await _presence.OnlineAsync(identity.SubjectId, identity.UserId).ConfigureAwait(false);
 
@@ -79,6 +91,20 @@ namespace Viv.Kinna.Connections
             if (info == null) return;
 
             await _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId).ConfigureAwait(false);
+        }
+
+        /// <summary>同客户端重复登录时先摘旧连接：扣在线态、发软踢，最后让 OnDisconnectedAsync 空转。</summary>
+        private async Task ReplaceAsync(string connectionId, CancellationToken cancellationToken)
+        {
+            var info = _session.Pool.Remove(connectionId);
+            if (info == null) return;
+
+            _logger.Info($"同一客户端重复登录，踢掉旧连接: {connectionId} app={info.Value.AppId}");
+
+            await _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId).ConfigureAwait(false);
+            await _session.Sender
+                .SendToConnectionAsync(connectionId, KinnaClientMethods.ForceDisconnect, [], cancellationToken)
+                .ConfigureAwait(false);
         }
 
         public async Task<KinnaPong> PingAsync(string connectionId, CancellationToken cancellationToken = default)

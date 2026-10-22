@@ -879,6 +879,11 @@ Viv.Herta.Core/Service/GroupService.cs                        实现 IGroupServi
 - `ConnectionLeaseSweeper : BackgroundService` 按 `SweepIntervalSeconds` 清扫
 - `HertaLinkOptions.EntryTtlSeconds`（默认 90）/ `SweepIntervalSeconds`（默认 60）
 
+**同一客户端只留一条连接**（`KinnaOptions.SingleConnectionPerApp`，默认开）：按「租户 + 用户 + AppId」判，
+新连接登记时先把旧的摘掉（扣在线态 + 发 `ForceDisconnect`），再登记新连接。重装、断线重连不会在连接表里
+留下幽灵连接，否则同一条消息会被推到一条已经死掉的连接上。只在本副本内生效——旧连接挂在别的副本上时
+需要广播踢人，暂不支持；客户端自己的多个设备用不同 AppId，互不影响。
+
 ### 18.4 健康检查与上行限流
 
 **健康检查**（`KinnaConnectionHealthCheck<THub>`，`KinnaOptions.EnableHealthCheck` 默认开）挂在标准 `/health` 上，一个 Hub 一条：
