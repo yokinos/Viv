@@ -3,7 +3,9 @@ using Viv.Kinna.Metrics;
 
 namespace Viv.Kinna.Connections
 {
-    /// <summary>进程内连接表，语义见 <see cref="IKinnaConnectionPool"/>。</summary>
+    /// <summary>
+    /// 进程内连接表，语义见 <see cref="IKinnaConnectionPool"/>。
+    /// </summary>
     public sealed class KinnaConnectionPool : IKinnaConnectionPool
     {
         // 按「租户 + 用户」索引，多端同步、按人踢都走它；这是每条消息都要查的那一级

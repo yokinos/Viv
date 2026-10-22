@@ -3,8 +3,7 @@ using Microsoft.AspNetCore.SignalR;
 namespace Viv.Kinna.Connections
 {
     /// <summary>
-    /// 基于 SignalR 的发送实现。internal 是故意的：业务拿到接口就够，
-    /// 看的到具体类型容易绕过接口直接用 Hub。
+    /// 基于 SignalR 的发送实现
     /// </summary>
     internal sealed class KinnaClientSender<THub> : IKinnaClientSender where THub : Hub
     {

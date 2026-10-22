@@ -6,16 +6,24 @@ namespace Viv.Kinna.Contracts
     /// </summary>
     public static class KinnaClientMethods
     {
-        /// <summary>握手回执，载荷 <see cref="KinnaConnected"/></summary>
+        /// <summary>
+        /// 握手回执，载荷 <see cref="KinnaConnected"/>
+        /// </summary>
         public const string Connected = "Connected";
 
-        /// <summary>新消息，载荷由业务定</summary>
+        /// <summary>
+        /// 新消息，载荷由业务定
+        /// </summary>
         public const string ReceiveMessage = "ReceiveMessage";
 
-        /// <summary>消息撤回，载荷由业务定</summary>
+        /// <summary>
+        /// 消息撤回，载荷由业务定
+        /// </summary>
         public const string MessageRecalled = "MessageRecalled";
 
-        /// <summary>软踢，客户端收到后自己 stop</summary>
+        /// <summary>
+        /// 软踢，客户端收到后自己 stop
+        /// </summary>
         public const string ForceDisconnect = "ForceDisconnect";
     }
 }

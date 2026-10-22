@@ -10,6 +10,7 @@ using Viv.Herta.Core.Entity.Vo.Chat;
 using Viv.Herta.Core.IRepository;
 using Viv.Herta.Core.IService;
 using Viv.Herta.Core.Magic;
+using Viv.Herta.Core.Mapping;
 using Viv.Outbox;
 
 namespace Viv.Herta.Core.Service
@@ -71,6 +72,11 @@ namespace Viv.Herta.Core.Service
             if (fromUserId <= 0 || tenantId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
+            // 对端 Id 必须合法：TargetId = 0 会建出 TargetUserId = 0 的会话，
+            // 并落一条 ReceiverUserId = 0 的消息，后续谁都查不到它
+            if (request.TargetId <= 0)
+                return VivApiResult.Failed("接收方不合法");
+
             var sentAt = DateTimeOffset.UtcNow;
             var isGroup = request.ReceiverType == EmChatReceiverType.Group;
 
@@ -79,7 +85,25 @@ namespace Viv.Herta.Core.Service
             if (isGroup && !await _groupMembers.IsMemberAsync(tenantId, request.TargetId, fromUserId))
                 return VivApiResult.Failed("不在该群");
 
-            var senderSession = await _sessions.GetOrCreateAsync(tenantId, fromUserId, request.ReceiverType, request.TargetId);
+            // 单聊的两个会话行一次查回，省掉第二次「查不到再建」的往返
+            EtChatSession senderSession;
+            EtChatSession? receiverSession = null;
+
+            if (isGroup)
+            {
+                senderSession = await _sessions.GetOrCreateAsync(tenantId, fromUserId, request.ReceiverType, request.TargetId);
+            }
+            else
+            {
+                var pair = await _sessions.FindDirectPairAsync(tenantId, fromUserId, request.TargetId);
+
+                senderSession = pair.FirstOrDefault(x => x.UserId == fromUserId)
+                    ?? await _sessions.GetOrCreateAsync(tenantId, fromUserId, EmChatReceiverType.User, request.TargetId);
+
+                // 接收方也要有一行，否则它在自己的会话列表里看不到这条会话
+                receiverSession = pair.FirstOrDefault(x => x.UserId == request.TargetId)
+                    ?? await _sessions.GetOrCreateAsync(tenantId, request.TargetId, EmChatReceiverType.User, fromUserId);
+            }
 
             var messageId = await _messages.AppendAsync(new ChatMessageEntry
             {
@@ -94,19 +118,15 @@ namespace Viv.Herta.Core.Service
                 SentAt = sentAt.UtcDateTime
             });
 
-            await _sessions.TouchAsync(senderSession.Id, sentAt.UtcDateTime);
+            // 两行的最后消息时间合成一条 UPDATE；逐行 Touch 每行都要先按主键查一次
+            await _sessions.TouchManyAsync(
+                receiverSession == null ? [senderSession.Id] : [senderSession.Id, receiverSession.Id],
+                sentAt.UtcDateTime);
 
             if (isGroup)
             {
                 // 群聊的最后消息时间是群级属性，所有成员共用一行
                 await _groups.TouchLastMessageAsync(tenantId, request.TargetId, sentAt.UtcDateTime);
-            }
-            else
-            {
-                // 接收方也要有一行，否则它在自己的会话列表里看不到这条会话
-                var receiverSession = await _sessions.GetOrCreateAsync(
-                    tenantId, request.TargetId, EmChatReceiverType.User, fromUserId);
-                await _sessions.TouchAsync(receiverSession.Id, sentAt.UtcDateTime);
             }
 
             await _outbox.EnqueueAsync(new SendMessageEvent(
@@ -134,26 +154,22 @@ namespace Viv.Herta.Core.Service
             if (userId <= 0 || tenantId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
+            if (request.TargetId <= 0)
+                return VivApiResult.Failed("接收方不合法");
+
+            // 群消息必须校验成员，否则知道 GroupId 就能拉全群历史。
+            // 与发送路径同一道门，只是这里查的是读权限
+            if (request.ReceiverType == EmChatReceiverType.Group
+                && !await _groupMembers.IsMemberAsync(tenantId, request.TargetId, userId))
+                return VivApiResult.Failed("不在该群");
+
             // 按对端取，不经 session：接收方可能还没有自己的会话行
             var entries = await _messages.ListAsync(
                 tenantId, request.ReceiverType, userId, request.TargetId,
                 request.AfterMessageId, request.BeforeMessageId, request.Limit);
 
-            var items = entries.Select(x => new MessageItemOutput
-            {
-                Id = x.Id,
-                SessionId = x.SessionId,
-                FromUserId = x.FromUserId,
-                ToUserId = x.ToUserId,
-                GroupId = x.GroupId,
-                MessageType = x.MessageType,
-                Body = x.Body,
-                ReplyMsgId = x.ReplyMsgId,
-                // 库里存的是 UTC DateTime（Kind 在往返后可能是 Unspecified），显式标回 UTC 再带偏移
-                SentAt = new DateTimeOffset(DateTime.SpecifyKind(x.SentAt, DateTimeKind.Utc)),
-                IsRecall = x.IsRecall,
-                RecallAt = ToOffset(x.RecallAt)
-            }).ToList();
+            // 字段映射由 Mapperly 在编译期生成，SentAt/RecallAt 走 UtcTime 的 UTC 标注
+            var items = entries.Select(ChatMappers.ToItem).ToList();
 
             return VivApiResult<List<MessageItemOutput>>.Success(items);
         }
@@ -294,6 +310,16 @@ namespace Viv.Herta.Core.Service
 
             // 群主自己的会话行，让这个群出现在自己的会话列表里
             await _sessions.GetOrCreateAsync(tenantId, userId, EmChatReceiverType.Group, groupId);
+
+            // 建群也要发成员变更：否则已在线的新成员不会进 SignalR 组，得等重连才收得到群消息。
+            // 群主一起带上，多端场景下他的其他设备也要进组
+            await _outbox.EnqueueAsync(new MembershipChangedEvent
+            {
+                TenantId = tenantId,
+                GroupId = groupId,
+                UserIds = rows.Select(x => x.UserId).ToList(),
+                ChangeType = MembershipChangeType.Joined
+            });
 
             return VivApiResult<CreateGroupOutput>.Success(new CreateGroupOutput { GroupId = groupId });
         }
@@ -493,7 +519,6 @@ namespace Viv.Herta.Core.Service
             return VivApiResult<List<PresenceItemOutput>>.Success(items);
         }
 
-        private static DateTimeOffset? ToOffset(DateTime? value)
-            => value is null ? null : new DateTimeOffset(DateTime.SpecifyKind(value.Value, DateTimeKind.Utc));
+        private static DateTimeOffset? ToOffset(DateTime? value) => UtcTime.FromUtc(value);
     }
 }

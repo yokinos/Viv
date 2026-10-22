@@ -12,16 +12,24 @@ namespace Viv.Kinna.Connections
     /// </summary>
     public interface IKinnaSession
     {
-        /// <summary>模块名（Hub 类型名），用于日志和指标标签</summary>
+        /// <summary>
+        /// 模块名（Hub 类型名），用于日志和指标标签
+        /// </summary>
         string Hub { get; }
 
-        /// <summary>本进程连接表</summary>
+        /// <summary>
+        /// 本进程连接表
+        /// </summary>
         IKinnaConnectionPool Pool { get; }
 
-        /// <summary>下行发送口，已绑定到本会话的 Hub 类型</summary>
+        /// <summary>
+        /// 下行发送口，已绑定到本会话的 Hub 类型
+        /// </summary>
         IKinnaClientSender Sender { get; }
 
-        /// <summary>用户 Key 和群名的生成器</summary>
+        /// <summary>
+        /// 用户 Key 和群名的生成器
+        /// </summary>
         IKinnaKeys Keys { get; }
 
         KinnaOptions Options { get; }

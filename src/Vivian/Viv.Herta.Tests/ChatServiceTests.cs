@@ -84,14 +84,17 @@ namespace Viv.Herta.Tests
         }
 
         [Fact]
-        public async Task SendMessage_单聊_两侧的会话行都要更新()
+        public async Task SendMessage_单聊_两侧的会话行一次更新()
         {
-            // 接收方没有自己的会话行时，它在会话列表里根本看不到这条会话
+            // 接收方没有自己的会话行时，它在会话列表里根本看不到这条会话；
+            // 两行合成一条 UPDATE，不再逐行「先查再改」
             var sut = Create();
 
             await sut.Service.SendMessageAsync(CreateRequest());
 
-            Assert.Equal(2, sut.Sessions.Touched.Count);
+            var call = Assert.Single(sut.Sessions.TouchedMany);
+            Assert.Equal(2, call.SessionIds.Count);
+            Assert.Empty(sut.Sessions.Touched);
         }
 
         [Fact]
@@ -104,7 +107,7 @@ namespace Viv.Herta.Tests
             // 群聊的最后消息时间是群级属性，不给每个成员各写一行
             var touched = Assert.Single(sut.Groups.Touched);
             Assert.Equal(TargetId, touched.GroupId);
-            Assert.Single(sut.Sessions.Touched);
+            Assert.Single(Assert.Single(sut.Sessions.TouchedMany).SessionIds);
         }
 
         [Fact]
@@ -133,6 +136,38 @@ namespace Viv.Herta.Tests
             Assert.Empty(sut.Outbox.Enqueued);
             // 校验排在建会话之前 —— 非成员不该留下会话行
             Assert.Null(sut.Sessions.LastTargetId);
+        }
+
+        [Fact]
+        public async Task SendMessage_对端为0_拒绝且不落库()
+        {
+            // 不拦会建出 TargetUserId = 0 的会话，并落一条谁都查不到的消息
+            var sut = Create();
+            var request = CreateRequest();
+            request.TargetId = 0;
+
+            var result = await sut.Service.SendMessageAsync(request);
+
+            Assert.False(result.Code >= 200);
+            Assert.Empty(sut.Messages.Appended);
+            Assert.Empty(sut.Outbox.Enqueued);
+        }
+
+        [Fact]
+        public async Task PullMessages_非群成员_拒绝()
+        {
+            // 知道 GroupId 就能拉全群历史，和发送路径是同一种越权
+            var sut = Create();
+            sut.GroupMembers.IsMember = false;
+
+            var result = await sut.Service.PullMessagesAsync(new PullMessagesRequest
+            {
+                TargetId = TargetId,
+                ReceiverType = EmChatReceiverType.Group
+            });
+
+            Assert.False(result.Code >= 200);
+            Assert.Empty(sut.Messages.Appended);
         }
 
         [Fact]
@@ -297,6 +332,26 @@ namespace Viv.Herta.Tests
             // 群主自己也要有一行会话，否则群不出现在他的列表里
             Assert.Equal(EmChatReceiverType.Group, sut.Sessions.LastReceiverType);
             Assert.Equal(group.Id, sut.Sessions.LastTargetId);
+        }
+
+        [Fact]
+        public async Task CreateGroup_发成员变更事件_让在线成员进组()
+        {
+            // 不发这条事件，已在线的新成员要等重连才收得到群消息
+            var sut = Create();
+
+            await sut.Service.CreateGroupAsync(new CreateGroupRequest
+            {
+                Name = "告警群",
+                MemberUserIds = [5]
+            });
+
+            var evt = Assert.Single(sut.Outbox.Enqueued.OfType<MembershipChangedEvent>());
+            Assert.Equal(MembershipChangeType.Joined, evt.ChangeType);
+            Assert.Equal(Assert.Single(sut.Groups.Created).Id, evt.GroupId);
+            // 群主也带上：他的其他设备同样要进组
+            Assert.Contains(ContextUserId, evt.UserIds);
+            Assert.Contains(5, evt.UserIds);
         }
 
         [Fact]

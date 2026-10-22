@@ -17,9 +17,7 @@ namespace Viv.Herta.Link.Consumers
 
         protected override object? GetConsumeLockKey(NanaEnvelope<MembershipChangedEvent> envelope) => null;
 
-        public override async Task<SubscribeResult> ReceiveMessageAsync(
-            NanaEnvelope<MembershipChangedEvent> envelope,
-            CancellationToken cancellationToken = default)
+        public override async Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<MembershipChangedEvent> envelope, CancellationToken cancellationToken = default)
         {
             var evt = envelope.Content;
             if (evt == null)

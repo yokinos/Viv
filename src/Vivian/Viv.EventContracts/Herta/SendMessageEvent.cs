@@ -61,7 +61,10 @@ namespace Viv.EventContracts.Herta
         /// <summary>
         /// 消息[Json]
         /// <see cref="IHertaChatMessage"/>
+        ///
+        /// 必须是 public setter：发件箱与 MQ 都用 System.Text.Json 的默认选项，
+        /// 非 public setter 反序列化时不会被赋值，消费端拿到的是空串（实时推送丢正文）。
         /// </summary>
-        public string Message { get; private set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
     }
 }

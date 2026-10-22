@@ -17,27 +17,41 @@ namespace Viv.Kinna.Connections
         /// </summary>
         KinnaConnectionInfo? Remove(string connectionId);
 
-        /// <summary>按用户查，不区分客户端。</summary>
+        /// <summary>
+        /// 按用户查，不区分客户端。
+        /// </summary>
         List<string> GetConnectionIds(long subjectId, long userId);
 
-        /// <summary>按用户加客户端查。</summary>
+        /// <summary>
+        /// 按用户加客户端查。
+        /// </summary>
         List<string> GetConnectionIds(long appId, long subjectId, long userId);
 
         List<KinnaConnectionInfo> GetConnections(long subjectId);
 
-        /// <summary>不在本进程时返回 null。</summary>
+        /// <summary>
+        /// 不在本进程时返回 null。
+        /// </summary>
         KinnaConnectionInfo? TryGet(string connectionId);
 
-        /// <summary>续租，客户端 Ping 时调用。</summary>
+        /// <summary>
+        /// 续租，客户端 Ping 时调用。
+        /// </summary>
         void Touch(string connectionId);
 
-        /// <summary>清掉超过 ttl 没续租的连接，返回被清掉的那些连接。</summary>
+        /// <summary>
+        /// 清掉超过 ttl 没续租的连接，返回被清掉的那些连接。
+        /// </summary>
         List<KinnaConnectionInfo> SweepExpired(TimeSpan ttl);
 
-        /// <summary>给健康检查看的一眼快照。</summary>
+        /// <summary>
+        /// 给健康检查看的一眼快照。
+        /// </summary>
         KinnaConnectionPoolSnapshot GetSnapshot();
 
-        /// <summary>测试和停机用。</summary>
+        /// <summary>
+        /// 测试和停机用。
+        /// </summary>
         void Clear();
     }
 

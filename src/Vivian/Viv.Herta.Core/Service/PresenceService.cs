@@ -96,11 +96,31 @@ namespace Viv.Herta.Core.Service
 
         public async Task<Dictionary<long, bool?>> IsOnlineAsync(long tenantId, IReadOnlyList<long> userIds)
         {
-            var result = new Dictionary<long, bool?>(userIds.Count);
+            var ids = userIds.Distinct().ToList();
+            var result = new Dictionary<long, bool?>(ids.Count);
+            if (ids.Count == 0) return result;
 
-            foreach (var userId in userIds.Distinct())
+            try
             {
-                result[userId] = await IsOnlineAsync(tenantId, userId).ConfigureAwait(false);
+                // 一条 MGET 查完：逐用户 EXISTS + GET 是 2N 次往返
+                var values = await _redis
+                    .GetManyAsync([.. ids.Select(x => BuildKey(tenantId, x))])
+                    .ConfigureAwait(false);
+
+                for (var i = 0; i < ids.Count; i++)
+                {
+                    // 键里存的是 INCR 写下的裸数字，直接解析，不走 JSON 反序列化
+                    result[ids[i]] = values[i] is { } raw && long.TryParse(raw, out var count) && count > 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                // 一个查询失败就整批给 null（不知道），调用方按未知处理
+                _logger.Warning($"在线态批量查询失败: tenant={tenantId} {ex.Message}");
+                foreach (var id in ids)
+                {
+                    result[id] = null;
+                }
             }
 
             return result;

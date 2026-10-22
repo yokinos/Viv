@@ -10,10 +10,14 @@ namespace Viv.Kinna.Contracts
     {
         string UserKey(long subjectId, long userId);
 
-        /// <summary>群名带租户，否则两个租户的 groupId 会撞进同一个组。</summary>
+        /// <summary>
+        /// 群名带租户，否则两个租户的 groupId 会撞进同一个组。
+        /// </summary>
         string GroupName(long subjectId, long groupId);
 
-        /// <summary>某个用户已确认到哪条消息（投递确认的水位）。</summary>
+        /// <summary>
+        /// 某个用户已确认到哪条消息（投递确认的水位）。
+        /// </summary>
         string DeliveryKey(long subjectId, long userId);
     }
 

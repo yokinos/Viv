@@ -79,6 +79,21 @@ public sealed class StubChatSessionRepository : IChatSessionRepository
     public Task<List<EtChatSession>> GetDirectSessionsAsync(long tenantId, long userId)
         => Task.FromResult(DirectSessions);
 
+    /// <summary>单聊两个方向的会话行，预置就返回、不预置就走「建会话」那条路</summary>
+    public List<EtChatSession> DirectPair { get; set; } = new();
+
+    public Task<List<EtChatSession>> FindDirectPairAsync(long tenantId, long userA, long userB)
+        => Task.FromResult(DirectPair);
+
+    /// <summary>合并更新：一次调用带多行 Id</summary>
+    public List<(List<long> SessionIds, DateTime At)> TouchedMany { get; } = new();
+
+    public Task TouchManyAsync(IReadOnlyList<long> sessionIds, DateTime lastMessageTime)
+    {
+        TouchedMany.Add(([.. sessionIds], lastMessageTime));
+        return Task.CompletedTask;
+    }
+
     public List<(long TargetId, long LastReadMsgId)> LastReadWrites { get; } = new();
 
     public Task SetLastReadAsync(long tenantId, long userId, EmChatReceiverType receiverType, long targetId, long lastReadMessageId)

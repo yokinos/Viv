@@ -16,9 +16,7 @@ namespace Viv.Herta.Link.Consumers
     {
         private readonly IKinnaMessageDispatcher<ChatHub, SendMessageEvent> _dispatcher;
 
-        public SendMessageConsumer(
-            VivConsumerDependency dependency,
-            IKinnaMessageDispatcher<ChatHub, SendMessageEvent> dispatcher)
+        public SendMessageConsumer(VivConsumerDependency dependency, IKinnaMessageDispatcher<ChatHub, SendMessageEvent> dispatcher)
             : base(dependency)
         {
             _dispatcher = dispatcher;
@@ -27,9 +25,7 @@ namespace Viv.Herta.Link.Consumers
         protected override object? GetConsumeLockKey(NanaEnvelope<SendMessageEvent> envelope) => null;
 
         /// <inheritdoc />
-        public override async Task<SubscribeResult> ReceiveMessageAsync(
-            NanaEnvelope<SendMessageEvent> envelope,
-            CancellationToken cancellationToken = default)
+        public override async Task<SubscribeResult> ReceiveMessageAsync(NanaEnvelope<SendMessageEvent> envelope, CancellationToken cancellationToken = default)
         {
             var evt = envelope.Content;
             if (evt == null)

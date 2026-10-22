@@ -6,6 +6,7 @@ using Viv.Herta.Core.Entity.Dto.Account;
 using Viv.Herta.Core.Entity.Vo.Account;
 using Viv.Herta.Core.IRepository;
 using Viv.Herta.Core.IService;
+using Viv.ServiceProxy.Apex;
 
 namespace Viv.Herta.Core.Service
 {
@@ -14,12 +15,18 @@ namespace Viv.Herta.Core.Service
         private readonly IChatUserRepository _users;
         private readonly IPasswordHasher _hasher;
         private readonly ITokenService _tokens;
+        private readonly IClientAppQuery _clientApps;
 
-        public AccountService(IChatUserRepository users, IPasswordHasher hasher, ITokenService tokens)
+        public AccountService(
+            IChatUserRepository users,
+            IPasswordHasher hasher,
+            ITokenService tokens,
+            IClientAppQuery clientApps)
         {
             _users = users;
             _hasher = hasher;
             _tokens = tokens;
+            _clientApps = clientApps;
         }
 
         public async Task<VivApiResult> RegisterAsync(HertaRegisterRequest request)
@@ -57,6 +64,12 @@ namespace Viv.Herta.Core.Service
             // 校验过滤器已经挡过一次，这里再挡一次：AppId 会进 token，后面按它认客户端
             if (request.AppId <= 0)
                 return VivApiResult<HertaLoginOutput>.Failed("缺少客户端标识");
+
+            // 登录时也问一次 Apex：AppId 会写进 token，等到连接准入再查就晚了 ——
+            // 客户端已经拿着一枚带非法 AppId 的 token 了。缓存 300 秒，代价可接受
+            var clientCheck = await _clientApps.ValidateAsync(request.AppId);
+            if (!clientCheck.Allowed)
+                return VivApiResult<HertaLoginOutput>.Failed(clientCheck.Reason);
 
             var loginCode = request.LoginCode?.Trim();
             if (string.IsNullOrEmpty(loginCode))

@@ -5,15 +5,15 @@ using Viv.Nana;
 
 namespace Viv.Herta.Link.Consumers
 {
-    /// <summary>撤回通知推送，拓扑与消息一致：每个副本各推自己的连接。</summary>
+    /// <summary>
+    /// 撤回通知推送，拓扑与消息一致：每个副本各推自己的连接。
+    /// </summary>
     [NanaConsumer(Topology = ConsumerTopology.PerInstance)]
     public class MessageRecalledConsumer : VivConsumer<MessageRecalledEvent>
     {
         private readonly IKinnaMessageDispatcher<ChatHub, MessageRecalledEvent> _dispatcher;
 
-        public MessageRecalledConsumer(
-            VivConsumerDependency dependency,
-            IKinnaMessageDispatcher<ChatHub, MessageRecalledEvent> dispatcher)
+        public MessageRecalledConsumer(VivConsumerDependency dependency, IKinnaMessageDispatcher<ChatHub, MessageRecalledEvent> dispatcher)
             : base(dependency)
         {
             _dispatcher = dispatcher;

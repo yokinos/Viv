@@ -34,7 +34,9 @@ namespace Viv.Kinna.Connections
                 }));
         }
 
-        /// <summary>不限流时恒 true。</summary>
+        /// <summary>
+        /// 不限流时恒 true。
+        /// </summary>
         public bool TryAcquire(string connectionId)
         {
             if (_limiter == null) return true;

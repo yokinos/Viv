@@ -1,11 +1,11 @@
-using System.Data;
+﻿using System.Data;
 using System.Text;
 using Viv.Delusion.Extension;
 
 namespace Viv.Delusion.Tests;
 
 /// <summary>
-/// As&lt;T&gt;（ObjectMapper.TryConvert）——Delusion 类型安全转换核心，用户点名必测。
+/// As&lt;T&gt;（SafeMapper.TryConvert）——Delusion 类型安全转换核心，用户点名必测。
 /// 契约：失败/空值一律回默认值不抛异常；8 位纯数字优先按 yyyyMMdd 日期解析（避免误判 Unix 秒）。
 /// </summary>
 public class AsTests

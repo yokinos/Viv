@@ -15,10 +15,7 @@ namespace Viv.Kinna.Dispatch
         private readonly IKinnaPusher<TEvent> _pusher;
         private readonly ILoggerContract _logger;
 
-        public KinnaMessageDispatcher(
-            IKinnaSession<THub> session,
-            IKinnaPusher<TEvent> pusher,
-            ILoggerContract logger)
+        public KinnaMessageDispatcher(IKinnaSession<THub> session, IKinnaPusher<TEvent> pusher, ILoggerContract logger)
         {
             _session = session;
             _pusher = pusher;

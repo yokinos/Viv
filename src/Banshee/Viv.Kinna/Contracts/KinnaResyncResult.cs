@@ -6,7 +6,9 @@ namespace Viv.Kinna.Contracts
     /// </summary>
     public sealed record KinnaResyncResult : KinnaPayload
     {
-        /// <summary>服务端记录的已确认水位，没有记录时为 null。</summary>
+        /// <summary>
+        /// 服务端记录的已确认水位，没有记录时为 null。
+        /// </summary>
         public long? LastDeliveredMessageId { get; init; }
 
         /// <summary>
@@ -15,7 +17,9 @@ namespace Viv.Kinna.Contracts
         /// </summary>
         public long[] DeliveredMessageIds { get; init; } = [];
 
-        /// <summary>true 表示客户端可能缺消息，应该走 HTTP 增量拉取。</summary>
+        /// <summary>
+        /// true 表示客户端可能缺消息，应该走 HTTP 增量拉取。
+        /// </summary>
         public bool NeedBackfill { get; init; }
 
         public DateTimeOffset ServerTime { get; init; }

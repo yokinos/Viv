@@ -4,6 +4,8 @@ var apexApi = builder.AddProject<Projects.Viv_Apex_Api>("viv-apex-api")
     .WithDeveloperCertificateTrust(true);
 
 var hertaApi = builder.AddProject<Projects.Viv_Herta_Api>("viv-herta-api")
+    // 登录要问 Apex 这个 AppId 是不是有效客户端（gRPC）
+    .WithReference(apexApi)
     .WithDeveloperCertificateTrust(true);
 
 var hertaLink = builder.AddProject<Projects.Viv_Herta_Link>("viv-herta-link")

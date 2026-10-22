@@ -1,11 +1,15 @@
 namespace Viv.Kinna.Contracts
 {
-    /// <summary>连接建立后的握手回执。</summary>
+    /// <summary>
+    /// 连接建立后的握手回执。
+    /// </summary>
     public sealed record KinnaConnected : KinnaPayload
     {
         public string ConnectionId { get; init; } = string.Empty;
 
-        /// <summary>服务端时间，客户端拿它校正本地时钟。</summary>
+        /// <summary>
+        /// 服务端时间，客户端拿它校正本地时钟。
+        /// </summary>
         public DateTimeOffset ServerTime { get; init; }
 
         /// <summary>

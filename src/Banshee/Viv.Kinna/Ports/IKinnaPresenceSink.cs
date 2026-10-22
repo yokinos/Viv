@@ -15,7 +15,9 @@ namespace Viv.Kinna.Ports
         Task RenewAsync(long subjectId, long userId);
     }
 
-    /// <summary>没接在线态时的空实现。</summary>
+    /// <summary>
+    /// 没接在线态时的空实现。
+    /// </summary>
     public sealed class NoopKinnaPresenceSink<THub> : IKinnaPresenceSink<THub> where THub : Hub
     {
         public static readonly NoopKinnaPresenceSink<THub> Instance = new();
