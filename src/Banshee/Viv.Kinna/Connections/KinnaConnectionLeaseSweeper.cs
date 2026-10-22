@@ -21,17 +21,20 @@ namespace Viv.Kinna.Connections
         private readonly IKinnaSession<THub> _session;
         private readonly IServiceScopeFactory _scopes;
         private readonly ILoggerContract _logger;
+        private readonly KinnaSweepClock<THub> _clock;
         private readonly TimeSpan _ttl;
         private readonly TimeSpan _interval;
 
         public KinnaConnectionLeaseSweeper(
             IKinnaSession<THub> session,
             IServiceScopeFactory scopes,
-            ILoggerContract logger)
+            ILoggerContract logger,
+            KinnaSweepClock<THub>? clock = null)
         {
             _session = session;
             _scopes = scopes;
             _logger = logger;
+            _clock = clock ?? new KinnaSweepClock<THub>();
 
             var options = session.Options;
             _ttl = TimeSpan.FromSeconds(Math.Max(1, options.EntryTtlSeconds));
@@ -52,6 +55,8 @@ namespace Viv.Kinna.Connections
                 }
 
                 var removed = _session.Pool.SweepExpired(_ttl);
+                _clock.Record(removed.Count);
+
                 if (removed.Count == 0) continue;
 
                 await OfflineAsync(removed).ConfigureAwait(false);

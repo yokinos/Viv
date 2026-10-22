@@ -34,7 +34,16 @@ namespace Viv.Kinna.Connections
         /// <summary>清掉超过 ttl 没续租的连接，返回被清掉的那些连接。</summary>
         List<KinnaConnectionInfo> SweepExpired(TimeSpan ttl);
 
+        /// <summary>给健康检查看的一眼快照。</summary>
+        KinnaConnectionPoolSnapshot GetSnapshot();
+
         /// <summary>测试和停机用。</summary>
         void Clear();
     }
+
+    /// <summary>
+    /// 连接表现状。<paramref name="MaxIdle"/> 是最久没续租的那条连接已经闲置多久，
+    /// 空表时为 <see cref="TimeSpan.Zero"/>。
+    /// </summary>
+    public readonly record struct KinnaConnectionPoolSnapshot(int Connections, TimeSpan MaxIdle);
 }

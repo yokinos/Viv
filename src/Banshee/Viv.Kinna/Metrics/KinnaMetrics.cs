@@ -21,6 +21,9 @@ namespace Viv.Kinna.Metrics
         /// <summary>事件署名与调用者不一致的次数。模拟发送、机器人代发会出现在这里，不是错误</summary>
         private static readonly Counter<long> IdentityOverrideCounter = Meter.CreateCounter<long>("kinna.identity.override");
 
+        /// <summary>被上行配额挡下的请求，标签 method 是 Ping/Ack</summary>
+        private static readonly Counter<long> UplinkThrottledCounter = Meter.CreateCounter<long>("kinna.uplink.throttled");
+
         public static void ConnectionAdded(string hub) => ConnectionCounter.Add(1, HubTag(hub));
 
         public static void ConnectionRemoved(string hub) => ConnectionCounter.Add(-1, HubTag(hub));
@@ -32,6 +35,9 @@ namespace Viv.Kinna.Metrics
                 new KeyValuePair<string, object?>("result", result));
 
         public static void RecordIdentityOverride(string hub) => IdentityOverrideCounter.Add(1, HubTag(hub));
+
+        public static void RecordUplinkThrottled(string hub, string method) =>
+            UplinkThrottledCounter.Add(1, HubTag(hub), new KeyValuePair<string, object?>("method", method));
 
         private static KeyValuePair<string, object?> HubTag(string hub) => new("hub", hub);
     }

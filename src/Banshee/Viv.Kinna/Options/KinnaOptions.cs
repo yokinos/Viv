@@ -26,5 +26,17 @@ namespace Viv.Kinna.Options
         /// 配 0 表示从不记 Id，只留水位。存储实现按这个数决定要不要清理。
         /// </summary>
         public int DeliveryIdLimit { get; set; } = 200;
+
+        /// <summary>
+        /// 每连接的上行配额：窗口内允许几次 Ping、Ack。配 0 表示不限流。
+        /// 限流只挡高频请求，不惩罚客户端——被挡下的 Ack 下次照常上报。
+        /// </summary>
+        public int UplinkPermitLimit { get; set; } = 20;
+
+        /// <summary>上行配额的窗口长度，配合 <see cref="UplinkPermitLimit"/> 使用。</summary>
+        public int UplinkWindowSeconds { get; set; } = 10;
+
+        /// <summary>是否注册连接数健康检查。</summary>
+        public bool EnableHealthCheck { get; set; } = true;
     }
 }

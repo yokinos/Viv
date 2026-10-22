@@ -21,6 +21,7 @@ namespace Viv.Kinna.Tests
             StubKinnaGroupSource<TestHub>? groups = null,
             StubKinnaPresenceSink<TestHub>? presence = null,
             StubKinnaDeliveryStore<TestHub>? delivery = null,
+            KinnaUplinkLimiter<TestHub>? limiter = null,
             int entryTtlSeconds = 90)
         {
             var session = new StubKinnaSession<TestHub>(
@@ -29,7 +30,7 @@ namespace Viv.Kinna.Tests
                 new KinnaKeys("kinna"),
                 new KinnaOptions { EntryTtlSeconds = entryTtlSeconds });
 
-            return new KinnaConnectionCoordinator<TestHub>(session, new RecordingLogger(), groups, presence, delivery);
+            return new KinnaConnectionCoordinator<TestHub>(session, new RecordingLogger(), groups, presence, delivery, limiter);
         }
 
         [Fact]
@@ -160,6 +161,44 @@ namespace Viv.Kinna.Tests
             Assert.Equal(SubjectId, ack.SubjectId);
             Assert.Equal(UserId, ack.UserId);
             Assert.Equal([11, 12], ack.MessageIds);
+        }
+
+        [Fact]
+        public async Task AckAsync_被上行配额挡下时不写()
+        {
+            // 丢一次确认不会丢消息：客户端下次补报，或者由 Resync 触发补拉
+            var pool = new KinnaConnectionPool();
+            var delivery = new StubKinnaDeliveryStore<TestHub>();
+            var session = new StubKinnaSession<TestHub>(pool, options: new KinnaOptions { UplinkPermitLimit = 1 });
+            using var limiter = new KinnaUplinkLimiter<TestHub>(session);
+
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), delivery: delivery, limiter: limiter);
+            await coordinator.RegisterAsync("c1", Identity());
+
+            await coordinator.AckAsync("c1", [11]);
+            var second = await coordinator.AckAsync("c1", [12]);
+
+            Assert.Equal(0, second);
+            Assert.Single(delivery.Acks);
+        }
+
+        [Fact]
+        public async Task PingAsync_被上限挡下时仍回Pong但不续租()
+        {
+            var pool = new KinnaConnectionPool();
+            var presence = new StubKinnaPresenceSink<TestHub>();
+            var session = new StubKinnaSession<TestHub>(pool, options: new KinnaOptions { UplinkPermitLimit = 1 });
+            using var limiter = new KinnaUplinkLimiter<TestHub>(session);
+
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), presence: presence, limiter: limiter);
+            await coordinator.RegisterAsync("c1", Identity());
+
+            var first = await coordinator.PingAsync("c1");
+            var second = await coordinator.PingAsync("c1");
+
+            Assert.NotNull(first);
+            Assert.NotNull(second);
+            Assert.Single(presence.RenewedUsers);
         }
 
         [Fact]

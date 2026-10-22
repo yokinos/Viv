@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Viv.Kinna.Connections;
 using Viv.Kinna.Contracts;
 using Viv.Kinna.Dispatch;
+using Viv.Kinna.Health;
 using Viv.Kinna.Options;
 
 namespace Viv.Kinna.Extensions
@@ -38,9 +39,19 @@ namespace Viv.Kinna.Extensions
                 new KinnaKeys(options.Prefix),
                 options));
 
+            services.TryAddSingleton<KinnaSweepClock<THub>>();
+            services.TryAddSingleton<KinnaUplinkLimiter<THub>>();
+
             services.TryAddScoped<IKinnaConnectionCoordinator<THub>, KinnaConnectionCoordinator<THub>>();
 
             services.AddHostedService<KinnaConnectionLeaseSweeper<THub>>();
+
+            if (options.EnableHealthCheck)
+            {
+                // 一个 Hub 一条，多 Hub 时 /health 里能分别看到各自的连接数和清扫状态
+                services.AddHealthChecks()
+                    .AddCheck<KinnaConnectionHealthCheck<THub>>($"kinna:{typeof(THub).Name}");
+            }
 
             // EnableDetailedErrors 是 SignalR 的进程级选项，多个 Hub 时以最后一次注册为准
             services.AddSignalR(o => o.EnableDetailedErrors = options.EnableDetailedErrors);

@@ -129,6 +129,23 @@ namespace Viv.Kinna.Connections
             return removed;
         }
 
+        public KinnaConnectionPoolSnapshot GetSnapshot()
+        {
+            var count = 0;
+            var oldest = DateTimeOffset.MaxValue;
+
+            foreach (var kv in _lastSeen)
+            {
+                count++;
+                if (kv.Value < oldest) oldest = kv.Value;
+            }
+
+            if (count == 0)
+                return new KinnaConnectionPoolSnapshot(0, TimeSpan.Zero);
+
+            return new KinnaConnectionPoolSnapshot(count, DateTimeOffset.UtcNow - oldest);
+        }
+
         public void Clear()
         {
             _userConnections.Clear();

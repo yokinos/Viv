@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Viv.Contracts.Models;
 using Viv.Kinna.Contracts;
+using Viv.Kinna.Metrics;
 using Viv.Kinna.Ports;
 using Viv.Log;
 
@@ -16,6 +17,7 @@ namespace Viv.Kinna.Connections
         private readonly IKinnaGroupSource<THub>? _groups;
         private readonly IKinnaPresenceSink<THub> _presence;
         private readonly IKinnaDeliveryStore<THub> _delivery;
+        private readonly KinnaUplinkLimiter<THub>? _limiter;
         private readonly ILoggerContract _logger;
         private readonly TimeSpan _leaseTtl;
 
@@ -24,13 +26,15 @@ namespace Viv.Kinna.Connections
             ILoggerContract logger,
             IKinnaGroupSource<THub>? groups = null,
             IKinnaPresenceSink<THub>? presence = null,
-            IKinnaDeliveryStore<THub>? delivery = null)
+            IKinnaDeliveryStore<THub>? delivery = null,
+            KinnaUplinkLimiter<THub>? limiter = null)
         {
             _session = session;
             _logger = logger;
             _groups = groups;
             _presence = presence ?? NoopKinnaPresenceSink<THub>.Instance;
             _delivery = delivery ?? NoopKinnaDeliveryStore<THub>.Instance;
+            _limiter = limiter;
             _leaseTtl = TimeSpan.FromSeconds(Math.Max(1, session.Options.EntryTtlSeconds));
         }
 
@@ -79,13 +83,21 @@ namespace Viv.Kinna.Connections
 
         public async Task<KinnaPong> PingAsync(string connectionId, CancellationToken cancellationToken = default)
         {
+            var now = DateTimeOffset.UtcNow;
+
+            // 被限流就不续租：客户端下一个窗口再 Ping 一次就恢复了，没必要在这里阻塞或抛错
+            if (_limiter?.TryAcquire(connectionId) == false)
+            {
+                KinnaMetrics.RecordUplinkThrottled(_session.Hub, "Ping");
+                return new KinnaPong { ServerTime = now, LeaseExpiresAt = now + _leaseTtl };
+            }
+
             var info = _session.Pool.TryGet(connectionId);
             _session.Pool.Touch(connectionId);
 
             if (info != null)
                 await _presence.RenewAsync(info.Value.SubjectId, info.Value.UserId).ConfigureAwait(false);
 
-            var now = DateTimeOffset.UtcNow;
             return new KinnaPong
             {
                 ServerTime = now,
@@ -95,6 +107,13 @@ namespace Viv.Kinna.Connections
 
         public async Task<long> AckAsync(string connectionId, IReadOnlyList<long> messageIds, CancellationToken cancellationToken = default)
         {
+            if (_limiter?.TryAcquire(connectionId) == false)
+            {
+                // 丢一次确认不会丢消息：客户端下次补报，或者由 Resync 触发补拉
+                KinnaMetrics.RecordUplinkThrottled(_session.Hub, "Ack");
+                return 0;
+            }
+
             // 身份从连接表拿：客户端不能自己报 userId，否则可以替别人确认
             var info = _session.Pool.TryGet(connectionId);
             if (info == null)

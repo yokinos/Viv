@@ -94,6 +94,11 @@ public sealed class StubKinnaConnectionPool : IKinnaConnectionPool
 
     public List<KinnaConnectionInfo> SweepExpired(TimeSpan ttl) => new();
 
+    /// <summary>健康检查看到的快照，由用例指定</summary>
+    public KinnaConnectionPoolSnapshot Snapshot { get; set; }
+
+    public KinnaConnectionPoolSnapshot GetSnapshot() => Snapshot;
+
     public void Clear() { }
 }
 

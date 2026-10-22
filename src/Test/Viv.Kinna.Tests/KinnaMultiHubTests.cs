@@ -37,6 +37,9 @@ namespace Viv.Kinna.Tests
         private static ServiceProvider Build()
         {
             var services = new ServiceCollection();
+
+            // 宿主里由宿主构建器提供；健康检查的内部服务依赖 ILogger<T>
+            services.AddLogging();
             services.AddSingleton<IHubContext<HubA>>(new FakeHubContext<HubA>());
             services.AddSingleton<IHubContext<HubB>>(new FakeHubContext<HubB>());
 

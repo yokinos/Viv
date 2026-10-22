@@ -879,7 +879,24 @@ Viv.Herta.Core/Service/GroupService.cs                        实现 IGroupServi
 - `ConnectionLeaseSweeper : BackgroundService` 按 `SweepIntervalSeconds` 清扫
 - `HertaLinkOptions.EntryTtlSeconds`（默认 90）/ `SweepIntervalSeconds`（默认 60）
 
-### 18.4 可测性调整：Hub 只剩转发
+### 18.4 健康检查与上行限流
+
+**健康检查**（`KinnaConnectionHealthCheck<THub>`，`KinnaOptions.EnableHealthCheck` 默认开）挂在标准 `/health` 上，一个 Hub 一条：
+
+- 报告连接数、最久未续租时长、距上次清扫多少秒
+- 清扫还没跑过、或超过三个周期没跑 → `Degraded`（进程活着但租约不受控）
+- 最久未续租超过两倍租约 → `Degraded`（清扫没跟上，或心跳间隔与租约配不上）
+
+清扫循环每跑完一轮把时间写进 `KinnaSweepClock<THub>`，健康检查读它，所以「后台任务卡死」能被发现。
+
+**上行限流**（`KinnaUplinkLimiter<THub>`，`KinnaOptions.UplinkPermitLimit` 默认 20 次 / `UplinkWindowSeconds` 默认 10 秒）：
+
+- 按连接计固定窗口，只挡 `Ping` / `Ack`
+- 被挡下的 `Ping` 仍返回 Pong（只是不续租），被挡下的 `Ack` 返回 0，都不抛错、不惩罚客户端
+- 计 `kinna.uplink.throttled{hub, method}`
+- 配 0 关闭限流
+
+### 18.5 可测性调整：Hub 只剩转发
 
 身份解析 + 登记 + 加组 + 协议应答全部搬进 `IConnectionCoordinator`，`ChatHub` 的每个方法都是一行转发。
 这样核心逻辑不需要 `Hub.Context` 夹具就能覆盖（`ConnectionCoordinatorTests`）。
