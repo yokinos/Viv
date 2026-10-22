@@ -63,7 +63,23 @@ namespace Viv.Kinna.Tests
             pool.Remove("c1");
 
             Assert.Empty(pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Empty(pool.GetConnectionIds(AppId, SubjectId, UserId));
             Assert.Empty(pool.GetConnections(SubjectId));
+        }
+
+        [Fact]
+        public void Remove_只摘掉自己那一行()
+        {
+            // 同一个用户两个客户端，两条索引里各有一份；摘一个不能把另一个带走
+            var pool = new KinnaConnectionPool();
+            pool.Add("c1", appId: 3, subjectId: SubjectId, userId: UserId);
+            pool.Add("c2", appId: 9, subjectId: SubjectId, userId: UserId);
+
+            pool.Remove("c1");
+
+            Assert.Equal(new[] { "c2" }, pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Empty(pool.GetConnectionIds(3, SubjectId, UserId));
+            Assert.Equal(new[] { "c2" }, pool.GetConnectionIds(9, SubjectId, UserId));
         }
 
         [Fact]

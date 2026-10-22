@@ -6,8 +6,15 @@ namespace Viv.Kinna.Connections
     /// <summary>进程内连接表，语义见 <see cref="IKinnaConnectionPool"/>。</summary>
     public sealed class KinnaConnectionPool : IKinnaConnectionPool
     {
-        private readonly ConcurrentDictionary<KinnaConnectionKey, ConcurrentDictionary<string, byte>> _userConnections = new();
+        // 按「租户 + 用户」索引，多端同步、按人踢都走它；这是每条消息都要查的那一级
+        private readonly ConcurrentDictionary<(long SubjectId, long UserId), ConcurrentDictionary<string, byte>> _userConnections = new();
+
+        // 按「客户端 + 租户 + 用户」索引，只有在指定客户端查的时候才用
+        private readonly ConcurrentDictionary<(long AppId, long SubjectId, long UserId), ConcurrentDictionary<string, byte>> _clientConnections = new();
+
+        // 反查：连接 Id → 身份，移除和清扫靠它
         private readonly ConcurrentDictionary<string, KinnaConnectionKey> _connectionLookup = new();
+
         private readonly ConcurrentDictionary<string, DateTimeOffset> _lastSeen = new();
         private readonly string _hub;
 
@@ -20,9 +27,16 @@ namespace Viv.Kinna.Connections
         public void Add(string connectionId, long appId, long subjectId, long userId)
         {
             var key = new KinnaConnectionKey(appId, subjectId, userId);
-            var connections = _userConnections.GetOrAdd(key, _ => new ConcurrentDictionary<string, byte>());
 
-            if (connections.TryAdd(connectionId, 0))
+            var added = _userConnections
+                .GetOrAdd((subjectId, userId), _ => new ConcurrentDictionary<string, byte>())
+                .TryAdd(connectionId, 0);
+
+            _clientConnections
+                .GetOrAdd((appId, subjectId, userId), _ => new ConcurrentDictionary<string, byte>())
+                .TryAdd(connectionId, 0);
+
+            if (added)
                 KinnaMetrics.ConnectionAdded(_hub);
 
             _connectionLookup[connectionId] = key;
@@ -37,38 +51,35 @@ namespace Viv.Kinna.Connections
             if (!_connectionLookup.TryRemove(connectionId, out var key))
                 return null;
 
-            if (_userConnections.TryGetValue(key, out var connections))
+            if (_userConnections.TryGetValue((key.SubjectId, key.UserId), out var byUser)
+                && byUser.TryRemove(connectionId, out _))
             {
-                if (connections.TryRemove(connectionId, out _))
-                    KinnaMetrics.ConnectionRemoved(_hub);
+                KinnaMetrics.ConnectionRemoved(_hub);
+                if (byUser.IsEmpty)
+                    _userConnections.TryRemove((key.SubjectId, key.UserId), out _);
+            }
 
-                if (connections.IsEmpty)
-                    _userConnections.TryRemove(key, out _);
+            if (_clientConnections.TryGetValue((key.AppId, key.SubjectId, key.UserId), out var byClient)
+                && byClient.TryRemove(connectionId, out _)
+                && byClient.IsEmpty)
+            {
+                _clientConnections.TryRemove((key.AppId, key.SubjectId, key.UserId), out _);
             }
 
             return new KinnaConnectionInfo(connectionId, key.AppId, key.SubjectId, key.UserId);
         }
 
         public List<string> GetConnectionIds(long subjectId, long userId)
-        {
-            var result = new List<string>();
-            foreach (var kv in _userConnections)
-            {
-                if (kv.Key.SubjectId == subjectId && kv.Key.UserId == userId)
-                    result.AddRange(kv.Value.Keys);
-            }
-
-            return result;
-        }
-
-        public List<string> GetConnectionIds(long appId, long subjectId, long userId)
-        {
-            var key = new KinnaConnectionKey(appId, subjectId, userId);
-            return _userConnections.TryGetValue(key, out var connections)
+            => _userConnections.TryGetValue((subjectId, userId), out var connections)
                 ? [.. connections.Keys]
                 : [];
-        }
 
+        public List<string> GetConnectionIds(long appId, long subjectId, long userId)
+            => _clientConnections.TryGetValue((appId, subjectId, userId), out var connections)
+                ? [.. connections.Keys]
+                : [];
+
+        /// <summary>管理用途（按租户踢人、排障），允许遍历。</summary>
         public List<KinnaConnectionInfo> GetConnections(long subjectId)
         {
             var result = new List<KinnaConnectionInfo>();
@@ -78,7 +89,7 @@ namespace Viv.Kinna.Connections
 
                 result.AddRange(kv.Value.Keys.Select(id => new KinnaConnectionInfo(
                     id,
-                    kv.Key.AppId,
+                    _connectionLookup.TryGetValue(id, out var key) ? key.AppId : 0,
                     kv.Key.SubjectId,
                     kv.Key.UserId)));
             }
@@ -121,6 +132,7 @@ namespace Viv.Kinna.Connections
         public void Clear()
         {
             _userConnections.Clear();
+            _clientConnections.Clear();
             _connectionLookup.Clear();
             _lastSeen.Clear();
         }
