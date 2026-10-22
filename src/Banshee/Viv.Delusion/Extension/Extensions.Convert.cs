@@ -24,7 +24,7 @@ namespace Viv.Delusion.Extension
         /// </example>
         public static long ToUnixTime(this DateTime self, bool isMs = false)
         {
-            return ObjectMapper.ToUnixTime(self, isMs);
+            return SafeMapper.ToUnixTime(self, isMs);
         }
 
         /// <summary>
@@ -36,7 +36,7 @@ namespace Viv.Delusion.Extension
         /// <remarks>DateTimeOffset包含时区信息，转换时会自动换算为UTC时间戳</remarks>
         public static long ToUnixTime(this DateTimeOffset self, bool isMs = false)
         {
-            return ObjectMapper.ToUnixTime(self, isMs);
+            return SafeMapper.ToUnixTime(self, isMs);
         }
 
         /// <summary>
@@ -50,11 +50,11 @@ namespace Viv.Delusion.Extension
         /// 1. 转换成功 → 目标类型的对象
         /// 2. 转换失败/源对象为null → 返回defaultvalue
         /// </returns>
-        /// <remarks>底层调用ObjectMapper.TryConvert实现，兼容常见类型（数值、字符串、日期等）转换</remarks>
+        /// <remarks>底层调用SafeMapper.TryConvert实现，兼容常见类型（数值、字符串、日期等）转换</remarks>
         [return: MaybeNull]
         public static T As<T>(this object? obj, T? defaultvalue = default, CultureInfo? culture = null)
         {
-            return ObjectMapper.TryConvert(obj, defaultvalue, culture);
+            return SafeMapper.TryConvert(obj, defaultvalue, culture);
         }
 
         /// <summary>

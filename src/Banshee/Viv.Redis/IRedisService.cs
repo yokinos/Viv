@@ -123,6 +123,18 @@ namespace Viv.Redis
         Task<T> GetAsync<T>(string key);
 
         /// <summary>
+        /// 批量取字符串原值（一条 MGET，按 Db 分组时每组一条）。键不存在返回 null。
+        /// 返回顺序与 <paramref name="keys"/> 一致；值不做反序列化。
+        /// </summary>
+        Task<List<string?>> GetManyAsync(IReadOnlyList<string> keys);
+
+        /// <summary>
+        /// 执行 Lua 脚本。脚本只能碰一个 key（多 key 要保证落在同一个 Db，这里不替调用方判断）。
+        /// 参数按字符串传过去，数字在脚本里用 tonumber 转；返回值由调用方解析。
+        /// </summary>
+        Task<RedisResult> ExecuteScriptAsync(string script, string key, params object?[] args);
+
+        /// <summary>
         /// 发布消息到指定频道
         /// </summary>
         /// <param name="channel">Redis频道</param>

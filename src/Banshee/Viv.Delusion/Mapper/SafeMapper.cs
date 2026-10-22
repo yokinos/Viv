@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -10,16 +10,18 @@ using Viv.Delusion.Extension;
 namespace Viv.Delusion.Mapper
 {
     /// <summary>
-    /// 通用类型转换工具类（核心能力：Unix时间戳转换、多类型安全转换）
+    /// 容错转换入口：失败返回默认值，绝不抛异常。
+    /// 常见基础类型、枚举、日期、JSON 自己转；自定义类型与集合转交
+    /// <see cref="EmitMapper"/> / <see cref="ExpressionMapper"/>。
     /// </summary>
     /// <remarks>
-    /// 设计原则：
-    /// 1. 无侵入：转换失败返回默认值，不抛业务异常；
-    /// 2. 兼容：支持常见基础类型、枚举、DateTime/DateTimeOffset、JSON字符串转换；
-    /// 3. 鲁棒：自动处理时区、Unix时间戳（秒/毫秒）、多语言文化格式；
-    /// 4. 轻量：仅依赖Newtonsoft.Json，无其他第三方依赖。
+    /// 支持的范围：
+    /// 1. 基础类型、枚举、DateTime/DateTimeOffset、JSON 字符串互转；
+    /// 2. Unix 时间戳（秒/毫秒自动判断）；
+    /// 3. 多语言文化格式、时区处理；
+    /// 4. 自定义类型的对象到对象映射（经 EmitMapper，表达式目录树版本默认关闭）。
     /// </remarks>
-    public static class ObjectMapper
+    public static class SafeMapper
     {
         /// <summary>
         /// Unix时间纪元（1970-01-01 00:00:00 UTC）
@@ -49,7 +51,7 @@ namespace Viv.Delusion.Mapper
         /// 器映射表</summary>
         private static readonly Dictionary<Type, Func<string, CultureInfo, object?, object?>> stringParsers;
 
-        static ObjectMapper()
+        static SafeMapper()
         {
             stringParsers = new Dictionary<Type, Func<string, CultureInfo, object?, object?>>
             {

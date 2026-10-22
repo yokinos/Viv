@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
@@ -40,7 +40,7 @@ namespace Viv.Redis
         /// 反序列化 RedisValue → T。
         /// 写侧统一 value.ToJson()（string 存原文、其他类型存 JSON 文本），
         /// 读侧必须先取文本（value.ToString()）再 As&lt;T&gt;()：直接 value.As&lt;T&gt;() 会让
-        /// ObjectMapper.TryConvert 对 RedisValue 结构体调用 JsonConvert.SerializeObject，得到垃圾数据。
+        /// SafeMapper.TryConvert 对 RedisValue 结构体调用 JsonConvert.SerializeObject，得到垃圾数据。
         /// string 目标由 TryConvert 的 source is T 直接命中，复杂类型落到 DeserializeObject(string.ToJson())，都正确。
         /// </summary>
         [return: MaybeNull]
@@ -112,6 +112,44 @@ namespace Viv.Redis
                 if (value.IsNull) return default;
                 return ReadRedis<T>(value);
             }).ConfigureAwait(false);
+        }
+
+        public async Task<List<string?>> GetManyAsync(IReadOnlyList<string> keys)
+        {
+            if (keys.Count == 0) return [];
+
+            var distinct = keys.Distinct().ToList();
+
+            // 按 Db 分组走批量 MGET；键落到不同 Db 时每组一条，总次数 = Db 数
+            var groups = await ExecuteRedisAsync(distinct, async (db, redisKeys) =>
+            {
+                var values = await db.StringGetAsync(redisKeys).ConfigureAwait(false);
+                var map = new Dictionary<string, string?>(redisKeys.Length);
+                for (var i = 0; i < redisKeys.Length; i++)
+                {
+                    map[redisKeys[i].ToString()] = values[i].IsNull ? null : values[i].ToString();
+                }
+
+                return map;
+            }).ConfigureAwait(false);
+
+            var merged = new Dictionary<string, string?>(distinct.Count);
+            foreach (var group in groups)
+            {
+                foreach (var kv in group)
+                {
+                    merged[kv.Key] = kv.Value;
+                }
+            }
+
+            return keys.Select(k => merged.GetValueOrDefault(k)).ToList();
+        }
+
+        public async Task<RedisResult> ExecuteScriptAsync(string script, string key, params object?[] args)
+        {
+            var values = args.Select(x => (RedisValue)(x is null ? string.Empty : x.ToString()!)).ToArray();
+
+            return await ExecuteRedisAsync(key, x => x.ScriptEvaluateAsync(script, [key], values)).ConfigureAwait(false);
         }
 
         #endregion
