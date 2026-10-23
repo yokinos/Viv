@@ -1,30 +1,29 @@
-﻿using Autofac.Features.Indexed;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using Viv.Apex.Core.Entity.Dto.Account;
 using Viv.Apex.Core.Entity.Dto.User;
-using Viv.Apex.Core.Entity.Vo.Account;
 using Viv.Apex.Core.Entity.Vo.User;
-using Viv.Apex.Core.Interface;
 using Viv.Apex.Core.IService;
-using Viv.Elysia;
 using Viv.Elysia.Request;
 using Viv.Engine;
-using Viv.Entity.Enums;
 
 namespace Viv.Apex.Core.Service
 {
     public class UserService : IUserService
     {
-        public UserService()
-        {
+        private readonly IMenuService _menu;
 
+        public UserService(IMenuService menu)
+        {
+            _menu = menu;
         }
 
         public async Task<VivApiResult> GetLoginDataAsync(ApiEmptyRequest request)
         {
             var output = new GetLoginDataOutput();
+
+            // 菜单跟着登录一次下发，省掉登录后再拉一次；取不到就留空，不挡登录
+            var routes = await _menu.GetRouteTreeAsync();
+            if (routes is VivApiResult<object> typed)
+                output.Routes = typed.Data;
+
             return VivApiResult.Success(output);
         }
 

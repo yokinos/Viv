@@ -1,11 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Delusion.Generic;
 using Viv.Entity.Any;
-using Viv.Entity.Converters;
-using Viv.Entity.Database.Apex;
-using Viv.Entity.Vue;
 
 namespace Viv.Elysia.Extension
 {
@@ -21,17 +18,6 @@ namespace Viv.Elysia.Extension
         {
             if (self == null) return [];
             return self.Select(x => new SelectItem<TValue>(x.Key, x.Value)).ToList();
-        }
-
-        /// <summary>
-        ///  [扩展方法] 生成 vue router 列表
-        /// </summary>
-        /// <param name="menus"></param>
-        /// <param name="subPages"></param>
-        /// <returns></returns>
-        public static List<RouteItem> ToVueRouter(this List<AtMenu> menus, List<AtMenuSubPage>? subPages = null)
-        {
-            return VueRouterConverter.ToVueRouter(menus, subPages);
         }
     }
 }

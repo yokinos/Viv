@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
+using Viv.Apex.Core.Entity.Vo.Menu;
 using Viv.Entity.Enums;
-using Viv.Entity.Vue;
 
 namespace Viv.Apex.Core.Entity.Vo.User
 {
@@ -19,14 +19,14 @@ namespace Viv.Apex.Core.Entity.Vo.User
         public UserSubjectInfo SubjectInfo { get; set; }
 
         /// <summary>
-        /// 该用户路由信息
+        /// 该用户路由信息。结构由客户端技术栈决定（Vue 是嵌套树），所以这里不写死类型
         /// </summary>
-        public List<RouteItem> Routes { get; set; }
+        public object? Routes { get; set; }
 
         /// <summary>
         /// 授权的按钮列表
         /// </summary>
-        public List<ButtonAuthItem> ButtonList { get; set; }
+        public List<ButtonAuthItem> ButtonList { get; set; } = [];
     }
 
     public class UserBaseInfo

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using Viv.Entity.Enums;
 using Viv.Momo.Base;
@@ -7,8 +7,8 @@ using Viv.Momo.Interface;
 namespace Viv.Entity.Database.Apex
 {
     /// <summary>
-    /// 菜单主表（对应前端路由）
-    /// 按 ClientAppId 隔离不同客户端应用菜单，全局顶层表无租户隔离
+    /// 菜单节点（可以是一级/多级菜单，也可以是不出现在菜单里的纯路由）
+    /// 按 ClientAppId 隔离：同一应用的不同平台是不同的 AppId，所以路由配置天然按端分开
     /// </summary>
     public class AtMenu : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
@@ -23,56 +23,41 @@ namespace Viv.Entity.Database.Apex
         public int BitIndex { get; set; }
 
         /// <summary>
-        /// 父菜单Id，顶级菜单为 0
+        /// 父节点Id，顶级为 0
         /// </summary>
         public long ParentId { get; set; }
 
         /// <summary>
-        /// 前端路由 name（唯一标识，对应 Vue Router 的 name 字段）
-        /// </summary>
-        [StringLength(100)]
-        public string? RouteName { get; set; }
-
-        /// <summary>
-        /// 菜单显示名称（对应 meta.title）
+        /// 显示名称
         /// </summary>
         [StringLength(100)]
         public string? Title { get; set; }
 
         /// <summary>
-        /// 前端路由路径 / 外链地址（对应 path）
-        /// </summary>
-        [StringLength(500)]
-        public string? Path { get; set; }
-
-        /// <summary>
-        /// 前端组件标识（对应 component）
-        /// 目录级固定为 "LAYOUT"，页面级为具体组件路径
-        /// </summary>
-        [StringLength(500)]
-        public string? Component { get; set; }
-
-        /// <summary>
-        /// 重定向路由地址（对应 redirect）
-        /// </summary>
-        [StringLength(500)]
-        public string? Redirect { get; set; }
-
-        /// <summary>
-        /// 菜单图标（对应 meta.icon）
+        /// 图标标识，具体字体/图片由各端自己解释
         /// </summary>
         [StringLength(500)]
         public string? Icon { get; set; }
 
         /// <summary>
-        /// 排序号（对应 meta.orderNo，数字越小越靠前）
+        /// 排序号，数字越小越靠前
         /// </summary>
         public int Sort { get; set; }
 
         /// <summary>
-        /// 菜单类型：0-目录 / 1-页面
+        /// 节点类型：目录 / 菜单页 / 纯路由
         /// </summary>
         public EmMenuType Type { get; set; }
+
+        /// <summary>
+        /// 是否在菜单里展示。纯路由（Type=Route）不看这个字段，一律不展示
+        /// </summary>
+        public bool IsVisible { get; set; }
+
+        /// <summary>
+        /// 客户端路由配置（JSON）。各端自己解释里面的键，后端只负责存取和透传
+        /// </summary>
+        public string? RouteConfig { get; set; }
 
         /// <summary>
         /// 菜单描述（仅后台使用，不输出到前端）
@@ -81,62 +66,27 @@ namespace Viv.Entity.Database.Apex
         public string? Description { get; set; }
 
         /// <summary>
-        /// 是否为外部链接（对应 meta.frameSrc）
-        /// </summary>
-        public bool IsExternalLink { get; set; }
-
-        /// <summary>
-        /// 外部链接是否新标签页打开（对应 meta.frameBlank）
-        /// </summary>
-        public bool IsOpenNewTab { get; set; }
-
-        /// <summary>
-        /// 路由页面是否持久缓存（对应 meta.keepAlive）
-        /// </summary>
-        public bool IsKeepAlive { get; set; }
-
-        /// <summary>
-        /// 是否侧边栏显示（对应 meta.hidden 的反向）
-        /// </summary>
-        public bool IsVisible { get; set; }
-
-        /// <summary>
-        /// 菜单状态：0-禁用 / 1-启用
+        /// 状态：启用 / 禁用
         /// </summary>
         public EmStatus Status { get; set; }
 
         /// <summary>
-        /// 是否默认展开（对应 meta.expanded）
-        /// </summary>
-        public bool IsExpanded { get; set; }
-
-        /// <summary>
-        /// 是否为单级菜单（父节点只有一个子节点时，菜单只展示一级）
-        /// </summary>
-        public bool IsSingle { get; set; }
-
-        /// <summary>
-        /// 是否在面包屑中隐藏（对应 meta.hiddenBreadcrumb）
-        /// </summary>
-        public bool IsHiddenBreadcrumb { get; set; }
-
-        /// <summary>
-        /// 创建时间
+        /// 创建时间（UTC）—— 由 MomoDatabase 自动盖章
         /// </summary>
         public DateTime? CreatedAt { get; set; }
 
         /// <summary>
-        /// 创建人ID
+        /// 创建人（IVivContext.UserId）
         /// </summary>
         public long? CreatedBy { get; set; }
 
         /// <summary>
-        /// 更新时间
+        /// 更新时间（UTC）—— 每次更新自动盖章
         /// </summary>
         public DateTime? UpdatedAt { get; set; }
 
         /// <summary>
-        /// 更新人ID
+        /// 更新人（IVivContext.UserId）
         /// </summary>
         public long? UpdatedBy { get; set; }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using Viv.Entity.Enums;
 using Viv.Momo.Base;
@@ -30,6 +30,11 @@ namespace Viv.Entity.Database.Apex
         /// 客户端平台类型
         /// </summary>
         public EmAppPlatform Platform { get; set; }
+
+        /// <summary>
+        /// 菜单适配的前端类型
+        /// </summary>
+        public EmClientStack ClientStack { get; set; }
 
         /// <summary>
         /// 密钥
