@@ -7,5 +7,8 @@ namespace Viv.Apex.Core.IRepository
     {
         /// <summary>按菜单 Id 批量取启用的子页面</summary>
         Task<List<AtMenuSubPage>> GetByMenuIdsAsync(IReadOnlyList<long> menuIds);
+
+        /// <summary>菜单删除时把它的子页面一并软删</summary>
+        Task<bool> SoftDeleteByMenuAsync(long menuId);
     }
 }

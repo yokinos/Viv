@@ -15,5 +15,10 @@ namespace Viv.Apex.Core.Module.Menu
 
         /// <summary>组装该端可直接下发的路由数据</summary>
         object BuildTree(IReadOnlyList<AtMenu> menus, IReadOnlyList<AtMenuSubPage> subPages);
+
+        /// <summary>
+        /// 保存菜单前校验路由配置能不能被这一端解释。空配置算合法（这个节点不配路由）
+        /// </summary>
+        bool IsValidConfig(string? routeConfig);
     }
 }

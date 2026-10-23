@@ -24,5 +24,8 @@ namespace Viv.Apex.Core.Repository
             return _dbContext.FindListAsync<AtMenuSubPage>(
                 x => ids.Contains(x.MenuId) && x.Status == EmStatus.Enabled);
         }
+
+        public Task<bool> SoftDeleteByMenuAsync(long menuId)
+            => _dbContext.SoftDeleteAsync<AtMenuSubPage>(x => x.MenuId == menuId);
     }
 }

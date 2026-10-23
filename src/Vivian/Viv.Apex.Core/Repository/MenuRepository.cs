@@ -18,5 +18,23 @@ namespace Viv.Apex.Core.Repository
 
         public Task<List<AtMenu>> GetEnabledByAppAsync(long clientAppId)
             => _dbContext.FindListAsync<AtMenu>(x => x.ClientAppId == clientAppId && x.Status == EmStatus.Enabled);
+
+        public Task<AtMenu?> GetAsync(long id)
+            => _dbContext.SingleOrDefaultAsync<AtMenu>(x => x.Id == id);
+
+        public async Task<long> AddAsync(AtMenu menu)
+        {
+            await _dbContext.InsertAsync(menu).ConfigureAwait(false);
+            return menu.Id;
+        }
+
+        public Task<bool> UpdateAsync(AtMenu menu)
+            => _dbContext.UpdateAsync(menu);
+
+        public Task<bool> SoftDeleteAsync(long id)
+            => _dbContext.SoftDeleteAsync<AtMenu>(id);
+
+        public Task<bool> HasChildrenAsync(long parentId)
+            => _dbContext.ExistAsync<AtMenu>(x => x.ParentId == parentId);
     }
 }

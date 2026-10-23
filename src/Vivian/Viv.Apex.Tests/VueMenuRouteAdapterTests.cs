@@ -151,5 +151,26 @@ namespace Viv.Apex.Tests
             Assert.Equal(EmClientStack.Vue, new AtClientApp().ClientStack);
             Assert.Equal(EmClientStack.Vue, _adapter.Stack);
         }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        [InlineData("""{"path":"/a","name":"a"}""")]
+        [InlineData("""{}""")]
+        public void 空配置与合法配置都算可保存(string? routeConfig)
+        {
+            Assert.True(_adapter.IsValidConfig(routeConfig));
+        }
+
+        [Theory]
+        [InlineData("{不是 json")]
+        [InlineData("""{"path": }""")]
+        [InlineData("[]")]
+        public void 坏配置保存时就被拦下(string routeConfig)
+        {
+            // 不拦的话，坏 JSON 要到客户端渲染时才暴露；保存时就该拒绝
+            Assert.False(_adapter.IsValidConfig(routeConfig));
+        }
     }
 }

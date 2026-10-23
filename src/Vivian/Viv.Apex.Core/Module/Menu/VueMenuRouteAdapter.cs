@@ -25,6 +25,9 @@ namespace Viv.Apex.Core.Module.Menu
 
         public EmClientStack Stack => EmClientStack.Vue;
 
+        public bool IsValidConfig(string? routeConfig)
+            => string.IsNullOrWhiteSpace(routeConfig) || Parse(routeConfig) is not null;
+
         public object BuildTree(IReadOnlyList<AtMenu> menus, IReadOnlyList<AtMenuSubPage> subPages)
         {
             var byParent = menus.ToLookup(x => x.ParentId);
