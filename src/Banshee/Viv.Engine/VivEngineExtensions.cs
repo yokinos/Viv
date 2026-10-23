@@ -1,4 +1,4 @@
-﻿using Autofac;
+using Autofac;
 using Autofac.Extras.DynamicProxy;
 using Castle.DynamicProxy;
 using Microsoft.AspNetCore.Http;
@@ -49,13 +49,23 @@ namespace Viv.Engine
 
             var serviceImplTypes = TypeScanMagic.Scan(diOptions.ServiceImplementation);
             var repoImplTypes = TypeScanMagic.Scan(diOptions.RepositoryImplementation);
+            var dependencyTypes = TypeScanMagic.ScanTypes<IDependency>();
+
+            // 启动自检：名字像 Service/Repository 却两条注册路径都没走到的类，永远不会进容器。
+            // 等它被解析时才炸的话，现场只剩「某个接口解析不到」，看不出是谁没注册
+            var unregistered = DependencySelfCheck.FindUnregistered(
+                TypeScanMagic.ScanTypes<object>().Where(t => !DependencySelfCheck.IsExcludedAssembly(t.Assembly)),
+                dependencyTypes.Concat(serviceImplTypes).Concat(repoImplTypes));
+
+            if (unregistered.Count > 0)
+                throw new InvalidOperationException(DependencySelfCheck.BuildMessage(unregistered));
 
             // 工作单元：先解析出哪些类型要开接口代理，并做启动期校验 ——
             // 拦不住的情况（非 virtual / 同步方法 / 没按接口注册）一律在此硬报错，
             // 绝不让「标了特性但没有事务」这种静默失效漏到运行期
             var intercepted = UnitOfWorkRegistration.Resolve(
                 serviceImplTypes.Concat(repoImplTypes),
-                TypeScanMagic.ScanTypes<IDependency>(),
+                dependencyTypes,
                 vivOptions.DatabaseOption != null);
 
             RegisterWorkUnitInterceptors(builder, intercepted);
