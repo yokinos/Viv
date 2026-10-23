@@ -168,9 +168,44 @@ public sealed class StubChatMessageRepository : IChatMessageRepository
     /// <summary>预设每个对端的未读条数，未列出的按 0</summary>
     public Dictionary<long, int> UnreadByTarget { get; set; } = new();
 
+    /// <summary>逐会话 count 的调用次数（批量之后应该是 0）</summary>
+    public int SingleUnreadCalls { get; private set; }
+
+    /// <summary>批量 count 的调用次数（一次列表请求应该只有一次）</summary>
+    public int BatchUnreadCalls { get; private set; }
+
     public Task<int> CountUnreadAsync(
         long tenantId, EmChatReceiverType receiverType, long userId, long targetId, long lastReadMessageId)
-        => Task.FromResult(UnreadByTarget.TryGetValue(targetId, out var count) ? count : 0);
+    {
+        SingleUnreadCalls++;
+        return Task.FromResult(UnreadByTarget.TryGetValue(targetId, out var count) ? count : 0);
+    }
+
+    public Task<ChatUnreadCounts> CountUnreadManyAsync(
+        long tenantId,
+        long userId,
+        IReadOnlyDictionary<long, long> directWatermarks,
+        IReadOnlyDictionary<long, long> groupWatermarks)
+    {
+        BatchUnreadCalls++;
+
+        var direct = new Dictionary<long, int>();
+        var group = new Dictionary<long, int>();
+
+        foreach (var targetId in directWatermarks.Keys)
+        {
+            if (UnreadByTarget.TryGetValue(targetId, out var count) && count > 0)
+                direct[targetId] = count;
+        }
+
+        foreach (var groupId in groupWatermarks.Keys)
+        {
+            if (UnreadByTarget.TryGetValue(groupId, out var count) && count > 0)
+                group[groupId] = count;
+        }
+
+        return Task.FromResult(new ChatUnreadCounts(direct, group));
+    }
 }
 
 /// <summary>群成员仓储替身：成员判定与成员行可预设。</summary>

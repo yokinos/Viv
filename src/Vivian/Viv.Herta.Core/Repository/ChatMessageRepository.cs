@@ -156,6 +156,87 @@ namespace Viv.Herta.Core.Repository
             return directs.Select(MapDirect).ToList();
         }
 
+        /// <summary>
+        /// 批量未读。一页会话逐条 count 就是 N 次查询；这里 JOIN 各自的已读水位，
+        /// 两张表各一次。原生 SQL 不过全局过滤器，租户与软删条件自己带。
+        /// </summary>
+        public async Task<ChatUnreadCounts> CountUnreadManyAsync(
+            long tenantId,
+            long userId,
+            IReadOnlyDictionary<long, long> directWatermarks,
+            IReadOnlyDictionary<long, long> groupWatermarks)
+        {
+            var direct = new Dictionary<long, int>();
+            var group = new Dictionary<long, int>();
+            if (directWatermarks.Count == 0 && groupWatermarks.Count == 0)
+                return new ChatUnreadCounts(direct, group);
+
+            var source = _databaseOptions.GetRealOptions().DatabaseSource;
+
+            string Col(string name) => SqlMagic.QuoteIdentifier(name, source);
+
+            if (directWatermarks.Count > 0)
+            {
+                // 单聊：发给我的、Id 超过本人会话行已读水位的
+                var sql = $"""
+                    SELECT m.{Col("UserId")} AS TargetId, COUNT(1) AS Count
+                    FROM {SqlMagic.GetTableName<EtUserChatMessage>(source)} m
+                    JOIN {SqlMagic.GetTableName<EtChatSession>(source)} s
+                      ON s.{Col("TenantId")} = m.{Col("TenantId")}
+                     AND s.{Col("UserId")} = @userId
+                     AND s.{Col("ChatSessionType")} = 0
+                     AND s.{Col("TargetUserId")} = m.{Col("UserId")}
+                    WHERE m.{Col("TenantId")} = @tenantId
+                      AND m.{Col("ReceiverUserId")} = @userId
+                      AND m.{Col("IsDeleted")} = @notDeleted
+                      AND m.{Col("Id")} > s.{Col("LastReadMsgId")}
+                      AND m.{Col("UserId")} IN @targets
+                    GROUP BY m.{Col("UserId")}
+                    """;
+
+                var rows = await _dbContext
+                    .FindListAsync<UnreadRow>(sql, new { tenantId, userId, notDeleted = false, targets = directWatermarks.Keys })
+                    .ConfigureAwait(false);
+
+                foreach (var row in rows) direct[row.TargetId] = row.Count;
+            }
+
+            if (groupWatermarks.Count > 0)
+            {
+                // 群聊：自己发的不算未读
+                var sql = $"""
+                    SELECT m.{Col("GroupChatId")} AS TargetId, COUNT(1) AS Count
+                    FROM {SqlMagic.GetTableName<EtGroupChatMessage>(source)} m
+                    JOIN {SqlMagic.GetTableName<EtGroupChatMember>(source)} s
+                      ON s.{Col("TenantId")} = m.{Col("TenantId")}
+                     AND s.{Col("UserId")} = @userId
+                     AND s.{Col("GroupChatId")} = m.{Col("GroupChatId")}
+                    WHERE m.{Col("TenantId")} = @tenantId
+                      AND m.{Col("UserId")} <> @userId
+                      AND m.{Col("IsDeleted")} = @notDeleted
+                      AND m.{Col("Id")} > s.{Col("LastReadMsgId")}
+                      AND m.{Col("GroupChatId")} IN @targets
+                    GROUP BY m.{Col("GroupChatId")}
+                    """;
+
+                var rows = await _dbContext
+                    .FindListAsync<UnreadRow>(sql, new { tenantId, userId, notDeleted = false, targets = groupWatermarks.Keys })
+                    .ConfigureAwait(false);
+
+                foreach (var row in rows) group[row.TargetId] = row.Count;
+            }
+
+            return new ChatUnreadCounts(direct, group);
+        }
+
+        /// <summary>Dapper 的行映射目标。</summary>
+        private sealed class UnreadRow
+        {
+            public long TargetId { get; set; }
+
+            public int Count { get; set; }
+        }
+
         private static ChatMessageEntry MapGroup(EtGroupChatMessage x) => new()
         {
             Id = x.Id,

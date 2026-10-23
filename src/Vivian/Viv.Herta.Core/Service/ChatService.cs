@@ -22,7 +22,11 @@ namespace Viv.Herta.Core.Service
         private const int GroupAdminRole = 1;
         private const int GroupOwnerRole = 2;
 
-        private const int MaxGroupMembers = 500;
+        /// <summary>
+        /// 新群的默认人数上限。以后按租户等级放开（付费多开），届时把这里换成配置/租户策略查询，
+        /// 已经建出来的群用行上存的 MaxMemberCount，不受影响。
+        /// </summary>
+        private const int DefaultMaxGroupMembers = 200;
 
         private static readonly TimeSpan RecallWindow = TimeSpan.FromMinutes(2);
         private readonly IVivOutbox _outbox;
@@ -65,7 +69,8 @@ namespace Viv.Herta.Core.Service
             if (message == null)
                 return VivApiResult.Failed("消息错误");
 
-            // 发送者：请求体给了 FromUserId 就是代发，没给用登录身份。
+            // 发送者：请求体给了 FromUserId 就按被署名人发（模拟发送能力），没给用登录身份。
+            // 谁有资格代发由调用方自己判定 —— 我们不认识它的角色体系，也不该在这里猜。
             // 租户不从请求里取，永远是登录身份的租户；跨租户代发只走事件（见 §26）
             var fromUserId = request.FromUserId > 0 ? request.FromUserId : _context.UserId;
             var tenantId = _context.SubjectId;
@@ -230,11 +235,25 @@ namespace Viv.Herta.Core.Service
                 .Take(take)
                 .ToList();
 
-            // 未读只算当前页，避免每个会话一次 count
+            // 未读只算当前页，而且两张表各一次查询 —— 逐条 count 是一页 N 次
+            var directWatermarks = page
+                .Where(x => x.ReceiverType == EmChatReceiverType.User)
+                .ToDictionary(x => x.TargetId, x => x.LastReadMsgId);
+
+            var groupWatermarks = page
+                .Where(x => x.ReceiverType == EmChatReceiverType.Group)
+                .ToDictionary(x => x.TargetId, x => x.LastReadMsgId);
+
+            var unread = await _messages
+                .CountUnreadManyAsync(tenantId, userId, directWatermarks, groupWatermarks)
+                .ConfigureAwait(false);
+
             foreach (var item in page)
             {
-                item.UnreadCount = await _messages.CountUnreadAsync(
-                    tenantId, item.ReceiverType, userId, item.TargetId, item.LastReadMsgId);
+                // 单聊与群聊分开取：同一个数字既可能是对方 userId，也可能是群 Id
+                item.UnreadCount = item.ReceiverType == EmChatReceiverType.User
+                    ? unread.Direct.GetValueOrDefault(item.TargetId)
+                    : unread.Group.GetValueOrDefault(item.TargetId);
             }
 
             return VivApiResult<List<ChatSessionItemOutput>>.Success(page);
@@ -279,8 +298,8 @@ namespace Viv.Herta.Core.Service
                 .Distinct()
                 .ToList();
 
-            if (members.Count + 1 > MaxGroupMembers)
-                return VivApiResult.Failed($"群成员不能超过 {MaxGroupMembers} 人");
+            if (members.Count + 1 > DefaultMaxGroupMembers)
+                return VivApiResult.Failed($"群成员不能超过 {DefaultMaxGroupMembers} 人");
 
             var now = DateTime.UtcNow;
             var groupId = await _groups.AddAsync(new EtGroupChat
@@ -289,7 +308,7 @@ namespace Viv.Herta.Core.Service
                 Name = name,
                 AvatarUrl = request.AvatarUrl,
                 OwnerUserId = userId,
-                MaxMemberCount = MaxGroupMembers,
+                MaxMemberCount = DefaultMaxGroupMembers,
                 CreateAt = now
             });
 

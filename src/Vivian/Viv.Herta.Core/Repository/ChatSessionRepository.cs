@@ -6,6 +6,7 @@ using Viv.Herta.Core.IRepository;
 using Viv.Log;
 using Viv.Momo;
 using Viv.Momo.Base;
+using Viv.Momo.Interface;
 
 namespace Viv.Herta.Core.Repository
 {
@@ -17,14 +18,17 @@ namespace Viv.Herta.Core.Repository
         private const int GroupSession = 1;
 
         private readonly IDistributedLock? _lock;
+        private readonly IDatabaseOptionsProvider _databaseOptions;
 
         public ChatSessionRepository(
             IVivContext context,
             IMomoDbContext dbContext,
             ILoggerContract logger,
+            IDatabaseOptionsProvider databaseOptions,
             IDistributedLock? distributedLock = null)
             : base(context, dbContext, logger)
         {
+            _databaseOptions = databaseOptions;
             _lock = distributedLock;
         }
 
@@ -147,10 +151,17 @@ namespace Viv.Herta.Core.Repository
 
         public async Task TouchManyAsync(IReadOnlyList<long> sessionIds, DateTime lastMessageTime)
         {
+            if (sessionIds.Count == 0) return;
+
+            // 手写 SQL 必须走 SqlMagic：PG 下表名列名是 snake_case，写死类名只在 SQL Server 上对
+            var source = _databaseOptions.GetRealOptions().DatabaseSource;
+            string Col(string name) => SqlMagic.QuoteIdentifier(name, source);
+            var table = SqlMagic.GetTableName<EtChatSession>(source);
+
             if (sessionIds.Count == 1)
             {
                 await _dbContext.ExecuteSqlAsync(
-                    "UPDATE EtChatSession SET LastMessageTime = @At WHERE Id = @Id0",
+                    $"UPDATE {table} SET {Col("LastMessageTime")} = @At WHERE {Col("Id")} = @Id0",
                     new { At = lastMessageTime, Id0 = sessionIds[0] }).ConfigureAwait(false);
                 return;
             }
@@ -159,7 +170,7 @@ namespace Viv.Herta.Core.Repository
             {
                 // 一条消息最多牵两行（单聊双向），写死两个参数比拼 IN 列表省事
                 await _dbContext.ExecuteSqlAsync(
-                    "UPDATE EtChatSession SET LastMessageTime = @At WHERE Id = @Id0 OR Id = @Id1",
+                    $"UPDATE {table} SET {Col("LastMessageTime")} = @At WHERE {Col("Id")} = @Id0 OR {Col("Id")} = @Id1",
                     new { At = lastMessageTime, Id0 = sessionIds[0], Id1 = sessionIds[1] }).ConfigureAwait(false);
                 return;
             }

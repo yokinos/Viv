@@ -30,5 +30,27 @@ namespace Viv.Herta.Core.IRepository
         /// <summary>该会话里发给我的、且 Id 大于已读水位的消息条数（群聊排除自己发的）</summary>
         Task<int> CountUnreadAsync(
             long tenantId, EmChatReceiverType receiverType, long userId, long targetId, long lastReadMessageId);
+
+        /// <summary>
+        /// 批量未读：每个会话按自己的已读水位算。两个来源分开返回 ——
+        /// 单聊的 key 是对方 userId，群聊的 key 是 groupId，混在一个字典里 5 号用户和 5 号群会撞号。
+        /// 逐会话调 <see cref="CountUnreadAsync"/> 是一页 N 次查询，这里两张表各一次。
+        /// </summary>
+        /// <param name="directWatermarks">单聊对方 userId → 已读水位</param>
+        /// <param name="groupWatermarks">群 groupId → 已读水位</param>
+        Task<ChatUnreadCounts> CountUnreadManyAsync(
+            long tenantId,
+            long userId,
+            IReadOnlyDictionary<long, long> directWatermarks,
+            IReadOnlyDictionary<long, long> groupWatermarks);
+    }
+
+    /// <summary>批量未读的结果，单聊与群聊分开，避免 targetId 撞号。</summary>
+    public readonly record struct ChatUnreadCounts(
+        IReadOnlyDictionary<long, int> Direct,
+        IReadOnlyDictionary<long, int> Group)
+    {
+        public static ChatUnreadCounts Empty { get; } =
+            new(new Dictionary<long, int>(), new Dictionary<long, int>());
     }
 }
