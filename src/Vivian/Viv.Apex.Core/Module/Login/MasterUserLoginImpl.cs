@@ -3,7 +3,6 @@ using System.Numerics;
 using System.Threading.Tasks;
 using Viv.Apex.Core.Entity.Dto.Account;
 using Viv.Apex.Core.Entity.Vo.Account;
-using Viv.Apex.Core.Interface;
 using Viv.Apex.Core.IRepository;
 using Viv.Contracts.Attributes;
 using Viv.Contracts.Interface;
@@ -16,7 +15,7 @@ using Viv.Entity.Database.Apex;
 using Viv.Entity.Enums;
 using Viv.Redis;
 
-namespace Viv.Apex.Core.Impl.Login
+namespace Viv.Apex.Core.Module.Login
 {
     [VivDependency(EmUserType.Master)]
     public class MasterUserLoginImpl : LoginImplBase, ILoginContract, IDependency

@@ -15,7 +15,7 @@ using Viv.Entity.Database.Apex;
 using Viv.Entity.Enums;
 using Viv.Redis;
 
-namespace Viv.Apex.Core.Impl.Login
+namespace Viv.Apex.Core.Module.Login
 {
     public class LoginImplBase
     {

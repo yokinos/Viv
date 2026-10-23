@@ -6,7 +6,7 @@ using Viv.Apex.Core.Entity.Vo.Account;
 using Viv.Delusion;
 using Viv.Elysia.Request;
 
-namespace Viv.Apex.Core.Interface
+namespace Viv.Apex.Core.Module.Login
 {
     public interface ILoginContract
     {
