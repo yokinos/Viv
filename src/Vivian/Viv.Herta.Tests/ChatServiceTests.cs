@@ -29,7 +29,8 @@ namespace Viv.Herta.Tests
             StubChatMessageRepository Messages,
             StubChatGroupRepository Groups,
             StubChatGroupMemberRepository GroupMembers,
-            StubPresenceStore Presence);
+            StubPresenceStore Presence,
+            TestContext Context);
 
         private static Sut Create(long userId = ContextUserId)
         {
@@ -51,7 +52,8 @@ namespace Viv.Herta.Tests
                 messages,
                 groups,
                 groupMembers,
-                presence);
+                presence,
+                context);
         }
 
         private static SendMessageRequest CreateRequest(EmChatReceiverType receiverType = EmChatReceiverType.User) => new()
@@ -181,9 +183,9 @@ namespace Viv.Herta.Tests
         }
 
         [Fact]
-        public async Task SendMessage_传了发送者就代发()
+        public async Task SendMessage_传了发送者就代发_落库与事件都按被署名人()
         {
-            // 机器人、客服代发：落库和事件都按请求体里的署名走
+            // 模拟发送：调用方说以谁的名义发，就以谁的名义发。鉴权在调用方，不在这里
             var sut = Create();
             var request = CreateRequest();
             request.FromUserId = 999;
@@ -198,9 +200,9 @@ namespace Viv.Herta.Tests
         }
 
         [Fact]
-        public async Task SendMessage_指定其他租户的请求字段不存在_租户永远来自登录身份()
+        public async Task SendMessage_租户永远来自登录身份()
         {
-            // 跨租户代发只能走事件，HTTP 侧没有 TenantId 这个概念
+            // HTTP 侧没有 TenantId 这个概念，跨租户只能走事件
             var sut = Create();
             var request = CreateRequest();
             request.FromUserId = 999;
@@ -643,6 +645,30 @@ namespace Viv.Herta.Tests
             // 未读按对端填充
             Assert.Equal(3, typed.Data![1].UnreadCount);
             Assert.Equal(0, typed.Data![2].UnreadCount);
+        }
+
+        [Fact]
+        public async Task ListSessions_未读一次批量查_不再逐会话count()
+        {
+            // 一页 3 个会话，逐条 count 就是 3 次查询；批量之后整页只有一次
+            var sut = Create();
+            sut.Sessions.DirectSessions =
+            [
+                new EtChatSession { Id = 101, TargetUserId = 7, LastMessageTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new EtChatSession { Id = 102, TargetUserId = 8, LastMessageTime = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc) }
+            ];
+            sut.GroupMembers.Memberships = [new EtGroupChatMember { GroupChatId = 50 }];
+            sut.Groups.Groups = [new EtGroupChat { Id = 50, Name = "群" }];
+            sut.Messages.UnreadByTarget = new Dictionary<long, int> { [8] = 3, [50] = 2 };
+
+            var result = await sut.Service.ListSessionsAsync(pageIndex: 1, pageSize: 20);
+
+            var typed = Assert.IsType<VivApiResult<List<ChatSessionItemOutput>>>(result);
+            Assert.Equal(1, sut.Messages.BatchUnreadCalls);
+            Assert.Equal(0, sut.Messages.SingleUnreadCalls);
+
+            Assert.Equal(3, typed.Data!.Single(x => x.TargetId == 8).UnreadCount);
+            Assert.Equal(2, typed.Data!.Single(x => x.TargetId == 50).UnreadCount);
         }
 
         [Fact]

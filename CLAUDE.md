@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -42,7 +42,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Clockwork` | Background scheduling — `TickerQ` integration for cron/interval job execution with dashboard；**任务基类** `VivTickerJobBase`（子类 `[TickerFunction]` 入口走受保护的 `RunAsync`）+ `VivTickerJob.ExecuteAsync`：包一层 `IVivLocalEventScope`（成功 Flush / 失败 Discard），并硬校验开工前已有租户或系统租户快照 —— 定时任务不必自己管本地事件分发 |
 | `Viv.Cli` | **CLI framework** — `VivCliHost` (REPL loop + Spectre.Console.Cli `CommandApp`); `[VivCommand]` auto-discovery; built-in `Cmd_Clear`; `Out` (formatted output) and `InputMagic` (interactive input) utilities；**命令走宿主容器**（`ScanCommands` 把命令类型写进宿主的 `IServiceCollection`，`CliTypeResolver` 从宿主 provider 开作用域解析，**一个命令一个作用域**；`new VivCliHost(options, services)` → `StartAsync` 之后 `UseContainer(provider)`，见 `### CLI commands (Viv.Cli)`）。只依赖 `Microsoft.Extensions.DependencyInjection.Abstractions`，**不认识 Autofac** |
 | `Viv.Forge` | **Source generator base library** — `VivSourceGenerator<TInfo>`（增量管线基类：候选筛选→语义提取→Collect→产出，异常兜底诊断）、`VivAttributeGenerator<TAttribute,TInfo>`（特性驱动基类，按全名匹配特性）、`SourceBuilder`（缩进/using 去重/auto-generated 头）、`SourceGenHelpers`（特性参数读取/标识符清理/字符串转义）。具体生成器标注 `[Generator]` 并继承基类，挂载到目标项目 `<ProjectReference OutputItemType="Analyzer">` |
-| `Viv.Kinna` | **长连接推送框架层**（IM 通用能力，从 `Viv.Herta.Link` 抽出）— `Connections/`（`IKinnaSession<THub>` 一个 Hub 一套运行实例、`KinnaConnectionPool` 本进程连接表 + 租约 + `KinnaConnectionLeaseSweeper<THub>`、`IKinnaConnectionCoordinator<THub>` 登记/Ping/**Ack**/**Resync**/**踢人**、`IKinnaClientSender` + internal `KinnaClientSender<THub>`）、`Contracts/`（`KinnaClientMethods` / `IKinnaKeys` 用户Key·群名·投递水位Key / `KinnaPayload` 带 `V` 的载荷基类 / `KinnaConnected`·`KinnaPong`·`KinnaResyncResult`）、`Dispatch/`（`IKinnaPusher<TEvent>` 业务只回答「方法名/载荷/目标」、`KinnaMessageDispatcher<THub, TEvent>` 统一流程：未命中本机=`Skipped` 且当成功、发送异常=`Failed` 不重投、署名不一致只审计、计划非法=`Dropped`；`AddKinnaPusher<THub,TEvent,TPusher>()` 一行注册）、`Ports/`（`IKinnaGroupSource<THub>` / `IKinnaPresenceSink<THub>` / `IKinnaDeliveryStore<THub>` + `NoopKinnaDeliveryStore`）、`Metrics/KinnaMetrics`（Meter `Viv.Kinna`，指标带 `hub` 标签）、`Extensions/`（`AddKinna<THub>()` / `MapKinnaHub<THub>()`）。**`Ack`/`Resync` 共用一份「每用户已确认消息」**：`Ack(long[] messageIds)` 逐条记 Id，记到 `KinnaOptions.DeliveryIdLimit`（默认 200，配 0 只留水位）就清空只留水位（等价全部标记已收到），水位只进不退、身份取自连接表；`Resync(lastMessageId)` 拿水位比客户端持有的决定 `NeedBackfill`（无记录时保守为 true），并把逐个记下的 `DeliveredMessageIds` 回给客户端跳过。存储走 `IKinnaDeliveryStore<THub>` 端口 + `KinnaDeliveryState`，Kinna 不绑实现，Herta 落 Redis（一个 Hash，字段 `w` 是水位、其余字段名即消息 Id，保留 7 天），Redis 故障时 `Ack` 记 Warning、`Resync` 退化成要求补拉。`IKinnaConnectionPool.Remove` 返回被移除的连接身份（一步摘除，避免与清扫各扣一次在线态），连接表按 `(SubjectId,UserId)` 与 `(AppId,SubjectId,UserId)` 两级索引（按用户查是 O(1)，这是每条消息每副本都走的路径）。**健康检查** `KinnaConnectionHealthCheck<THub>`（`EnableHealthCheck` 默认开，`AddHealthChecks()` 一个 Hub 一条）：报连接数 / 最久未续租 / 距上次清扫，清扫没跑过或超三个周期、最久未续租超两倍租约都记 `Degraded`，清扫时间由 `KinnaSweepClock<THub>` 记录。**上行限流** `KinnaUplinkLimiter<THub>`（`UplinkPermitLimit` 默认 20 次 / `UplinkWindowSeconds` 默认 10 秒，配 0 关闭）：按连接固定窗口，只挡 `Ping`/`Ack`，被挡的 Ping 仍回 Pong 但不续租、被挡的 Ack 返回 0，计 `kinna.uplink.throttled`。**同一客户端只留一条连接**（`SingleConnectionPerApp` 默认开）：按「租户 + 用户 + AppId」判，新连接登记时先摘旧连接（扣在线态 + 发 `ForceDisconnect`），只在本副本内生效，不同 AppId 的多设备互不影响。**支持一个进程托管多个 Hub**：每次 `AddKinna<THub>()` 只给该 Hub 建一套 Session（池/发送器/键/配置/清扫循环），业务注入 `IKinnaSession<自己的Hub>`；具体 Hub 类型只在注册点闭合（`IHubContext<T>` 不能按基类型解析），其余代码走 `IKinnaClientSender`。配置先读共享 `KinnaOptions`，再读 `KinnaOptions:<Hub 类型名>` 覆盖，最后 `configure` 回调。依赖只有 `FrameworkReference Microsoft.AspNetCore.App` + `Viv.Contracts` + `Viv.Log` —— **刻意不引 `Viv.Engine`（身份解析留业务 Hub）、`Viv.Nana`（框架不认识 MQ）、`Viv.Redis`（投递水位通过端口落业务侧）** |
+| `Viv.Kinna` | **长连接推送框架层**（IM 通用能力，从 `Viv.Herta.Link` 抽出）— `Connections/`（`IKinnaSession<THub>` 一个 Hub 一套运行实例、`KinnaConnectionPool` 本进程连接表 + 租约 + `KinnaConnectionLeaseSweeper<THub>`、`IKinnaConnectionCoordinator<THub>` 登记/Ping/**Ack**/**Resync**/**踢人**、`IKinnaClientSender` + internal `KinnaClientSender<THub>`）、`Contracts/`（`KinnaClientMethods` / `IKinnaKeys` 用户Key·群名·投递水位Key / `KinnaPayload` 带 `V` 的载荷基类 / `KinnaConnected`·`KinnaPong`·`KinnaResyncResult`）、`Dispatch/`（`IKinnaPusher<TEvent>` 业务只回答「方法名/载荷/目标」、`KinnaMessageDispatcher<THub, TEvent>` 统一流程：未命中本机=`Skipped` 且当成功、发送异常=`Failed` 不重投、署名不一致只审计、计划非法=`Dropped`；`AddKinnaPusher<THub,TEvent,TPusher>()` 一行注册）、`Ports/`（`IKinnaGroupSource<THub>` / `IKinnaPresenceSink<THub>` / `IKinnaDeliveryStore<THub>` + `NoopKinnaDeliveryStore`）、`Metrics/KinnaMetrics`（Meter `Viv.Kinna`，指标带 `hub` 标签）、`Extensions/`（`AddKinna<THub>()` / `MapKinnaHub<THub>()`）。**`Ack`/`Resync` 共用一份「每用户已确认消息」**：`Ack(long[] messageIds)` 逐条记 Id，记到 `KinnaOptions.DeliveryIdLimit`（默认 200，配 0 只留水位）就清空只留水位（等价全部标记已收到），水位只进不退、身份取自连接表；`Resync(lastMessageId)` 拿水位比客户端持有的决定 `NeedBackfill`（无记录时保守为 true），并把逐个记下的 `DeliveredMessageIds` 回给客户端跳过。存储走 `IKinnaDeliveryStore<THub>` 端口 + `KinnaDeliveryState`，Kinna 不绑实现，Herta 把水位落库（`EtChatDelivery`，一用户一行，`LastDeliveredMessageId` 只进不退）、明细落 Redis（一个 Hash，字段 `ids` 是逗号分隔的 Id 列表，保留 7 天，超 `DeliveryIdLimit` 清空），Redis 故障时 `Ack` 仍写库、`Resync` 只剩水位没有明细，客户端多补拉一次；水位读取失败才退化成要求补拉。`IKinnaConnectionPool.Remove` 返回被移除的连接身份（一步摘除，避免与清扫各扣一次在线态），连接表按 `(SubjectId,UserId)` 与 `(AppId,SubjectId,UserId)` 两级索引（按用户查是 O(1)，这是每条消息每副本都走的路径）。**健康检查** `KinnaConnectionHealthCheck<THub>`（`EnableHealthCheck` 默认开，`AddHealthChecks()` 一个 Hub 一条）：报连接数 / 最久未续租 / 距上次清扫，清扫没跑过或超三个周期、最久未续租超两倍租约都记 `Degraded`，清扫时间由 `KinnaSweepClock<THub>` 记录。**上行限流** `KinnaUplinkLimiter<THub>`（`UplinkPermitLimit` 默认 20 次 / `UplinkWindowSeconds` 默认 10 秒，配 0 关闭）：按连接固定窗口，只挡 `Ping`/`Ack`，被挡的 Ping 仍回 Pong 但不续租、被挡的 Ack 返回 0，计 `kinna.uplink.throttled`。**同一客户端只留一条连接**（`SingleConnectionPerApp` 默认开）：按「租户 + 用户 + AppId」判，新连接登记时先摘旧连接（扣在线态 + 发 `ForceDisconnect`），只在本副本内生效，不同 AppId 的多设备互不影响。**支持一个进程托管多个 Hub**：每次 `AddKinna<THub>()` 只给该 Hub 建一套 Session（池/发送器/键/配置/清扫循环），业务注入 `IKinnaSession<自己的Hub>`；具体 Hub 类型只在注册点闭合（`IHubContext<T>` 不能按基类型解析），其余代码走 `IKinnaClientSender`。配置先读共享 `KinnaOptions`，再读 `KinnaOptions:<Hub 类型名>` 覆盖，最后 `configure` 回调。依赖只有 `FrameworkReference Microsoft.AspNetCore.App` + `Viv.Contracts` + `Viv.Log` —— **刻意不引 `Viv.Engine`（身份解析留业务 Hub）、`Viv.Nana`（框架不认识 MQ）、`Viv.Redis`（投递水位通过端口落业务侧）** |
 
 ---
 
@@ -75,6 +75,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 
 - **事件契约的属性必须 public setter**：发件箱与 MQ 都用 `System.Text.Json` 默认选项（`OutboxJson.Options` 是 `JsonSerializerDefaults.Web`），**非 public setter 反序列化时不会赋值**。`SendMessageEvent.Message` 踩过：序列化正常、消费端拿到空串，实时推送只剩空正文；单测直接构造事件、不经过序列化，所以测不出来。契约新增字段别写 `private set`，动过的补一条 JSON 往返断言（`SendMessageEventTests`）。
 - **群消息读写都校验成员**：`SendMessageAsync` 与 `PullMessagesAsync` 都是先 `_groupMembers.IsMemberAsync(tenantId, targetId, userId)` 再往下走。少了读这一侧，知道 GroupId 就能拉全群历史。
+- **代发不做服务端权限判定**：`SendMessageAsync` 里 `FromUserId` 给了就按被署名人发 —— 这是对外提供的「模拟发送」能力，谁能代发由调用方（或网关）自己判定。Herta 不认识调用方的角色体系，也不该在这里猜；`IVivContext` 上没有、也不该加 `IsAdmin` 之类的字段。Herta 只守两条：租户永远取登录身份（请求体不带 `TenantId`），群聊发送校验「被署名人」在群里。评审报告里 S3 的「代发权限未修」按设计如此读，不是缺陷。
 - **建群要发 `MembershipChangedEvent`**：`CreateGroupAsync` 与 `AddGroupMembersAsync` 一样入队 `Joined`，`UserIds` 要带上群主（多端场景下他的其他设备也要进组）。不发的话，已在线的新成员要等重连才收得到群消息。
 - **会话行并发靠两样**：`ChatSessionRepository.GetOrCreateAsync` 先用分布式锁（键 `chat:session:{租户}:{用户}:{类型}:{对端}`）夹住「查不到 → 插入」，拿到锁后**再查一次**；取不到锁退化为直接插入（宁可极小概率多一行，也不能发不出消息）。这只是应用层兜底，**唯一性要手工建索引**（`SchemaSynchronizer` 不生成索引）：
 
@@ -85,6 +86,13 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 
   索引建好后并发首条消息会抛唯一约束异常，`InsertAsync` 已捕获：记 Warning 后按定位列重查，查到就复用那一行，查不到（如 PostgreSQL 上冲突已终止整个事务）把原异常抛出 —— 宁可报错，也不静默留下重复行。
 - **一条消息的写路径不要退回逐行**：`FindDirectPairAsync` 一次查双方会话 → `AppendAsync` → `TouchManyAsync` 一条 UPDATE 改两行 → 发件箱入队，常见路径 4 次往返。逐会话 `GetOrCreate` + 逐行 `TouchAsync`（每行先按主键查再更新）是 8 次。
+- **投递水位落库，明细留 Redis**：`EtChatDelivery` 一个用户一行（`TenantId` + `UserId`），`LastDeliveredMessageId` 只进不退，`Ack` 走 `IChatDeliveryRepository.MergeAsync`（行不存在时插入，并发首条撞唯一约束就回查改更新），明细（最近确认过的 Id 列表）仍放 Redis Hash。重连判断补拉以库里的水位为准，Redis 挂了只是少一份明细、多补拉几条。索引要手工建：
+
+  ```sql
+  CREATE UNIQUE INDEX UX_ChatDelivery_User ON EtChatDelivery (TenantId, UserId);
+  ```
+
+  表由 `initviv` 的 `SchemaSynchronizer` 建（`SyncTableAsync` 不在启动路径上），或者手工 DDL。注意 `Ack` 现在每次是「库一次读改写 + Redis 一次脚本」——客户端批量确认时摊销得掉，如果以后 Ack 频次上去了，再加「水位涨够 N 条或隔 X 秒才落库」的节流。
 
 ### Aspire orchestration (`src/Vivian/Viv.Aspire/`)
 
@@ -187,6 +195,13 @@ finally { await app.StopAsync(); }
 - `AddServiceDefaults()` and `MapDefaultEndpoints()` are **caller-side** Aspire concerns; the framework does not reference Aspire.
 
 ### Configuration: `VivOptions` node in `appsettings.json`
+
+> **凭据不入库**：入库的 `appsettings.json` 里所有凭据类值都是空串 —— `EnvOption.InternalToken`、`TokenOption.SecretKey`、`S3Option.AccessKey/SecretKey`、`LogOption.SeqApiKey`、`CacheOption.RedisOptions.ConnectionString/Password`、`DatabaseOption.MasterConnectionString`、`NanaOption.Password/SagaConnectionString`、SakuMai 的 TickerQ 连接串。三处来源按环境补上：
+> 1. **本地开发**：`appsettings.Development.json`（`.gitignore` 已排除，且是**整份覆盖**，所以每个 host 都有一份带真实值的副本）—— 新机器 clone 后没有这个文件，要自己建或向团队要；
+> 2. **生产**：环境变量 `VivOptions__TokenOption__SecretKey` / `VivOptions__EnvOption__InternalToken` / `VivOptions__DatabaseOption__MasterConnectionString` 等（层级用双下划线连接，标准配置链已生效）；
+> 3. **不要再往 `appsettings.json` 里填**：那份是共享的、会被提交的。
+>
+> ⚠️ `TokenOption.SecretKey` 为空时 JwtBearer 注册直接抛 `IDX10720`，这是有意的 fail fast —— 生产漏注入会在启动时炸，而不是静默用空密钥签 token。数据库/Redis/MQ 的连接串为空同理，在首次使用时报错。
 
 Every API / Worker / 工具箱 project carries a `VivOptions` node in its `appsettings.json`. It is bound via `configuration.GetSection("VivOptions").Get<VivOptions>()`（MS ConfigurationBinder）by `VivConfigLoader.Load(IConfiguration)`，which also writes the static `VivEngine.VivOptions` snapshot. Sub-sections drive all subsystem wiring:
 
