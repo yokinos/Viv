@@ -7,7 +7,8 @@ using Viv.Momo.Interface;
 namespace Viv.Entity.Database.Apex
 {
     /// <summary>
-    /// 菜单节点（可以是一级/多级菜单，也可以是不出现在菜单里的纯路由）
+    /// 菜单节点（目录或页面）。详情页、编辑页这类只在代码里跳转的页面挂在 AtMenuSubPage 上，
+    /// 用 IsVisible=false 表达"不进菜单"，不占用菜单节点。
     /// 按 ClientAppId 隔离：同一应用的不同平台是不同的 AppId，所以路由配置天然按端分开
     /// </summary>
     public class AtMenu : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
@@ -45,17 +46,18 @@ namespace Viv.Entity.Database.Apex
         public int Sort { get; set; }
 
         /// <summary>
-        /// 节点类型：目录 / 菜单页 / 纯路由
+        /// 节点类型：目录 / 页面
         /// </summary>
         public EmMenuType Type { get; set; }
 
         /// <summary>
-        /// 是否在菜单里展示。纯路由（Type=Route）不看这个字段，一律不展示
+        /// 是否在菜单里展示。隐藏的菜单项仍然会注册路由，只是侧边栏看不到
         /// </summary>
         public bool IsVisible { get; set; }
 
         /// <summary>
-        /// 客户端路由配置（JSON）。各端自己解释里面的键，后端只负责存取和透传
+        /// 客户端路由配置（JSON）。约定是「一个路由节点的形状」，由各端适配器解释；
+        /// 展示信息（标题/图标/排序/可见性）以列上的值为准，children 由层级生成，JSON 里写了也不生效
         /// </summary>
         public string? RouteConfig { get; set; }
 

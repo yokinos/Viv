@@ -71,16 +71,15 @@ namespace Viv.Apex.Tests
         }
 
         [Fact]
-        public void BuildTree_纯路由与隐藏菜单都标隐藏()
+        public void BuildTree_隐藏的菜单项仍然出路由_只是标隐藏()
         {
             var tree = Build(
-                Menu(1, EmMenuType.Route, null),
-                Menu(2, EmMenuType.Page, null, visible: false),
-                Menu(3, EmMenuType.Page, null));
+                Menu(1, EmMenuType.Page, """{"path":"detail/:id"}""", visible: false),
+                Menu(2, EmMenuType.Page, null));
 
             Assert.True(tree[0].Meta!.Hidden);
-            Assert.True(tree[1].Meta!.Hidden);
-            Assert.False(tree[2].Meta!.Hidden);
+            Assert.Equal("/detail/:id", tree[0].Path);
+            Assert.False(tree[1].Meta!.Hidden);
         }
 
         [Fact]

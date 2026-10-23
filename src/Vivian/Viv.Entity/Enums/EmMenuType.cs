@@ -6,7 +6,8 @@ using System.Text;
 namespace Viv.Entity.Enums
 {
     /// <summary>
-    /// 菜单节点类型。决定这一行在客户端是什么角色，跟具体前端框架无关
+    /// 菜单节点类型。只分「有没有自己的页面」，跟具体前端框架无关：
+    /// 详情页、编辑页这类"代码跳转但不进菜单"的页面走 AtMenuSubPage + IsVisible=false
     /// </summary>
     public enum EmMenuType : byte
     {
@@ -17,15 +18,9 @@ namespace Viv.Entity.Enums
         Directory = 0,
 
         /// <summary>
-        /// 菜单页：出现在菜单里，点了能跳
+        /// 页面：自己能跳，是否显示在菜单里看 IsVisible
         /// </summary>
         [Description("页面")]
-        Page = 1,
-
-        /// <summary>
-        /// 纯路由：不进菜单，只能被代码跳转（详情页、编辑页之类）
-        /// </summary>
-        [Description("路由")]
-        Route = 2
+        Page = 1
     }
 }

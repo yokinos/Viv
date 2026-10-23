@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Viv.Apex.Core.Module.Menu.Vue;
 using Viv.Contracts.Attributes;
 using Viv.Contracts.Interface;
@@ -9,9 +8,9 @@ using Viv.Entity.Enums;
 namespace Viv.Apex.Core.Module.Menu
 {
     /// <summary>
-    /// Vue Router 适配器。RouteConfig 的约定见 <see cref="VueRouteConfig"/>，
-    /// 缺项一律给 Vue 端的默认值，前端不用再兜底。
-    /// 组树也在这里做：别的技术栈的结构可能根本不是树，不该塞进公共接口。
+    /// Vue Router 适配器。AtMenu.RouteConfig 存的就是一个 <see cref="VueRouteItem"/>（不含 children），
+    /// 反序列化后把列上的展示信息盖上去：title/icon/orderNo/hidden 以列为准，children 由树结构生成，
+    /// JSON 里写了这两个字段也不生效。组树也在这里做 —— 别的技术栈的结构可能不是树。
     /// </summary>
     [VivDependency(EmClientStack.Vue)]
     public class VueMenuRouteAdapter : IMenuRouteAdapter, IDependency
@@ -21,8 +20,7 @@ namespace Viv.Apex.Core.Module.Menu
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
-            PropertyNameCaseInsensitive = true,
-            NumberHandling = JsonNumberHandling.AllowReadingFromString
+            PropertyNameCaseInsensitive = true
         };
 
         public EmClientStack Stack => EmClientStack.Vue;
@@ -62,54 +60,35 @@ namespace Viv.Apex.Core.Module.Menu
 
         private static VueRouteItem BuildItem(AtMenu menu, VueRouteItem? parent)
         {
-            var config = Parse(menu.RouteConfig);
+            var item = Parse(menu.RouteConfig) ?? new VueRouteItem();
 
-            return new VueRouteItem
-            {
-                Path = Combine(parent?.Path, config?.Path),
-                Name = config?.Name,
-                Component = menu.Type == EmMenuType.Directory ? LayoutComponent : config?.Component,
-                Redirect = config?.Redirect,
-                Meta = new VueRouteMeta
-                {
-                    Title = menu.Title,
-                    Icon = menu.Icon,
-                    OrderNo = menu.Sort,
-                    // 纯路由不进菜单；显式隐藏的也按隐藏走
-                    Hidden = menu.Type == EmMenuType.Route || !menu.IsVisible,
-                    KeepAlive = config?.Meta?.KeepAlive ?? true,
-                    Expanded = config?.Meta?.Expanded,
-                    Single = config?.Meta?.Single,
-                    HiddenBreadcrumb = config?.Meta?.HiddenBreadcrumb,
-                    FrameSrc = config?.Meta?.FrameSrc,
-                    FrameBlank = config?.Meta?.FrameBlank
-                }
-            };
+            item.Path = Combine(parent?.Path, item.Path);
+            item.Component = menu.Type == EmMenuType.Directory ? LayoutComponent : item.Component;
+            item.Meta ??= new VueRouteMeta();
+            item.Meta.Title = menu.Title;
+            item.Meta.Icon = menu.Icon;
+            item.Meta.OrderNo = menu.Sort;
+            // 隐藏的菜单项照样注册路由，只是侧边栏不显示
+            item.Meta.Hidden = !menu.IsVisible;
+            item.Meta.KeepAlive ??= true;
+            item.Children = [];
+
+            return item;
         }
 
         private static VueRouteItem BuildSubPage(AtMenuSubPage page, VueRouteItem parent)
         {
-            var config = Parse(page.RouteConfig);
+            var item = Parse(page.RouteConfig) ?? new VueRouteItem();
 
-            return new VueRouteItem
-            {
-                Path = Combine(parent.Path, config?.Path),
-                Name = config?.Name,
-                Component = config?.Component,
-                Redirect = config?.Redirect,
-                Meta = new VueRouteMeta
-                {
-                    Title = page.Title,
-                    OrderNo = page.Sort,
-                    Hidden = !page.IsVisible,
-                    KeepAlive = config?.Meta?.KeepAlive ?? true,
-                    Expanded = config?.Meta?.Expanded,
-                    Single = config?.Meta?.Single,
-                    HiddenBreadcrumb = config?.Meta?.HiddenBreadcrumb,
-                    FrameSrc = config?.Meta?.FrameSrc,
-                    FrameBlank = config?.Meta?.FrameBlank
-                }
-            };
+            item.Path = Combine(parent.Path, item.Path);
+            item.Meta ??= new VueRouteMeta();
+            item.Meta.Title = page.Title;
+            item.Meta.OrderNo = page.Sort;
+            item.Meta.Hidden = !page.IsVisible;
+            item.Meta.KeepAlive ??= true;
+            item.Children = [];
+
+            return item;
         }
 
         /// <summary>
@@ -130,13 +109,13 @@ namespace Viv.Apex.Core.Module.Menu
             return parentPath is null ? "/" + path : parentPath.TrimEnd('/') + "/" + path;
         }
 
-        private static VueRouteConfig? Parse(string? json)
+        private static VueRouteItem? Parse(string? json)
         {
             if (string.IsNullOrWhiteSpace(json)) return null;
 
             try
             {
-                return JsonSerializer.Deserialize<VueRouteConfig>(json, JsonOptions);
+                return JsonSerializer.Deserialize<VueRouteItem>(json, JsonOptions);
             }
             catch (JsonException)
             {
@@ -144,34 +123,5 @@ namespace Viv.Apex.Core.Module.Menu
                 return null;
             }
         }
-    }
-
-    /// <summary>Vue RouteConfig 的约定。未列出的键会被忽略，不会报错</summary>
-    public class VueRouteConfig
-    {
-        public string? Path { get; set; }
-
-        public string? Name { get; set; }
-
-        public string? Component { get; set; }
-
-        public string? Redirect { get; set; }
-
-        public VueRouteMetaConfig? Meta { get; set; }
-    }
-
-    public class VueRouteMetaConfig
-    {
-        public bool? KeepAlive { get; set; }
-
-        public bool? Expanded { get; set; }
-
-        public bool? Single { get; set; }
-
-        public bool? HiddenBreadcrumb { get; set; }
-
-        public string? FrameSrc { get; set; }
-
-        public bool? FrameBlank { get; set; }
     }
 }
