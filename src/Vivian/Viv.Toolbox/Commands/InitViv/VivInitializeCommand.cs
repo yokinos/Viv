@@ -1,3 +1,4 @@
+
 using Microsoft.Extensions.Configuration;
 using Spectre.Console.Cli;
 using Viv.Cli;
@@ -17,7 +18,7 @@ namespace Viv.Toolbox.Commands.InitViv
     /// 参数给全则全程不问（--yes），适合自动化。
     /// </summary>
     [VivCommand("initviv", "初始化Viv所有库（建库 + 表结构 + 初始操作员）")]
-    public class VivInitializeDbProcess : AsyncCommand<InitVivSettings>
+    public class VivInitializeCommand : AsyncCommand<InitVivSettings>
     {
         /// <summary>
         /// 库清单：库名 + 表名前缀 + 实体所在命名空间（前缀匹配；命名空间为空表示该库只有框架表）
@@ -51,7 +52,7 @@ namespace Viv.Toolbox.Commands.InitViv
 
         private readonly IConfiguration _configuration;
 
-        public VivInitializeDbProcess(IMomoDbContextFactory dbContextFactory, IConfiguration configuration)
+        public VivInitializeCommand(IMomoDbContextFactory dbContextFactory, IConfiguration configuration)
         {
             _dbContextFactory = dbContextFactory;
             _configuration = configuration;
