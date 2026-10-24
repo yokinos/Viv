@@ -7,10 +7,10 @@ using Viv.Momo.Interface;
 namespace Viv.Entity.Database.Apex
 {
     /// <summary>
-    /// 菜单按钮表
-    /// 一对多关联 AtMenu 页面菜单，一个页面多条操作按钮
+    /// 菜单动作表（权限点）
+    /// 一对多关联 AtMenu 页面菜单，一个页面多条操作动作
     /// </summary>
-    public class AtMenuButton : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
+    public class AtMenuAction : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
         /// 所属页面菜单Id（仅关联Type=Page的菜单）
@@ -23,7 +23,7 @@ namespace Viv.Entity.Database.Apex
         public int BitIndex { get; set; }
 
         /// <summary>
-        /// 按钮名称
+        /// 动作名称
         /// </summary>
         [StringLength(100)]
         public string? Name { get; set; }
@@ -34,7 +34,7 @@ namespace Viv.Entity.Database.Apex
         public int Sort { get; set; }
 
         /// <summary>
-        /// 按钮备注说明
+        /// 动作备注说明
         /// </summary>
         [StringLength(500)]
         public string? Remark { get; set; }

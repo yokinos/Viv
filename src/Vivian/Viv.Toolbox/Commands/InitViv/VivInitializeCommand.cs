@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Spectre.Console.Cli;
 using Viv.Cli;
 using Viv.Delusion.Magic;
+using Viv.Entity.Database.Apex;
 using Viv.Entity.Enums;
 using Viv.Momo;
 using Viv.Momo.Enums;
@@ -15,6 +16,7 @@ namespace Viv.Toolbox.Commands.InitViv
     /// <summary>
     /// 初始化 Viv 全部数据库：交互问数据库地址与初始操作员 → 建库 → 逐库同步表结构 → 播种超级管理员。
     /// 库清单硬编码在本命令里；没有实体的框架库只建库，表由框架自己建。
+    /// Apex 库额外播种客户端应用、初始菜单树（App管理 / 系统设置）与超级管理员。
     /// 参数给全则全程不问（--yes），适合自动化。
     /// </summary>
     [VivCommand("initviv", "初始化Viv所有库（建库 + 表结构 + 初始操作员）")]
@@ -47,6 +49,28 @@ namespace Viv.Toolbox.Commands.InitViv
         /// 初始客户端应用的对外 AppId
         /// </summary>
         private const string AdminClientAppId = "viv-rootadmin-app";
+
+        /// <summary>
+        /// 初始菜单树。侧边栏只有 App管理 → App列表；
+        /// 菜单管理是 App列表 的隐藏子路由（由列表行的动作进入），同名动作只做权限位。
+        /// </summary>
+        private const string AppMenuTitle = "App管理";
+        private const string AppListTitle = "App列表";
+        private const string MenuManageTitle = "菜单管理";
+
+        private const string AppMenuRouteConfig = """{"path":"/app","name":"app","redirect":"/app/list"}""";
+        private const string AppListRouteConfig = """{"path":"list","name":"app-list","component":"app/list/index"}""";
+        private const string MenuManageSubPageRouteConfig = """{"path":"menu","name":"app-list-menu","component":"app/list/menu"}""";
+
+        private const string SystemMenuTitle = "系统设置";
+        private const string StaffMenuTitle = "员工管理";
+        private const string StaffListTitle = "员工列表";
+        private const string RoleListTitle = "角色列表";
+
+        private const string SystemMenuRouteConfig = """{"path":"/system","name":"system","redirect":"/system/staff"}""";
+        private const string StaffMenuRouteConfig = """{"path":"staff","name":"system-staff","component":"system/staff/index"}""";
+        private const string StaffListRouteConfig = """{"path":"list","name":"system-staff-list","component":"system/staff/list"}""";
+        private const string RoleListRouteConfig = """{"path":"roles","name":"system-staff-roles","component":"system/staff/roles"}""";
 
         private readonly IMomoDbContextFactory _dbContextFactory;
 
@@ -160,7 +184,9 @@ namespace Viv.Toolbox.Commands.InitViv
 
                     if (database == ApexDatabase)
                     {
-                        seeded += await SeedClientAppAsync(db, cancellationToken);
+                        var (appInserted, clientAppId) = await SeedClientAppAsync(db, cancellationToken);
+                        seeded += appInserted;
+                        seeded += await SeedMenusAsync(db, clientAppId, cancellationToken);
                         seeded += await SeedAdminUserAsync(db, operatorName, nickName, phone, password, cancellationToken);
                     }
                 }
@@ -265,9 +291,10 @@ namespace Viv.Toolbox.Commands.InitViv
 
         /// <summary>
         /// 播种客户端应用：后端很多数据（菜单、组织、版本）都挂在 AtClientApp.Id 下，
-        /// 缺这条记录后台取不到任何东西，而它又不能为空，所以必须初始化
+        /// 缺这条记录后台取不到任何东西，而它又不能为空，所以必须初始化。
+        /// 返回「新增行数 + 这条应用的 Id」，后面的菜单播种要拿它做归属。
         /// </summary>
-        private static async Task<int> SeedClientAppAsync(IMomoDbContext db, CancellationToken cancellationToken)
+        private static async Task<(int Inserted, long ClientAppId)> SeedClientAppAsync(IMomoDbContext db, CancellationToken cancellationToken)
         {
             var exists = await db.FindScalarAsync<long?>(
                 "SELECT TOP 1 Id FROM AtClientApp WHERE AppId = @appId AND IsDeleted = 0",
@@ -277,20 +304,22 @@ namespace Viv.Toolbox.Commands.InitViv
             if (exists is not null and not 0)
             {
                 Out.Println($"  [{ApexDatabase}] 客户端应用 {AdminClientAppId} 已存在，跳过");
-                return 0;
+                return (0, exists.Value);
             }
 
+            var id = IdMagic.NextId();
             var secret = Guid.NewGuid().ToString("N");
 
             await db.ExecuteSqlAsync(
-                @"INSERT INTO AtClientApp (Id, AppId, Name, Platform, AppSecret, Source, Remark, Status, IsDeleted, CreatedAt)
-                  VALUES (@id, @appId, @name, @platform, @secret, @source, @remark, @status, 0, @createdAt)",
+                @"INSERT INTO AtClientApp (Id, AppId, Name, Platform, ClientStack, AppSecret, Source, Remark, Status, IsDeleted, CreatedAt)
+                  VALUES (@id, @appId, @name, @platform, @clientStack, @secret, @source, @remark, @status, 0, @createdAt)",
                 new
                 {
-                    id = IdMagic.NextId(),
+                    id,
                     appId = AdminClientAppId,
                     name = "Viv管理后台",
                     platform = (byte)EmAppPlatform.Web,
+                    clientStack = (int)EmClientStack.Vue,
                     secret,
                     source = (byte)EmAppSouce.Viv,
                     remark = "系统初始化创建",
@@ -300,7 +329,188 @@ namespace Viv.Toolbox.Commands.InitViv
                 cancellationToken);
 
             Out.Println($"  [{ApexDatabase}] 客户端应用已创建：AppId={AdminClientAppId}　AppSecret={secret}");
-            return 1;
+            return (1, id);
+        }
+
+        /// <summary>
+        /// 播种初始菜单树：
+        /// App管理（目录）→ App列表（页面）→ 菜单管理（隐藏子页面 + 动作）；
+        /// 系统设置（目录）→ 员工管理（页面）→ 员工列表 / 角色列表（子页面）。
+        /// 按根目录整枝判重：根已存在就跳过该枝，不逐节点修复。
+        /// </summary>
+        private static async Task<int> SeedMenusAsync(IMomoDbContext db, long clientAppId, CancellationToken cancellationToken)
+        {
+            var inserted = 0;
+
+            if (await MenuBranchExistsAsync(db, clientAppId, AppMenuTitle, cancellationToken))
+            {
+                Out.Println($"  [{ApexDatabase}] 菜单「{AppMenuTitle}」已存在，跳过");
+            }
+            else
+            {
+                var (menus, subPages, actions) = BuildAppMenuSeed(clientAppId);
+                inserted += await InsertMenuSeedAsync(db, menus, subPages, actions, cancellationToken);
+            }
+
+            if (await MenuBranchExistsAsync(db, clientAppId, SystemMenuTitle, cancellationToken))
+            {
+                Out.Println($"  [{ApexDatabase}] 菜单「{SystemMenuTitle}」已存在，跳过");
+            }
+            else
+            {
+                var (menus, subPages, actions) = BuildSystemMenuSeed(clientAppId);
+                inserted += await InsertMenuSeedAsync(db, menus, subPages, actions, cancellationToken);
+            }
+
+            return inserted;
+        }
+
+        /// <summary>
+        /// App 管理这一枝：目录 + 页面 + 隐藏子页面 + 动作。
+        /// 父级 Id 在内存里先接好，再整批落库。
+        /// </summary>
+        private static (List<AtMenu> Menus, List<AtMenuSubPage> SubPages, List<AtMenuAction> Actions) BuildAppMenuSeed(long clientAppId)
+        {
+            var appMenu = NewMenu(clientAppId, 0, AppMenuTitle, EmMenuType.Directory, AppMenuRouteConfig, "app", 1);
+            var appList = NewMenu(clientAppId, appMenu.Id, AppListTitle, EmMenuType.Page, AppListRouteConfig, null, 1);
+
+            var subPage = NewSubPage(appList.Id, MenuManageTitle, MenuManageSubPageRouteConfig, false, 1);
+            var action = NewAction(appList.Id, MenuManageTitle, 1);
+
+            return ([appMenu, appList], [subPage], [action]);
+        }
+
+        /// <summary>
+        /// 系统设置这一枝：目录 + 员工管理页面 + 员工列表 / 角色列表两个可见子页面。
+        /// </summary>
+        private static (List<AtMenu> Menus, List<AtMenuSubPage> SubPages, List<AtMenuAction> Actions) BuildSystemMenuSeed(long clientAppId)
+        {
+            var systemMenu = NewMenu(clientAppId, 0, SystemMenuTitle, EmMenuType.Directory, SystemMenuRouteConfig, "setting", 2);
+            var staffMenu = NewMenu(clientAppId, systemMenu.Id, StaffMenuTitle, EmMenuType.Page, StaffMenuRouteConfig, null, 1);
+
+            var staffList = NewSubPage(staffMenu.Id, StaffListTitle, StaffListRouteConfig, true, 1);
+            var roleList = NewSubPage(staffMenu.Id, RoleListTitle, RoleListRouteConfig, true, 2);
+
+            return ([systemMenu, staffMenu], [staffList, roleList], []);
+        }
+
+        private static AtMenu NewMenu(long clientAppId, long parentId, string title, EmMenuType type,
+            string routeConfig, string? icon, int sort)
+            => new()
+            {
+                Id = IdMagic.NextId(),
+                ClientAppId = clientAppId,
+                ParentId = parentId,
+                Title = title,
+                Type = type,
+                Icon = icon,
+                Sort = sort,
+                IsVisible = true,
+                RouteConfig = routeConfig,
+                Description = "系统初始化创建",
+                Status = EmStatus.Enabled
+            };
+
+        private static AtMenuSubPage NewSubPage(long menuId, string title, string routeConfig, bool isVisible, int sort)
+            => new()
+            {
+                Id = IdMagic.NextId(),
+                MenuId = menuId,
+                Title = title,
+                RouteConfig = routeConfig,
+                IsVisible = isVisible,
+                Sort = sort,
+                Remark = "系统初始化创建",
+                Status = EmStatus.Enabled
+            };
+
+        private static AtMenuAction NewAction(long menuId, string name, int sort)
+            => new()
+            {
+                Id = IdMagic.NextId(),
+                MenuId = menuId,
+                Name = name,
+                Sort = sort,
+                Remark = "系统初始化创建",
+                Status = EmStatus.Enabled
+            };
+
+        /// <summary>
+        /// 整批落库。父节点先写，子页面/动作引用的是内存里已经接好的 Id。
+        /// 整枝一个事务：子页面写失败时连菜单一起回滚，避免留下「根目录在、子页面没了」的半截数据。
+        /// BitIndex 按各自表内当前最大值往后排，避免和手工数据撞位。
+        /// </summary>
+        private static async Task<int> InsertMenuSeedAsync(IMomoDbContext db,
+            List<AtMenu> menus, List<AtMenuSubPage> subPages, List<AtMenuAction> actions,
+            CancellationToken cancellationToken)
+        {
+            await db.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var nextMenuBit = await NextBitIndexAsync(db, "AtMenu", "ClientAppId", menus[0].ClientAppId, cancellationToken);
+                foreach (var menu in menus) menu.BitIndex = nextMenuBit++;
+
+                if (!await db.InsertAsync(menus, cancellationToken))
+                    throw new InvalidOperationException("初始菜单写入失败");
+
+                if (subPages.Count > 0)
+                {
+                    foreach (var group in subPages.GroupBy(x => x.MenuId))
+                    {
+                        var next = await NextBitIndexAsync(db, "AtMenuSubPage", "MenuId", group.Key, cancellationToken);
+                        foreach (var page in group) page.BitIndex = next++;
+                    }
+
+                    if (!await db.InsertAsync(subPages, cancellationToken))
+                        throw new InvalidOperationException("初始菜单子页面写入失败");
+                }
+
+                if (actions.Count > 0)
+                {
+                    foreach (var group in actions.GroupBy(x => x.MenuId))
+                    {
+                        var next = await NextBitIndexAsync(db, "AtMenuAction", "MenuId", group.Key, cancellationToken);
+                        foreach (var action in group) action.BitIndex = next++;
+                    }
+
+                    if (!await db.InsertAsync(actions, cancellationToken))
+                        throw new InvalidOperationException("初始菜单动作写入失败");
+                }
+
+                await db.CommitTransactionAsync(cancellationToken);
+
+                Out.Println($"  [{ApexDatabase}] 初始菜单已创建：菜单 {menus.Count}、子页面 {subPages.Count}、动作 {actions.Count}");
+                return menus.Count + subPages.Count + actions.Count;
+            }
+            catch
+            {
+                await db.RollbackTransactionAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// 取某张表在某个归属列下的下一个 BitIndex。表名/列名是内部常量，不来自外部输入。
+        /// </summary>
+        private static Task<int> NextBitIndexAsync(IMomoDbContext db, string table, string ownerColumn, long ownerId,
+            CancellationToken cancellationToken)
+            => db.FindScalarAsync<int>(
+                $"SELECT ISNULL(MAX(BitIndex), -1) + 1 FROM {table} WHERE {ownerColumn} = @ownerId AND IsDeleted = 0",
+                new { ownerId },
+                cancellationToken);
+
+        /// <summary>
+        /// 根目录是否已经播种过。整枝判重，不逐节点补齐。
+        /// </summary>
+        private static async Task<bool> MenuBranchExistsAsync(IMomoDbContext db, long clientAppId, string title,
+            CancellationToken cancellationToken)
+        {
+            var id = await db.FindScalarAsync<long?>(
+                "SELECT TOP 1 Id FROM AtMenu WHERE ClientAppId = @appId AND ParentId = 0 AND Title = @title AND IsDeleted = 0",
+                new { appId = clientAppId, title },
+                cancellationToken);
+
+            return id is > 0;
         }
 
         /// <summary>
