@@ -8,9 +8,8 @@ using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
 using Viv.Momo.Sync;
-using Viv.Toolbox.CommandSetting.Basic;
 
-namespace Viv.Toolbox.Commands.Basic
+namespace Viv.Toolbox.Commands.InitViv
 {
     /// <summary>
     /// 初始化 Viv 全部数据库：交互问数据库地址与初始操作员 → 建库 → 逐库同步表结构 → 播种超级管理员。
@@ -18,7 +17,7 @@ namespace Viv.Toolbox.Commands.Basic
     /// 参数给全则全程不问（--yes），适合自动化。
     /// </summary>
     [VivCommand("initviv", "初始化Viv所有库（建库 + 表结构 + 初始操作员）")]
-    public class Cmd_InitViv : AsyncCommand<InitVivSettings>
+    public class VivInitializeDbProcess : AsyncCommand<InitVivSettings>
     {
         /// <summary>
         /// 库清单：库名 + 表名前缀 + 实体所在命名空间（前缀匹配；命名空间为空表示该库只有框架表）

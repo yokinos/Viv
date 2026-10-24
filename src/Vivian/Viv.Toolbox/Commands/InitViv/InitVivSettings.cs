@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Viv.Toolbox.CommandSetting.Basic
+namespace Viv.Toolbox.Commands.InitViv
 {
     /// <summary>
     /// initviv 的参数：全部给了就不问，缺什么问什么
