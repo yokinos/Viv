@@ -51,7 +51,7 @@ namespace Viv.Toolbox.Commands.InitViv
 
         private readonly IConfiguration _configuration;
 
-        public Cmd_InitViv(IMomoDbContextFactory dbContextFactory, IConfiguration configuration)
+        public VivInitializeDbProcess(IMomoDbContextFactory dbContextFactory, IConfiguration configuration)
         {
             _dbContextFactory = dbContextFactory;
             _configuration = configuration;
