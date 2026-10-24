@@ -13,7 +13,11 @@ namespace Viv.Fakes;
 /// </summary>
 public class TestContext : IVivContext
 {
-    private VivContextContent? _snapshot;
+    /// <summary>
+    /// 快照的真实存放处。上下文与访问器共用这一份 —— 否则
+    /// <see cref="VivContextAccessor"/> 拿到的访问器读不到 <see cref="Snapshot"/> 摆的值。
+    /// </summary>
+    private readonly TestContextAccessor _accessor = new();
 
     /// <summary>
     /// 当前快照，可直接赋值（测试摆初值用，不计数）；
@@ -21,8 +25,8 @@ public class TestContext : IVivContext
     /// </summary>
     public VivContextContent? Snapshot
     {
-        get => _snapshot;
-        set => _snapshot = value;
+        get => _accessor.Current;
+        set => _accessor.Current = value;
     }
 
     /// <summary>被清了几次 —— 验「作用域结束后确实清理了上下文」</summary>
@@ -42,28 +46,30 @@ public class TestContext : IVivContext
 
     public string TraceId => ThrowOnMemberAccess
         ? throw new InvalidOperationException("被测代码不该读上下文（TestContext.ThrowOnMemberAccess）")
-        : _snapshot?.TraceId ?? "";
+        : _accessor.Current?.TraceId ?? "";
 
     public void SetSnapshot(VivContextContent model)
     {
         SetSnapshotCalls++;
-        _snapshot = model;
+        _accessor.Current = model;
     }
 
     public void Clear()
     {
         ClearCalls++;
-        _snapshot = null;
+        _accessor.Current = null;
     }
 
-    public VivContextContent? GetRawSnapshot() => _snapshot;
+    public VivContextContent? GetRawSnapshot() => _accessor.Current;
+
+    public IVivContextAccessor VivContextAccessor => _accessor;
 
     private long Read(Func<VivContextContent, long> selector)
     {
         if (ThrowOnMemberAccess)
             throw new InvalidOperationException("被测代码不该读上下文（TestContext.ThrowOnMemberAccess）");
 
-        return _snapshot is null ? 0 : selector(_snapshot);
+        return _accessor.Current is { } snapshot ? selector(snapshot) : 0;
     }
 }
 

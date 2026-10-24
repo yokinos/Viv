@@ -22,6 +22,8 @@ namespace Viv.Sandrone.Impl
 
         public string TraceId => Snapshot?.TraceId ?? string.Empty;
 
+        public IVivContextAccessor VivContextAccessor => _accessor;
+
         public VivContextContent? GetRawSnapshot()
         {
             return Snapshot;

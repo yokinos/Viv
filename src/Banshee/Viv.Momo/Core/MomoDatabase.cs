@@ -26,27 +26,21 @@ namespace Viv.Momo.Core
     public class MomoDatabase : IDisposable
     {
         protected readonly IVivContext _vivContext;
-
-        protected DatabaseOptions _databaseOptions;
-
+        protected readonly IVivContextAccessor _accessor;
         protected readonly ILoggerContract _logger;
-
-        protected readonly IDatabaseOptionsProvider _optionsProvider;
-
-        protected EFAppContext? _writeDbContext;
-
-        protected EFAppContext? _readDbContext;
-
         protected IDbTransaction? _transaction;
 
-        protected int _timeOut = 30;
+        protected DatabaseOptions _databaseOptions;
+        protected EFAppContext? _writeDbContext;
+        protected EFAppContext? _readDbContext;
 
+        protected int _timeOut = 30;
         protected static readonly HashSet<string> _primaryKeys = ["Id"];
 
         /// <summary>
         /// 查询耗时与慢查询判据。EF 那条路随 EFAppContext 下发到 DbCommandInterceptor，
         /// Dapper 的执行点在子类 MomoDatabaseContext 里直接用。
-        /// 与 _databaseOptions 一样在 SetOptions 里赋值
+        /// 与 _databaseOptions 一样在构造时定死，不随后续请求变化。
         /// </summary>
         protected QueryTelemetry _queryTelemetry = null!;
 
@@ -59,39 +53,39 @@ namespace Viv.Momo.Core
 
         private bool _disposed = false;
 
+        /// <summary>
+        /// 用默认库配置构造。options 在构造时定死 —— 建过上下文之后再换配置，
+        /// 缓存里的上下文和 <see cref="_databaseOptions"/> 会各说各话，故不再提供可变的 SetOptions。
+        /// 需要指定另一份配置（如 <see cref="MomoDbContextFactory"/> 的一次性会话）时，
+        /// 由调用方包一个 <see cref="IDatabaseOptionsProvider"/> 传进来。
+        /// </summary>
         public MomoDatabase(IVivContext vivContext, ILoggerContract logger, IDatabaseOptionsProvider optionsProvider)
         {
             ArgumentNullException.ThrowIfNull(vivContext);
-            _vivContext = vivContext;
-            _optionsProvider = optionsProvider;
-            _logger = logger;
-            SetOptions(_optionsProvider.GetRealOptions());
-        }
+            ArgumentNullException.ThrowIfNull(logger);
+            ArgumentNullException.ThrowIfNull(optionsProvider);
 
-        public void SetOptions(DatabaseOptions? options)
-        {
+            var options = optionsProvider.GetRealOptions();
             ArgumentNullException.ThrowIfNull(options);
+
+            _vivContext = vivContext;
+            _logger = logger;
+            _accessor = vivContext.VivContextAccessor
+                ?? throw new InvalidOperationException("IVivContext.VivContextAccessor 不能为空：Momo 需要它挂租户过滤器。");
             _databaseOptions = options;
-            _timeOut = _databaseOptions.Timeout;
-            // 换 options 就换阈值，跟着重建一份（无状态，重建没有代价）
-            _queryTelemetry = new QueryTelemetry(_logger, _databaseOptions.SlowQueryThresholdMs);
+            _timeOut = options.Timeout;
+            _queryTelemetry = new QueryTelemetry(logger, options.SlowQueryThresholdMs);
         }
 
         /// <summary>
-        /// 获取要使用的EFCore上下文（内部使用缓存，线程安全）
+        /// 获取本次会话要用的 EF 上下文。读 / 写各缓存一个、在实例内复用 —— 缓存是刻意的：
+        /// Dapper 的 <c>_transaction</c> 来自这个上下文的连接，每次换新实例事务就对不上了。
         /// </summary>
         [return: NotNull]
         public EFAppContext GetAppContext(DbReadWriteType dbReadWriteType = DbReadWriteType.Write)
         {
-            return CreateEFAppContext(_databaseOptions, dbReadWriteType);
-        }
-
-        /// <summary>
-        /// 创建或获取缓存的EFAppContext
-        /// </summary>
-        public EFAppContext CreateEFAppContext(DatabaseOptions options, DbReadWriteType dbReadWriteType, bool reload = false)
-        {
-            if (!options.IsReadWriteSplit)
+            // 无读写分离 → 走主库
+            if (!_databaseOptions.IsReadWriteSplit)
             {
                 dbReadWriteType = DbReadWriteType.Write;
             }
@@ -100,25 +94,19 @@ namespace Viv.Momo.Core
             {
                 if (dbReadWriteType == DbReadWriteType.Read)
                 {
-                    if (_readDbContext == null || reload)
-                    {
-                        var old = _readDbContext;
-                        _readDbContext = new EFAppContext(options, DbReadWriteType.Read, _queryTelemetry);
-                        old?.Dispose();
-                    }
-                    return _readDbContext;
+                    return _readDbContext ??= CreateContext(DbReadWriteType.Read);
                 }
-                else
-                {
-                    if (_writeDbContext == null || reload)
-                    {
-                        var old = _writeDbContext;
-                        _writeDbContext = new EFAppContext(options, DbReadWriteType.Write, _queryTelemetry);
-                        old?.Dispose();
-                    }
-                    return _writeDbContext;
-                }
+
+                return _writeDbContext ??= CreateContext(DbReadWriteType.Write);
             }
+        }
+
+        /// <summary>
+        /// 建上下文。租户访问器取自当前 <see cref="IVivContext"/>，不再有静态回落分支。
+        /// </summary>
+        private EFAppContext CreateContext(DbReadWriteType dbReadWriteType)
+        {
+            return new EFAppContext(_databaseOptions, _accessor, dbReadWriteType, _queryTelemetry);
         }
 
         /// <summary>

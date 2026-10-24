@@ -48,5 +48,10 @@ namespace Viv.Contracts.Interface
         /// 获取原始快照（谨慎使用，优先使用封装属性）
         /// </summary>
         VivContextContent? GetRawSnapshot();
+
+        /// <summary>
+        /// 当前上下文背后的访问器（<see cref="IVivContext"/> 本身就是它的视图）。
+        /// </summary>
+        IVivContextAccessor VivContextAccessor { get; }
     }
 }

@@ -14,22 +14,26 @@ namespace Viv.Momo.Core
 
         private readonly ILoggerContract _logger;
 
-        private readonly IDatabaseOptionsProvider _optionsProvider;
-
-        public MomoDbContextFactory(IVivContext vivContext, ILoggerContract logger, IDatabaseOptionsProvider optionsProvider)
+        public MomoDbContextFactory(IVivContext vivContext, ILoggerContract logger)
         {
             _vivContext = vivContext;
             _logger = logger;
-            _optionsProvider = optionsProvider;
         }
 
         /// <inheritdoc/>
         public IMomoDbContext? Create(DatabaseOptions options)
         {
             if (options == null) return null;
-            var dataContext = new MomoDatabaseContext(_vivContext, _logger, _optionsProvider);
-            dataContext.SetOptions(options);
-            return dataContext;
+            return new MomoDatabaseContext(_vivContext, _logger, new FixedOptionsProvider(options));
+        }
+
+        private sealed class FixedOptionsProvider : IDatabaseOptionsProvider
+        {
+            private readonly DatabaseOptions _options;
+
+            public FixedOptionsProvider(DatabaseOptions options) => _options = options;
+
+            public DatabaseOptions GetRealOptions() => _options;
         }
     }
 }
