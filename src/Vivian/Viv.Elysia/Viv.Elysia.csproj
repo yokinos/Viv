@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
@@ -11,6 +11,7 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
 	  <ProjectReference Include="..\Viv.EventContracts\Viv.EventContracts.csproj" />
+	  <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
 	</ItemGroup>
 
 </Project>
