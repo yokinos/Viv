@@ -5,7 +5,6 @@ using System.Net;
 using Viv.Apex.Core.Entity.Dto.Account;
 using Viv.Apex.Core.Entity.Vo.Account;
 using Viv.Apex.Core.IService;
-using Viv.Elysia.Filter;
 
 namespace Viv.Apex.Api.Controllers
 {
@@ -29,7 +28,7 @@ namespace Viv.Apex.Api.Controllers
         /// <param name="request"></param>
         /// <returns></returns>
         [AllowAnonymous]
-        [ProducesResponseType(typeof(LoginOutput), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(LoginOutput), StatusCodes.Status200OK)]
         [HttpPost("login")]
         public async Task<IActionResult> LoginAsync(LoginRequest request)
         {
@@ -42,7 +41,7 @@ namespace Viv.Apex.Api.Controllers
         /// <param name="request"></param>
         /// <returns></returns>
         [AllowAnonymous]
-        [ProducesResponseType(typeof(LoginOutput), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(LoginOutput), StatusCodes.Status200OK)]
         [HttpPost("refreshToken")]
         public async Task<IActionResult> RefreshTokenAsync(RefreshRequest request)
         {

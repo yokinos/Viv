@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Viv.Entity.Enums
 {
-    public enum EmUserType
+    public enum EmUserType : byte
     {
         /// <summary>
         /// 运营平台用户

@@ -24,7 +24,7 @@ namespace Viv.Apex.Api.Controllers
         /// 当前客户端的路由树。结构由客户端技术栈决定（Vue 是嵌套树），后端已组好，前端可直接注册
         /// </summary>
         [HttpGet("tree")]
-        [ProducesResponseType(typeof(VivApiResult<object>), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(VivApiResult<object>), StatusCodes.Status200OK)]
         public async Task<VivApiResult> GetTreeAsync()
         {
             return await _menu.GetRouteTreeAsync();
