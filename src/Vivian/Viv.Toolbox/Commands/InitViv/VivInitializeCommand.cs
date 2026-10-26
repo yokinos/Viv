@@ -46,9 +46,9 @@ namespace Viv.Toolbox.Commands.InitViv
         private static readonly byte StatusEnabled = (byte)EmStatus.Enabled;
 
         /// <summary>
-        /// 初始客户端应用的对外 AppId
+        /// 初始客户端应用的对外 AppKey（登录时客户端传这个，不是主键）
         /// </summary>
-        private const string AdminClientAppId = "viv-rootadmin-app";
+        private const string AdminClientAppKey = "viv-rootadmin-app";
 
         /// <summary>
         /// 初始菜单树。侧边栏只有 App管理 → App列表；
@@ -297,13 +297,13 @@ namespace Viv.Toolbox.Commands.InitViv
         private static async Task<(int Inserted, long ClientAppId)> SeedClientAppAsync(IMomoDbContext db, CancellationToken cancellationToken)
         {
             var exists = await db.FindScalarAsync<long?>(
-                "SELECT TOP 1 Id FROM AtClientApp WHERE AppId = @appId AND IsDeleted = 0",
-                new { appId = AdminClientAppId },
+                "SELECT TOP 1 Id FROM AtClientApp WHERE AppKey = @appKey AND IsDeleted = 0",
+                new { appKey = AdminClientAppKey },
                 cancellationToken);
 
             if (exists is not null and not 0)
             {
-                Out.Println($"  [{ApexDatabase}] 客户端应用 {AdminClientAppId} 已存在，跳过");
+                Out.Println($"  [{ApexDatabase}] 客户端应用 {AdminClientAppKey} 已存在，跳过");
                 return (0, exists.Value);
             }
 
@@ -311,12 +311,12 @@ namespace Viv.Toolbox.Commands.InitViv
             var secret = Guid.NewGuid().ToString("N");
 
             await db.ExecuteSqlAsync(
-                @"INSERT INTO AtClientApp (Id, AppId, Name, Platform, ClientStack, AppSecret, Source, Remark, Status, IsDeleted, CreatedAt)
-                  VALUES (@id, @appId, @name, @platform, @clientStack, @secret, @source, @remark, @status, 0, @createdAt)",
+                @"INSERT INTO AtClientApp (Id, AppKey, Name, Platform, ClientStack, AppSecret, Source, Remark, Status, IsDeleted, CreatedAt)
+                  VALUES (@id, @appKey, @name, @platform, @clientStack, @secret, @source, @remark, @status, 0, @createdAt)",
                 new
                 {
                     id,
-                    appId = AdminClientAppId,
+                    appKey = AdminClientAppKey,
                     name = "Viv管理后台",
                     platform = (byte)EmAppPlatform.Web,
                     clientStack = (int)EmClientStack.Vue,
@@ -328,7 +328,7 @@ namespace Viv.Toolbox.Commands.InitViv
                 },
                 cancellationToken);
 
-            Out.Println($"  [{ApexDatabase}] 客户端应用已创建：AppId={AdminClientAppId}　AppSecret={secret}");
+            Out.Println($"  [{ApexDatabase}] 客户端应用已创建：AppKey={AdminClientAppKey}　AppSecret={secret}");
             return (1, id);
         }
 

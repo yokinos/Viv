@@ -52,9 +52,10 @@ namespace Viv.Engine
             var dependencyTypes = TypeScanMagic.ScanTypes<IDependency>();
 
             // 启动自检：名字像 Service/Repository 却两条注册路径都没走到的类，永远不会进容器。
-            // 等它被解析时才炸的话，现场只剩「某个接口解析不到」，看不出是谁没注册
+            // 等它被解析时才炸的话，现场只剩「某个接口解析不到」，看不出是谁没注册。
+            var scannedAssemblies = new HashSet<Assembly>(serviceImplTypes.Concat(repoImplTypes).Select(static t => t.Assembly));
             var unregistered = DependencySelfCheck.FindUnregistered(
-                TypeScanMagic.ScanTypes<object>().Where(t => !DependencySelfCheck.IsExcludedAssembly(t.Assembly)),
+                TypeScanMagic.ScanTypes<object>().Where(t => scannedAssemblies.Contains(t.Assembly)),
                 dependencyTypes.Concat(serviceImplTypes).Concat(repoImplTypes));
 
             if (unregistered.Count > 0)
@@ -150,7 +151,7 @@ namespace Viv.Engine
                 var lifetime = dependencyAttribute?.Lifetime ?? DependencyLifetime.Scoped;
                 var asSelf = dependencyAttribute?.AsSelf ?? false;
                 var tag = dependencyAttribute?.Tag;
-                 
+
                 if (implementationType.IsGenericTypeDefinition)
                 {
                     var registration = builder.RegisterGeneric(implementationType);

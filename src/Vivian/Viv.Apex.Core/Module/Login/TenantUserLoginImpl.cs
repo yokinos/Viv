@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Apex.Core.Entity.Dto.Account;
@@ -33,6 +33,14 @@ namespace Viv.Apex.Core.Module.Login
                 return FuncResult<LoginOutput>.Failed("登录类型非法");
             }
 
+            var validateApp = await ValidateAppAsync(request.AppKey);
+            if (!validateApp.IsSuccess)
+            {
+                return FuncResult<LoginOutput>.Failed(validateApp.Message);
+            }
+
+            var clientAppId = validateApp.Data.Id;
+
             var tenant = await _tenantRepository.GetTenantByCodeAsync(request.SubjectCode);
             if (tenant is null)
             {
@@ -51,7 +59,7 @@ namespace Viv.Apex.Core.Module.Login
             }
 
 
-            var appRelation = tenantApps.SingleOrDefault(x => x.ClientAppId == request.AppId);
+            var appRelation = tenantApps.SingleOrDefault(x => x.ClientAppId == clientAppId);
             if (appRelation == null)
             {
                 return FuncResult<LoginOutput>.Failed("当前组织未获得授权");
@@ -62,21 +70,15 @@ namespace Viv.Apex.Core.Module.Login
                 return FuncResult<LoginOutput>.Failed("当前组织授权已过期");
             }
 
-            var validateApp = await ValidateAppAsync(request.AppId);
-            if (!validateApp.IsSuccess)
-            {
-                return FuncResult<LoginOutput>.Failed(validateApp.Message);
-            }
-
             var validateUser = await ValidateUserAsync(request.UserType, request.UserName, request.Password);
             if (!validateUser.IsSuccess)
             {
                 return FuncResult<LoginOutput>.Failed(validateUser.Message);
             }
 
-            var output = await BuildLoginOutputAsync(request.AppId, validateUser.Data);
+            var output = await BuildLoginOutputAsync(clientAppId, validateUser.Data);
 
-            return FuncResult<LoginOutput>.Success();
+            return FuncResult<LoginOutput>.Success("login success", output);
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using Azure.Core;
+using Azure.Core;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -40,37 +40,39 @@ namespace Viv.Apex.Core.Module.Login
         }
 
         /// <summary>
-        /// 生成 缓存Key
+        /// 生成 缓存Key（clientAppId 是主键，不是对外的 AppKey）
         /// </summary>
-        /// <param name="appId"></param>
+        /// <param name="clientAppId"></param>
         /// <param name="userType"></param>
         /// <param name="userId"></param>
         /// <returns></returns>
-        public virtual string GetSessionKey(long appId, EmUserType userType, long userId)
+        public virtual string GetSessionKey(long clientAppId, EmUserType userType, long userId)
         {
-            return $"LoginRefreshKey:{appId}:{userType}:{userId}";
+            return $"LoginRefreshKey:{clientAppId}:{userType}:{userId}";
         }
 
         /// <summary>
         /// 生成Token、更新Redis、组装输出对象
         /// </summary>
-        public virtual async Task<LoginOutput> BuildLoginOutputAsync(long appId, AtUser user)
+        /// <param name="clientAppId">客户端应用主键（<c>AtClientApp.Id</c>），token claim 里放的就是它</param>
+        /// <param name="user">登录用户</param>
+        public virtual async Task<LoginOutput> BuildLoginOutputAsync(long clientAppId, AtUser user)
         {
             var tokenOptions = _tokenService.GetOptions();
             var newAccessToken = _tokenService.GenerateToken(new Contracts.Models.TokenPayload
             {
-                AppId = appId,
+                AppId = clientAppId,
                 UserId = user.Id,
                 UserName = user.Name
             });
 
             var newRefreshToken = StringMagic.GenerateFastString(64);
-            var redisSessionKey = GetSessionKey(appId, user.UserType, user.Id);
+            var redisSessionKey = GetSessionKey(clientAppId, user.UserType, user.Id);
 
             var newExpire = CacheTimeProvider.GetRandomDays(30, 45);
             var tokenValue = new RefreshTokenValue
             {
-                AppId = appId,
+                AppId = clientAppId,
                 UserId = user.Id,
                 RefreshToken = newRefreshToken
             };
@@ -91,20 +93,29 @@ namespace Viv.Apex.Core.Module.Login
             };
         }
 
-        public virtual async Task<FuncResult> ValidateAppAsync(long appId)
+        /// <summary>
+        /// 校验客户端应用。入参是对外的 AppKey，返回的实体里带主键 ——
+        /// 从这里往下（session key、token claim、外键）一律用 <c>clientApp.Id</c>，不要再传字符串。
+        /// </summary>
+        public virtual async Task<FuncResult<AtClientApp>> ValidateAppAsync(string? appKey)
         {
-            var clientApp = await _clientAppRepository.GetAppAsync(appId);
+            if (string.IsNullOrWhiteSpace(appKey))
+            {
+                return FuncResult<AtClientApp>.Failed("缺少客户端 AppKey");
+            }
+
+            var clientApp = await _clientAppRepository.GetAppByAppKeyAsync(appKey);
             if (clientApp == null)
             {
-                return FuncResult.Failed("客户端不存在");
+                return FuncResult<AtClientApp>.Failed("客户端不存在");
             }
 
             if (clientApp.Status != EmStatus.Enabled)
             {
-                return FuncResult.Failed("客户端已禁用");
+                return FuncResult<AtClientApp>.Failed("客户端已禁用");
             }
 
-            return FuncResult.Success();
+            return FuncResult<AtClientApp>.Success(clientApp);
         }
 
         public virtual async Task<FuncResult<AtUser>> ValidateUserAsync(long userId)
@@ -161,18 +172,19 @@ namespace Viv.Apex.Core.Module.Login
 
         public virtual async Task<FuncResult<LoginOutput>> RefreshTokenAsync(RefreshRequest request)
         {
-            var redisSessionKey = GetSessionKey(request.AppId, request.UserType, request.UserId);
+            var validateApp = await ValidateAppAsync(request.AppKey);
+            if (!validateApp.IsSuccess)
+            {
+                return FuncResult<LoginOutput>.Failed(validateApp.Message);
+            }
+
+            var clientAppId = validateApp.Data.Id;
+            var redisSessionKey = GetSessionKey(clientAppId, request.UserType, request.UserId);
             var session = await _redisService.GetAsync<RefreshTokenValue>(redisSessionKey);
 
             if (session == null || session.RefreshToken != request.RefreshToken)
             {
                 return FuncResult<LoginOutput>.Failed("登录凭证已失效，请重新登录");
-            }
-
-            var validateApp = await ValidateAppAsync(request.AppId);
-            if (!validateApp.IsSuccess)
-            {
-                return FuncResult<LoginOutput>.Failed(validateApp.Message);
             }
 
             var validateUser = await ValidateUserAsync(session.UserId);
@@ -181,7 +193,7 @@ namespace Viv.Apex.Core.Module.Login
                 return FuncResult<LoginOutput>.Failed(validateUser.Message);
             }
 
-            var output = await BuildLoginOutputAsync(request.AppId, validateUser.Data);
+            var output = await BuildLoginOutputAsync(clientAppId, validateUser.Data);
             return FuncResult<LoginOutput>.Success("success", output);
         }
 

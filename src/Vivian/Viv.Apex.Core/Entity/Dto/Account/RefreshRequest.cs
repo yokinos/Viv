@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
@@ -10,9 +10,13 @@ namespace Viv.Apex.Core.Entity.Dto.Account
 {
     public class RefreshRequest : VivApiRequest
     {
+        /// <summary>
+        /// 客户端对外标识（对应 AtClientApp.AppKey），不是主键 Id
+        /// </summary>
         [Required]
-        [DisplayName("客户端AppId")]
-        public long AppId { get; set; }
+        [StringLength(64)]
+        [DisplayName("客户端AppKey")]
+        public string? AppKey { get; set; }
 
         [Required]
         [DisplayName("用户Id")]

@@ -15,10 +15,11 @@ namespace Viv.Entity.Database.Apex
     public class AtClientApp : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
-        /// 对外唯一鉴权AppId
+        /// 对外唯一鉴权标识 AppKey
+        /// 只用于「客户端自报身份」这一个入口；内部关联（菜单、版本、组织授权等）一律用 <see cref="EntityBase.Id"/>，
         /// </summary>
         [StringLength(64)]
-        public string? AppId { get; set; }
+        public string? AppKey { get; set; }
 
         /// <summary>
         /// 客户端应用程序名称

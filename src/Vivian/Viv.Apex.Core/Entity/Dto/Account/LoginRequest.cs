@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using Viv.Delusion.Extension;
 using Viv.Elysia.Request;
 using Viv.Entity.Enums;
@@ -7,9 +7,13 @@ namespace Viv.Apex.Core.Entity.Dto.Account
 {
     public class LoginRequest : VivApiRequest
     {
+        /// <summary>
+        /// 客户端对外标识（对应 AtClientApp.AppKey），不是主键 Id
+        /// </summary>
         [Required]
-        [Display(Name = "客户端AppId")]
-        public long AppId { get; set; }
+        [StringLength(64)]
+        [Display(Name = "客户端AppKey")]
+        public string? AppKey { get; set; }
 
         /// <summary>
         /// 账户名

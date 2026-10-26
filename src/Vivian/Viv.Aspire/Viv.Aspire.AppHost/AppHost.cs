@@ -23,6 +23,8 @@ var ouroborosApi = builder.AddProject<Projects.Viv_Ouroboros_Api>("viv-ouroboros
     .WithDeveloperCertificateTrust(true);
 
 builder.AddProject<Projects.Viv_Aspire_Gateway>("viv-aspire-gateway")
+    // 固定对外端口：前端（viv-master-admin）要写死地址，动态端口每次启动都变
+    .WithHttpEndpoint(port: 5262, name: "http")
     .WithReference(apexApi)
     .WithReference(hertaApi)
     .WithReference(hertaLink)

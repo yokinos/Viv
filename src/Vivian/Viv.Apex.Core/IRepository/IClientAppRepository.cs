@@ -37,6 +37,12 @@ namespace Viv.Apex.Core.IRepository
         Task<AtClientApp?> GetAppAsync(long appId);
 
         /// <summary>
+        /// 按对外 AppKey 取客户端应用（登录入口用）。
+        /// 内部先解析成主键再走实体缓存，返回的实体带 Id，调用方后续一律用 Id。
+        /// </summary>
+        Task<AtClientApp?> GetAppByAppKeyAsync(string appKey);
+
+        /// <summary>
         /// 分页查询客户端应用
         /// </summary>
         Task<PagedList<AtClientApp>> GetAppPagedListAsync(IApiPagedRequest request);

@@ -1,3 +1,4 @@
+using System;
 using Viv.Apex.Core.IRepository;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
@@ -19,8 +20,6 @@ namespace Viv.Apex.Core.Repository
         {
         }
 
-        // ==================== AtClientApp ====================
-
         public async Task<bool> AddAppAsync(AtClientApp app)
         {
             var flag = await _dbContext.InsertAsync(app);
@@ -37,6 +36,7 @@ namespace Viv.Apex.Core.Repository
             if (flag)
             {
                 await RefreshAsync(app.Id);
+                await RemoveAppKeyMapAsync(app.AppKey);
             }
             return flag;
         }
@@ -65,6 +65,43 @@ namespace Viv.Apex.Core.Repository
         {
             var bucket = await GetCacheAsync(appId);
             return bucket?.Entity;
+        }
+
+        private static readonly TimeSpan AppKeyMapTtl = TimeSpan.FromMinutes(10);
+
+        private static string GetAppKeyMapKey(string appKey) => $"ApexClientApp:AppKey:{appKey}";
+
+        public async Task<AtClientApp?> GetAppByAppKeyAsync(string appKey)
+        {
+            if (string.IsNullOrWhiteSpace(appKey))
+            {
+                return null;
+            }
+
+            var mapKey = GetAppKeyMapKey(appKey);
+            var cachedId = await _redisService.GetAsync<long>(mapKey);
+            if (cachedId > 0)
+            {
+                var cachedApp = await GetAppAsync(cachedId);
+                if (cachedApp is not null)
+                {
+                    return cachedApp;
+                }
+            }
+
+            var app = await _dbContext.SingleOrDefaultAsync<AtClientApp>(x => x.AppKey == appKey && !x.IsDeleted);
+            if (app is null)
+            {
+                return null;
+            }
+
+            await _redisService.AddAsync(mapKey, app.Id, AppKeyMapTtl);
+            return app;
+        }
+
+        private async Task RemoveAppKeyMapAsync(string? appKey)
+        {
+            await _redisService.RemoveAsync(GetAppKeyMapKey(appKey));
         }
 
         public override async Task<EntityBucket<AtClientApp>?> GetDbAsync(params object[] keys)
