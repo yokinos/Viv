@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Data;
 using Viv.Aoi;
@@ -50,6 +50,25 @@ namespace Viv.Momo.Core
         public long CurrentTenantId => _tenantAccessor?.Current?.SubjectId ?? 0;
 
         /// <summary>
+        /// 模型缓存键：实体扫描配置不同 → 模型就不同。
+        /// EF 默认只按上下文类型缓存模型，不区分这个的话，先建模型的上下文（例如连 master 库、
+        /// 配置里没有实体扫描的那个）会把它的模型缓存给后面所有上下文，
+        /// 见 <see cref="MomoModelCacheKeyFactory"/>。
+        /// </summary>
+        public string ModelCacheKey { get; }
+
+        private static string BuildModelCacheKey(DatabaseOptions options)
+        {
+            var filters = (options.EntityTypeOptions ?? [])
+                .Where(static f => f is not null)
+                .Select(static f => string.Join('|',
+                    f.AssemblyName, f.Namespace, f.ClassNameStartsWith, f.ClassNameEndsWith, f.BaseType, f.AttributeType))
+                .OrderBy(static s => s, StringComparer.Ordinal);
+
+            return $"{options.DatabaseSource}:{string.Join(';', filters)}";
+        }
+
+        /// <summary>
         /// 当前是否没有租户上下文。无上下文（后台消费者未设置租户）时租户过滤放行，保持既有行为。
         /// </summary>
         public bool HasNoTenantContext => _tenantAccessor?.Current == null;
@@ -69,6 +88,7 @@ namespace Viv.Momo.Core
             _options = options;
             _tenantAccessor = tenantAccessor;
             _interceptor = telemetry is null ? null : new MomoMetricsCommandInterceptor(telemetry);
+            ModelCacheKey = BuildModelCacheKey(options);
 
             if (options.IsReadWriteSplit)
             {
@@ -116,22 +136,32 @@ namespace Viv.Momo.Core
         /// </summary>
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
+            // 模型按「实体扫描配置」分开缓存，否则先建模型的那个上下文会把模型传染给所有上下文
+            optionsBuilder.ReplaceService<Microsoft.EntityFrameworkCore.Infrastructure.IModelCacheKeyFactory, MomoModelCacheKeyFactory>();
+
             if (optionsBuilder.IsConfigured) return;
 
             var connectionString = GetConnectionString();
             var queryTrackingBehavior = _dbReadWriteType == DbReadWriteType.Read ? QueryTrackingBehavior.NoTracking : QueryTrackingBehavior.TrackAll;
 
+            // 注意：这里刻意不挂 EnableRetryOnFailure。
+            // 重试策略（SqlServerRetryingExecutionStrategy / NpgsqlRetryingExecutionStrategy）
+            // 只接受它自己开的事务；而 Viv 的事务是手工模型（MomoDatabase.BeginTransaction/CommitTransaction），
+            // 事务里再 SaveChanges 会抛
+            // "The configured execution strategy does not support user-initiated transactions"。
+            // 要保留自动重试，就得把每个事务块改成 Database.CreateExecutionStrategy().ExecuteAsync(...) 包起来，
+            // 那等于把 Begin/Commit 这套 API 整个换掉。
             switch (_options.DatabaseSource)
             {
                 case DatabaseSourceType.PostgreSQL:
-                    optionsBuilder.UseNpgsql(connectionString, x => x.EnableRetryOnFailure())
+                    optionsBuilder.UseNpgsql(connectionString)
                         .UseQueryTrackingBehavior(queryTrackingBehavior)
                         .UseSnakeCaseNamingConvention();
                     break;
                 case DatabaseSourceType.SqlServer:
                     // SQL Server 保持 CLR PascalCase（[AtUser]/[TenantId]），与 SqlMagic / SchemaSynchronizer 一致。
                     // 不要在这边再套 UseSnakeCaseNamingConvention —— 那会建成 at_user，而 Dapper 还在打 [AtUser]。
-                    optionsBuilder.UseSqlServer(connectionString, x => x.EnableRetryOnFailure())
+                    optionsBuilder.UseSqlServer(connectionString)
                         .UseQueryTrackingBehavior(queryTrackingBehavior);
                     break;
                 default:
@@ -155,6 +185,7 @@ namespace Viv.Momo.Core
             }
 
             var typeList = TypeScanMagic.ScanRange(_options.EntityTypeOptions);
+
             foreach (var type in typeList)
             {
                 var entity = modelBuilder.Entity(type);
