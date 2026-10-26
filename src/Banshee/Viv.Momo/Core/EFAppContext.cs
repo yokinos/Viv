@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Data;
-using Viv.Aoi;
 using Viv.Contracts.Interface;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
@@ -38,7 +37,8 @@ namespace Viv.Momo.Core
         private readonly MomoMetricsCommandInterceptor? _interceptor;
 
         /// <summary>
-        /// 有没有租户访问器。租户过滤器用它决定挂不挂，VivLocator 未初始化（测试直建上下文）时没有
+        /// 有没有租户访问器。租户过滤器用它决定挂不挂：上下文由调用方显式传入访问器，
+        /// 传 null 表示这条链路不参与租户过滤（测试 / 无租户场景）
         /// </summary>
         public bool HasTenantAccessor => _tenantAccessor != null;
 
@@ -77,11 +77,6 @@ namespace Viv.Momo.Core
         /// 某条过滤器有没有被 IDataFilter 关掉。走上下文实例是为了让 EF 按查询重新求值。
         /// </summary>
         public bool IsDataFilterDisabled(Type filterType) => DataFilterSwitch.IsDisabled(filterType);
-
-        public EFAppContext(DatabaseOptions options, DbReadWriteType dbReadWriteType = DbReadWriteType.Read, QueryTelemetry? telemetry = null)
-            : this(options, ResolveTenantAccessor(), dbReadWriteType, telemetry)
-        {
-        }
 
         public EFAppContext(DatabaseOptions options, IVivContextAccessor? tenantAccessor, DbReadWriteType dbReadWriteType = DbReadWriteType.Read, QueryTelemetry? telemetry = null)
         {
@@ -144,24 +139,23 @@ namespace Viv.Momo.Core
             var connectionString = GetConnectionString();
             var queryTrackingBehavior = _dbReadWriteType == DbReadWriteType.Read ? QueryTrackingBehavior.NoTracking : QueryTrackingBehavior.TrackAll;
 
-            // 注意：这里刻意不挂 EnableRetryOnFailure。
-            // 重试策略（SqlServerRetryingExecutionStrategy / NpgsqlRetryingExecutionStrategy）
-            // 只接受它自己开的事务；而 Viv 的事务是手工模型（MomoDatabase.BeginTransaction/CommitTransaction），
-            // 事务里再 SaveChanges 会抛
-            // "The configured execution strategy does not support user-initiated transactions"。
-            // 要保留自动重试，就得把每个事务块改成 Database.CreateExecutionStrategy().ExecuteAsync(...) 包起来，
-            // 那等于把 Begin/Commit 这套 API 整个换掉。
+            // 开自动重试：瞬时故障（死锁 1205、连接瞬断等）时由执行策略把整笔事务重放。
+            // 前提是事务必须走 ExecuteInTransactionAsync（策略拥有 BEGIN/COMMIT）——
+            // 手工开的事务它会直接拒绝，这正是之前把三段式整套换掉的原因。
+            // 重放会重新执行 work，所以 work 里只能有数据库副作用；
+            // 按尝试累积的外部状态（本地事件队列等）由 ITransactionAttemptListener 在失败尝试时回退，
+            // ExecuteInTransactionAsync 每次尝试都会通知它。
             switch (_options.DatabaseSource)
             {
                 case DatabaseSourceType.PostgreSQL:
-                    optionsBuilder.UseNpgsql(connectionString)
+                    optionsBuilder.UseNpgsql(connectionString, x => x.EnableRetryOnFailure())
                         .UseQueryTrackingBehavior(queryTrackingBehavior)
                         .UseSnakeCaseNamingConvention();
                     break;
                 case DatabaseSourceType.SqlServer:
                     // SQL Server 保持 CLR PascalCase（[AtUser]/[TenantId]），与 SqlMagic / SchemaSynchronizer 一致。
                     // 不要在这边再套 UseSnakeCaseNamingConvention —— 那会建成 at_user，而 Dapper 还在打 [AtUser]。
-                    optionsBuilder.UseSqlServer(connectionString)
+                    optionsBuilder.UseSqlServer(connectionString, x => x.EnableRetryOnFailure())
                         .UseQueryTrackingBehavior(queryTrackingBehavior);
                     break;
                 default:
@@ -198,21 +192,6 @@ namespace Viv.Momo.Core
                         entity.HasQueryFilter(filter.Name, filter.BuildExpression(this, type));
                     }
                 }
-            }
-        }
-
-        /// <summary>
-        /// 解析当前租户访问器。VivLocator 未初始化（如单元测试直建上下文）时返回 null，跳过租户过滤
-        /// </summary>
-        private static IVivContextAccessor? ResolveTenantAccessor()
-        {
-            try
-            {
-                return VivLocator.GetService<IVivContextAccessor>();
-            }
-            catch
-            {
-                return null;
             }
         }
 

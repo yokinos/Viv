@@ -34,6 +34,14 @@ namespace Viv.Momo.Core
         protected EFAppContext? _writeDbContext;
         protected EFAppContext? _readDbContext;
 
+        /// <summary>
+        /// 事务尝试观察者（可选，由宿主传入）。开启重试后 work 会被重放，
+        /// 按尝试累积的外部状态（如本地事件队列）需要在失败尝试时回退 ——
+        /// 由它实现，Momo 本身不认识那些状态。
+        /// 没传（初始化工具、单元测试直建上下文）时不做任何回退。
+        /// </summary>
+        protected readonly ITransactionAttemptListener? _attemptListener;
+
         protected int _timeOut = 30;
         protected static readonly HashSet<string> _primaryKeys = ["Id"];
 
@@ -54,7 +62,7 @@ namespace Viv.Momo.Core
         /// 需要指定另一份配置（如 <see cref="MomoDbContextFactory"/> 的一次性会话）时，
         /// 由调用方包一个 <see cref="IDatabaseOptionsProvider"/> 传进来。
         /// </summary>
-        public MomoDatabase(IVivContext vivContext, ILoggerContract logger, IDatabaseOptionsProvider optionsProvider)
+        public MomoDatabase(IVivContext vivContext, ILoggerContract logger, IDatabaseOptionsProvider optionsProvider, ITransactionAttemptListener? attemptListener = null)
         {
             ArgumentNullException.ThrowIfNull(vivContext);
             ArgumentNullException.ThrowIfNull(logger);
@@ -65,6 +73,7 @@ namespace Viv.Momo.Core
 
             _vivContext = vivContext;
             _logger = logger;
+            _attemptListener = attemptListener;
             _accessor = vivContext.VivContextAccessor
                 ?? throw new InvalidOperationException("IVivContext.VivContextAccessor 不能为空：Momo 需要它挂租户过滤器。");
             _databaseOptions = options;
@@ -283,8 +292,12 @@ namespace Viv.Momo.Core
             var context = GetAppContext(DbReadWriteType.Write);
             var strategy = context.Database.CreateExecutionStrategy();
 
+            // 开启重试后 work 会被整段重放：失败尝试里累积的外部状态（如本地事件队列）
+            // 对应已回滚的写入，重试前必须让观察者撤掉，否则成功那次会把它们一起带出去。
             return await strategy.ExecuteAsync(async () =>
             {
+                _attemptListener?.OnAttemptStarting();
+
                 await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
                 // Dapper 命令靠 _transaction 判断「我在事务里」，必须指向同一条连接上的 ADO 事务，
@@ -311,6 +324,9 @@ namespace Viv.Momo.Core
                 }
                 catch
                 {
+                    // 本次尝试累积的外部状态先撤掉，再回滚 —— 顺序无所谓，但两件都得做
+                    _attemptListener?.OnAttemptFailed();
+
                     try
                     {
                         await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);

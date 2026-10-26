@@ -154,6 +154,19 @@ public class RecordingLocalEventBus : IVivLocalEventBus
     }
 
     public void Discard() => Calls.Add("discard");
+
+    /// <summary>入队事件的可回退记录 —— 与真实现同一语义：Mark 记位置，RewindTo 丢弃其后的</summary>
+    public int Mark() => Published.Count;
+
+    public void RewindTo(int mark)
+    {
+        if (mark < 0) return;
+
+        while (Published.Count > mark)
+        {
+            Published.RemoveAt(Published.Count - 1);
+        }
+    }
 }
 
 /// <summary>

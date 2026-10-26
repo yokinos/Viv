@@ -65,6 +65,7 @@ namespace Viv.Engine.LocalEvents
 
             services.AddScoped<IVivLocalEventBus, LocalEventBus>();
             services.AddScoped<IVivLocalEventScope, LocalEventScope>();
+            services.AddScoped<ITransactionAttemptListener, LocalEventAttemptListener>();
 
             HandlerCount = handlerTypes.Count;
             EventTypeCount = eventTypes.Count;

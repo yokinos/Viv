@@ -56,5 +56,23 @@ namespace Viv.Contracts.Interface
         /// 框架调用，业务代码不要直接调用。
         /// </summary>
         void Discard();
+
+        /// <summary>
+        /// 记下当前队尾位置，供 <see cref="RewindTo"/> 回退。
+        ///
+        /// 用于「事务尝试可能被重放」的场景：开启 EF 重试后，一次失败的尝试里入队的事件
+        /// 对应的是已回滚的写入，重试前必须把它们撤掉，否则成功那次会连它们一起分发（幽灵事件）。
+        /// 框架调用，业务代码不要直接调用。
+        /// </summary>
+        /// <returns>队尾位置；与后续 <see cref="RewindTo"/> 配对使用</returns>
+        int Mark();
+
+        /// <summary>
+        /// 回退到 <see cref="Mark"/> 记下的位置：丢弃那之后入队的事件。
+        /// 只影响待发队列，不会撤销已经分发的事件；已进入终态（Done）时什么都不做。
+        /// 框架调用，业务代码不要直接调用。
+        /// </summary>
+        /// <param name="mark"><see cref="Mark"/> 的返回值</param>
+        void RewindTo(int mark);
     }
 }

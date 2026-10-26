@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Contracts.Interface;
@@ -14,17 +14,20 @@ namespace Viv.Momo.Core
 
         private readonly ILoggerContract _logger;
 
-        public MomoDbContextFactory(IVivContext vivContext, ILoggerContract logger)
+        private readonly ITransactionAttemptListener? _attemptListener;
+
+        public MomoDbContextFactory(IVivContext vivContext, ILoggerContract logger, ITransactionAttemptListener? attemptListener = null)
         {
             _vivContext = vivContext;
             _logger = logger;
+            _attemptListener = attemptListener;
         }
 
         /// <inheritdoc/>
         public IMomoDbContext? Create(DatabaseOptions options)
         {
             if (options == null) return null;
-            return new MomoDatabaseContext(_vivContext, _logger, new FixedOptionsProvider(options));
+            return new MomoDatabaseContext(_vivContext, _logger, new FixedOptionsProvider(options), _attemptListener);
         }
 
         private sealed class FixedOptionsProvider : IDatabaseOptionsProvider

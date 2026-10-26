@@ -153,6 +153,84 @@ public class LocalEventTests
     #endregion
 
     [Fact]
+    public async Task Mark与RewindTo_丢弃标记之后入队的事件()
+    {
+        // 重试场景的护栏：失败那次尝试入队的事件必须能撤回，否则成功那次会连它们一起分发
+        var bus = NewBus(new RecordingLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));
+
+        await bus.PublishAsync(new OrderCreated());   // 标记之前：属于外层，必须保留
+        var mark = bus.Mark();
+
+        await bus.PublishAsync(new OrderCreated());   // 标记之后：失败尝试产生的，要丢掉
+        bus.RewindTo(mark);
+
+        await bus.FlushAsync();
+
+        // 只剩标记之前那一条
+        Assert.Single(Hits);
+    }
+
+    [Fact]
+    public async Task RewindTo_不改动标记之前的队尾()
+    {
+        var bus = NewBus(new RecordingLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));
+
+        var mark = bus.Mark();
+        await bus.PublishAsync(new OrderCreated());
+        await bus.PublishAsync(new OrderCreated());
+        bus.RewindTo(mark);
+
+        // 全被丢掉：标记位置是 0
+        await bus.FlushAsync();
+        Assert.Empty(Hits);
+    }
+
+    [Fact]
+    public void RewindTo_已Discard后调用不抛()
+    {
+        var bus = NewBus(new RecordingLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));
+
+        var mark = bus.Mark();
+        bus.Discard();
+
+        // 终态后回退无事可做，也不该抛
+        bus.RewindTo(mark);
+    }
+
+    [Fact]
+    public async Task 尝试观察者_失败尝试入队的事件被回退()
+    {
+        // 事务重试的护栏：失败那一次尝试的事件不能混进成功那次
+        var bus = NewBus(new RecordingLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));
+        var listener = new LocalEventAttemptListener(bus);
+
+        await bus.PublishAsync(new OrderCreated());   // 事务之外，必须保留
+
+        listener.OnAttemptStarting();
+        await bus.PublishAsync(new OrderCreated());   // 本次尝试产生，随后失败
+        listener.OnAttemptFailed();
+
+        await bus.FlushAsync();
+
+        Assert.Single(Hits);
+    }
+
+    [Fact]
+    public async Task 尝试观察者_成功尝试的事件保留()
+    {
+        var bus = NewBus(new RecordingLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));
+        var listener = new LocalEventAttemptListener(bus);
+
+        listener.OnAttemptStarting();
+        await bus.PublishAsync(new OrderCreated());
+        // 不调 OnAttemptFailed = 这次尝试成功
+
+        await bus.FlushAsync();
+
+        Assert.Single(Hits);
+    }
+
+    [Fact]
     public async Task 发布只入队_未Flush不执行()
     {
         var bus = NewBus(new RecordingLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));

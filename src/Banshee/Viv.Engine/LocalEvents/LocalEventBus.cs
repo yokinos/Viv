@@ -154,6 +154,33 @@ namespace Viv.Engine.LocalEvents
             }
         }
 
+        /// <inheritdoc />
+        public int Mark()
+        {
+            lock (_sync)
+            {
+                return _pending.Count;
+            }
+        }
+
+        /// <inheritdoc />
+        public void RewindTo(int mark)
+        {
+            // 已经分发或丢弃过：队列已清空 / 进终态，回退无事可做
+            if (mark < 0) return;
+
+            lock (_sync)
+            {
+                if (_state != LocalEventBusState.Pending)
+                    return;
+
+                while (_pending.Count > mark)
+                {
+                    _pending.Dequeue();
+                }
+            }
+        }
+
         /// <summary>
         /// 作用域结束时兜底：说明调用方忘了走 Flush/Discard（或该宿主没有触发点）。
         /// TickerQ / 手写 BackgroundService 请用 <see cref="IVivLocalEventScope"/> 包一层。

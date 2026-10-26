@@ -430,6 +430,11 @@ namespace Viv.Ouroboros.Core.Service
             ToolApprovalRequestContent? pending = null;
             OtApproval? approval = null;
 
+            // 委托可能被重试重放：先取基线，attempt 内用「基线 + 增量」赋值，避免反复累加翻倍
+            var baseMessageCount = conversation.MessageCount;
+            var baseInputTokens = conversation.TotalInputTokens;
+            var baseOutputTokens = conversation.TotalOutputTokens;
+
             try
             {
                 await _db.ExecuteInTransactionAsync(async ct =>
@@ -458,12 +463,10 @@ namespace Viv.Ouroboros.Core.Service
                         ReasoningTokens = response.Usage?.ReasoningTokenCount is { } r ? (int)r : null
                     });
 
-                    // 注意：这几个 += 是内存累加，一旦开启事务重试会被重放而翻倍。
-                    // 当前未开重试；将来要开，必须改成「每次尝试从库里重新读一次会话」。
-                    conversation.MessageCount += userSeq > 0 ? 2 : 1;
+                    conversation.MessageCount = baseMessageCount + (userSeq > 0 ? 2 : 1);
                     conversation.LastMessageAt = DateTime.Now;
-                    conversation.TotalInputTokens += response.Usage?.InputTokenCount ?? 0;
-                    conversation.TotalOutputTokens += response.Usage?.OutputTokenCount ?? 0;
+                    conversation.TotalInputTokens = baseInputTokens + (response.Usage?.InputTokenCount ?? 0);
+                    conversation.TotalOutputTokens = baseOutputTokens + (response.Usage?.OutputTokenCount ?? 0);
                     await _store.UpdateConversationAsync(conversation);
 
                     await SaveSessionAsync(agent, session, conversation.Id, conversation.MainAgentKey);
