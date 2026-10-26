@@ -38,17 +38,14 @@ public class UnitOfWorkLocalEventComboTests
     {
         Task<VivApiResult> SuccessAsync();
         Task<VivApiResult> FailureEnvelopeAsync();
-        Task<VivApiResult> StickySuccessAsync();
     }
 
     public class ComboService : IComboService
     {
-        private readonly IVivUnitOfWork _unitOfWork;
         private readonly IVivLocalEventBus _bus;
 
-        public ComboService(IVivUnitOfWork unitOfWork, IVivLocalEventBus bus)
+        public ComboService(IVivLocalEventBus bus)
         {
-            _unitOfWork = unitOfWork;
             _bus = bus;
         }
 
@@ -64,17 +61,6 @@ public class UnitOfWorkLocalEventComboTests
         {
             await _bus.PublishAsync(new ComboEvent());
             return VivApiResult.Failed("业务失败");
-        }
-
-        [VivUnitOfWork]
-        public virtual async Task<VivApiResult> StickySuccessAsync()
-        {
-            await _bus.PublishAsync(new ComboEvent());
-            await using (var inner = await _unitOfWork.BeginAsync())
-            {
-            }
-
-            return VivApiResult.Success("粘性成功信封");
         }
     }
 
@@ -154,24 +140,6 @@ public class UnitOfWorkLocalEventComboTests
 
         Assert.Equal(-200, result!.Code);
         Assert.Equal("begin|rollback", kernel.Trace());
-        Assert.Empty(Hits);
-    }
-
-    [Fact]
-    public async Task 粘性加成功信封_回滚且Discard不分发()
-    {
-        var (container, kernel, bus) = Build();
-        using var scope = container.BeginLifetimeScope();
-
-        await Assert.ThrowsAsync<VivUnitOfWorkException>(
-            () => InvokeLikeFilter(bus, () => scope.Resolve<IComboService>().StickySuccessAsync()));
-
-        Assert.Equal("begin|rollback", kernel.Trace());
-        Assert.Equal(0, kernel.Count("commit"));
-        Assert.Empty(Hits);
-
-        // Discard 之后再 Flush 也捞不出事件
-        await bus.FlushAsync();
         Assert.Empty(Hits);
     }
 }

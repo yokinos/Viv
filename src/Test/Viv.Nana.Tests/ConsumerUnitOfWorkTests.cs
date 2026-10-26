@@ -110,15 +110,14 @@ public class ConsumerUnitOfWorkTests
     }
 
     [Fact]
-    public async Task 粘性提交被拒_消费不算成功_整队Discard()
+    public async Task 提交失败_消费不算成功_整队Discard()
     {
-        // 真工作在 rollback-only 时是「先回滚、再抛 VivUnitOfWorkException」，
-        // 异常从 ExecuteAsync 冒过 HandleAsync 的 finally —— 那里必须按「没成功」处理，
-        // 否则成功信封会把一个已经回滚掉的事务对应的本地事件发出去。
+        // 提交失败（Momo 会包成 VivConnectionException 抛出来）从 ExecuteAsync 冒过 HandleAsync 的 finally，
+        // 那里必须按「没成功」处理，否则成功信封会把一个已经回滚掉的事务对应的本地事件发出去。
         var bus = new RecordingLocalEventBus();
         var uow = new RecordingUnitOfWork
         {
-            CommitException = new VivUnitOfWorkException("嵌套事务已标记回滚，最外层提交被拒绝。数据库已回滚。"),
+            CommitException = new VivUnitOfWorkException("提交失败，事务已回滚。"),
         };
 
         await Assert.ThrowsAsync<VivUnitOfWorkException>(

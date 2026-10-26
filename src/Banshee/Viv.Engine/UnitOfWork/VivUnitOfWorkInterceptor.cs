@@ -26,10 +26,10 @@ namespace Viv.Engine.UnitOfWork
     /// InstancePerLifetimeScope —— 否则 <see cref="IVivUnitOfWork"/> 会变成全局单例，
     /// 并发请求共用同一个事务状态机。（已实测 Autofac 的接口代理从当前作用域解析拦截器，不会落根。）
     ///
-    /// 调用方的 <see cref="CancellationToken"/> 只传给 <c>BeginAsync</c>（请求已经断了就别开事务）；
-    /// Commit 与 Rollback 一律 <see cref="CancellationToken.None"/> —— 它们是收尾动作，不是业务步骤。
-    /// MVC action 的令牌是 <c>HttpContext.RequestAborted</c>，客户端断线就取消：提交被取消的后果是
-    /// 「业务成功返回、写却全丢」，回滚被取消则留下没关掉的事务。与本地事件分发那几处传 None 同一取舍。
+    /// 调用方的 <see cref="CancellationToken"/> 只用于「开事务」（请求已经断了就别开）；
+    /// 提交与回滚是收尾动作，不跟这个令牌走。MVC action 的令牌是 <c>HttpContext.RequestAborted</c>，
+    /// 客户端断线就取消：提交被取消的后果是「业务成功返回、写却全丢」，回滚被取消则留下没关掉的事务。
+    /// 与本地事件分发那几处传 None 同一取舍。
     /// </summary>
     internal sealed class VivUnitOfWorkInterceptor : AsyncInterceptorBase
     {
@@ -60,18 +60,9 @@ namespace Viv.Engine.UnitOfWork
             }
 
             var cancellationToken = ResolveCancellationToken(invocation);
-            await using var transaction = await _unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                await proceed(invocation, proceedInfo).ConfigureAwait(false);
-            }
-            catch
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;                                          // 原样上抛，绝不吞
-            }
-
-            await transaction.CommitAsync(CancellationToken.None).ConfigureAwait(false);
+            await _unitOfWork.ExecuteAsync(
+                _ => proceed(invocation, proceedInfo),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -85,30 +76,22 @@ namespace Viv.Engine.UnitOfWork
             }
 
             var cancellationToken = ResolveCancellationToken(invocation);
-            await using var transaction = await _unitOfWork.BeginAsync(cancellationToken).ConfigureAwait(false);
 
-            TResult result;
-            try
-            {
-                result = await proceed(invocation, proceedInfo).ConfigureAwait(false);
-            }
-            catch
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
-
-            // 业务自己返回失败信封（HTTP 仍是 200）→ 回滚。
+            // 业务自己返回失败信封（HTTP 仍是 200）→ 回滚。判据交给工作单元，它决定提交还是回滚。
             // 与本地事件分发的成败判定同源，见 FailDetector。
-            if (FailDetector.IsFailed(result))
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                _logger.Warning("方法返回失败信封，事务已回滚：{0}", Describe(invocation));
-                return result;
-            }
+            return await _unitOfWork.ExecuteAsync(
+                _ => proceed(invocation, proceedInfo),
+                commitWhen: result =>
+                {
+                    if (!FailDetector.IsFailed(result))
+                    {
+                        return true;
+                    }
 
-            await transaction.CommitAsync(CancellationToken.None).ConfigureAwait(false);
-            return result;
+                    _logger.Warning("方法返回失败信封，事务已回滚：{0}", Describe(invocation));
+                    return false;
+                },
+                cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>

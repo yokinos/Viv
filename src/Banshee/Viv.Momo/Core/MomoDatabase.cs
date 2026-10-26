@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -45,11 +45,6 @@ namespace Viv.Momo.Core
         protected QueryTelemetry _queryTelemetry = null!;
 
         private readonly Lock _lock = new();
-
-        /// <summary>
-        /// 串行化异步 BeginTransactionAsync 的 check+begin+set（Monitor 无法跨 await 持有，用信号量替代）
-        /// </summary>
-        private readonly SemaphoreSlim _transactionSemaphore = new(1, 1);
 
         private bool _disposed = false;
 
@@ -260,182 +255,94 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
-        /// 开启一个数据库事务（使用写库）
+        /// 委托式事务：BEGIN / COMMIT 由执行策略包住，work 抛异常则整笔回滚。
+        /// 已处于外层事务里时直接内联（不重开、不重试）。
         /// </summary>
-        public virtual bool BeginTransaction()
-        {
-            lock (_lock)
-            {
-                if (_transaction != null) return true;
-
-                try
-                {
-                    var context = GetAppContext(DbReadWriteType.Write);
-                    // 原先这里是 (IDbTransaction)context.Database.BeginTransaction() —— 强转必抛，
-                    // 而那时真事务已经开在连接上了、句柄却没存住，就成了没人能提/能滚的悬挂事务
-                    _transaction = GetDbTransaction(context.Database.BeginTransaction());
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    throw WrapDatabaseException($"BeginTransaction,{ex.Message}", ex);
-                }
-            }
-        }
+        public virtual Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default)
+            => ExecuteInTransactionCoreAsync(work, commitWhen: null, cancellationToken);
 
         /// <summary>
-        /// 提交当前事务
+        /// 同上，提交与否由 <paramref name="commitWhen"/> 判定（业务返回失败信封也算失败）。
         /// </summary>
-        public virtual void CommitTransaction()
+        public virtual Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> work, Func<T, bool> commitWhen, CancellationToken cancellationToken = default)
         {
-            lock (_lock)
-            {
-                if (_transaction == null) return;
-
-                try
-                {
-                    var context = GetAppContext(DbReadWriteType.Write);
-                    context.Database.CommitTransaction();
-                }
-                catch (Exception ex)
-                {
-                    throw WrapDatabaseException($"CommitTransaction,{ex.Message}", ex);
-                }
-                finally
-                {
-                    _transaction?.Dispose();
-                    _transaction = null;
-                }
-            }
+            ArgumentNullException.ThrowIfNull(commitWhen);
+            return ExecuteInTransactionCoreAsync(work, commitWhen, cancellationToken);
         }
 
-        /// <summary>
-        /// 回滚当前事务。回滚失败只记日志不抛出，避免掩盖触发回滚的原始异常。
-        /// </summary>
-        public virtual void RollbackTransaction()
+        private async Task<T> ExecuteInTransactionCoreAsync<T>(Func<CancellationToken, Task<T>> work, Func<T, bool>? commitWhen, CancellationToken cancellationToken)
         {
-            lock (_lock)
-            {
-                if (_transaction == null) return;
+            ArgumentNullException.ThrowIfNull(work);
 
-                try
-                {
-                    var context = GetAppContext(DbReadWriteType.Write);
-                    context.Database.RollbackTransaction();
-                }
-                catch (Exception ex)
-                {
-                    WriteLog($"RollbackTransaction,{ex.Message}", ex);
-                }
-                finally
-                {
-                    _transaction?.Dispose();
-                    _transaction = null;
-                }
+            // 已在事务里：并入外层。这里绝不能新开一个，也不能单独重试 —— 边界由外层拥有
+            if (_transaction is not null)
+            {
+                return await work(cancellationToken).ConfigureAwait(false);
             }
-        }
 
-        /// <summary>
-        /// 异步开启事务
-        /// </summary>
-        public virtual async Task<bool> BeginTransactionAsync(CancellationToken cancellationToken = default)
-        {
-            // check + begin + set 全程串行：避免两个并发调用都通过 null 检查、各自开启事务的竞态
-            await _transactionSemaphore.WaitAsync();
-            try
+            var context = GetAppContext(DbReadWriteType.Write);
+            var strategy = context.Database.CreateExecutionStrategy();
+
+            return await strategy.ExecuteAsync(async () =>
             {
+                await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+                // Dapper 命令靠 _transaction 判断「我在事务里」，必须指向同一条连接上的 ADO 事务，
+                // 否则会出现「EF 在事务内、Dapper 在事务外」
                 lock (_lock)
                 {
-                    if (_transaction != null) return true;
-                }
-
-                var context = GetAppContext(DbReadWriteType.Write);
-                var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-                lock (_lock)
-                {
-                    // 同 BeginTransaction：强转会在事务已经开好的时候抛，留下提不了也滚不掉的悬挂事务
                     _transaction = GetDbTransaction(transaction);
                 }
+
+                try
+                {
+                    var result = await work(cancellationToken).ConfigureAwait(false);
+
+                    if (commitWhen is null || commitWhen(result))
+                    {
+                        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                    }
+
+                    return result;
+                }
+                catch
+                {
+                    try
+                    {
+                        await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception rollbackEx)
+                    {
+                        // 回滚失败只记日志：此刻再抛会盖住真正触发回滚的那个异常
+                        WriteLog($"ExecuteInTransactionAsync 回滚失败：{rollbackEx.Message}", rollbackEx);
+                    }
+
+                    throw;
+                }
+                finally
+                {
+                    lock (_lock)
+                    {
+                        _transaction = null;
+                    }
+                }
+            }).ConfigureAwait(false);
+        }
+
+        /// <inheritdoc />
+        public virtual Task ExecuteInTransactionAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(work);
+
+            return ExecuteInTransactionAsync(async ct =>
+            {
+                await work(ct).ConfigureAwait(false);
                 return true;
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                throw WrapDatabaseException($"BeginTransactionAsync,{ex.Message}", ex);
-            }
-            finally
-            {
-                _transactionSemaphore.Release();
-            }
-        }
-
-        /// <summary>
-        /// 异步提交事务
-        /// </summary>
-        public virtual async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
-        {
-            IDbTransaction? transactionToCommit;
-            lock (_lock)
-            {
-                if (_transaction == null) return;
-                transactionToCommit = _transaction;
-            }
-
-            try
-            {
-                var context = GetAppContext(DbReadWriteType.Write);
-                await context.Database.CommitTransactionAsync(cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                throw WrapDatabaseException($"CommitTransactionAsync,{ex.Message}", ex);
-            }
-            finally
-            {
-                lock (_lock)
-                {
-                    transactionToCommit?.Dispose();
-                    _transaction = null;
-                }
-            }
-        }
-
-        /// <summary>
-        /// 异步回滚事务。回滚失败只记日志不抛出，避免掩盖触发回滚的原始异常。
-        /// </summary>
-        public virtual async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
-        {
-            IDbTransaction? transactionToRollback;
-            lock (_lock)
-            {
-                if (_transaction == null) return;
-                transactionToRollback = _transaction;
-            }
-
-            try
-            {
-                var context = GetAppContext(DbReadWriteType.Write);
-                await context.Database.RollbackTransactionAsync(cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                WriteLog($"RollbackTransactionAsync,{ex.Message}", ex);
-            }
-            finally
-            {
-                lock (_lock)
-                {
-                    transactionToRollback?.Dispose();
-                    _transaction = null;
-                }
-            }
+            }, cancellationToken);
         }
 
         /// <summary>
@@ -497,7 +404,6 @@ namespace Viv.Momo.Core
                     _writeDbContext = null;
                     _readDbContext = null;
                 }
-                _transactionSemaphore.Dispose();
             }
 
             _disposed = true;

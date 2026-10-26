@@ -92,17 +92,10 @@ public class UnitOfWorkInterceptorTests
             BodyFinished = true;
         }
 
-        /// <summary>返回成功信封，但内层事务没提交 —— 拦截器必须看见提交失败</summary>
+        /// <summary>返回成功信封，业务正常结束</summary>
         [VivUnitOfWork]
-        public virtual async Task<VivApiResult> StickySuccessAsync()
-        {
-            await using (var inner = await _unitOfWork.BeginAsync())
-            {
-                // 不提交 → 粘性 rollback-only
-            }
-
-            return VivApiResult.Success("粘性成功信封");
-        }
+        public virtual Task<VivApiResult> StickySuccessAsync()
+            => Task.FromResult(VivApiResult.Success("成功信封"));
 
         [VivUnitOfWork]
         public virtual Task<VivApiResult> CreateWithTokenAsync(CancellationToken cancellationToken)
@@ -317,20 +310,6 @@ public class UnitOfWorkInterceptorTests
 
         Assert.NotSame(c1.Resolve<VivUnitOfWorkInterceptor>(), c2.Resolve<VivUnitOfWorkInterceptor>());
         Assert.NotSame(c1.Resolve<IVivUnitOfWork>(), c2.Resolve<IVivUnitOfWork>());
-    }
-
-    [Fact]
-    public async Task 粘性回滚_成功信封也抛异常且回滚()
-    {
-        var (container, kernel, _) = Build();
-        using var scope = container.BeginLifetimeScope();
-
-        var ex = await Assert.ThrowsAsync<VivUnitOfWorkException>(
-            () => scope.Resolve<IProbeService>().StickySuccessAsync());
-
-        Assert.Contains("回滚", ex.Message);
-        Assert.Equal("begin|rollback", kernel.Trace());
-        Assert.Equal(0, kernel.Count("commit"));
     }
 
     [Fact]

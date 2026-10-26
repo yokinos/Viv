@@ -6,8 +6,8 @@ namespace Viv.Fakes;
 /// <summary>
 /// 事务内核桩 —— 只记调用序列，不碰数据库。
 ///
-/// 这个桩只有 3 个方法，正是 <see cref="ITransactionKernel"/> 存在的理由：
-/// 直连 <c>IMomoDbContext</c> 的话这里要桩 55 个成员。
+/// 这个桩只有 1 个方法，正是 <see cref="ITransactionKernel"/> 存在的理由：
+/// 直连 <c>IMomoDbContext</c> 的话这里要桩五十多个成员。
 ///
 /// 只能声明成 internal：<see cref="ITransactionKernel"/> 本身就是 internal 的，
 /// public 类实现 internal 接口是 CS0061。故本程序集对 <c>Viv.Engine.Tests</c> 开了 IVT。
@@ -15,9 +15,6 @@ namespace Viv.Fakes;
 internal class KernelStub : ITransactionKernel
 {
     public List<string> Calls { get; } = [];
-
-    /// <summary>开启事务的返回值。底层实测从不返回 false，保留只为验防御性分支。</summary>
-    public bool BeginResult { get; set; } = true;
 
     /// <summary>回滚时抛出的异常 —— 验「回滚失败只记日志不抛」</summary>
     public Exception? RollbackException { get; set; }
@@ -39,14 +36,45 @@ internal class KernelStub : ITransactionKernel
 
     public int Count(string call) => Calls.Count(c => c == call);
 
-    public Task<bool> BeginAsync(CancellationToken cancellationToken = default)
+    public async Task<T> ExecuteAsync<T>(
+        Func<CancellationToken, Task<T>> work,
+        Func<T, bool>? commitWhen,
+        CancellationToken cancellationToken)
     {
         Calls.Add("begin");
         BeginTokens.Add(cancellationToken);
-        return Task.FromResult(BeginResult);
+
+        T result;
+        try
+        {
+            result = await work(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // 回滚失败不能盖住原始异常（与 Momo 实现同一取舍）
+            try
+            {
+                await RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                // 只记日志的位置在 Momo 那边，桩这里直接吞
+            }
+
+            throw;
+        }
+
+        if (commitWhen is not null && !commitWhen(result))
+        {
+            await RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            return result;
+        }
+
+        await CommitAsync(CancellationToken.None).ConfigureAwait(false);
+        return result;
     }
 
-    public async Task CommitAsync(CancellationToken cancellationToken = default)
+    private async Task CommitAsync(CancellationToken cancellationToken)
     {
         Calls.Add("commit");
         CommitTokens.Add(cancellationToken);
@@ -54,7 +82,7 @@ internal class KernelStub : ITransactionKernel
         if (CommitException != null) throw CommitException;
     }
 
-    public Task RollbackAsync(CancellationToken cancellationToken = default)
+    private Task RollbackAsync(CancellationToken cancellationToken)
     {
         Calls.Add("rollback");
         RollbackTokens.Add(cancellationToken);
@@ -64,6 +92,7 @@ internal class KernelStub : ITransactionKernel
 
 /// <summary>
 /// 公开的工作单元记录替身 —— 给跨程序集测试（如 Nana 消费者）用，不必碰 internal 的内核桩。
+/// 记录序列与真实实现一致：begin → commit / begin → rollback。
 /// </summary>
 public sealed class RecordingUnitOfWork : IVivUnitOfWork
 {
@@ -78,7 +107,7 @@ public sealed class RecordingUnitOfWork : IVivUnitOfWork
     /// <summary>提交那一刻的回调 —— 与 <see cref="KernelStub.OnCommit"/> 同款，验时序用</summary>
     public Action? OnCommit { get; set; }
 
-    /// <summary>提交时抛出的异常 —— 真工作在 rollback-only 时就是这样先回滚再抛 VivUnitOfWorkException</summary>
+    /// <summary>提交时抛出的异常 —— 验「提交失败必须上抛」</summary>
     public Exception? CommitException { get; set; }
 
     /// <summary>回滚时抛出的异常</summary>
@@ -86,46 +115,54 @@ public sealed class RecordingUnitOfWork : IVivUnitOfWork
 
     public string Trace() => string.Join("|", Calls);
 
-    public Task<IVivTransaction> BeginAsync(CancellationToken cancellationToken = default)
+    public async Task<T> ExecuteAsync<T>(
+        Func<CancellationToken, Task<T>> work,
+        Func<T, bool>? commitWhen = null,
+        CancellationToken cancellationToken = default)
     {
         Calls.Add("begin");
         BeginTokens.Add(cancellationToken);
-        return Task.FromResult<IVivTransaction>(new Handle(this));
+
+        T result;
+        try
+        {
+            result = await work(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await RollbackAsync().ConfigureAwait(false);
+            throw;
+        }
+
+        if (commitWhen is not null && !commitWhen(result))
+        {
+            await RollbackAsync().ConfigureAwait(false);
+            return result;
+        }
+
+        Calls.Add("commit");
+        CommitTokens.Add(CancellationToken.None);
+        OnCommit?.Invoke();
+        if (CommitException != null) throw CommitException;
+
+        return result;
     }
 
-    private sealed class Handle : IVivTransaction
+    public Task ExecuteAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken = default)
     {
-        private readonly RecordingUnitOfWork _owner;
-        private bool _completed;
+        ArgumentNullException.ThrowIfNull(work);
 
-        public Handle(RecordingUnitOfWork owner) => _owner = owner;
-
-        public Task CommitAsync(CancellationToken cancellationToken = default)
+        return ExecuteAsync(async ct =>
         {
-            if (_completed) return Task.CompletedTask;
-            _completed = true;
-            _owner.Calls.Add("commit");
-            _owner.CommitTokens.Add(cancellationToken);
-            _owner.OnCommit?.Invoke();
-            return _owner.CommitException is null
-                ? Task.CompletedTask
-                : Task.FromException(_owner.CommitException);
-        }
+            await work(ct).ConfigureAwait(false);
+            return true;
+        }, commitWhen: null, cancellationToken);
+    }
 
-        public Task RollbackAsync(CancellationToken cancellationToken = default)
-        {
-            if (_completed) return Task.CompletedTask;
-            _completed = true;
-            _owner.Calls.Add("rollback");
-            _owner.RollbackTokens.Add(cancellationToken);
-            return _owner.RollbackException is null
-                ? Task.CompletedTask
-                : Task.FromException(_owner.RollbackException);
-        }
-
-        public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
-
-        public ValueTask DisposeAsync()
-            => new(RollbackAsync(CancellationToken.None));
+    private Task RollbackAsync()
+    {
+        Calls.Add("rollback");
+        RollbackTokens.Add(CancellationToken.None);
+        return RollbackException is null ? Task.CompletedTask : Task.FromException(RollbackException);
     }
 }

@@ -262,32 +262,42 @@ namespace Viv.Ouroboros.Core.Service
                 AgentKey = conversation.MainAgentKey
             };
 
-            await _db.BeginTransactionAsync(cancellationToken);
             try
             {
-                await _store.InsertMessageAsync(userMessage);
-
-                var enqueued = await _outbox.EnqueueAsync(new OuroborosTurnEvent
+                await _db.ExecuteInTransactionAsync(async ct =>
                 {
-                    ConversationKey = conversationKey,
-                    UserMessageId = userMessage.Id,
-                    Text = text
+                    await _store.InsertMessageAsync(userMessage);
+
+                    var enqueued = await _outbox.EnqueueAsync(new OuroborosTurnEvent
+                    {
+                        ConversationKey = conversationKey,
+                        UserMessageId = userMessage.Id,
+                        Text = text
+                    }, ct);
+
+                    // 入队失败要整笔回滚，而委托里没法「回滚 + 返回」——用哨兵异常跳出，外面翻译成返回值
+                    if (!enqueued)
+                    {
+                        throw new OutboxEnqueueFailedException();
+                    }
                 }, cancellationToken);
 
-                if (!enqueued)
-                {
-                    await _db.RollbackTransactionAsync(cancellationToken);
-                    return "写发件箱失败";
-                }
-
-                await _db.CommitTransactionAsync(cancellationToken);
                 return null;
             }
-            catch
+            catch (OutboxEnqueueFailedException)
             {
-                await _db.RollbackTransactionAsync(cancellationToken);
-                throw;
+                return "写发件箱失败";
             }
+        }
+
+        /// <summary>写发件箱失败：用于从委托事务里跳出并回滚</summary>
+        private sealed class OutboxEnqueueFailedException : Exception
+        {
+        }
+
+        /// <summary>消息已处理过（消息级幂等）：用于从委托事务里跳出并回滚</summary>
+        private sealed class DuplicateMessageException : Exception
+        {
         }
 
         /// <summary>
@@ -417,73 +427,73 @@ namespace Viv.Ouroboros.Core.Service
             var seq = userSeq > 0 ? userSeq + 1 : await _store.NextSeqAsync(conversation.Id);
             var inbox = _services.GetService<IVivInbox>();
 
-            ToolApprovalRequestContent? pending;
+            ToolApprovalRequestContent? pending = null;
             OtApproval? approval = null;
 
-            await _db.BeginTransactionAsync(cancellationToken);
             try
             {
-                if (inbox is not null && sourceMessageId > 0)
+                await _db.ExecuteInTransactionAsync(async ct =>
                 {
-                    var accepted = await inbox.TryAcceptAsync(sourceMessageId, cancellationToken);
-                    if (!accepted)
+                    if (inbox is not null && sourceMessageId > 0)
                     {
-                        await _db.RollbackTransactionAsync(cancellationToken);
-                        _logger.Warning("消息 {0} 已处理过，跳过落库（消息级幂等）", sourceMessageId);
-                        return new ChatTurnResult(null, null, null, null);
+                        var accepted = await inbox.TryAcceptAsync(sourceMessageId, ct);
+                        if (!accepted)
+                        {
+                            throw new DuplicateMessageException();
+                        }
                     }
-                }
 
-                await _store.InsertMessageAsync(new OtMessage
-                {
-                    ConversationId = conversation.Id,
-                    Seq = seq,
-                    Role = EmMessageRole.Assistant,
-                    Content = response.Text,
-                    ContentType = EmMessageContentType.Text,
-                    AgentKey = conversation.MainAgentKey,
-                    ModelProfile = null,
-                    InputTokens = response.Usage?.InputTokenCount is { } i ? (int)i : null,
-                    OutputTokens = response.Usage?.OutputTokenCount is { } o ? (int)o : null,
-                    CachedInputTokens = response.Usage?.CachedInputTokenCount is { } c ? (int)c : null,
-                    ReasoningTokens = response.Usage?.ReasoningTokenCount is { } r ? (int)r : null
-                });
-
-                conversation.MessageCount += userSeq > 0 ? 2 : 1;
-                conversation.LastMessageAt = DateTime.Now;
-                conversation.TotalInputTokens += response.Usage?.InputTokenCount ?? 0;
-                conversation.TotalOutputTokens += response.Usage?.OutputTokenCount ?? 0;
-                await _store.UpdateConversationAsync(conversation);
-
-                await SaveSessionAsync(agent, session, conversation.Id, conversation.MainAgentKey);
-
-                // 模型要求人工审批 → 落单并把 RequestId 交给前端（审批单也在同一事务里，别出现"轮次落了、单子丢了"）
-                pending = response.Messages.SelectMany(m => m.Contents).OfType<ToolApprovalRequestContent>().FirstOrDefault();
-                if (pending is not null)
-                {
-                    var toolCall = pending.ToolCall as FunctionCallContent;
-                    approval = new OtApproval
+                    await _store.InsertMessageAsync(new OtMessage
                     {
-                        ApprovalId = Guid.NewGuid(),
-                        ExternalRequestId = pending.RequestId,
-                        ExternalToolCallId = toolCall?.CallId,
                         ConversationId = conversation.Id,
-                        SubjectId = _context.SubjectId,
-                        ToolKey = toolCall?.Name ?? "unknown",
-                        Arguments = toolCall is null ? null : JsonSerializer.Serialize(toolCall.Arguments),
-                        Status = EmApprovalStatus.Pending,
-                        RequestedAt = DateTime.Now,
-                        ExpiresAt = DateTime.Now.AddHours(24)
-                    };
-                    await _store.InsertApprovalAsync(approval);
-                }
+                        Seq = seq,
+                        Role = EmMessageRole.Assistant,
+                        Content = response.Text,
+                        ContentType = EmMessageContentType.Text,
+                        AgentKey = conversation.MainAgentKey,
+                        ModelProfile = null,
+                        InputTokens = response.Usage?.InputTokenCount is { } i ? (int)i : null,
+                        OutputTokens = response.Usage?.OutputTokenCount is { } o ? (int)o : null,
+                        CachedInputTokens = response.Usage?.CachedInputTokenCount is { } c ? (int)c : null,
+                        ReasoningTokens = response.Usage?.ReasoningTokenCount is { } r ? (int)r : null
+                    });
 
-                await _db.CommitTransactionAsync(cancellationToken);
+                    // 注意：这几个 += 是内存累加，一旦开启事务重试会被重放而翻倍。
+                    // 当前未开重试；将来要开，必须改成「每次尝试从库里重新读一次会话」。
+                    conversation.MessageCount += userSeq > 0 ? 2 : 1;
+                    conversation.LastMessageAt = DateTime.Now;
+                    conversation.TotalInputTokens += response.Usage?.InputTokenCount ?? 0;
+                    conversation.TotalOutputTokens += response.Usage?.OutputTokenCount ?? 0;
+                    await _store.UpdateConversationAsync(conversation);
+
+                    await SaveSessionAsync(agent, session, conversation.Id, conversation.MainAgentKey);
+
+                    // 模型要求人工审批 → 落单并把 RequestId 交给前端（审批单也在同一事务里，别出现"轮次落了、单子丢了"）
+                    pending = response.Messages.SelectMany(m => m.Contents).OfType<ToolApprovalRequestContent>().FirstOrDefault();
+                    if (pending is not null)
+                    {
+                        var toolCall = pending.ToolCall as FunctionCallContent;
+                        approval = new OtApproval
+                        {
+                            ApprovalId = Guid.NewGuid(),
+                            ExternalRequestId = pending.RequestId,
+                            ExternalToolCallId = toolCall?.CallId,
+                            ConversationId = conversation.Id,
+                            SubjectId = _context.SubjectId,
+                            ToolKey = toolCall?.Name ?? "unknown",
+                            Arguments = toolCall is null ? null : JsonSerializer.Serialize(toolCall.Arguments),
+                            Status = EmApprovalStatus.Pending,
+                            RequestedAt = DateTime.Now,
+                            ExpiresAt = DateTime.Now.AddHours(24)
+                        };
+                        await _store.InsertApprovalAsync(approval);
+                    }
+                }, cancellationToken);
             }
-            catch
+            catch (DuplicateMessageException)
             {
-                await _db.RollbackTransactionAsync(cancellationToken);
-                throw;
+                _logger.Warning("消息 {0} 已处理过，跳过落库（消息级幂等）", sourceMessageId);
+                return new ChatTurnResult(null, null, null, null);
             }
 
             // 用量出账放在消息与会话都落完之后：出账失败不该回滚已经跑完的这一轮

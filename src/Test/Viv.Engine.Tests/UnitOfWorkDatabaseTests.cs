@@ -106,19 +106,21 @@ public class UnitOfWorkDatabaseTests : IClassFixture<EnginePostgresFixture>
         var uow = new UnitOfWorkManager(new MomoTransactionAdapter(db), logger);
 
         var committedId = 1L;
-        await using (var tx = await uow.BeginAsync())
+        await uow.ExecuteAsync(async _ =>
         {
             Assert.True(await db.InsertAsync(new UowProbeRow { Id = committedId, Label = "ok" }));
-            await tx.CommitAsync();
-        }
+            return true;
+        });
 
         Assert.NotNull(await db.FindAsync<UowProbeRow>(committedId));
 
         var rolledId = 2L;
-        await using (var tx = await uow.BeginAsync())
-        {
-            Assert.True(await db.InsertAsync(new UowProbeRow { Id = rolledId, Label = "nope" }));
-        }
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            uow.ExecuteAsync<int>(async _ =>
+            {
+                Assert.True(await db.InsertAsync(new UowProbeRow { Id = rolledId, Label = "nope" }));
+                throw new InvalidOperationException("故意回滚");
+            }));
 
         Assert.Null(await db.FindAsync<UowProbeRow>(rolledId));
     }

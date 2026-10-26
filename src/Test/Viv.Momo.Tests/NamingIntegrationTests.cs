@@ -85,25 +85,32 @@ internal static class NamingIntegration
         await db.SyncTableAsync();
 
         var committedId = 9001L;
-        Assert.True(await db.BeginTransactionAsync());
-        Assert.True(await db.InsertAsync(new NamingProbeRow
+        await db.ExecuteInTransactionAsync(async _ =>
         {
-            Id = committedId,
-            DisplayName = "committed",
-            ItemCount = 1
-        }));
-        await db.CommitTransactionAsync();
+            Assert.True(await db.InsertAsync(new NamingProbeRow
+            {
+                Id = committedId,
+                DisplayName = "committed",
+                ItemCount = 1
+            }));
+
+            return true;
+        });
         Assert.NotNull(await db.FindAsync<NamingProbeRow>(committedId));
 
         var rolledId = 9002L;
-        Assert.True(await db.BeginTransactionAsync());
-        Assert.True(await db.InsertAsync(new NamingProbeRow
-        {
-            Id = rolledId,
-            DisplayName = "rolled",
-            ItemCount = 2
-        }));
-        await db.RollbackTransactionAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            db.ExecuteInTransactionAsync<int>(async _ =>
+            {
+                Assert.True(await db.InsertAsync(new NamingProbeRow
+                {
+                    Id = rolledId,
+                    DisplayName = "rolled",
+                    ItemCount = 2
+                }));
+
+                throw new InvalidOperationException("故意回滚");
+            }));
         Assert.Null(await db.FindAsync<NamingProbeRow>(rolledId));
     }
 }

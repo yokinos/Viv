@@ -19,8 +19,9 @@ namespace Viv.Contracts.Interface
     {
         /// <summary>
         /// 尝试记录本服务已处理 <paramref name="messageId"/>。0（空信封）直接返回 false，不落库。
-        /// 必须与业务写处于同一 <c>IVivTransaction</c> 才原子 —— 实现走 <c>ExecuteSqlAsync</c>，
-        /// 会并入调用方当前事务。没有外层事务时依然落库（有持久性、没有与业务写的原子性）。
+        /// 必须与业务写处于同一个事务（<c>IVivUnitOfWork.ExecuteAsync</c> 的 work 里）才原子 ——
+        /// 实现走 <c>ExecuteSqlAsync</c>，会并入调用方当前事务。没有外层事务时依然落库
+        /// （有持久性、没有与业务写的原子性）。
         /// </summary>
         /// <returns>首次接受 true；唯一约束冲突（已处理过）false。</returns>
         Task<bool> TryAcceptAsync(long messageId, CancellationToken cancellationToken = default);

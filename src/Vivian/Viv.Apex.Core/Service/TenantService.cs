@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Apex.Core.Entity.Vo.Tenant;
@@ -14,12 +14,9 @@ namespace Viv.Apex.Core.Service
     {
         private readonly ITenantRepository _tenantRepository;
 
-        private readonly IVivUnitOfWork _unitOfWork;
-
-        public TenantService(ITenantRepository tenantRepository, IVivUnitOfWork unitOfWork)
+        public TenantService(ITenantRepository tenantRepository)
         {
             _tenantRepository = tenantRepository;
-            _unitOfWork = unitOfWork;
         }
 
         public async Task<VivApiResult<GetTenantOutput>> GetTenantAsync(ApiIdRequest request)
@@ -29,8 +26,6 @@ namespace Viv.Apex.Core.Service
             {
                 return VivApiResult<GetTenantOutput>.Failed("租户不存在");
             }
-
-            using var tx = await _unitOfWork.BeginAsync();
 
             var output = new GetTenantOutput()
             {

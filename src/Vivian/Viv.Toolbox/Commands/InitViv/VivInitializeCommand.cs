@@ -440,28 +440,29 @@ namespace Viv.Toolbox.Commands.InitViv
         /// 整枝一个事务：子页面写失败时连菜单一起回滚，避免留下「根目录在、子页面没了」的半截数据。
         /// BitIndex 按各自表内当前最大值往后排，避免和手工数据撞位。
         /// </summary>
-        private static async Task<int> InsertMenuSeedAsync(IMomoDbContext db,
+        private static Task<int> InsertMenuSeedAsync(IMomoDbContext db,
             List<AtMenu> menus, List<AtMenuSubPage> subPages, List<AtMenuAction> actions,
             CancellationToken cancellationToken)
         {
-            await db.BeginTransactionAsync(cancellationToken);
-            try
+            // 整枝一个事务：子页面写失败时连菜单一起回滚，避免留下「根目录在、子页面没了」的半截数据。
+            // BitIndex 在委托内部按各自表内当前最大值往后排 —— 委托可能被重放，赋值必须每次重算。
+            return db.ExecuteInTransactionAsync(async ct =>
             {
-                var nextMenuBit = await NextBitIndexAsync(db, "AtMenu", "ClientAppId", menus[0].ClientAppId, cancellationToken);
+                var nextMenuBit = await NextBitIndexAsync(db, "AtMenu", "ClientAppId", menus[0].ClientAppId, ct);
                 foreach (var menu in menus) menu.BitIndex = nextMenuBit++;
 
-                if (!await db.InsertAsync(menus, cancellationToken))
+                if (!await db.InsertAsync(menus, ct))
                     throw new InvalidOperationException("初始菜单写入失败");
 
                 if (subPages.Count > 0)
                 {
                     foreach (var group in subPages.GroupBy(x => x.MenuId))
                     {
-                        var next = await NextBitIndexAsync(db, "AtMenuSubPage", "MenuId", group.Key, cancellationToken);
+                        var next = await NextBitIndexAsync(db, "AtMenuSubPage", "MenuId", group.Key, ct);
                         foreach (var page in group) page.BitIndex = next++;
                     }
 
-                    if (!await db.InsertAsync(subPages, cancellationToken))
+                    if (!await db.InsertAsync(subPages, ct))
                         throw new InvalidOperationException("初始菜单子页面写入失败");
                 }
 
@@ -469,24 +470,17 @@ namespace Viv.Toolbox.Commands.InitViv
                 {
                     foreach (var group in actions.GroupBy(x => x.MenuId))
                     {
-                        var next = await NextBitIndexAsync(db, "AtMenuAction", "MenuId", group.Key, cancellationToken);
+                        var next = await NextBitIndexAsync(db, "AtMenuAction", "MenuId", group.Key, ct);
                         foreach (var action in group) action.BitIndex = next++;
                     }
 
-                    if (!await db.InsertAsync(actions, cancellationToken))
+                    if (!await db.InsertAsync(actions, ct))
                         throw new InvalidOperationException("初始菜单动作写入失败");
                 }
 
-                await db.CommitTransactionAsync(cancellationToken);
-
                 Out.Println($"  [{ApexDatabase}] 初始菜单已创建：菜单 {menus.Count}、子页面 {subPages.Count}、动作 {actions.Count}");
                 return menus.Count + subPages.Count + actions.Count;
-            }
-            catch
-            {
-                await db.RollbackTransactionAsync(cancellationToken);
-                throw;
-            }
+            }, cancellationToken);
         }
 
         /// <summary>

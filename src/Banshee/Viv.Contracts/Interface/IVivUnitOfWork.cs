@@ -1,36 +1,52 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Viv.Contracts.Interface
 {
     /// <summary>
-    /// 窄事务入口，业务自己划边界。完整事务（方法级 <c>[VivUnitOfWork]</c>）由框架自动开合，不用这个接口。
+    /// 工作单元：把「一段要原子完成的活」交给框架在事务里跑。
     ///
     /// <code>
-    /// await using var tx = await _unitOfWork.BeginAsync();
-    /// await _repo.InsertAsync(x);
-    /// await tx.CommitAsync();
+    /// await _unitOfWork.ExecuteAsync(async ct =>
+    /// {
+    ///     await _repo.InsertAsync(x, ct);
+    ///     await _repo.UpdateAsync(y, ct);
+    /// }, cancellationToken: ct);
     /// </code>
     ///
-    /// 嵌套：只有最外层那次 BeginAsync 真开数据库事务，嵌套调用拿到的是子句柄。
-    /// 子句柄的提交是空操作；子句柄没提交就释放（含抛异常）→ 整个作用域被标记 rollback-only，
-    /// 最外层再提交会先回滚再抛 <see cref="Viv.Contracts.Exceptions.VivUnitOfWorkException"/>（不只记 Warning）。
-    /// 没有保存点，内层回滚会拖垮整个事务，不会只撤销内层那几行。
+    /// 方法级 <c>[VivUnitOfWork]</c> 由拦截器自动包一层，业务代码不用调本接口。
     ///
-    /// 从 DI 作用域构造注入 —— 事务状态跟着作用域走，解析到根作用域会让并发请求共用一个事务。
-    /// 也正因为状态绑在作用域上，同一作用域内只可能有一个事务：要一段与当前事务互不影响的操作，
-    /// 得从新建的 DI 作用域解析本接口（IServiceScopeFactory.CreateScope），那条路径走独立连接 ——
-    /// 内层与外层写同一批行会死锁。
+    /// 语义：
+    /// <list type="bullet">
+    /// <item>work 正常返回、且 <c>commitWhen</c> 判据通过（默认通过）→ 提交；</item>
+    /// <item>work 抛异常，或 <c>commitWhen</c> 返回 false → 整笔回滚（后者用于「业务返回失败信封」）；</item>
+    /// <item>嵌套调用并入外层事务，不重开、不单独提交（没有保存点，内层失败会拖垮整笔）；</item>
+    /// <item>事务只针对主库写。</item>
+    /// </list>
     ///
-    /// 事务只针对主库写，读不开事务，业务先把数据备好再开。
-    /// 读写未分离时读写共用一条连接，事务内走 Dapper 原生 SQL 读（FindScalar / FindList&lt;T&gt;(sql) / Page 等）会直接抛异常。
+    /// 与旧的两段式调用（Begin/Commit/Rollback）的区别：没有事务句柄，边界就是 lambda 的生存期。
+    /// 这不是风格选择 —— EF 的执行策略必须在失败时把整笔重做，所以 BEGIN/COMMIT 得由它拥有，
+    /// 用户自己开的事务它一律拒绝。
+    ///
+    /// 从 DI 作用域构造注入：事务状态跟着作用域走，解析到根作用域会让并发请求共用一个事务。
     /// </summary>
     public interface IVivUnitOfWork
     {
         /// <summary>
-        /// 开启事务；若当前作用域已有未结束的事务，则加入它并返回虚拟子句柄，不再新开数据库事务。
-        /// 句柄离开作用域时若未提交，自动回滚。
+        /// 在事务里执行 <paramref name="work"/>。
         /// </summary>
-        Task<IVivTransaction> BeginAsync(CancellationToken cancellationToken = default);
+        /// <param name="work">要原子完成的工作</param>
+        /// <param name="commitWhen">提交判据：拿到 work 的返回值，返回 false 则回滚（默认总是提交）</param>
+        /// <param name="cancellationToken">只用于开事务；提交/回滚不跟它走（收尾动作不应被客户端断开取消）</param>
+        Task<T> ExecuteAsync<T>(
+            Func<CancellationToken, Task<T>> work,
+            Func<T, bool>? commitWhen = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 无返回值的版本：正常返回即提交，抛异常即回滚。
+        /// </summary>
+        Task ExecuteAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken = default);
     }
 }
