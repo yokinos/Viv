@@ -4,6 +4,7 @@ using Viv.Apex.Core.IRepository;
 using Viv.Apex.Core.IService;
 using Viv.Apex.Core.Module.Menu;
 using Viv.Contracts.Interface;
+using Viv.Elysia.Request;
 using Viv.Engine;
 using Viv.Entity.Database.Apex;
 using Viv.Entity.Enums;
@@ -22,7 +23,7 @@ namespace Viv.Apex.Core.Service
         private readonly IMenuSubPageRepository _subPages;
         private readonly IIndex<EmClientStack, IMenuRouteAdapter> _adapters;
 
-        public MenuService(IVivContext context, IClientAppRepository clientApps, IMenuRepository menus, IMenuSubPageRepository subPages, 
+        public MenuService(IVivContext context, IClientAppRepository clientApps, IMenuRepository menus, IMenuSubPageRepository subPages,
             IIndex<EmClientStack, IMenuRouteAdapter> adapters)
         {
             _context = context;
@@ -116,21 +117,21 @@ namespace Viv.Apex.Core.Service
             return VivApiResult.Success();
         }
 
-        public async Task<VivApiResult> DeleteAsync(long id)
+        public async Task<VivApiResult> DeleteAsync(ApiIdRequest request)
         {
             var resolved = await ResolveAsync();
             if (resolved.Error is not null) return resolved.Error;
 
-            var menu = await _menus.GetAsync(id);
+            var menu = await _menus.GetAsync(request.Id);
             if (menu is null || menu.ClientAppId != resolved.AppId)
                 return VivApiResult.Failed("菜单不存在");
 
             // 有子菜单就先删子菜单，避免删完父节点留下挂不上的孤儿节点
-            if (await _menus.HasChildrenAsync(id))
+            if (await _menus.HasChildrenAsync(request.Id))
                 return VivApiResult.Failed("请先删除子菜单");
 
-            await _subPages.SoftDeleteByMenuAsync(id);
-            await _menus.SoftDeleteAsync(id);
+            await _subPages.SoftDeleteByMenuAsync(request.Id);
+            await _menus.SoftDeleteAsync(request.Id);
 
             return VivApiResult.Success();
         }

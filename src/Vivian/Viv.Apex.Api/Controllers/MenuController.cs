@@ -1,8 +1,9 @@
-using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Net;
 using Viv.Apex.Core.Entity.Dto.Menu;
 using Viv.Apex.Core.IService;
+using Viv.Elysia.Request;
 using Viv.Engine;
 
 namespace Viv.Apex.Api.Controllers
@@ -38,10 +39,10 @@ namespace Viv.Apex.Api.Controllers
         }
 
         /// <summary>删除菜单：软删菜单本身与它的子页面；有子菜单时拒绝</summary>
-        [HttpDelete("{id:long}")]
-        public async Task<VivApiResult> DeleteAsync(long id)
+        [HttpPost("delete")]
+        public async Task<VivApiResult> DeleteAsync(ApiIdRequest request)
         {
-            return await _menu.DeleteAsync(id);
+            return await _menu.DeleteAsync(request);
         }
     }
 }

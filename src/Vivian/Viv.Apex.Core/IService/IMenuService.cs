@@ -1,4 +1,5 @@
 using Viv.Apex.Core.Entity.Dto.Menu;
+using Viv.Elysia.Request;
 using Viv.Engine;
 
 namespace Viv.Apex.Core.IService
@@ -16,6 +17,6 @@ namespace Viv.Apex.Core.IService
         Task<VivApiResult> SaveAsync(SaveMenuRequest request);
 
         /// <summary>软删除菜单及其子页面；有子菜单时拒绝</summary>
-        Task<VivApiResult> DeleteAsync(long id);
+        Task<VivApiResult> DeleteAsync(ApiIdRequest request);
     }
 }
