@@ -28,7 +28,6 @@ namespace Viv.Apex.Api.Controllers
         /// </summary>
         /// <param name="request"></param>
         /// <returns></returns>
-        [AllowAnonymous]
         [ProducesResponseType(typeof(GetLoginDataOutput), StatusCodes.Status200OK)]
         [HttpPost("getLoginData")]
         public async Task<IActionResult> GetLoginDataAsync(ApiEmptyRequest request)
