@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data;
 using System.Reflection;
@@ -425,11 +425,13 @@ namespace Viv.Momo.Sync
         /// CLR 类型 → SQL 类型映射。
         /// string 有 [StringLength(n)] → varchar(n) / nvarchar(n)，
         /// 无长度限制 → text / nvarchar(max)。
-        /// enum 按 int 处理。
+        /// enum 按其**底层类型**处理（不少枚举声明为 `: byte`）。
+        /// 一律按 int 建会出问题的原因：Dapper 映射枚举时按底层类型拆箱，
+        /// 列返回 Int32 而枚举是 byte → `Unable to cast object of type 'System.Int32' to type 'System.Byte'`。
         /// </summary>
         private string MapToSqlType(PropertyInfo prop, Type clrType, int? maxLength)
         {
-            if (clrType.IsEnum) clrType = typeof(int);
+            if (clrType.IsEnum) clrType = Enum.GetUnderlyingType(clrType);
 
             if (clrType == typeof(string))
             {

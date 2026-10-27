@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 using Viv.Momo.Base;
@@ -83,10 +83,31 @@ public class SyncScalarRow : IEntity
     public ulong ULongCol { get; set; }
     public char CharCol { get; set; }
 
+    /// <summary>枚举列：按**底层类型**建（byte 枚举曾一律按 int 建，Dapper 拆箱时 Int32 → Byte 直接炸）</summary>
+    public ByteBasedEnum ByteEnumCol { get; set; }
+
+    public ByteBasedEnum? NullableByteEnumCol { get; set; }
+
+    public IntBasedEnum IntEnumCol { get; set; }
+
     [Precision(20, 4)]
     public decimal PreciseAmount { get; set; }
 
     public decimal PlainAmount { get; set; }
+}
+
+/// <summary>常见形状：<c>: byte</c></summary>
+public enum ByteBasedEnum : byte
+{
+    None = 0,
+    Active = 1,
+}
+
+/// <summary>默认底层类型 <c>int</c></summary>
+public enum IntBasedEnum
+{
+    None = 0,
+    Active = 1,
 }
 
 #endregion
@@ -389,6 +410,12 @@ public class SchemaSyncTests
         Assert.Contains("[UIntCol] bigint", sql);
         Assert.Contains("[CharCol] nvarchar(1)", sql);
         Assert.DoesNotContain("[ULongCol] nvarchar(max)", sql);   // 修之前就是这个形状
+
+        // 枚举按底层类型建：byte → tinyint，int → int。
+        // 一律建 int 的话 Dapper 读 byte 枚举会抛「Int32 转 Byte」。
+        Assert.Contains("[ByteEnumCol] tinyint", sql);
+        Assert.Contains("[NullableByteEnumCol] tinyint", sql);
+        Assert.Contains("[IntEnumCol] int", sql);
     }
 
     [Fact]
@@ -401,6 +428,9 @@ public class SchemaSyncTests
         Assert.Contains("u_short_col integer", sql);
         Assert.Contains("u_int_col bigint", sql);
         Assert.Contains("char_col character(1)", sql);      // Npgsql 把 char 落到 character(1)，不是 text
+
+        Assert.Contains("byte_enum_col smallint", sql);     // PG 没有 tinyint，byte 抬成 smallint（与 EF 一致）
+        Assert.Contains("int_enum_col integer", sql);
     }
 
     [Fact]

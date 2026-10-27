@@ -42,5 +42,15 @@ namespace Viv.Engine.Options
         /// 让 Aspire/YARP 容器网关的 X-Forwarded-* 生效。生产要收紧时再填。
         /// </summary>
         public string[]? TrustedProxies { get; set; }
+
+        /// <summary>
+        /// 是否由服务自身做 HTTP → HTTPS 跳转。**默认 false**。
+        ///
+        /// 本架构由网关 / 边缘节点终止 TLS：网关用 http 连下游，下游一旦自己跳转，
+        /// 浏览器会被 307 到服务自己的 https 端口（如 <c>https://localhost:7093</c>），
+        /// 请求直接逃出网关、连同 <c>/{服务短名}</c> 前缀一起丢掉。
+        /// 只有当某个服务被**直接**以 http 暴露、且需要它自己跳到 https 时才打开。
+        /// </summary>
+        public bool EnableHttpsRedirection { get; set; }
     }
 }

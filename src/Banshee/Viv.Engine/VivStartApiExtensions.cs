@@ -195,7 +195,13 @@ namespace Viv.Engine
             // TickerQ / 手写 BackgroundService 不走这条管道，请用 IVivLocalEventScope.RunAsync。
             app.UseMiddleware<LocalEventFlushMiddleware>();
 
-            app.UseHttpsRedirection();
+            // 默认不跳转：TLS 在网关 / 边缘终止，下游自己跳转会把浏览器 307 到服务自身的 https 端口
+            // （如 https://localhost:7093），请求逃出网关且丢掉 /{服务短名} 前缀 —— 与 VivForwardedHeaders
+            // 注释里那个坑是同一个。只有服务被直接以 http 暴露时才在 appsettings.json 打开。
+            if (VivEngine.VivOptions?.EnvOption?.EnableHttpsRedirection == true)
+            {
+                app.UseHttpsRedirection();
+            }
             if (hasAuth)
             {
                 app.UseAuthorization();
