@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using Viv.Momo.Core;
+using Viv.Momo.Dialect;
 using Viv.Momo.Enums;
 
 namespace Viv.Momo.Interface
@@ -48,7 +49,9 @@ namespace Viv.Momo.Interface
         ///
         /// tenantId 是本次读生效的租户（MomoDatabase.TenantId，ChangeTenant 的覆盖优先），
         /// 不要改成直接读请求上下文，那会把后台任务换租户读的覆盖废掉。
+        ///
+        /// <paramref name="dialect"/> 由调用方按**当前连接**给出，过滤器不要自己判断库类型。
         /// </summary>
-        string BuildSqlCondition(long tenantId, DatabaseSourceType databaseSource, IDictionary<string, object> parameters);
+        string BuildSqlCondition(long tenantId, ISqlDialect dialect, IDictionary<string, object> parameters);
     }
 }

@@ -1,4 +1,4 @@
-using Dapper;
+﻿using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Data;
@@ -72,9 +72,9 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
+                    var tableName = Dialect.GetTableName<T>();
                     MomoMetrics.RecordBatchPath("dapper", "insert");
-                    var tempSql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _databaseOptions.DatabaseSource);
+                    var tempSql = Dialect.GetInsertSqlTemplate(tableName, typeof(T));
                     affected = _queryTelemetry.Measure("dapper", "insert", tempSql,
                         () => context.DbConnection.Execute(tempSql, entityList, _transaction, _timeOut));
                 }
@@ -128,8 +128,8 @@ namespace Viv.Momo.Core
                 }
                 else
                 {
-                    var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
-                    var tempSql = SqlMagic.GetInsertSqlTemplate(tableName, typeof(T), _databaseOptions.DatabaseSource);
+                    var tableName = Dialect.GetTableName<T>();
+                    var tempSql = Dialect.GetInsertSqlTemplate(tableName, typeof(T));
                     MomoMetrics.RecordBatchPath("dapper", "insert");
                     affected = await _queryTelemetry.MeasureAsync("dapper", "insert", tempSql,
                         async () => await context.DbConnection.ExecuteAsync(tempSql, entityList, _transaction, _timeOut).ConfigureAwait(false)).ConfigureAwait(false);
@@ -399,7 +399,7 @@ namespace Viv.Momo.Core
         private List<KeyValueItem<string, DynamicParameters>> BuildUpdateSqlList<T>(List<T> entities, int pageSize = 200) where T : class, IEntity
         {
             var type = typeof(T);
-            var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
+            var tableName = Dialect.GetTableName<T>();
             var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
             var result = new List<KeyValueItem<string, DynamicParameters>>();
 
@@ -421,8 +421,8 @@ namespace Viv.Momo.Core
                     if (_primaryKeys.Contains(propName, StringComparer.OrdinalIgnoreCase)) continue;
                     if (IsProtectedColumn(type, propName)) continue;
 
-                    var dbField = SqlMagic.QuoteIdentifier(propName, _databaseOptions.DatabaseSource);
-                    var idField = SqlMagic.QuoteIdentifier("Id", _databaseOptions.DatabaseSource);
+                    var dbField = Dialect.QuoteIdentifier(propName);
+                    var idField = Dialect.QuoteIdentifier("Id");
 
                     var caseBuilder = new StringBuilder($"{dbField} = CASE {idField} ");
                     foreach (var entity in pageEntities)
@@ -451,7 +451,7 @@ namespace Viv.Momo.Core
                     parameters.Add(paramName, idValue);
                 }
 
-                sqlBuilder.Append($" WHERE {SqlMagic.QuoteIdentifier("Id", _databaseOptions.DatabaseSource)} IN ({string.Join(", ", idParams)})");
+                sqlBuilder.Append($" WHERE {Dialect.QuoteIdentifier("Id")} IN ({string.Join(", ", idParams)})");
                 result.Add(new KeyValueItem<string, DynamicParameters>(sqlBuilder.ToString(), parameters));
             }
 
@@ -503,10 +503,10 @@ namespace Viv.Momo.Core
                 else
                 {
                     MomoMetrics.RecordBatchPath("dapper", "delete");
-                    var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
+                    var tableName = Dialect.GetTableName<T>();
                     var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T)) && TenantId > 0;
-                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _databaseOptions.DatabaseSource)} IN @Ids"
-                        + (isTenantEntity ? $" AND {SqlMagic.QuoteIdentifier("TenantId", _databaseOptions.DatabaseSource)} = @TenantId" : "");
+                    var deleteSql = $"DELETE FROM {tableName} WHERE {Dialect.QuoteIdentifier("Id")} IN @Ids"
+                        + (isTenantEntity ? $" AND {Dialect.QuoteIdentifier("TenantId")} = @TenantId" : "");
                     int affected = _queryTelemetry.Measure("dapper", "delete", deleteSql,
                         () => context.DbConnection.Execute(deleteSql, isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids }, _transaction, _timeOut));
                     return affected > 0;
@@ -561,10 +561,10 @@ namespace Viv.Momo.Core
                 {
                     MomoMetrics.RecordBatchPath("dapper", "delete");
                     cancellationToken.ThrowIfCancellationRequested();
-                    var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
+                    var tableName = Dialect.GetTableName<T>();
                     var isTenantEntity = typeof(ITenant).IsAssignableFrom(typeof(T)) && TenantId > 0;
-                    var deleteSql = $"DELETE FROM {tableName} WHERE {SqlMagic.QuoteIdentifier("Id", _databaseOptions.DatabaseSource)} IN @Ids"
-                        + (isTenantEntity ? $" AND {SqlMagic.QuoteIdentifier("TenantId", _databaseOptions.DatabaseSource)} = @TenantId" : "");
+                    var deleteSql = $"DELETE FROM {tableName} WHERE {Dialect.QuoteIdentifier("Id")} IN @Ids"
+                        + (isTenantEntity ? $" AND {Dialect.QuoteIdentifier("TenantId")} = @TenantId" : "");
                     int affected = await _queryTelemetry.MeasureAsync("dapper", "delete", deleteSql,
                         async () => await context.DbConnection.ExecuteAsync(deleteSql, isTenantEntity ? new { Ids = ids, TenantId } : new { Ids = ids }, _transaction, _timeOut).ConfigureAwait(false)).ConfigureAwait(false);
                     return affected > 0;
@@ -583,8 +583,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetDeleteSql(tableName, predicate, _databaseOptions.DatabaseSource, TenantId);
+                var tableName = Dialect.GetTableName<T>();
+                var (sql, parameters) = Dialect.GetDeleteSql(tableName, predicate, TenantId);
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
@@ -605,8 +605,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetDeleteSql(tableName, predicate, _databaseOptions.DatabaseSource, TenantId);
+                var tableName = Dialect.GetTableName<T>();
+                var (sql, parameters) = Dialect.GetDeleteSql(tableName, predicate, TenantId);
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
@@ -629,8 +629,8 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext();
-                var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
-                var (sql, parameter) = SqlMagic.GetDeleteSql<T>(tableName, x => x.Id == id, _databaseOptions.DatabaseSource, TenantId);
+                var tableName = Dialect.GetTableName<T>();
+                var (sql, parameter) = Dialect.GetDeleteSql<T>(tableName, x => x.Id == id, TenantId);
                 var count = _queryTelemetry.Measure("dapper", "delete", sql,
                     () => context.DbConnection.Execute(sql, parameter, _transaction, _timeOut));
                 return (count > 0);
@@ -649,8 +649,8 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext();
-                var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
-                var (sql, parameter) = SqlMagic.GetDeleteSql<T>(tableName, x => x.Id == id, _databaseOptions.DatabaseSource, TenantId);
+                var tableName = Dialect.GetTableName<T>();
+                var (sql, parameter) = Dialect.GetDeleteSql<T>(tableName, x => x.Id == id, TenantId);
                 var command = new CommandDefinition(sql, parameter, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
                 var count = await _queryTelemetry.MeasureAsync("dapper", "delete", sql,
                     async () => await context.DbConnection.ExecuteAsync(command).ConfigureAwait(false)).ConfigureAwait(false);
@@ -673,8 +673,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _databaseOptions.DatabaseSource, TenantId);
+                var tableName = Dialect.GetTableName<T>();
+                var (sql, parameters) = Dialect.GetSoftDeleteSql(tableName, predicate, TenantId);
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext(DbReadWriteType.Write);
@@ -695,8 +695,8 @@ namespace Viv.Momo.Core
 
             try
             {
-                var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _databaseOptions.DatabaseSource, TenantId);
+                var tableName = Dialect.GetTableName<T>();
+                var (sql, parameters) = Dialect.GetSoftDeleteSql(tableName, predicate, TenantId);
                 if (string.IsNullOrEmpty(sql)) return false;
 
                 var context = GetAppContext();
@@ -719,8 +719,8 @@ namespace Viv.Momo.Core
             try
             {
                 Expression<Func<T, bool>> predicate = x => x.Id == id;
-                var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _databaseOptions.DatabaseSource, TenantId);
+                var tableName = Dialect.GetTableName<T>();
+                var (sql, parameters) = Dialect.GetSoftDeleteSql(tableName, predicate, TenantId);
                 var context = GetAppContext(DbReadWriteType.Write);
                 var count = _queryTelemetry.Measure("dapper", "delete", sql,
                     () => context.DbConnection.Execute(sql, parameters, _transaction, _timeOut));
@@ -740,8 +740,8 @@ namespace Viv.Momo.Core
             try
             {
                 Expression<Func<T, bool>> predicate = x => x.Id == id;
-                var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
-                var (sql, parameters) = SqlMagic.GetSoftDeleteSql(tableName, predicate, _databaseOptions.DatabaseSource, TenantId);
+                var tableName = Dialect.GetTableName<T>();
+                var (sql, parameters) = Dialect.GetSoftDeleteSql(tableName, predicate, TenantId);
                 var context = GetAppContext(DbReadWriteType.Write);
                 var command = new CommandDefinition(sql, parameters, _transaction, _timeOut, null, CommandFlags.Buffered, cancellationToken);
                 var count = await _queryTelemetry.MeasureAsync("dapper", "delete", sql,
@@ -1249,7 +1249,7 @@ namespace Viv.Momo.Core
         public T? Find<T>(long id) where T : class, IEntity
         {
             if (id <= 0) return default;
-            var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
+            var tableName = Dialect.GetTableName<T>();
 
             try
             {
@@ -1258,7 +1258,7 @@ namespace Viv.Momo.Core
                 // 参数由过滤器自己往字典里放（租户那条放 TenantId），SQL 也由它拼。
                 // 传 TenantId 而不是 _vivContext.SubjectId，ChangeTenant 的覆盖要算数
                 var parameters = new Dictionary<string, object> { ["Id"] = id };
-                var sql = SqlMagic.GetFindSqlTemplate(tableName, _databaseOptions.DatabaseSource, TenantId, GetActiveFilters<T>(), parameters);
+                var sql = Dialect.GetFindSqlTemplate(tableName, TenantId, GetActiveFilters<T>(), parameters);
                 return _queryTelemetry.Measure("dapper", "scalar", sql,
                     () => connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut));
             }
@@ -1272,14 +1272,14 @@ namespace Viv.Momo.Core
         public async Task<T?> FindAsync<T>(long id, CancellationToken cancellationToken = default) where T : class, IEntity
         {
             if (id <= 0) return default;
-            var tableName = SqlMagic.GetTableName<T>(_databaseOptions.DatabaseSource);
+            var tableName = Dialect.GetTableName<T>();
 
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
                 var parameters = new Dictionary<string, object> { ["Id"] = id };
-                var sql = SqlMagic.GetFindSqlTemplate(tableName, _databaseOptions.DatabaseSource, TenantId, GetActiveFilters<T>(), parameters);
+                var sql = Dialect.GetFindSqlTemplate(tableName, TenantId, GetActiveFilters<T>(), parameters);
                 var command = new CommandDefinition(sql, parameters, TransactionFor(context), _timeOut, null, CommandFlags.Buffered, cancellationToken);
                 return await _queryTelemetry.MeasureAsync("dapper", "scalar", sql,
                     async () => await connection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false)).ConfigureAwait(false);
@@ -1478,7 +1478,7 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
-                var (pageSql, countSql) = SqlMagic.GetPageSqlTemplate(sql, pageIndex, pageSize, _databaseOptions.DatabaseSource);
+                var (pageSql, countSql) = Dialect.GetPageSqlTemplate(sql, pageIndex, pageSize);
 
                 // count 与 list 合成一个样本，计时从拼完 SQL 之后起。sql 传原串，不传 pageSql
                 return _queryTelemetry.Measure("dapper", "page", sql, () =>
@@ -1513,7 +1513,7 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext(DbReadWriteType.Read);
-                var (pageSql, countSql) = SqlMagic.GetPageSqlTemplate(sql, pageIndex, pageSize, _databaseOptions.DatabaseSource);
+                var (pageSql, countSql) = Dialect.GetPageSqlTemplate(sql, pageIndex, pageSize);
                 var countCommand = new CommandDefinition(countSql, parameters, TransactionFor(context), _timeOut, null, CommandFlags.Buffered, cancellationToken);
 
                 // 同 Page

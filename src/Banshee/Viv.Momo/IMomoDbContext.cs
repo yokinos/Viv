@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using System.Text;
 using Viv.Delusion.Generic;
 using Viv.Momo.Core;
+using Viv.Momo.Dialect;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
@@ -17,6 +18,12 @@ namespace Viv.Momo
     /// </summary>
     public interface IMomoDbContext : IDisposable
     {
+        /// <summary>
+        /// 本连接对应的 SQL 方言（命名 / 引用符 / 模板 / 字面量）。
+        /// 调用方（含手写 SQL 的仓储）取它来拼 SQL，不要自己判断 <see cref="DatabaseSourceType"/>。
+        /// </summary>
+        ISqlDialect Dialect { get; }
+
         bool Insert<T>(T entity) where T : IEntity;
         bool Insert<T>(IEnumerable<T> entitys) where T : IEntity;
         Task<bool> InsertAsync<T>(T entity, CancellationToken cancellationToken = default) where T : IEntity;

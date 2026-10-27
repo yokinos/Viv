@@ -1,4 +1,4 @@
-using Viv.Momo.Enums;
+﻿using Viv.Momo.Enums;
 
 namespace Viv.Momo.Tests;
 
@@ -16,27 +16,27 @@ public class MomoIdentifierTests
     [InlineData("Id", "id")]
     [InlineData("HTMLParser", "html_parser")]
     public void ToSnakeCase_对齐EFNamingConventions(string clr, string snake)
-        => Assert.Equal(snake, MomoIdentifier.ToSnakeCase(clr));
+        => Assert.Equal(snake, SqlMagic.For(DatabaseSourceType.PostgreSQL).ToSnakeCase(clr));
 
     [Fact]
     public void PostgreSQL_QuoteClr走snake_case不加引号()
     {
-        Assert.Equal("tenant_id", MomoIdentifier.QuoteClr("TenantId", DatabaseSourceType.PostgreSQL));
-        Assert.Equal("at_user", MomoIdentifier.ToPhysical("AtUser", DatabaseSourceType.PostgreSQL));
+        Assert.Equal("tenant_id", SqlMagic.For(DatabaseSourceType.PostgreSQL).QuoteClr("TenantId"));
+        Assert.Equal("at_user", SqlMagic.For(DatabaseSourceType.PostgreSQL).ToPhysical("AtUser"));
     }
 
     [Fact]
     public void SqlServer_QuoteClr保持PascalCase加方括号()
     {
-        Assert.Equal("[TenantId]", MomoIdentifier.QuoteClr("TenantId", DatabaseSourceType.SqlServer));
-        Assert.Equal("AtUser", MomoIdentifier.ToPhysical("AtUser", DatabaseSourceType.SqlServer));
-        Assert.Equal("[AtUser]", MomoIdentifier.Quote("AtUser", DatabaseSourceType.SqlServer));
+        Assert.Equal("[TenantId]", SqlMagic.For(DatabaseSourceType.SqlServer).QuoteClr("TenantId"));
+        Assert.Equal("AtUser", SqlMagic.For(DatabaseSourceType.SqlServer).ToPhysical("AtUser"));
+        Assert.Equal("[AtUser]", SqlMagic.For(DatabaseSourceType.SqlServer).Quote("AtUser"));
     }
 
     [Fact]
     public void 显式物理名只加引号不再改写()
     {
-        Assert.Equal("sys_users", MomoIdentifier.Quote("sys_users", DatabaseSourceType.PostgreSQL));
-        Assert.Equal("[sys_users]", MomoIdentifier.Quote("sys_users", DatabaseSourceType.SqlServer));
+        Assert.Equal("sys_users", SqlMagic.For(DatabaseSourceType.PostgreSQL).Quote("sys_users"));
+        Assert.Equal("[sys_users]", SqlMagic.For(DatabaseSourceType.SqlServer).Quote("sys_users"));
     }
 }

@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data;
 using System.Reflection;
@@ -8,10 +8,10 @@ using Npgsql;
 using Viv.Contracts.Enums;
 using Viv.Delusion.Magic;
 using Viv.Delusion;
+using Viv.Momo.Dialect;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
-using MomoIdentifier = Viv.Momo.MomoIdentifier;
 
 namespace Viv.Momo.Sync
 {
@@ -38,6 +38,9 @@ namespace Viv.Momo.Sync
         private readonly List<FilterTypeOptions> _entityFilters;
         private readonly DatabaseSourceType _dbType;
 
+        /// <summary>与 _dbType 同源，SQL 拼装一律走它</summary>
+        private readonly ISqlDialect _dialect;
+
         /// <summary>非主键列是否强制 NULL。true 时只有主键是 NOT NULL，其余全 NULL</summary>
         private readonly bool _nonPkNullable;
 
@@ -56,6 +59,7 @@ namespace Viv.Momo.Sync
         {
             _dbOptions = dbOptions;
             _dbType = dbOptions.DatabaseSource;
+            _dialect = SqlMagic.For(dbOptions.DatabaseSource);
             _entityFilters = dbOptions.EntityTypeOptions ?? [];
             _nonPkNullable = nonPkNullable;
             _allowAlterColumn = allowAlterColumn;
@@ -90,7 +94,7 @@ namespace Viv.Momo.Sync
             {
                 // [Table("xxx")] → 已经是物理名，不再改写；无特性则按 provider 从类名推导
                 var tableAttr = type.GetCustomAttribute<TableAttribute>();
-                var tableName = tableAttr?.Name ?? MomoIdentifier.ToPhysical(type.Name, _dbType);
+                var tableName = tableAttr?.Name ?? _dialect.ToPhysical(type.Name);
 
                 var tableInfo = new TableInfo { Name = tableName };
 
@@ -323,7 +327,7 @@ namespace Viv.Momo.Sync
         private ColumnInfo BuildColumnInfo(PropertyInfo prop)
         {
             var colAttr = prop.GetCustomAttribute<ColumnAttribute>();
-            var colName = colAttr?.Name ?? MomoIdentifier.ToPhysical(prop.Name, _dbType);
+            var colName = colAttr?.Name ?? _dialect.ToPhysical(prop.Name);
 
             var clrType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
             var isPk = IsPrimaryKeyProperty(prop);
@@ -587,9 +591,9 @@ namespace Viv.Momo.Sync
 
         /// <summary>
         /// 标识符引用：物理名已经按 provider 改写过（PG snake_case / SQL Server PascalCase）。
-        /// SQL Server 加方括号，PostgreSQL 原样。与 <see cref="MomoIdentifier.Quote"/> 同一套。
+        /// SQL Server 加方括号，PostgreSQL 原样。与 <see cref="ISqlDialect.Quote"/> 同一套。
         /// </summary>
-        private string Quote(string name) => MomoIdentifier.Quote(name, _dbType);
+        private string Quote(string name) => _dialect.Quote(name);
 
         #endregion
 

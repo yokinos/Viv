@@ -4,6 +4,7 @@ using Viv.Entity.Enums;
 using Viv.Herta.Core.Entity.Model.Chat;
 using Viv.Herta.Core.IRepository;
 using Viv.Log;
+using Viv.Momo.Dialect;
 using Viv.Momo;
 using Viv.Momo.Base;
 using Viv.Momo.Enums;
@@ -171,17 +172,17 @@ namespace Viv.Herta.Core.Repository
             if (directWatermarks.Count == 0 && groupWatermarks.Count == 0)
                 return new ChatUnreadCounts(direct, group);
 
-            var source = _databaseOptions.GetRealOptions().DatabaseSource;
+            var dialect = _dbContext.Dialect;
 
-            string Col(string name) => SqlMagic.QuoteIdentifier(name, source);
+            string Col(string name) => dialect.QuoteIdentifier(name);
 
             if (directWatermarks.Count > 0)
             {
                 // 单聊：发给我的、Id 超过本人会话行已读水位的
                 var sql = $"""
                     SELECT m.{Col("UserId")} AS TargetId, COUNT(1) AS Count
-                    FROM {SqlMagic.GetTableName<EtUserChatMessage>(source)} m
-                    JOIN {SqlMagic.GetTableName<EtChatSession>(source)} s
+                    FROM {dialect.GetTableName<EtUserChatMessage>()} m
+                    JOIN {dialect.GetTableName<EtChatSession>()} s
                       ON s.{Col("TenantId")} = m.{Col("TenantId")}
                      AND s.{Col("UserId")} = @userId
                      AND s.{Col("ChatSessionType")} = 0
@@ -206,8 +207,8 @@ namespace Viv.Herta.Core.Repository
                 // 群聊：自己发的不算未读
                 var sql = $"""
                     SELECT m.{Col("GroupChatId")} AS TargetId, COUNT(1) AS Count
-                    FROM {SqlMagic.GetTableName<EtGroupChatMessage>(source)} m
-                    JOIN {SqlMagic.GetTableName<EtGroupChatMember>(source)} s
+                    FROM {dialect.GetTableName<EtGroupChatMessage>()} m
+                    JOIN {dialect.GetTableName<EtGroupChatMember>()} s
                       ON s.{Col("TenantId")} = m.{Col("TenantId")}
                      AND s.{Col("UserId")} = @userId
                      AND s.{Col("GroupChatId")} = m.{Col("GroupChatId")}
@@ -270,22 +271,22 @@ namespace Viv.Herta.Core.Repository
         };
 
         /// <summary>
-        /// 拼列表 SQL。表名/列名走 <see cref="SqlMagic"/>（两种方言各自的物理命名），取前 N 条只有 TOP 与 LIMIT 一处差异。
+        /// 拼列表 SQL。表名/列名走 <see cref="Viv.Momo.Dialect.ISqlDialect"/>（两种方言各自的物理命名），取前 N 条只有 TOP 与 LIMIT 一处差异。
         /// 原生 SQL 不过全局过滤器，租户与软删条件必须自己带。
         /// </summary>
         private (string Sql, object Parameters) BuildListSql(
             bool isGroup, long tenantId, long userId, long targetId,
             long afterMessageId, long beforeMessageId, int take, bool descending)
         {
-            var source = _databaseOptions.GetRealOptions().DatabaseSource;
+            var dialect = _dbContext.Dialect;
 
-            string Col(string name) => SqlMagic.QuoteIdentifier(name, source);
+            string Col(string name) => dialect.QuoteIdentifier(name);
             string table = isGroup
-                ? SqlMagic.GetTableName<EtGroupChatMessage>(source)
-                : SqlMagic.GetTableName<EtUserChatMessage>(source);
+                ? dialect.GetTableName<EtGroupChatMessage>()
+                : dialect.GetTableName<EtUserChatMessage>();
 
-            var head = source == DatabaseSourceType.SqlServer ? "SELECT TOP (@limit) t.*" : "SELECT t.*";
-            var tail = source == DatabaseSourceType.SqlServer ? string.Empty : "LIMIT @limit";
+            var head = dialect.Source == DatabaseSourceType.SqlServer ? "SELECT TOP (@limit) t.*" : "SELECT t.*";
+            var tail = dialect.Source == DatabaseSourceType.SqlServer ? string.Empty : "LIMIT @limit";
             var direction = descending ? "DESC" : "ASC";
 
             // 单聊要取两个方向：我发给他的 + 他发给我的

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using Viv.Contracts.Interface;
 using Viv.Momo.Core;
+using Viv.Momo.Dialect;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 
@@ -35,11 +36,11 @@ namespace Viv.Momo.DataFilter
             return Expression.Lambda(body, e);
         }
 
-        public string BuildSqlCondition(long tenantId, DatabaseSourceType databaseSource, IDictionary<string, object> parameters)
+        public string BuildSqlCondition(long tenantId, ISqlDialect dialect, IDictionary<string, object> parameters)
         {
             // 布尔字面量按方言给：PostgreSQL 的 boolean 列不接受 `= 0`（与 GetSoftDeleteSql 同一取舍）
-            var falseValue = databaseSource == DatabaseSourceType.PostgreSQL ? "false" : "0";
-            return $" AND {SqlMagic.QuoteIdentifier(nameof(ISoftDeleted.IsDeleted), databaseSource)} = {falseValue}";
+            var falseValue = dialect.Source == DatabaseSourceType.PostgreSQL ? "false" : "0";
+            return $" AND {dialect.QuoteIdentifier(nameof(ISoftDeleted.IsDeleted))} = {falseValue}";
         }
     }
 }

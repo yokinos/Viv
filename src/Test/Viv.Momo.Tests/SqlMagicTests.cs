@@ -1,4 +1,4 @@
-using Viv.Momo.DataFilter;
+﻿using Viv.Momo.DataFilter;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 
@@ -15,28 +15,28 @@ public class SqlMagicTests
     [Fact]
     public void QuoteIdentifier_SqlServer加方括号()
     {
-        Assert.Equal("[Name]", SqlMagic.QuoteIdentifier("Name", DatabaseSourceType.SqlServer));
+        Assert.Equal("[Name]", SqlMagic.For(DatabaseSourceType.SqlServer).QuoteIdentifier("Name"));
     }
 
     [Fact]
     public void QuoteIdentifier_Postgres转snake_case()
     {
-        Assert.Equal("name", SqlMagic.QuoteIdentifier("Name", DatabaseSourceType.PostgreSQL));
-        Assert.Equal("tenant_id", SqlMagic.QuoteIdentifier("TenantId", DatabaseSourceType.PostgreSQL));
+        Assert.Equal("name", SqlMagic.For(DatabaseSourceType.PostgreSQL).QuoteIdentifier("Name"));
+        Assert.Equal("tenant_id", SqlMagic.For(DatabaseSourceType.PostgreSQL).QuoteIdentifier("TenantId"));
     }
 
     [Fact]
     public void GetTableName_无Table特性用类名()
     {
-        Assert.Equal("[TenantUserEntity]", SqlMagic.GetTableName<TenantUserEntity>(DatabaseSourceType.SqlServer));
-        Assert.Equal("tenant_user_entity", SqlMagic.GetTableName<TenantUserEntity>(DatabaseSourceType.PostgreSQL));
+        Assert.Equal("[TenantUserEntity]", SqlMagic.For(DatabaseSourceType.SqlServer).GetTableName<TenantUserEntity>());
+        Assert.Equal("tenant_user_entity", SqlMagic.For(DatabaseSourceType.PostgreSQL).GetTableName<TenantUserEntity>());
     }
 
     [Fact]
     public void GetTableName_读Table特性()
     {
-        Assert.Equal("[sys_users]", SqlMagic.GetTableName<TableNamedEntity>(DatabaseSourceType.SqlServer));
-        Assert.Equal("sys_users", SqlMagic.GetTableName<TableNamedEntity>(DatabaseSourceType.PostgreSQL));
+        Assert.Equal("[sys_users]", SqlMagic.For(DatabaseSourceType.SqlServer).GetTableName<TableNamedEntity>());
+        Assert.Equal("sys_users", SqlMagic.For(DatabaseSourceType.PostgreSQL).GetTableName<TableNamedEntity>());
     }
 
     #endregion
@@ -46,10 +46,10 @@ public class SqlMagicTests
     [Fact]
     public void GetInsertSqlTemplate_列名按库引用参数名保留原名()
     {
-        var sqlServer = SqlMagic.GetInsertSqlTemplate("users", typeof(FlatRow), DatabaseSourceType.SqlServer);
+        var sqlServer = SqlMagic.For(DatabaseSourceType.SqlServer).GetInsertSqlTemplate("users", typeof(FlatRow));
         Assert.Equal("INSERT INTO users([Id],[Name],[Active]) VALUES(@Id,@Name,@Active)", sqlServer);
 
-        var postgres = SqlMagic.GetInsertSqlTemplate("users", typeof(FlatRow), DatabaseSourceType.PostgreSQL);
+        var postgres = SqlMagic.For(DatabaseSourceType.PostgreSQL).GetInsertSqlTemplate("users", typeof(FlatRow));
         Assert.Equal("INSERT INTO users(id,name,active) VALUES(@Id,@Name,@Active)", postgres);
     }
 
@@ -57,7 +57,7 @@ public class SqlMagicTests
     public void CreateInsertSql_非空字段参数化()
     {
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
-        var (sql, p) = SqlMagic.CreateInsertSql("users", entity, DatabaseSourceType.SqlServer);
+        var (sql, p) = SqlMagic.For(DatabaseSourceType.SqlServer).CreateInsertSql("users", entity);
 
         Assert.Equal("INSERT INTO [users] ([Id],[Name],[Active]) VALUES (@p0,@p1,@p2)", sql);
         Assert.Equal(1L, p.Get<object>("@p0"));
@@ -69,7 +69,7 @@ public class SqlMagicTests
     public void CreateInsertSql_null字段跳过()
     {
         var entity = new NullableRow { Id = 1, Name = null };
-        var (sql, p) = SqlMagic.CreateInsertSql("rows", entity, DatabaseSourceType.SqlServer);
+        var (sql, p) = SqlMagic.For(DatabaseSourceType.SqlServer).CreateInsertSql("rows", entity);
 
         Assert.Equal("INSERT INTO [rows] ([Id]) VALUES (@p0)", sql);
         Assert.Single(p.ParameterNames);
@@ -79,7 +79,7 @@ public class SqlMagicTests
     public void CreateInsertSql_ignoreKeys跳过指定列()
     {
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
-        var (sql, _) = SqlMagic.CreateInsertSql("users", entity, DatabaseSourceType.PostgreSQL, ignoreKeys: "Id");
+        var (sql, _) = SqlMagic.For(DatabaseSourceType.PostgreSQL).CreateInsertSql("users", entity, ignoreKeys: "Id");
 
         Assert.Equal("INSERT INTO users (name,active) VALUES (@p0,@p1)", sql);
     }
@@ -92,7 +92,7 @@ public class SqlMagicTests
     public void CreateUpdateSql_whereKeys进WHERE其余进SET()
     {
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
-        var (sql, p) = SqlMagic.CreateUpdateSql("users", entity, "Id", DatabaseSourceType.SqlServer);
+        var (sql, p) = SqlMagic.For(DatabaseSourceType.SqlServer).CreateUpdateSql("users", entity, "Id");
 
         Assert.Equal("UPDATE [users] SET [Name] = @p1,[Active] = @p2 WHERE [Id] = @p0", sql);
         Assert.Equal("x", p.Get<object>("@p1"));
@@ -102,14 +102,14 @@ public class SqlMagicTests
     public void CreateUpdateSql_无whereKeys抛异常()
     {
         var entity = new FlatRow { Id = 1 };
-        Assert.Throws<ArgumentException>(() => SqlMagic.CreateUpdateSql("users", entity, "", DatabaseSourceType.SqlServer));
+        Assert.Throws<ArgumentException>(() => SqlMagic.For(DatabaseSourceType.SqlServer).CreateUpdateSql("users", entity, ""));
     }
 
     [Fact]
     public void CreateDeleteSql_全属性进WHERE()
     {
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
-        var (sql, _) = SqlMagic.CreateDeleteSql("users", entity, DatabaseSourceType.SqlServer);
+        var (sql, _) = SqlMagic.For(DatabaseSourceType.SqlServer).CreateDeleteSql("users", entity);
 
         Assert.Equal("DELETE FROM [users] WHERE [Id] = @p0 AND [Name] = @p1 AND [Active] = @p2", sql);
     }
@@ -122,7 +122,7 @@ public class SqlMagicTests
     public void CreateInsertSqlRaw_SqlServer布尔转1()
     {
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
-        var sql = SqlMagic.CreateInsertSqlRaw("users", entity, DatabaseSourceType.SqlServer);
+        var sql = SqlMagic.For(DatabaseSourceType.SqlServer).CreateInsertSqlRaw("users", entity);
         Assert.Equal("INSERT INTO [users] ([Id],[Name],[Active]) VALUES (1,'x',1)", sql);
     }
 
@@ -130,7 +130,7 @@ public class SqlMagicTests
     public void CreateInsertSqlRaw_Postgres布尔转true()
     {
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
-        var sql = SqlMagic.CreateInsertSqlRaw("users", entity, DatabaseSourceType.PostgreSQL);
+        var sql = SqlMagic.For(DatabaseSourceType.PostgreSQL).CreateInsertSqlRaw("users", entity);
         Assert.Equal("INSERT INTO users (id,name,active) VALUES (1,'x',true)", sql);
     }
 
@@ -138,7 +138,7 @@ public class SqlMagicTests
     public void CreateUpdateSqlRaw_内联值()
     {
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
-        var sql = SqlMagic.CreateUpdateSqlRaw("users", entity, "Id", DatabaseSourceType.SqlServer);
+        var sql = SqlMagic.For(DatabaseSourceType.SqlServer).CreateUpdateSqlRaw("users", entity, "Id");
         Assert.Equal("UPDATE [users] SET [Name] = 'x',[Active] = 1 WHERE [Id] = 1", sql);
     }
 
@@ -146,7 +146,7 @@ public class SqlMagicTests
     public void CreateDeleteSqlRaw_内联值()
     {
         var entity = new FlatRow { Id = 1, Name = "x", Active = true };
-        var sql = SqlMagic.CreateDeleteSqlRaw("users", entity, DatabaseSourceType.PostgreSQL);
+        var sql = SqlMagic.For(DatabaseSourceType.PostgreSQL).CreateDeleteSqlRaw("users", entity);
         Assert.Equal("DELETE FROM users WHERE id = 1 AND name = 'x' AND active = true", sql);
     }
 
@@ -157,8 +157,8 @@ public class SqlMagicTests
     [Fact]
     public void GetFindSqlTemplate_按Id查()
     {
-        Assert.Equal("SELECT * FROM users WHERE [Id] = @Id", SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.SqlServer));
-        Assert.Equal("SELECT * FROM users WHERE id = @Id", SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.PostgreSQL));
+        Assert.Equal("SELECT * FROM users WHERE [Id] = @Id", SqlMagic.For(DatabaseSourceType.SqlServer).GetFindSqlTemplate("users"));
+        Assert.Equal("SELECT * FROM users WHERE id = @Id", SqlMagic.For(DatabaseSourceType.PostgreSQL).GetFindSqlTemplate("users"));
     }
 
     /// <summary>从静态清单里挑出指定的几条过滤器 —— 与框架拼 SQL 时的取法一致</summary>
@@ -169,8 +169,7 @@ public class SqlMagicTests
     public void GetFindSqlTemplate_含租户过滤()
     {
         var parameters = new Dictionary<string, object> { ["Id"] = 1L };
-        var sql = SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.SqlServer, 7L,
-            Filters(typeof(TenantDataFilter)), parameters);
+        var sql = SqlMagic.For(DatabaseSourceType.SqlServer).GetFindSqlTemplate("users", 7L, Filters(typeof(TenantDataFilter)), parameters);
 
         Assert.Equal("SELECT * FROM users WHERE [Id] = @Id AND [TenantId] = @TenantId", sql);
         Assert.Equal(7L, parameters["TenantId"]);
@@ -181,19 +180,16 @@ public class SqlMagicTests
     {
         // 布尔字面量按方言给：PostgreSQL 的 boolean 列不接受 = 0
         Assert.Equal("SELECT * FROM users WHERE [Id] = @Id AND [IsDeleted] = 0",
-            SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.SqlServer, 7L,
-                Filters(typeof(SoftDeletedFilter)), new Dictionary<string, object>()));
+            SqlMagic.For(DatabaseSourceType.SqlServer).GetFindSqlTemplate("users", 7L, Filters(typeof(SoftDeletedFilter)), new Dictionary<string, object>()));
         Assert.Equal("SELECT * FROM users WHERE id = @Id AND is_deleted = false",
-            SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.PostgreSQL, 7L,
-                Filters(typeof(SoftDeletedFilter)), new Dictionary<string, object>()));
+            SqlMagic.For(DatabaseSourceType.PostgreSQL).GetFindSqlTemplate("users", 7L, Filters(typeof(SoftDeletedFilter)), new Dictionary<string, object>()));
     }
 
     [Fact]
     public void GetFindSqlTemplate_租户与软删除两条叠加()
     {
         var parameters = new Dictionary<string, object>();
-        var sql = SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.SqlServer, 7L,
-            Filters(typeof(TenantDataFilter), typeof(SoftDeletedFilter)), parameters);
+        var sql = SqlMagic.For(DatabaseSourceType.SqlServer).GetFindSqlTemplate("users", 7L, Filters(typeof(TenantDataFilter), typeof(SoftDeletedFilter)), parameters);
 
         Assert.Equal("SELECT * FROM users WHERE [Id] = @Id AND [TenantId] = @TenantId AND [IsDeleted] = 0", sql);
     }
@@ -203,8 +199,7 @@ public class SqlMagicTests
     {
         // 与 EF 那条「无上下文不过滤」同一语义：后台任务没有租户，不能凭空拼一个 TenantId = 0 进去
         var parameters = new Dictionary<string, object>();
-        var sql = SqlMagic.GetFindSqlTemplate("users", DatabaseSourceType.SqlServer, 0L,
-            Filters(typeof(TenantDataFilter)), parameters);
+        var sql = SqlMagic.For(DatabaseSourceType.SqlServer).GetFindSqlTemplate("users", 0L, Filters(typeof(TenantDataFilter)), parameters);
 
         Assert.Equal("SELECT * FROM users WHERE [Id] = @Id", sql);
         Assert.False(parameters.ContainsKey("TenantId"));
@@ -217,7 +212,7 @@ public class SqlMagicTests
     [Fact]
     public void GetPageSqlTemplate_Postgres_LimitOffset()
     {
-        var (page, count) = SqlMagic.GetPageSqlTemplate("SELECT * FROM users", 2, 10, DatabaseSourceType.PostgreSQL);
+        var (page, count) = SqlMagic.For(DatabaseSourceType.PostgreSQL).GetPageSqlTemplate("SELECT * FROM users", 2, 10);
 
         Assert.Equal("SELECT * FROM users LIMIT 10 OFFSET 10", page);
         Assert.Equal("SELECT COUNT(*) FROM (SELECT * FROM users) AS t", count);
@@ -226,7 +221,7 @@ public class SqlMagicTests
     [Fact]
     public void GetPageSqlTemplate_CountSql剥离最外层OrderBy()
     {
-        var (_, count) = SqlMagic.GetPageSqlTemplate("SELECT * FROM users ORDER BY Id DESC", 1, 10, DatabaseSourceType.PostgreSQL);
+        var (_, count) = SqlMagic.For(DatabaseSourceType.PostgreSQL).GetPageSqlTemplate("SELECT * FROM users ORDER BY Id DESC", 1, 10);
 
         Assert.Equal("SELECT COUNT(*) FROM (SELECT * FROM users) AS t", count);
     }
@@ -235,7 +230,7 @@ public class SqlMagicTests
     public void GetPageSqlTemplate_子查询OrderBy不剥离()
     {
         var sql = "SELECT * FROM (SELECT * FROM t ORDER BY x) s";
-        var (_, count) = SqlMagic.GetPageSqlTemplate(sql, 1, 10, DatabaseSourceType.PostgreSQL);
+        var (_, count) = SqlMagic.For(DatabaseSourceType.PostgreSQL).GetPageSqlTemplate(sql, 1, 10);
 
         Assert.Equal("SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM t ORDER BY x) s) AS t", count);
     }
@@ -243,7 +238,7 @@ public class SqlMagicTests
     [Fact]
     public void GetPageSqlTemplate_SqlServer_OffsetFetch()
     {
-        var (page, count) = SqlMagic.GetPageSqlTemplate("SELECT * FROM users ORDER BY Id DESC", 2, 10, DatabaseSourceType.SqlServer);
+        var (page, count) = SqlMagic.For(DatabaseSourceType.SqlServer).GetPageSqlTemplate("SELECT * FROM users ORDER BY Id DESC", 2, 10);
 
         Assert.Contains("OFFSET 10 ROWS FETCH NEXT 10 ROWS ONLY", page);
         Assert.Contains("ORDER BY", page);
@@ -254,7 +249,7 @@ public class SqlMagicTests
     public void GetPageSqlTemplate_SqlServer无OrderBy抛异常()
     {
         Assert.Throws<InvalidOperationException>(() =>
-            SqlMagic.GetPageSqlTemplate("SELECT * FROM users", 1, 10, DatabaseSourceType.SqlServer));
+            SqlMagic.For(DatabaseSourceType.SqlServer).GetPageSqlTemplate("SELECT * FROM users", 1, 10));
     }
 
     #endregion
@@ -264,33 +259,33 @@ public class SqlMagicTests
     [Fact]
     public void ToDatabaseValue_null转NULL()
     {
-        Assert.Equal("NULL", SqlMagic.ToDatabaseValue(null, DatabaseSourceType.SqlServer));
+        Assert.Equal("NULL", SqlMagic.For(DatabaseSourceType.SqlServer).ToDatabaseValue(null));
     }
 
     [Fact]
     public void ToDatabaseValue_数字原样()
     {
-        Assert.Equal("5", SqlMagic.ToDatabaseValue(5, DatabaseSourceType.SqlServer));
-        Assert.Equal("123", SqlMagic.ToDatabaseValue(123L, DatabaseSourceType.SqlServer));
+        Assert.Equal("5", SqlMagic.For(DatabaseSourceType.SqlServer).ToDatabaseValue(5));
+        Assert.Equal("123", SqlMagic.For(DatabaseSourceType.SqlServer).ToDatabaseValue(123L));
     }
 
     [Fact]
     public void ToDatabaseValue_字符串转义单引号()
     {
-        Assert.Equal("'it''s'", SqlMagic.ToDatabaseValue("it's", DatabaseSourceType.SqlServer));
+        Assert.Equal("'it''s'", SqlMagic.For(DatabaseSourceType.SqlServer).ToDatabaseValue("it's"));
     }
 
     [Fact]
     public void ToDatabaseValue_布尔分库()
     {
-        Assert.Equal("1", SqlMagic.ToDatabaseValue(true, DatabaseSourceType.SqlServer));
-        Assert.Equal("true", SqlMagic.ToDatabaseValue(true, DatabaseSourceType.PostgreSQL));
+        Assert.Equal("1", SqlMagic.For(DatabaseSourceType.SqlServer).ToDatabaseValue(true));
+        Assert.Equal("true", SqlMagic.For(DatabaseSourceType.PostgreSQL).ToDatabaseValue(true));
     }
 
     [Fact]
     public void ToDatabaseValue_枚举转int()
     {
-        Assert.Equal("2", SqlMagic.ToDatabaseValue(TestState.Active, DatabaseSourceType.SqlServer));
+        Assert.Equal("2", SqlMagic.For(DatabaseSourceType.SqlServer).ToDatabaseValue(TestState.Active));
     }
 
     #endregion

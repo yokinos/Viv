@@ -1,4 +1,4 @@
-using Viv.Momo.Converter;
+﻿using Viv.Momo.Converter;
 using Viv.Momo.Enums;
 
 namespace Viv.Momo.Tests;
@@ -9,10 +9,13 @@ namespace Viv.Momo.Tests;
 /// </summary>
 public class ExpressionToSqlConverterTests
 {
+    /// <summary>方言由 source 决定，测试里只关心"哪种库"</summary>
+    private static (string Sql, Dictionary<string, object> Parameter) ToSql<T>(System.Linq.Expressions.Expression<Func<T, bool>> expression, DatabaseSourceType source)
+        => new ExpressionToSqlConverter(Viv.Momo.SqlMagic.For(source)).Convert(expression);
     [Fact]
     public void 相等_Postgres字段小写()
     {
-        var (sql, p) = ExpressionToSqlConverter.Convert<TenantUserEntity>(x => x.Id == 5, DatabaseSourceType.PostgreSQL);
+        var (sql, p) = ToSql<TenantUserEntity>(x => x.Id == 5, DatabaseSourceType.PostgreSQL);
         Assert.Equal("(id = @p0)", sql);
         Assert.Equal(5L, Convert.ToInt64(p["@p0"]));
     }
@@ -20,14 +23,14 @@ public class ExpressionToSqlConverterTests
     [Fact]
     public void 相等_SqlServer加方括号()
     {
-        var (sql, _) = ExpressionToSqlConverter.Convert<TenantUserEntity>(x => x.Id == 5, DatabaseSourceType.SqlServer);
+        var (sql, _) = ToSql<TenantUserEntity>(x => x.Id == 5, DatabaseSourceType.SqlServer);
         Assert.Equal("([Id] = @p0)", sql);
     }
 
     [Fact]
     public void And_拼接两个条件()
     {
-        var (sql, _) = ExpressionToSqlConverter.Convert<TenantUserEntity>(
+        var (sql, _) = ToSql<TenantUserEntity>(
             x => x.TenantId == 7 && x.Age > 18, DatabaseSourceType.PostgreSQL);
 
         Assert.Equal("((tenant_id = @p0) AND (age > @p1))", sql);
@@ -36,7 +39,7 @@ public class ExpressionToSqlConverterTests
     [Fact]
     public void Or_拼接两个条件()
     {
-        var (sql, _) = ExpressionToSqlConverter.Convert<TenantUserEntity>(
+        var (sql, _) = ToSql<TenantUserEntity>(
             x => x.Name == "a" || x.Name == "b", DatabaseSourceType.PostgreSQL);
 
         Assert.Equal("((name = @p0) OR (name = @p1))", sql);
@@ -45,7 +48,7 @@ public class ExpressionToSqlConverterTests
     [Fact]
     public void 字符串Contains_转LIKE模糊()
     {
-        var (sql, p) = ExpressionToSqlConverter.Convert<TenantUserEntity>(
+        var (sql, p) = ToSql<TenantUserEntity>(
             x => x.Name.Contains("abc"), DatabaseSourceType.PostgreSQL);
 
         Assert.Equal("name LIKE @p0", sql);
@@ -55,7 +58,7 @@ public class ExpressionToSqlConverterTests
     [Fact]
     public void 字符串StartsWith_转LIKE前缀()
     {
-        var (sql, p) = ExpressionToSqlConverter.Convert<TenantUserEntity>(
+        var (sql, p) = ToSql<TenantUserEntity>(
             x => x.Name.StartsWith("pre"), DatabaseSourceType.PostgreSQL);
 
         Assert.Equal("name LIKE @p0", sql);
@@ -66,7 +69,7 @@ public class ExpressionToSqlConverterTests
     public void 闭包变量参数化()
     {
         int threshold = 18;
-        var (sql, p) = ExpressionToSqlConverter.Convert<TenantUserEntity>(
+        var (sql, p) = ToSql<TenantUserEntity>(
             x => x.Age > threshold, DatabaseSourceType.PostgreSQL);
 
         Assert.Equal("(age > @p0)", sql);
@@ -77,13 +80,13 @@ public class ExpressionToSqlConverterTests
     public void 不支持运算符_抛异常()
     {
         Assert.Throws<NotSupportedException>(() =>
-            ExpressionToSqlConverter.Convert<TenantUserEntity>(x => x.Id + 1 > 3, DatabaseSourceType.PostgreSQL));
+            ToSql<TenantUserEntity>(x => x.Id + 1 > 3, DatabaseSourceType.PostgreSQL));
     }
 
     [Fact]
     public void 空表达式_返回空()
     {
-        var (sql, p) = ExpressionToSqlConverter.Convert<TenantUserEntity>(null!, DatabaseSourceType.PostgreSQL);
+        var (sql, p) = ToSql<TenantUserEntity>(null!, DatabaseSourceType.PostgreSQL);
         Assert.Equal(string.Empty, sql);
         Assert.Empty(p);
     }

@@ -1,282 +1,203 @@
-﻿using System;
-using System.Collections.Concurrent;
+using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq.Expressions;
-using System.Reflection;
-using System.Text;
-using Viv.Contracts.Interface;
+
+using Dapper;
+
 using Viv.Delusion;
-using Viv.Delusion.Extension;
-using Viv.Momo.Converter;
+using Viv.Momo.Dialect;
 using Viv.Momo.Enums;
-using Viv.Momo.Interface;
-using Viv.Momo.SqlServer;
 
 namespace Viv.Momo
 {
     /// <summary>
-    /// 通用数据操作工具类
-    /// 包含：表名获取、查询条件拼接、SQL模板生成（插入/查询/分页）等核心方法
+    /// SQL 生成的总入口。
+    ///
+    /// 分工：
+    /// <list type="bullet">
+    /// <item><description><see cref="For"/> 按库类型取方言实例（<see cref="ISqlDialect"/> 的实现），
+    /// 方言负责**真正因库而异**的部分：命名、引用符、分页、当前时间、布尔字面量。</description></item>
+    /// <item><description>下面的 CRUD 方法负责"把实体属性列表拼成 INSERT/UPDATE/DELETE"，
+    /// 唯一的方言接触点是 <c>dialect.QuoteClr</c> 与 <c>dialect.ToDatabaseValue</c>。</description></item>
+    /// </list>
+    ///
+    /// 拼装放在这里而不是两个方言各写一遍：它是纯遍历 + 字符串拼接，没有任何方言差异。
+    ///
+    /// ⚠️ 参数名前缀固定 `@p{n}`；`ignoreKeys` / `whereKeys` 按 CLR 属性名匹配（大小写不敏感），
+    /// 不要拿加过引号的物理名去 Contains。
     /// </summary>
-    public static partial class SqlMagic
+    public static class SqlMagic
     {
-        static SqlMagic()
-        {
-            // PostgreSQL 物理列是 snake_case，Dapper 默认只按属性名精确匹配（忽略大小写）。
-            // 打开之后 display_name → DisplayName；SQL Server 返回 DisplayName 仍然匹配。
-            Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
-        }
+        #region 方言实例
+
+        /// <summary>方言实例无状态，进程内复用</summary>
+        private static readonly ISqlDialect SqlServer = new SqlServerDialect();
+
+        private static readonly ISqlDialect Postgres = new PostgresDialect();
 
         /// <summary>
-        /// 缓存实体类型对应的数据库表名称
+        /// 按库类型取方言。
+        ///
+        /// 调用方优先用 <c>IMomoDbContext.Dialect</c>（跟连接同源）；这里留给拿不到连接的场景
+        /// （SchemaSynchronizer 按配置建、测试）。
         /// </summary>
-        private static readonly ConcurrentDictionary<Type, (string Name, bool Explicit)> _tableNameCache = [];
-
-        /// <summary>
-        /// 获取实体对应的数据库表名称（带缓存，避免重复反射）
-        /// 优先读取实体类上的[Table]特性指定的名称，无特性则使用实体类名
-        /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
-        /// <returns>数据库表名称</returns>
-        public static string GetTableName<T>(DatabaseSourceType databaseSource)
+        /// <exception cref="ArgumentOutOfRangeException">未支持的库类型（配置写错应当启动即炸，不静默回落）</exception>
+        public static ISqlDialect For(DatabaseSourceType source) => source switch
         {
-            var entityType = typeof(T);
-            if (!_tableNameCache.TryGetValue(entityType, out var cached))
+            DatabaseSourceType.PostgreSQL => Postgres,
+            DatabaseSourceType.SqlServer => SqlServer,
+            _ => throw new ArgumentOutOfRangeException(nameof(source), source, "未支持的数据库类型")
+        };
+
+        #endregion
+
+        #region 参数化版本
+
+        public static (string Sql, DynamicParameters Parameters) CreateInsertSql(
+            ISqlDialect dialect, string tableName, object entity, string ignoreKeys = "")
+        {
+            var fieldList = new List<string>();
+            var valueList = new List<string>();
+            var parameters = new DynamicParameters();
+            var idx = 0;
+
+            foreach (var property in VivTypeReflectionCache.GetPropertieList(entity.GetType()))
             {
-                var tableAttr = entityType.GetCustomAttribute<TableAttribute>();
-                cached = (tableAttr?.Name ?? entityType.Name, tableAttr != null);
-                _tableNameCache[entityType] = cached;
+                if (ignoreKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase)) continue;
+
+                var value = property.GetValue(entity);
+                if (value == null) continue;
+
+                var paramName = $"@p{idx++}";
+                fieldList.Add(dialect.QuoteClr(property.Name));
+                valueList.Add(paramName);
+                parameters.Add(paramName, value);
             }
 
-            var physical = cached.Explicit ? cached.Name : MomoIdentifier.ToPhysical(cached.Name, databaseSource);
-            return MomoIdentifier.Quote(physical, databaseSource);
+            return ($"INSERT INTO {QuoteTable(dialect, tableName)} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})", parameters);
         }
 
-        /// <summary>
-        /// CLR 标识符 → 该 provider 下带引号的物理名。见 <see cref="MomoIdentifier"/>。
-        /// </summary>
-        public static string QuoteIdentifier(string field, DatabaseSourceType databaseSource)
-            => MomoIdentifier.QuoteClr(field, databaseSource);
-
-        /// <summary>
-        /// 生成通用INSERT SQL模板
-        /// 适配PostgreSQL（字段/表名小写）和其他数据库（如SQL Server）
-        /// </summary>
-        /// <param name="tableName">数据库表名称</param>
-        /// <param name="type">实体类型（用于反射获取字段名）</param>
-        /// <param name="databaseSource">数据库类型（PostgreSQL/SQL Server等）</param>
-        /// <returns>带参数占位符的INSERT SQL语句</returns>
-        public static string GetInsertSqlTemplate(string tableName, Type type, DatabaseSourceType databaseSource)
+        public static (string Sql, DynamicParameters Parameters) CreateUpdateSql(
+            ISqlDialect dialect, string tableName, object entity, string whereKeys, string ignoreKeys = "")
         {
-            var propertyNameList = VivTypeReflectionCache.GetPropertyNameList(type);
-            var quotedColumns = propertyNameList.Select(x => QuoteIdentifier(x, databaseSource)).ToList();
-            // 参数占位符必须用原始属性名：SQL Server 下 QuoteIdentifier 会把列名变成 [Name]，
-            // 若沿用引号后的名字会生成 @[Name]，Dapper/SqlClient 绑不上参数导致批量插入抛异常。
-            var sql = $"INSERT INTO {tableName}({string.Join(",", quotedColumns)}) VALUES({string.Join(",", propertyNameList.Select(x => $"@{x}"))})";
-            return sql;
-        }
+            var setList = new List<string>();
+            var whereList = new List<string>();
+            var parameters = new DynamicParameters();
+            var idx = 0;
 
-        /// <summary>
-        /// 生成根据ID查询单条数据的SELECT SQL模板（不带读过滤器）
-        /// 适配PostgreSQL（表名小写）和SQL Server（表名加方括号）
-        /// </summary>
-        /// <param name="tableName">数据库表名称</param>
-        /// <param name="databaseSource">数据库类型（PostgreSQL/SQL Server等）</param>
-        /// <returns>带参数占位符@Id的SELECT SQL语句</returns>
-        public static string GetFindSqlTemplate(string tableName, DatabaseSourceType databaseSource)
-            => $"SELECT * FROM {tableName} WHERE {QuoteIdentifier("Id", databaseSource)} = @Id";
-
-        /// <summary>
-        /// 同上，另按逐条生效的读过滤器追加 WHERE 条件。
-        /// 框架不认识具体是哪几条，条件与参数都由过滤器自己给（见 IMomoDataFilter）。
-        /// </summary>
-        /// <param name="tableName">数据库表名称</param>
-        /// <param name="databaseSource">数据库类型（PostgreSQL/SQL Server等）</param>
-        /// <param name="tenantId">本次读生效的租户（无租户传 0）</param>
-        /// <param name="filters">本次生效的读过滤器</param>
-        /// <param name="parameters">参数容器，过滤器把自带的参数放进来，最终交给 Dapper</param>
-        /// <returns>带参数占位符的SELECT SQL语句</returns>
-        public static string GetFindSqlTemplate(string tableName, DatabaseSourceType databaseSource,
-            long tenantId, IReadOnlyList<IMomoDataFilter> filters, IDictionary<string, object> parameters)
-        {
-            var sql = GetFindSqlTemplate(tableName, databaseSource);
-            foreach (var filter in filters)
+            foreach (var property in VivTypeReflectionCache.GetPropertieList(entity.GetType()))
             {
-                sql += filter.BuildSqlCondition(tenantId, databaseSource, parameters);
-            }
-            return sql;
-        }
+                if (ignoreKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase)) continue;
 
-        /// <summary>
-        /// 生成分页查询SQL模板（总数统计+分页数据）
-        /// 适配PostgreSQL（LIMIT/OFFSET）和SQL Server（OFFSET/FETCH）
-        /// </summary>
-        /// <param name="sql">原始查询SQL（如：SELECT * FROM table WHERE ...）</param>
-        /// <param name="pageIndex">页码（从1开始）</param>
-        /// <param name="pageSize">每页条数</param>
-        /// <param name="databaseSource">数据库类型（PostgreSQL/SQL Server等）</param>
-        /// <returns>分页查询SQL + 总数统计SQL</returns>
-        public static (string pageSql, string countSql) GetPageSqlTemplate(string sql, int pageIndex, int pageSize, DatabaseSourceType databaseSource)
-        {
-            int offset = (pageIndex - 1) * pageSize;
-            var sqlWithoutOrderBy = RemoveOrderBy(sql);
+                var name = dialect.QuoteClr(property.Name);
+                var paramName = $"@p{idx++}";
+                parameters.Add(paramName, property.GetValue(entity));
 
-            if (databaseSource == DatabaseSourceType.PostgreSQL)
-            {
-                var countSql = $"SELECT COUNT(*) FROM ({sqlWithoutOrderBy}) AS t";
-                var pageSql = $"{sql} LIMIT {pageSize} OFFSET {offset}";
-                return (pageSql, countSql);
-            }
-
-            if (databaseSource == DatabaseSourceType.SqlServer)
-            {
-                var analyzer = new MssqlSqlAnalyzer();
-                var analysis = analyzer.Analyze(sql);
-
-                return (analysis.BuildPageSql(pageIndex, pageSize), analysis.BuildCountSql());
-            }
-
-            throw new NotSupportedException($"Unsupported database type: {databaseSource}");
-        }
-
-        private static string RemoveOrderBy(string sql)
-        {
-            if (string.IsNullOrEmpty(sql)) return sql;
-
-            var lastIndex = sql.LastIndexOf("ORDER BY", StringComparison.OrdinalIgnoreCase);
-            if (lastIndex < 0) return sql;
-
-            // 确保不是子查询中的 ORDER BY（后面不能再有右括号）
-            var afterOrderBy = sql.Substring(lastIndex);
-            var closeParenIndex = afterOrderBy.IndexOf(')');
-            if (closeParenIndex >= 0) return sql;
-
-            return sql.Substring(0, lastIndex).TrimEnd();
-        }
-
-        /// <summary>
-        /// 生成真删除sql（物理删除）
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="tableName"></param>
-        /// <param name="expression"></param>
-        /// <param name="databaseSource"></param>
-        /// <returns></returns>
-        public static (string sql, Dictionary<string, object> parameter) GetDeleteSql<T>(
-          string tableName,
-          Expression<Func<T, bool>> expression,
-          DatabaseSourceType databaseSource,
-          long tenantId = 0)
-        {
-            if (expression == null)
-                return (string.Empty, []);
-
-            var (where, parameters) = ExpressionToSqlConverter.Convert(expression, databaseSource);
-            AppendTenantFilter(ref where, parameters, databaseSource, typeof(T), tenantId);
-            var sql = $"DELETE FROM {tableName} WHERE {where}";
-            return (sql, parameters);
-        }
-
-        /// <summary>
-        /// 生成软删除 SQL（更新 IsDeleted + DeletedAt）
-        /// </summary>
-        /// <typeparam name="T">实体类型</typeparam>
-        /// <param name="tableName">表名</param>
-        /// <param name="expression">过滤条件</param>
-        /// <param name="databaseSource">数据库类型</param>
-        /// <returns>SQL + 参数</returns>
-        public static (string sql, Dictionary<string, object> parameter) GetSoftDeleteSql<T>(
-            string tableName,
-            Expression<Func<T, bool>> expression,
-            DatabaseSourceType databaseSource,
-            long tenantId = 0) where T : IEntity, ISoftDeleted
-        {
-            if (expression == null)
-                return (string.Empty, []);
-
-            var isDeletedCol = QuoteIdentifier(nameof(ISoftDeleted.IsDeleted), databaseSource);
-            var deletedAtCol = QuoteIdentifier(nameof(ISoftDeleted.DeletedAt), databaseSource);
-
-            string dateValue, boolValue;
-            switch (databaseSource)
-            {
-                case DatabaseSourceType.PostgreSQL:
-                    dateValue = "NOW()";
-                    boolValue = "true";
-                    break;
-                case DatabaseSourceType.SqlServer:
-                    dateValue = "GETDATE()";
-                    boolValue = "1";
-                    break;
-                default:
-                    return (string.Empty, []);
-            }
-
-            var (whereSql, parameters) = ExpressionToSqlConverter.Convert(expression, databaseSource);
-            AppendTenantFilter(ref whereSql, parameters, databaseSource, typeof(T), tenantId);
-            var sql = $"UPDATE {tableName} SET {isDeletedCol} = {boolValue}, {deletedAtCol} = {dateValue} WHERE {whereSql}";
-            return (sql, parameters);
-        }
-
-        /// <summary>
-        /// 多租户防御纵深：T : ITenant 且当前有租户（tenantId &gt; 0）时，在 where 后追加 AND [TenantId] = @TenantId。
-        /// tenantId 为 0（无请求上下文，如后台消费者）时不追加，与 EF 查询过滤保持同一「无上下文不过滤」语义，
-        /// 避免静默破坏后台任务对非租户隔离数据的操作。
-        /// </summary>
-        private static void AppendTenantFilter(ref string where, Dictionary<string, object> parameters, DatabaseSourceType databaseSource, Type entityType, long tenantId)
-        {
-            if (tenantId > 0 && typeof(ITenant).IsAssignableFrom(entityType))
-            {
-                where += $" AND {QuoteIdentifier("TenantId", databaseSource)} = @TenantId";
-                parameters["TenantId"] = tenantId;
-            }
-        }
-
-        /// <summary>
-        /// 将 CLR 值转换为数据库兼容的 SQL 字面量（兼容 PostgreSQL 和 SQL Server）
-        /// 字符串会做单引号转义，非参数化场景使用
-        /// </summary>
-        public static string ToDatabaseValue(object? value, DatabaseSourceType databaseSource)
-        {
-            if (value == null) return "NULL";
-
-            var valueType = value.GetType();
-            var underlyingType = Nullable.GetUnderlyingType(valueType);
-            var realType = underlyingType ?? valueType;
-
-            return realType.Name switch
-            {
-                nameof(Int32) or nameof(Int64) or nameof(Decimal) or nameof(Byte) or nameof(SByte) or
-                nameof(Double) or nameof(Single) or nameof(Int16) or nameof(UInt32) or nameof(UInt64) or
-                nameof(UInt16) => value.ToString()!,
-
-                nameof(Boolean) => databaseSource switch
+                if (whereKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase))
                 {
-                    DatabaseSourceType.PostgreSQL => (bool)value ? "true" : "false",
-                    DatabaseSourceType.SqlServer => (bool)value ? "1" : "0",
-                    _ => value.ToString()!
-                },
+                    whereList.Add($"{(whereList.Count == 0 ? "WHERE" : "AND")} {name} = {paramName}");
+                }
+                else
+                {
+                    setList.Add($"{name} = {paramName}");
+                }
+            }
 
-                nameof(String) => $"'{EscapeSqlQuote(value.ToString()!)}'",
+            if (whereList.Count == 0) throw new ArgumentException("WhereKeys is empty.");
 
-                nameof(DateTime) => $"'{FormatDateTime((DateTime)value)}'",
-                nameof(DateTimeOffset) => $"'{FormatDateTime(((DateTimeOffset)value).UtcDateTime)}'",
-
-                _ when realType.IsEnum => ((int)value).ToString(),
-
-                _ => $"'{EscapeSqlQuote(value.ToJson()!)}'"
-            };
+            return ($"UPDATE {QuoteTable(dialect, tableName)} SET {string.Join(",", setList)} {string.Join(" ", whereList)}", parameters);
         }
 
-        private static string EscapeSqlQuote(string input)
-            => input.Replace("'", "''");
-
-        private static string FormatDateTime(DateTime dt)
+        public static (string Sql, DynamicParameters Parameters) CreateDeleteSql(
+            ISqlDialect dialect, string tableName, object entity)
         {
-            if (dt.TimeOfDay == TimeSpan.Zero)
-                return dt.ExtToString(DateFormat.Date);
-            return dt.ExtToString();
+            var whereList = new List<string>();
+            var parameters = new DynamicParameters();
+            var idx = 0;
+
+            foreach (var property in VivTypeReflectionCache.GetPropertieList(entity.GetType()))
+            {
+                var paramName = $"@p{idx++}";
+                parameters.Add(paramName, property.GetValue(entity));
+                whereList.Add($"{(whereList.Count == 0 ? "WHERE" : "AND")} {dialect.QuoteClr(property.Name)} = {paramName}");
+            }
+
+            return ($"DELETE FROM {QuoteTable(dialect, tableName)} {string.Join(" ", whereList)}", parameters);
+        }
+
+        #endregion
+
+        #region Raw 版本（内联值，非参数化）
+
+        public static string CreateInsertSqlRaw(
+            ISqlDialect dialect, string tableName, object entity, string ignoreKeys = "")
+        {
+            var fieldList = new List<string>();
+            var valueList = new List<string>();
+
+            foreach (var property in VivTypeReflectionCache.GetPropertieList(entity.GetType()))
+            {
+                if (ignoreKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase)) continue;
+
+                var value = property.GetValue(entity);
+                if (value == null) continue;
+
+                fieldList.Add(dialect.QuoteClr(property.Name));
+                valueList.Add(dialect.ToDatabaseValue(value));
+            }
+
+            return $"INSERT INTO {QuoteTable(dialect, tableName)} ({string.Join(",", fieldList)}) VALUES ({string.Join(",", valueList)})";
+        }
+
+        public static string CreateUpdateSqlRaw(
+            ISqlDialect dialect, string tableName, object entity, string whereKeys, string ignoreKeys = "")
+        {
+            var setList = new List<string>();
+            var whereList = new List<string>();
+
+            foreach (var property in VivTypeReflectionCache.GetPropertieList(entity.GetType()))
+            {
+                if (ignoreKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase)) continue;
+
+                var name = dialect.QuoteClr(property.Name);
+                var dbValue = dialect.ToDatabaseValue(property.GetValue(entity));
+
+                if (whereKeys.Contains(property.Name, StringComparison.InvariantCultureIgnoreCase))
+                {
+                    whereList.Add($"{(whereList.Count == 0 ? "WHERE" : "AND")} {name} = {dbValue}");
+                }
+                else
+                {
+                    setList.Add($"{name} = {dbValue}");
+                }
+            }
+
+            if (whereList.Count == 0) throw new ArgumentException("WhereKeys is empty.");
+
+            return $"UPDATE {QuoteTable(dialect, tableName)} SET {string.Join(",", setList)} {string.Join(" ", whereList)}";
+        }
+
+        public static string CreateDeleteSqlRaw(ISqlDialect dialect, string tableName, object entity)
+        {
+            var whereList = new List<string>();
+
+            foreach (var property in VivTypeReflectionCache.GetPropertieList(entity.GetType()))
+            {
+                whereList.Add($"{(whereList.Count == 0 ? "WHERE" : "AND")} {dialect.QuoteClr(property.Name)} = {dialect.ToDatabaseValue(property.GetValue(entity))}");
+            }
+
+            return $"DELETE FROM {QuoteTable(dialect, tableName)} {string.Join(" ", whereList)}";
+        }
+
+        #endregion
+
+        /// <summary>
+        /// 手写表名（测试里的 users、或已经 Quote 过的 GetTableName 结果）。
+        /// 已带方括号的不再改写，避免 [[AtUser]]。
+        /// </summary>
+        private static string QuoteTable(ISqlDialect dialect, string tableName)
+        {
+            if (string.IsNullOrEmpty(tableName) || tableName[0] == '[') return tableName;
+            return dialect.QuoteClr(tableName);
         }
     }
 }

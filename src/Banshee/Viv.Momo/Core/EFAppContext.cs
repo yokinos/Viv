@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using System;
 using System.Data;
 using Viv.Contracts.Interface;
@@ -153,7 +153,7 @@ namespace Viv.Momo.Core
                         .UseSnakeCaseNamingConvention();
                     break;
                 case DatabaseSourceType.SqlServer:
-                    // SQL Server 保持 CLR PascalCase（[AtUser]/[TenantId]），与 SqlMagic / SchemaSynchronizer 一致。
+                    // SQL Server 保持 CLR PascalCase（[AtUser]/[TenantId]），与 SqlServerDialect / SchemaSynchronizer 一致。
                     // 不要在这边再套 UseSnakeCaseNamingConvention —— 那会建成 at_user，而 Dapper 还在打 [AtUser]。
                     optionsBuilder.UseSqlServer(connectionString, x => x.EnableRetryOnFailure())
                         .UseQueryTrackingBehavior(queryTrackingBehavior);

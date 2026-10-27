@@ -1,4 +1,4 @@
-using Viv.Momo.Enums;
+﻿using Viv.Momo.Enums;
 using Viv.Momo.Sync;
 
 namespace Viv.Momo.Tests;
@@ -46,9 +46,9 @@ internal static class NamingIntegration
         using var db = MomoTestDatabase.Open(connectionString, source);
         await db.SyncTableAsync();
 
-        var physical = MomoIdentifier.ToPhysical(nameof(NamingProbeRow), source);
-        var quoted = MomoIdentifier.Quote(physical, source);
-        Assert.Equal(quoted, SqlMagic.GetTableName<NamingProbeRow>(source));
+        var physical = SqlMagic.For(source).ToPhysical(nameof(NamingProbeRow));
+        var quoted = SqlMagic.For(source).Quote(physical);
+        Assert.Equal(quoted, SqlMagic.For(source).GetTableName<NamingProbeRow>());
 
         var expected = new SchemaSynchronizer(MomoTestDatabase.Options(connectionString, source))
             .BuildExpectedSchema([typeof(NamingProbeRow)]);

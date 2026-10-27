@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using Viv.Contracts.Interface;
 using Viv.Momo.Core;
+using Viv.Momo.Dialect;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 
@@ -39,13 +40,13 @@ namespace Viv.Momo.DataFilter
             return Expression.Lambda(body, e);
         }
 
-        public string BuildSqlCondition(long tenantId, DatabaseSourceType databaseSource, IDictionary<string, object> parameters)
+        public string BuildSqlCondition(long tenantId, ISqlDialect dialect, IDictionary<string, object> parameters)
         {
             // 与 EF 那条同一语义：没有租户就不加条件，不凭空拼一个 TenantId = 0 进去
             if (tenantId <= 0) return string.Empty;
 
             parameters[nameof(ITenant.TenantId)] = tenantId;
-            return $" AND {SqlMagic.QuoteIdentifier(nameof(ITenant.TenantId), databaseSource)} = @{nameof(ITenant.TenantId)}";
+            return $" AND {dialect.QuoteIdentifier(nameof(ITenant.TenantId))} = @{nameof(ITenant.TenantId)}";
         }
     }
 }

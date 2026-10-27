@@ -28,7 +28,7 @@ public class ExposedEfAppContext : EFAppContext
 
 /// <summary>
 /// 多租户隔离 —— 两条强制路径的纯逻辑验证：
-/// 1) Dapper 路径：SqlMagic.AppendTenantFilter（经 GetDeleteSql / GetSoftDeleteSql / GetFindSqlTemplate 暴露）
+/// 1) Dapper 路径：SqlMagic 的租户过滤（AppendTenantFilter）（经 GetDeleteSql / GetSoftDeleteSql / GetFindSqlTemplate 暴露）
 /// 2) EF 路径：EFAppContext.OnModelCreating 对 ITenant 实体加全局查询过滤
 /// </summary>
 public class TenantFilterTests
@@ -38,7 +38,7 @@ public class TenantFilterTests
     [Fact]
     public void GetDeleteSql_租户实体带租户追加过滤()
     {
-        var (sql, p) = SqlMagic.GetDeleteSql<TenantUserEntity>("users", x => x.Name == "a", DatabaseSourceType.SqlServer, tenantId: 7);
+        var (sql, p) = SqlMagic.For(DatabaseSourceType.SqlServer).GetDeleteSql<TenantUserEntity>("users", x => x.Name == "a", tenantId: 7);
 
         Assert.Equal("DELETE FROM users WHERE ([Name] = @p0) AND [TenantId] = @TenantId", sql);
         Assert.Equal(7L, p["TenantId"]);
@@ -47,7 +47,7 @@ public class TenantFilterTests
     [Fact]
     public void GetDeleteSql_无请求上下文不追加()
     {
-        var (sql, p) = SqlMagic.GetDeleteSql<TenantUserEntity>("users", x => x.Name == "a", DatabaseSourceType.SqlServer, tenantId: 0);
+        var (sql, p) = SqlMagic.For(DatabaseSourceType.SqlServer).GetDeleteSql<TenantUserEntity>("users", x => x.Name == "a", tenantId: 0);
 
         Assert.Equal("DELETE FROM users WHERE ([Name] = @p0)", sql);
         Assert.DoesNotContain("TenantId", p.Keys);
@@ -56,7 +56,7 @@ public class TenantFilterTests
     [Fact]
     public void GetDeleteSql_非租户实体永不追加()
     {
-        var (sql, _) = SqlMagic.GetDeleteSql<NonTenantEntity>("users", x => x.Name == "a", DatabaseSourceType.SqlServer, tenantId: 7);
+        var (sql, _) = SqlMagic.For(DatabaseSourceType.SqlServer).GetDeleteSql<NonTenantEntity>("users", x => x.Name == "a", tenantId: 7);
 
         Assert.DoesNotContain("TenantId", sql);
     }
@@ -64,7 +64,7 @@ public class TenantFilterTests
     [Fact]
     public void GetSoftDeleteSql_租户软删带过滤()
     {
-        var (sql, p) = SqlMagic.GetSoftDeleteSql<SoftDeleteTenantEntity>("[users]", x => x.Name == "a", DatabaseSourceType.SqlServer, tenantId: 7);
+        var (sql, p) = SqlMagic.For(DatabaseSourceType.SqlServer).GetSoftDeleteSql<SoftDeleteTenantEntity>("[users]", x => x.Name == "a", tenantId: 7);
 
         Assert.Equal("UPDATE [users] SET [IsDeleted] = 1, [DeletedAt] = GETDATE() WHERE ([Name] = @p0) AND [TenantId] = @TenantId", sql);
         Assert.Equal(7L, p["TenantId"]);
@@ -73,7 +73,7 @@ public class TenantFilterTests
     [Fact]
     public void GetSoftDeleteSql_Postgres语法()
     {
-        var (sql, _) = SqlMagic.GetSoftDeleteSql<SoftDeleteTenantEntity>("users", x => x.Name == "a", DatabaseSourceType.PostgreSQL, tenantId: 7);
+        var (sql, _) = SqlMagic.For(DatabaseSourceType.PostgreSQL).GetSoftDeleteSql<SoftDeleteTenantEntity>("users", x => x.Name == "a", tenantId: 7);
 
         Assert.Equal("UPDATE users SET is_deleted = true, deleted_at = NOW() WHERE (name = @p0) AND tenant_id = @TenantId", sql);
     }

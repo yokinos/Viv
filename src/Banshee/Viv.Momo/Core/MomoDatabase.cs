@@ -1,4 +1,4 @@
-using Dapper;
+﻿using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
@@ -17,6 +18,7 @@ using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
 using Viv.Log;
 using Viv.Momo.Base;
+using Viv.Momo.Dialect;
 using Viv.Momo.Enums;
 using Viv.Momo.Interface;
 using Viv.Momo.Options;
@@ -33,6 +35,12 @@ namespace Viv.Momo.Core
         protected DatabaseOptions _databaseOptions;
         protected EFAppContext? _writeDbContext;
         protected EFAppContext? _readDbContext;
+
+        /// <summary>
+        /// 本连接对应的 SQL 方言，构造时按 <see cref="DatabaseOptions.DatabaseSource"/> 定死。
+        /// 所有 SQL 拼装（表名/列名/分页/字面量）都走它，调用方不再传 DatabaseSourceType。
+        /// </summary>
+        protected readonly ISqlDialect _dialect;
 
         /// <summary>
         /// 事务尝试观察者（可选，由宿主传入）。开启重试后 work 会被重放，
@@ -74,12 +82,16 @@ namespace Viv.Momo.Core
             _vivContext = vivContext;
             _logger = logger;
             _attemptListener = attemptListener;
+            _dialect = SqlMagic.For(options.DatabaseSource);
             _accessor = vivContext.VivContextAccessor
                 ?? throw new InvalidOperationException("IVivContext.VivContextAccessor 不能为空：Momo 需要它挂租户过滤器。");
             _databaseOptions = options;
             _timeOut = options.Timeout;
             _queryTelemetry = new QueryTelemetry(logger, options.SlowQueryThresholdMs);
         }
+
+        /// <inheritdoc />
+        public ISqlDialect Dialect => _dialect;
 
         /// <summary>
         /// 获取本次会话要用的 EF 上下文。读 / 写各缓存一个、在实例内复用 —— 缓存是刻意的：
@@ -294,59 +306,133 @@ namespace Viv.Momo.Core
 
             // 开启重试后 work 会被整段重放：失败尝试里累积的外部状态（如本地事件队列）
             // 对应已回滚的写入，重试前必须让观察者撤掉，否则成功那次会把它们一起带出去。
-            return await strategy.ExecuteAsync(async () =>
+            try
             {
-                _attemptListener?.OnAttemptStarting();
-
-                await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-
-                // Dapper 命令靠 _transaction 判断「我在事务里」，必须指向同一条连接上的 ADO 事务，
-                // 否则会出现「EF 在事务内、Dapper 在事务外」
-                lock (_lock)
+                return await strategy.ExecuteAsync(async () =>
                 {
-                    _transaction = GetDbTransaction(transaction);
-                }
+                    // 重试会重放 work：上一次尝试 new 出来的实体仍留在 ChangeTracker 里（SaveChanges 失败
+                    // 不会把它们清掉），不清就会在重放时一起 INSERT —— 重复消息、重复审批单。
+                    // 记下进入本次尝试时已被跟踪的实体，失败时只摘掉这之后新增的 Added 项。
+                    var trackedBefore = SnapshotTrackedEntities(context);
 
-                try
-                {
-                    var result = await work(cancellationToken).ConfigureAwait(false);
+                    _attemptListener?.OnAttemptStarting();
 
-                    if (commitWhen is null || commitWhen(result))
+                    await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+                    // Dapper 命令靠 _transaction 判断「我在事务里」，必须指向同一条连接上的 ADO 事务，
+                    // 否则会出现「EF 在事务内、Dapper 在事务外」
+                    lock (_lock)
                     {
-                        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                        _transaction = GetDbTransaction(transaction);
                     }
-                    else
-                    {
-                        await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                    }
-
-                    return result;
-                }
-                catch
-                {
-                    // 本次尝试累积的外部状态先撤掉，再回滚 —— 顺序无所谓，但两件都得做
-                    _attemptListener?.OnAttemptFailed();
 
                     try
                     {
-                        await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                    }
-                    catch (Exception rollbackEx)
-                    {
-                        // 回滚失败只记日志：此刻再抛会盖住真正触发回滚的那个异常
-                        WriteLog($"ExecuteInTransactionAsync 回滚失败：{rollbackEx.Message}", rollbackEx);
-                    }
+                        var result = await work(cancellationToken).ConfigureAwait(false);
 
-                    throw;
-                }
-                finally
-                {
-                    lock (_lock)
-                    {
-                        _transaction = null;
+                        if (commitWhen is null || commitWhen(result))
+                        {
+                            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                            DetachAddedSince(context, trackedBefore);
+                        }
+
+                        return result;
                     }
+                    catch (Exception ex)
+                    {
+                        // 本次尝试累积的外部状态先撤掉，再回滚 —— 顺序无所谓，但两件都得做
+                        _attemptListener?.OnAttemptFailed();
+
+                        // 回滚之后这笔写就没了，对应实体也不能留在跟踪器里等人下次 SaveChanges 顺手带出去
+                        DetachAddedSince(context, trackedBefore);
+
+                        try
+                        {
+                            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                        catch (Exception rollbackEx)
+                        {
+                            // 回滚失败只记日志：此刻再抛会盖住真正触发回滚的那个异常
+                            WriteLog($"ExecuteInTransactionAsync 回滚失败：{rollbackEx.Message}", rollbackEx);
+                        }
+
+                        // 执行策略靠「异常链里有没有 SqlException/PostgresException」判断是否重试，
+                        // 而它剥壳只穿过 EF 自己造的异常 —— VivConnectionException 不是，
+                        // 直接把包装抛出去，策略会认为"不可重试"，EnableRetryOnFailure 等于白挂。
+                        // 所以这里把原始 DbException 剥出来抛给策略，最终失败时再由下面的 catch 包回去。
+                        if (FindRetryableDbException(ex) is { } dbException)
+                        {
+                            ExceptionDispatchInfo.Capture(dbException).Throw();
+                        }
+
+                        throw;
+                    }
+                    finally
+                    {
+                        lock (_lock)
+                        {
+                            _transaction = null;
+                        }
+                    }
+                }).ConfigureAwait(false);
+            }
+            catch (DbException dbException)
+            {
+                // 重试耗尽（或本就不可重试）时保持对外契约：API 过滤器靠 VivConnectionException 映射 -5xx，
+                // 指标收口也在 WrapDatabaseException 里
+                throw WrapDatabaseException($"ExecuteInTransactionAsync 重试后仍失败,{dbException.Message}", dbException);
+            }
+        }
+
+        /// <summary>
+        /// 从异常链里找出第一个 <see cref="DbException"/>。
+        ///
+        /// 用途：把原始数据库异常交给 EF 的执行策略。`VivConnectionException` 是框架自己的包装，
+        /// 而 EF 的剥壳（<c>ExecutionStrategy.CallOnWrappedException</c>）只穿过它自己创建的异常，
+        /// 停在包装上就识别不出 `SqlException.IsTransient` / `PostgresException.SqlState`，永远不会重试。
+        /// </summary>
+        internal static DbException? FindRetryableDbException(Exception? exception)
+        {
+            while (exception is not null)
+            {
+                if (exception is DbException dbException)
+                {
+                    return dbException;
                 }
-            }).ConfigureAwait(false);
+
+                exception = exception.InnerException;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 记录当前已被跟踪的实体（**按引用比较**）。
+        /// ChangeTracker.Entries() 每次返回新的包装对象，按 EntityEntry 比会永远不相等，只能比实体本身。
+        /// </summary>
+        internal static HashSet<object> SnapshotTrackedEntities(EFAppContext context)
+            => new(context.ChangeTracker.Entries().Select(static e => e.Entity), ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// 摘掉「本次尝试新加进来、但没落库」的实体，供事务回滚/重试前调用。
+        ///
+        /// 只处理 <see cref="EntityState.Added"/>：Modified 是绝对赋值（基线+增量），重放会赋同样的值，幂等；
+        /// 也不能直接 <c>ChangeTracker.Clear()</c> —— 那会把事务**外**加载的实体一起 detach，
+        /// 之后 Update 会退化成全字段覆盖，把并发写入抹掉。
+        /// </summary>
+        internal static void DetachAddedSince(EFAppContext context, HashSet<object> trackedBefore)
+        {
+            foreach (var entry in context.ChangeTracker.Entries())
+            {
+                if (entry.State == EntityState.Added && !trackedBefore.Contains(entry.Entity))
+                {
+                    entry.State = EntityState.Detached;
+                }
+            }
         }
 
         /// <inheritdoc />

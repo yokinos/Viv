@@ -1,9 +1,10 @@
-using Viv.Contracts;
+﻿using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Entity.Database.Herta;
 using Viv.Entity.Enums;
 using Viv.Herta.Core.IRepository;
 using Viv.Log;
+using Viv.Momo.Dialect;
 using Viv.Momo;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
@@ -153,10 +154,10 @@ namespace Viv.Herta.Core.Repository
         {
             if (sessionIds.Count == 0) return;
 
-            // 手写 SQL 必须走 SqlMagic：PG 下表名列名是 snake_case，写死类名只在 SQL Server 上对
-            var source = _databaseOptions.GetRealOptions().DatabaseSource;
-            string Col(string name) => SqlMagic.QuoteIdentifier(name, source);
-            var table = SqlMagic.GetTableName<EtChatSession>(source);
+            // 手写 SQL 必须走 _dbContext.Dialect：PG 下表名列名是 snake_case，写死类名只在 SQL Server 上对
+            var dialect = _dbContext.Dialect;
+            string Col(string name) => dialect.QuoteIdentifier(name);
+            var table = dialect.GetTableName<EtChatSession>();
 
             if (sessionIds.Count == 1)
             {

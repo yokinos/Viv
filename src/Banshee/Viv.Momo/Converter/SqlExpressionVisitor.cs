@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Text;
-using Viv.Momo.Enums;
+using Viv.Momo.Dialect;
 
 namespace Viv.Momo.Converter
 {
@@ -12,16 +12,15 @@ namespace Viv.Momo.Converter
         public StringBuilder Sql { get; } = new();
         public Dictionary<string, object> Parameters { get; } = new();
         private int _paramIndex;
-        private readonly DatabaseSourceType _databaseSource;
+        private readonly ISqlDialect _dialect;
 
-        public SqlExpressionVisitor(DatabaseSourceType databaseSource)
+        public SqlExpressionVisitor(ISqlDialect dialect)
         {
-            _databaseSource = databaseSource;
+            _dialect = dialect;
         }
 
         // 根据数据库类型引用标识符（CLR 属性名 → 物理列名）
-        private string QuoteIdentifier(string name)
-            => MomoIdentifier.QuoteClr(name, _databaseSource);
+        private string QuoteIdentifier(string name) => _dialect.QuoteClr(name);
 
         // 辅助方法：检测表达式是否依赖任何参数
         private static bool ContainsParameter([AllowNull] Expression expr)

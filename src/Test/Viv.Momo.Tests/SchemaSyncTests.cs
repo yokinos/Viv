@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 using Viv.Momo.Base;
@@ -445,7 +445,7 @@ public class SchemaSyncTests
         foreach (var prop in entity.GetProperties())
         {
             var column = table.Columns.Single(
-                c => c.Name == Viv.Momo.MomoIdentifier.ToPhysical(prop.Name, dbType));
+                c => c.Name == Viv.Momo.SqlMagic.For(dbType).ToPhysical(prop.Name));
             Assert.Equal(prop.GetColumnType(), column.FullSqlType);
         }
     }
