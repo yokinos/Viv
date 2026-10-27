@@ -39,10 +39,7 @@ namespace Viv.Contracts.Interface
         /// <param name="work">要原子完成的工作</param>
         /// <param name="commitWhen">提交判据：拿到 work 的返回值，返回 false 则回滚（默认总是提交）</param>
         /// <param name="cancellationToken">只用于开事务；提交/回滚不跟它走（收尾动作不应被客户端断开取消）</param>
-        Task<T> ExecuteAsync<T>(
-            Func<CancellationToken, Task<T>> work,
-            Func<T, bool>? commitWhen = null,
-            CancellationToken cancellationToken = default);
+        Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, Func<T, bool>? commitWhen = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 无返回值的版本：正常返回即提交，抛异常即回滚。
