@@ -72,21 +72,8 @@ namespace Viv.Momo
         Task<bool> ExecuteSqlListAsync(List<string> sqlList, object? parameters = default, bool isTxn = true, CancellationToken cancellationToken = default);
         bool ExecuteSqlList(List<KeyValueItem<string, object?>> sqlList, bool isTxn = true);
         Task<bool> ExecuteSqlListAsync(List<KeyValueItem<string, object?>> sqlList, bool isTxn = true, CancellationToken cancellationToken = default);
-        /// <summary>
-        /// 委托式事务：BEGIN / COMMIT 都在执行策略内部，work 抛异常则整笔回滚。
-        /// 已处于外层事务中时直接内联执行（不重开、不重试）。
-        /// 注意：开启重试后 work 可能被整段重放，副作用只能落在数据库上（内存队列里的本地事件需要按尝试重置）。
-        /// </summary>
         Task ExecuteInTransactionAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken = default);
-
-        /// <inheritdoc cref="ExecuteInTransactionAsync(Func{CancellationToken, Task}, CancellationToken)"/>
         Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// 同上，但由 <paramref name="commitWhen"/> 决定这笔事务提交还是回滚 ——
-        /// 用于「业务返回失败信封也要回滚」（HTTP 仍 200）这类场景：判据拿到返回值，返回 false 则回滚。
-        /// 无论提交还是回滚，work 的返回值都会原样返回。
-        /// </summary>
         Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> work, Func<T, bool> commitWhen, CancellationToken cancellationToken = default);
         void ChangeTenant(long tenantId);
         void IsAutoSetDefaultValue(bool flag);
