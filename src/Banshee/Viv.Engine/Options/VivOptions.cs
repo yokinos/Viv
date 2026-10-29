@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using Viv.Aoi;
@@ -11,6 +11,7 @@ using Viv.Momo.Options;
 using Viv.Nana.Options;
 using Viv.Outbox.Options;
 using Viv.Redis;
+using Viv.Skirk.Options;
 
 #nullable disable
 namespace Viv.Engine.Options
@@ -88,5 +89,8 @@ namespace Viv.Engine.Options
         /// S3 配置（用于存储和检索文件）
         /// </summary>
         public S3Options S3Option { get; set; }
+
+        /// <summary>异步任务（Viv.Skirk）。为 null = 不启用；Api 与 Worker 共享任务表，谁执行看 EnableWorker</summary>
+        public SkirkOption SkirkOption { get; set; }
     }
 }

@@ -1,4 +1,4 @@
-<Solution>
+﻿<Solution>
   <Folder Name="/src/" />
   <Folder Name="/src/Banshee/">
     <Project Path="src/Banshee/Viv.Aoi/Viv.Aoi.csproj" Id="67f8aa78-ac0b-458f-85dc-4011a9aaaf30" />
@@ -16,6 +16,7 @@
     <Project Path="src/Banshee/Viv.Outbox/Viv.Outbox.csproj" />
     <Project Path="src/Banshee/Viv.Redis/Viv.Redis.csproj" Id="681e717d-013f-40c7-9bba-589b9ddf3629" />
     <Project Path="src/Banshee/Viv.Sandrone/Viv.Sandrone.csproj" Id="ba236dd9-a8cd-4150-bc58-16aea65e2704" />
+    <Project Path="src/Banshee/Viv.Skirk/Viv.Skirk.csproj" Id="facc2211-eebb-4c49-92d7-f06d3ceb99c3" />
   </Folder>
   <Folder Name="/src/Test/">
     <Project Path="src/Test/Viv.Aoi.Tests/Viv.Aoi.Tests.csproj" />
@@ -23,6 +24,7 @@
     <Project Path="src/Test/Viv.Engine.Tests/Viv.Engine.Tests.csproj" Id="52a5b0c1-9c22-4387-a45c-52ffc0a21a23" />
     <Project Path="src/Test/Viv.Fakes/Viv.Fakes.csproj" />
     <Project Path="src/Test/Viv.Kinna.Tests/Viv.Kinna.Tests.csproj" />
+    <Project Path="src/Test/Viv.Skirk.Tests/Viv.Skirk.Tests.csproj" />
     <Project Path="src/Test/Viv.Momo.Tests/Viv.Momo.Tests.csproj" Id="248fec67-3ed0-42ea-b2b1-fc65fdd4faa7" />
     <Project Path="src/Test/Viv.Nana.Tests/Viv.Nana.Tests.csproj" Id="b16aac01-c8a3-4e62-b95c-34cc7a5dc3fe" />
     <Project Path="src/Test/Viv.Outbox.Tests/Viv.Outbox.Tests.csproj" />

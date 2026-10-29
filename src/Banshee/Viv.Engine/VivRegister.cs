@@ -1,12 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using System.Reflection;
 using Viv.Clockwork;
 using Viv.Clockwork.Enums;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Interface;
-using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
 using Viv.Echo;
@@ -30,6 +27,7 @@ using Viv.Outbox;
 using Viv.Redis;
 using Viv.Redis.DbAllocator;
 using Viv.Sandrone.Impl;
+using Viv.Skirk;
 
 namespace Viv.Engine
 {
@@ -72,6 +70,8 @@ namespace Viv.Engine
             RegisterOutbox(services, options);
             // 可选 Inbox（有数据库就注册，消费者自行决定是否用）
             RegisterInbox(services, options);
+            // 注册异步任务（Skirk）：任务表在业务主库，EnableWorker 决定本宿主跑不跑消费者
+            RegisterSkirk(services, options);
             // 注册Token
             RegisterToken(services, options);
             // 注册调度
@@ -254,6 +254,23 @@ namespace Viv.Engine
         private static void RegisterMqtt(IServiceCollection services, VivOptions options)
         {
             services.AddVivMqtt(options.MqttOption);
+        }
+
+        #endregion
+
+        #region 异步任务 Skirk
+
+        private static void RegisterSkirk(IServiceCollection services, VivOptions options)
+        {
+            if (options.SkirkOption == null) return;
+
+            // 任务表存在业务主库里：没配数据库既入不了队也执行不了，这里把话说死
+            if (options.DatabaseOption == null)
+            {
+                throw new Exception("SkirkOption 需要 DatabaseOption：异步任务表存在业务主库，缺少数据库配置无法工作");
+            }
+
+            VivAsyncTaskRegister.Initialize(services, options.SkirkOption);
         }
 
         #endregion

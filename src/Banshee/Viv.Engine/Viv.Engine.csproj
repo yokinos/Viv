@@ -31,6 +31,7 @@
 		<ProjectReference Include="..\Viv.Redis\Viv.Redis.csproj" />
 		<ProjectReference Include="..\Viv.Echo\Viv.Echo.csproj" />
 		<ProjectReference Include="..\Viv.Sandrone\Viv.Sandrone.csproj" />
+		<ProjectReference Include="..\Viv.Skirk\Viv.Skirk.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

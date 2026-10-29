@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Viv.Skirk</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
+    <ProjectReference Include="..\Viv.Delusion\Viv.Delusion.csproj" />
+    <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />
+    <ProjectReference Include="..\Viv.Momo\Viv.Momo.csproj" />
+  </ItemGroup>
+
+</Project>
