@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Echo.Grpc;
 using Viv.Sandrone.Impl;
@@ -35,6 +36,9 @@ namespace Viv.ServiceProxy.Tests.Grpc
             builder.Services.AddSingleton(GrpcTestToken.Options);
 
             _app = builder.Build();
+            // 生产管道由 VivContextMiddleware / RequestTrackMiddleware 在本地事件分发之后清上下文。
+            // 测试宿主没有那两层，这里在端点外面清，保证处理期间拦截器灌进去的租户还在。
+            _app.UseOuterContextCleanup();
             _app.UseRouting();
             _app.MapGrpcService<TenantGrpcStub>();
 
@@ -51,6 +55,25 @@ namespace Viv.ServiceProxy.Tests.Grpc
 
             await _app.StopAsync();
             await _app.DisposeAsync();
+        }
+    }
+
+    internal static class GrpcTestPipeline
+    {
+        public static void UseOuterContextCleanup(this WebApplication app)
+        {
+            app.Use(async (HttpContext ctx, RequestDelegate next) =>
+            {
+                try
+                {
+                    await next(ctx);
+                }
+                finally
+                {
+                    ctx.RequestServices.GetService<IVivContext>()?.Clear();
+                    LockHolderContext.Clear();
+                }
+            });
         }
     }
 }
