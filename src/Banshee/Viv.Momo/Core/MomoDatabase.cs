@@ -453,6 +453,14 @@ namespace Viv.Momo.Core
         public bool IsInTransaction => _transaction != null;
 
         /// <summary>
+        /// 当前写库上的 ADO 事务。没有外层事务时为 null。
+        ///
+        /// 认领、取消标记、幂等回查必须打主库，并且要把它交给 Dapper：
+        /// 连接上已经挂着事务时，不传事务句柄，SQL Server 会直接拒绝执行。
+        /// </summary>
+        public IDbTransaction? AmbientTransaction => _transaction;
+
+        /// <summary>
         /// 单次EF处理实体的最大数量（超过这个数量会用Dapper处理）
         /// </summary>
         protected const int EFMaxCount = 200;

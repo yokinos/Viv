@@ -36,7 +36,8 @@ namespace Viv.Skirk.Core
             var smallText = d.Source == Momo.Enums.DatabaseSourceType.PostgreSQL ? "varchar(64)" : "nvarchar(64)";
             var mediumText = d.Source == Momo.Enums.DatabaseSourceType.PostgreSQL ? "varchar(2000)" : "nvarchar(2000)";
             var boolType = d.Source == Momo.Enums.DatabaseSourceType.PostgreSQL ? "boolean" : "bit";
-            var timeType = d.Source == Momo.Enums.DatabaseSourceType.PostgreSQL ? "timestamp" : "datetime2";
+            // PG 用 timestamptz：Npgsql 6+ 拒绝把 Kind=Local/Unspecified 写进 timestamp without time zone
+            var timeType = d.Source == Momo.Enums.DatabaseSourceType.PostgreSQL ? "timestamptz" : "datetime2";
 
             var create = $"""
                 CREATE TABLE {table} (
@@ -110,7 +111,7 @@ namespace Viv.Skirk.Core
         public static string Insert(ISqlDialect d)
         {
             var table = T(d);
-            return $"""
+            var sql = $"""
                 INSERT INTO {table} (
                     {C(d, "Id")}, {C(d, "AppId")}, {C(d, "SubjectId")}, {C(d, "UserId")}, {C(d, "TaskType")}, {C(d, "ParamsJson")},
                     {C(d, "Status")}, {C(d, "Progress")}, {C(d, "TotalCount")}, {C(d, "DoneCount")}, {C(d, "ProgressMessage")}, {C(d, "ResultJson")}, {C(d, "ErrorMessage")},
@@ -124,6 +125,18 @@ namespace Viv.Skirk.Core
                     @CancelRequested, @IdempotencyKey, @TraceId,
                     @CreatedAt, @StartedAt, @FinishedAt, @ExpireAt)
                 """;
+
+            // 部分唯一索引冲突时不要抛错：PostgreSQL 一抛就把当前事务打成 aborted，
+            // 后面的回查会跟着失败。谓词必须和建索引那句一致，否则 ON CONFLICT 配不上索引。
+            if (d.Source == Momo.Enums.DatabaseSourceType.PostgreSQL)
+            {
+                sql += $"""
+
+                    ON CONFLICT ({C(d, "IdempotencyKey")}) WHERE {C(d, "IdempotencyKey")} IS NOT NULL DO NOTHING
+                    """;
+            }
+
+            return sql;
         }
 
         public static string SelectById(ISqlDialect d) => $"SELECT * FROM {T(d)} WHERE {C(d, "Id")} = @Id";
@@ -170,7 +183,7 @@ namespace Viv.Skirk.Core
 
         public static string RequestCancel(ISqlDialect d)
             => $"""
-                UPDATE {T(d)} SET {C(d, "CancelRequested")} = 1
+                UPDATE {T(d)} SET {C(d, "CancelRequested")} = @CancelRequested
                 WHERE {C(d, "Id")} = @Id AND {C(d, "Status")} IN (@Pending, @Running)
                 """;
 
@@ -181,8 +194,9 @@ namespace Viv.Skirk.Core
         /// <summary>
         /// 原子认领：挑最多 N 条到期且未被租用的待执行行，置为执行中并写租约。
         ///
-        /// SQL Server 没有 SKIP LOCKED，用 READPAST 跳过被别人锁住的行；
-        /// PostgreSQL 用 FOR UPDATE SKIP LOCKED。两边都保证多副本不会领到同一条。
+        /// SQL Server 没有 SKIP LOCKED，子查询用 UPDLOCK + READPAST + ROWLOCK：
+        /// 锁住候选行，并跳过别人已经锁住的行。外层再核一次 Status = Pending，
+        /// 避免两段之间行已经被领走。PostgreSQL 用 FOR UPDATE SKIP LOCKED。
         /// </summary>
         public static string ClaimBatch(ISqlDialect d)
         {
@@ -205,11 +219,12 @@ namespace Viv.Skirk.Core
                         ORDER BY {C(d, "NextAttemptAt")}
                         LIMIT @BatchSize
                         FOR UPDATE SKIP LOCKED)
+                      AND {C(d, "Status")} = @Pending
                     RETURNING *
                     """,
 
                 _ => $"""
-                    UPDATE {table} WITH (READPAST) SET
+                    UPDATE {table} SET
                         {C(d, "Status")} = @Running,
                         {C(d, "LeaseUntil")} = @LeaseUntil,
                         {C(d, "LeaseOwner")} = @LeaseOwner,
@@ -217,11 +232,12 @@ namespace Viv.Skirk.Core
                         {C(d, "Attempt")} = {C(d, "Attempt")} + 1
                     OUTPUT INSERTED.*
                     WHERE {C(d, "Id")} IN (
-                        SELECT TOP (@BatchSize) {C(d, "Id")} FROM {table} WITH (READPAST)
+                        SELECT TOP (@BatchSize) {C(d, "Id")} FROM {table} WITH (UPDLOCK, READPAST, ROWLOCK)
                         WHERE {C(d, "Status")} = @Pending
                           AND {C(d, "NextAttemptAt")} <= @Now
                           AND ({C(d, "LeaseUntil")} IS NULL OR {C(d, "LeaseUntil")} < @Now)
                         ORDER BY {C(d, "NextAttemptAt")})
+                      AND {C(d, "Status")} = @Pending
                     """
             };
         }
@@ -233,14 +249,19 @@ namespace Viv.Skirk.Core
                 WHERE {C(d, "Id")} = @Id AND {C(d, "LeaseOwner")} = @LeaseOwner
                 """;
 
-        /// <summary>回收过期租约：执行方崩溃后任务回到待执行</summary>
+        /// <summary>
+        /// 回收过期租约。认领时 Attempt 已经 +1，超过 MaxAttempts 的不再放回队列，直接终态失败。
+        /// </summary>
         public static string ReleaseExpiredLeases(ISqlDialect d)
             => $"""
                 UPDATE {T(d)} SET
-                    {C(d, "Status")} = @Pending,
+                    {C(d, "Status")} = CASE WHEN {C(d, "Attempt")} > {C(d, "MaxAttempts")} THEN @Failed ELSE @Pending END,
                     {C(d, "LeaseUntil")} = NULL,
                     {C(d, "LeaseOwner")} = NULL,
-                    {C(d, "NextAttemptAt")} = @Now
+                    {C(d, "NextAttemptAt")} = @Now,
+                    {C(d, "FinishedAt")} = CASE WHEN {C(d, "Attempt")} > {C(d, "MaxAttempts")} THEN @Now ELSE NULL END,
+                    {C(d, "ExpireAt")} = CASE WHEN {C(d, "Attempt")} > {C(d, "MaxAttempts")} THEN @ExpireAt ELSE NULL END,
+                    {C(d, "ErrorMessage")} = CASE WHEN {C(d, "Attempt")} > {C(d, "MaxAttempts")} THEN @ErrorMessage ELSE {C(d, "ErrorMessage")} END
                 WHERE {C(d, "Status")} = @Running AND {C(d, "LeaseUntil")} < @Now
                 """;
 

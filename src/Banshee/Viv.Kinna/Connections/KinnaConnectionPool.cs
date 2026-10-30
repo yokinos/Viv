@@ -8,7 +8,8 @@ namespace Viv.Kinna.Connections
     /// </summary>
     public sealed class KinnaConnectionPool : IKinnaConnectionPool
     {
-        // 按「租户 + 用户」索引，多端同步、按人踢都走它；这是每条消息都要查的那一级
+        // 按「租户 + 用户」索引，多端同步、按人踢都走它；这是每条消息都要查的那一级。
+        // 空桶留着：摘掉最后一个连接时如果把整本字典移除，并发的 Add 可能刚写进这本字典就被一起丢掉。
         private readonly ConcurrentDictionary<(long SubjectId, long UserId), ConcurrentDictionary<string, byte>> _userConnections = new();
 
         // 按「客户端 + 租户 + 用户」索引，只有在指定客户端查的时候才用
@@ -57,15 +58,11 @@ namespace Viv.Kinna.Connections
                 && byUser.TryRemove(connectionId, out _))
             {
                 KinnaMetrics.ConnectionRemoved(_hub);
-                if (byUser.IsEmpty)
-                    _userConnections.TryRemove((key.SubjectId, key.UserId), out _);
             }
 
-            if (_clientConnections.TryGetValue((key.AppId, key.SubjectId, key.UserId), out var byClient)
-                && byClient.TryRemove(connectionId, out _)
-                && byClient.IsEmpty)
+            if (_clientConnections.TryGetValue((key.AppId, key.SubjectId, key.UserId), out var byClient))
             {
-                _clientConnections.TryRemove((key.AppId, key.SubjectId, key.UserId), out _);
+                byClient.TryRemove(connectionId, out _);
             }
 
             return new KinnaConnectionInfo(connectionId, key.AppId, key.SubjectId, key.UserId);
@@ -110,6 +107,13 @@ namespace Viv.Kinna.Connections
                 _lastSeen[connectionId] = DateTimeOffset.UtcNow;
         }
 
+        /// <summary>测试用：把上次心跳拨到过去，让清扫能立刻判过期。</summary>
+        internal void Backdate(string connectionId, TimeSpan age)
+        {
+            if (_lastSeen.ContainsKey(connectionId))
+                _lastSeen[connectionId] = DateTimeOffset.UtcNow - age;
+        }
+
         public List<KinnaConnectionInfo> SweepExpired(TimeSpan ttl)
         {
             var now = DateTimeOffset.UtcNow;
@@ -124,6 +128,10 @@ namespace Viv.Kinna.Connections
             var removed = new List<KinnaConnectionInfo>(expired.Count);
             foreach (var connectionId in expired)
             {
+                // 收集和摘除之间可能已经 Ping 续租，摘之前再看一眼
+                if (_lastSeen.TryGetValue(connectionId, out var seen) && DateTimeOffset.UtcNow - seen <= ttl)
+                    continue;
+
                 var info = Remove(connectionId);
                 if (info != null) removed.Add(info.Value);
             }

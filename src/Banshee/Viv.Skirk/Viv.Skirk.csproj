@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Viv.Skirk.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Dapper" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
   </ItemGroup>

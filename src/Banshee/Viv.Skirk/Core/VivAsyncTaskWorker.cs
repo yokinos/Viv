@@ -23,8 +23,8 @@ namespace Viv.Skirk.Core
         private readonly SkirkOption _option;
         private readonly ILoggerContract _logger;
 
-        /// <summary>租约持有者标识：机器 + 进程 + 随机后缀，进程重启不会复用</summary>
-        private readonly string _leaseOwner = $"{Environment.MachineName}:{Environment.ProcessId}:{Guid.NewGuid():N}"[..48];
+        /// <summary>租约持有者标识：机器 + 进程 + 随机后缀，进程重启不会复用。列宽 64，这里截到 48。</summary>
+        private readonly string _leaseOwner = CreateLeaseOwner(Environment.MachineName, Environment.ProcessId, Guid.NewGuid());
 
         public VivAsyncTaskWorker(
             IServiceScopeFactory scopeFactory,
@@ -38,8 +38,20 @@ namespace Viv.Skirk.Core
             _logger = logger;
         }
 
+        /// <summary>机器名很短时整段都放得下；超长才截断。直接 [..48] 在短字符串上会抛。</summary>
+        internal static string CreateLeaseOwner(string machineName, int processId, Guid token)
+        {
+            var raw = $"{machineName}:{processId}:{token:N}";
+            return raw.Length <= 48 ? raw : raw[..48];
+        }
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                _registry.Build(scope.ServiceProvider);
+            }
+
             await EnsureTableAsync(stoppingToken).ConfigureAwait(false);
 
             _logger.Info("Skirk 任务消费者已启动：轮询 {0}s / 批量 {1} / 并发 {2} / 租约 {3}s",
@@ -57,10 +69,10 @@ namespace Viv.Skirk.Core
 
                     await PollOnceAsync(stoppingToken).ConfigureAwait(false);
 
-                    if (DateTime.Now - lastCleanup > TimeSpan.FromHours(6))
+                    if (DateTime.UtcNow - lastCleanup > TimeSpan.FromHours(6))
                     {
                         await CleanupAsync(stoppingToken).ConfigureAwait(false);
-                        lastCleanup = DateTime.Now;
+                        lastCleanup = DateTime.UtcNow;
                     }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -80,19 +92,23 @@ namespace Viv.Skirk.Core
             if (!_option.AutoCreateTable) return;
 
             using var scope = _scopeFactory.CreateScope();
-            var store = scope.ServiceProvider.GetRequiredService<VivAsyncTaskStore>();
+            var store = scope.ServiceProvider.GetRequiredService<IVivAsyncTaskStore>();
             await store.EnsureTableAsync(cancellationToken).ConfigureAwait(false);
         }
 
         private async Task PollOnceAsync(CancellationToken cancellationToken)
         {
             using var scope = _scopeFactory.CreateScope();
-            var store = scope.ServiceProvider.GetRequiredService<VivAsyncTaskStore>();
+            var store = scope.ServiceProvider.GetRequiredService<IVivAsyncTaskStore>();
 
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
 
-            // 先把"执行方崩了、租约过期"的任务放回队列，再认领
-            await store.ReleaseExpiredLeasesAsync(now, cancellationToken).ConfigureAwait(false);
+            // 先把"执行方崩了、租约过期"的任务放回队列，再认领。
+            // 重试次数已经用尽的标成失败，不再无限回到队列。
+            await store.ReleaseExpiredLeasesAsync(
+                now,
+                now.AddDays(Math.Max(1, _option.RetentionDays)),
+                cancellationToken).ConfigureAwait(false);
 
             var claimed = await store
                 .ClaimBatchAsync(
@@ -115,11 +131,14 @@ namespace Viv.Skirk.Core
                 (task, ct) => new ValueTask(ExecuteOneAsync(task, ct))).ConfigureAwait(false);
         }
 
+        internal Task RunOneAsync(VivAsyncTask task, CancellationToken cancellationToken)
+            => ExecuteOneAsync(task, cancellationToken);
+
         private async Task ExecuteOneAsync(VivAsyncTask task, CancellationToken cancellationToken)
         {
             using var scope = _scopeFactory.CreateScope();
             var provider = scope.ServiceProvider;
-            var store = provider.GetRequiredService<VivAsyncTaskStore>();
+            var store = provider.GetRequiredService<IVivAsyncTaskStore>();
             var accessor = provider.GetRequiredService<IVivContextAccessor>();
 
             // 把任务行里的身份快照塞回上下文：后台没有 HttpContext，不塞的话租户过滤器会整条放行
@@ -147,8 +166,8 @@ namespace Viv.Skirk.Core
                     // 不认识的任务类型：直接终态失败，别占着队列反复重试
                     await store.FailAsync(
                         task.Id, _leaseOwner, VivAsyncTaskStatus.Failed,
-                        $"未注册的任务类型：{task.TaskType}", null, DateTime.Now,
-                        DateTime.Now.AddDays(Math.Max(1, _option.RetentionDays)), cancellationToken).ConfigureAwait(false);
+                        $"未注册的任务类型：{task.TaskType}", null, DateTime.UtcNow,
+                        DateTime.UtcNow.AddDays(Math.Max(1, _option.RetentionDays)), cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -157,14 +176,18 @@ namespace Viv.Skirk.Core
 
                 await handler.ExecuteAsync(@params, context, taskCts.Token).ConfigureAwait(false);
 
-                var finishedAt = DateTime.Now;
-                await store.CompleteAsync(
+                var finishedAt = DateTime.UtcNow;
+                var wrote = await store.CompleteAsync(
                     task.Id, _leaseOwner, null, finishedAt,
                     finishedAt.AddDays(Math.Max(1, _option.RetentionDays)), cancellationToken).ConfigureAwait(false);
+                if (!wrote)
+                {
+                    _logger.Warning("Skirk 任务 {0} 完成时租约已不属于本副本，结果未写回", task.Id);
+                }
             }
             catch (OperationCanceledException) when (context.CanceledByUser)
             {
-                var now = DateTime.Now;
+                var now = DateTime.UtcNow;
                 await store.MarkCanceledAsync(task.Id, now, now.AddDays(Math.Max(1, _option.RetentionDays)), CancellationToken.None)
                     .ConfigureAwait(false);
             }
@@ -189,13 +212,16 @@ namespace Viv.Skirk.Core
         /// <summary>心跳：续租 + 查取消。续不上（租约被别人拿走）就取消本地执行。</summary>
         private async Task HeartbeatAsync(
             VivAsyncTask task,
-            VivAsyncTaskStore store,
+            IVivAsyncTaskStore store,
             VivAsyncTaskContext context,
             CancellationTokenSource taskCts,
             CancellationToken cancellationToken)
         {
-            var interval = TimeSpan.FromSeconds(Math.Max(5, _option.LeaseSeconds / 3));
-            using var timer = new PeriodicTimer(interval);
+            var renewEvery = TimeSpan.FromSeconds(Math.Max(5, _option.LeaseSeconds / 3));
+            var cancelEvery = TimeSpan.FromMilliseconds(Math.Max(50, _option.CancelPollIntervalMs));
+            var tick = cancelEvery < renewEvery ? cancelEvery : renewEvery;
+            using var timer = new PeriodicTimer(tick);
+            var nextRenewAt = DateTime.UtcNow + renewEvery;
 
             try
             {
@@ -209,8 +235,10 @@ namespace Viv.Skirk.Core
                         return;
                     }
 
+                    if (DateTime.UtcNow < nextRenewAt) continue;
+
                     var renewed = await store
-                        .RenewLeaseAsync(task.Id, _leaseOwner, DateTime.Now.AddSeconds(Math.Max(5, _option.LeaseSeconds)), cancellationToken)
+                        .RenewLeaseAsync(task.Id, _leaseOwner, DateTime.UtcNow.AddSeconds(Math.Max(5, _option.LeaseSeconds)), cancellationToken)
                         .ConfigureAwait(false);
 
                     if (!renewed)
@@ -219,6 +247,8 @@ namespace Viv.Skirk.Core
                         taskCts.Cancel();
                         return;
                     }
+
+                    nextRenewAt = DateTime.UtcNow + renewEvery;
                 }
             }
             catch (OperationCanceledException)
@@ -227,30 +257,36 @@ namespace Viv.Skirk.Core
             }
             catch (Exception ex)
             {
+                // 续不上就停掉本地执行。否则租约过期后别的副本会把同一条再跑一遍。
                 _logger.Warning("Skirk 任务 {0} 心跳异常：{1}", task.Id, ex.Message);
+                taskCts.Cancel();
             }
         }
 
-        private async Task FailOrRetryAsync(VivAsyncTask task, VivAsyncTaskStore store, string error, CancellationToken cancellationToken)
+        private async Task FailOrRetryAsync(VivAsyncTask task, IVivAsyncTaskStore store, string error, CancellationToken cancellationToken)
         {
             // 认领时 Attempt 已经 +1
             var attempt = task.Attempt;
             var canRetry = attempt <= Math.Max(0, task.MaxAttempts);
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
 
             var status = canRetry ? VivAsyncTaskStatus.Pending : VivAsyncTaskStatus.Failed;
             var nextAttemptAt = canRetry ? now.AddSeconds(Math.Min(300, Math.Pow(2, attempt))) : (DateTime?)null;
             var expireAt = canRetry ? (DateTime?)null : now.AddDays(Math.Max(1, _option.RetentionDays));
 
-            await store.FailAsync(
+            var wrote = await store.FailAsync(
                 task.Id, _leaseOwner, status, Truncate(error, 2000), nextAttemptAt, now, expireAt, cancellationToken)
                 .ConfigureAwait(false);
+            if (!wrote)
+            {
+                _logger.Warning("Skirk 任务 {0} 收尾时租约已不属于本副本，失败状态未写回", task.Id);
+            }
         }
 
         private async Task CleanupAsync(CancellationToken cancellationToken)
         {
             using var scope = _scopeFactory.CreateScope();
-            var store = scope.ServiceProvider.GetRequiredService<VivAsyncTaskStore>();
+            var store = scope.ServiceProvider.GetRequiredService<IVivAsyncTaskStore>();
 
             var batchSize = Math.Max(1, _option.BatchSize) * 50;
             var deleted = 0;
@@ -258,7 +294,7 @@ namespace Viv.Skirk.Core
             // 分批删，避免一次锁太多行
             while (deleted < 10_000)
             {
-                var affected = await store.CleanupAsync(batchSize, DateTime.Now, cancellationToken).ConfigureAwait(false);
+                var affected = await store.CleanupAsync(batchSize, DateTime.UtcNow, cancellationToken).ConfigureAwait(false);
                 if (!affected) break;
 
                 deleted += batchSize;

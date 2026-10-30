@@ -24,6 +24,7 @@ namespace Viv.Skirk
 
             // Scoped：与业务同一个 IMomoDbContext 作用域，入队才能并入业务事务
             services.AddScoped<VivAsyncTaskStore>();
+            services.AddScoped<IVivAsyncTaskStore>(sp => sp.GetRequiredService<VivAsyncTaskStore>());
             services.AddScoped<IVivAsyncTask, VivAsyncTaskService>();
 
             if (!option.EnableWorker) return;
@@ -33,10 +34,20 @@ namespace Viv.Skirk
 
             foreach (var handlerType in TypeScanMagic.ScanByInterface<IVivAsyncTaskHandler>())
             {
-                services.AddScoped(handlerType);
+                AddHandler(services, handlerType);
             }
 
             services.AddHostedService<VivAsyncTaskWorker>();
+        }
+
+        /// <summary>
+        /// 同时按具体类型和 <see cref="IVivAsyncTaskHandler"/> 注册。
+        /// 注册表用接口解析出 TaskType，执行时再按具体类型取同一个作用域里的实例。
+        /// </summary>
+        public static void AddHandler(IServiceCollection services, Type handlerType)
+        {
+            services.AddScoped(handlerType);
+            services.AddScoped(typeof(IVivAsyncTaskHandler), sp => (IVivAsyncTaskHandler)sp.GetRequiredService(handlerType));
         }
     }
 }

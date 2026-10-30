@@ -11,7 +11,7 @@ namespace Viv.Skirk.Core
     /// </summary>
     internal sealed class VivAsyncTaskContext : IVivAsyncTaskContext
     {
-        private readonly VivAsyncTaskStore _store;
+        private readonly IVivAsyncTaskStore _store;
         private readonly SkirkOption _option;
         private readonly ILoggerContract _logger;
 
@@ -19,7 +19,7 @@ namespace Viv.Skirk.Core
 
         private volatile bool _canceledByUser;
 
-        public VivAsyncTaskContext(long taskId, VivAsyncTaskStore store, SkirkOption option, ILoggerContract logger)
+        public VivAsyncTaskContext(long taskId, IVivAsyncTaskStore store, SkirkOption option, ILoggerContract logger)
         {
             TaskId = taskId;
             _store = store;
@@ -61,7 +61,7 @@ namespace Viv.Skirk.Core
             CancellationToken cancellationToken)
         {
             // 节流：进度写库比业务本身更容易把库打满
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             if ((now - _lastReportAt).TotalMilliseconds < Math.Max(0, _option.ProgressMinIntervalMs)) return;
             _lastReportAt = now;
 
