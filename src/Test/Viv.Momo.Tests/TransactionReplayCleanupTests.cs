@@ -45,7 +45,7 @@ public class TransactionReplayCleanupTests
         var inAttempt = new TenantUserEntity { Id = 2, Name = "本次" };
         context.Add(inAttempt);
 
-        MomoDatabase.DetachAddedSince(context, trackedBefore);
+        MomoDatabase.RestoreTrackerAfterAttempt(context, trackedBefore);
 
         Assert.Equal(EntityState.Added, context.Entry(outsideEntity).State);
         Assert.Equal(EntityState.Detached, context.Entry(inAttempt).State);
@@ -60,7 +60,7 @@ public class TransactionReplayCleanupTests
         context.Attach(entity);
         context.Entry(entity).State = EntityState.Modified;
 
-        MomoDatabase.DetachAddedSince(context, MomoDatabase.SnapshotTrackedEntities(context));
+        MomoDatabase.RestoreTrackerAfterAttempt(context, MomoDatabase.SnapshotTrackedEntities(context));
 
         // Modified 是绝对赋值，重放赋同样的值就幂等，不能摘
         Assert.Equal(EntityState.Modified, context.Entry(entity).State);
@@ -75,7 +75,7 @@ public class TransactionReplayCleanupTests
         // attempt 1：新增后失败，清理
         var attempt1 = new TenantUserEntity { Id = 4 };
         context.Add(attempt1);
-        MomoDatabase.DetachAddedSince(context, trackedBefore);
+        MomoDatabase.RestoreTrackerAfterAttempt(context, trackedBefore);
 
         // attempt 2：重放，再 new 一个
         var attempt2 = new TenantUserEntity { Id = 5 };
@@ -89,5 +89,86 @@ public class TransactionReplayCleanupTests
         // 交付给 SaveChanges 的只有最后一次尝试的实体 —— 否则就是重复插入
         Assert.Single(added);
         Assert.Same(attempt2, added[0]);
+    }
+
+    [Fact]
+    public void SaveChanges已接受的修改_失败后能再次被发现()
+    {
+        using var context = NewContext();
+
+        // 事务外加载，尝试里改完并 SaveChanges（跟踪器已 Accept，库上的提交还没发生）
+        var entity = new TenantUserEntity { Id = 3, Name = "旧", Age = 1 };
+        context.Attach(entity);
+        var trackedBefore = MomoDatabase.SnapshotTrackedEntities(context);
+
+        entity.Name = "新";
+        entity.Age = 9;
+        // SaveChanges 会先 DetectChanges 再 Accept。这里不碰库，把这两步分开做。
+        context.ChangeTracker.DetectChanges();
+        context.ChangeTracker.AcceptAllChanges();
+
+        Assert.Equal(EntityState.Unchanged, context.Entry(entity).State);
+
+        MomoDatabase.RestoreTrackerAfterAttempt(context, trackedBefore);
+
+        Assert.Equal("旧", entity.Name);
+        Assert.Equal(1, entity.Age);
+        Assert.Equal(EntityState.Unchanged, context.Entry(entity).State);
+        Assert.Equal("旧", context.Entry(entity).OriginalValues.GetValue<string>(nameof(TenantUserEntity.Name)));
+
+        // 重试再赋同一个新值，必须重新变成 Modified，否则 SaveChanges 不发 UPDATE
+        entity.Name = "新";
+        Assert.Equal(EntityState.Modified, context.Entry(entity).State);
+    }
+
+    [Fact]
+    public void SaveChanges已接受的新增_失败后摘掉_避免重试再插入一次()
+    {
+        using var context = NewContext();
+        var trackedBefore = MomoDatabase.SnapshotTrackedEntities(context);
+
+        var created = new TenantUserEntity { Id = 8, Name = "本次" };
+        context.Add(created);
+        context.ChangeTracker.AcceptAllChanges();
+
+        MomoDatabase.RestoreTrackerAfterAttempt(context, trackedBefore);
+
+        Assert.Equal(EntityState.Detached, context.Entry(created).State);
+    }
+
+    [Fact]
+    public void 尝试前已是Added_SaveChanges接受后_还原回Added()
+    {
+        using var context = NewContext();
+
+        var outside = new TenantUserEntity { Id = 1, Name = "外部" };
+        context.Add(outside);
+        var trackedBefore = MomoDatabase.SnapshotTrackedEntities(context);
+
+        context.ChangeTracker.AcceptAllChanges();
+        Assert.Equal(EntityState.Unchanged, context.Entry(outside).State);
+
+        MomoDatabase.RestoreTrackerAfterAttempt(context, trackedBefore);
+
+        Assert.Equal(EntityState.Added, context.Entry(outside).State);
+        Assert.Equal("外部", outside.Name);
+    }
+
+    [Fact]
+    public void 尝试中删除的实体_失败后回到删除前()
+    {
+        using var context = NewContext();
+
+        var entity = new TenantUserEntity { Id = 6, Name = "删" };
+        context.Attach(entity);
+        var trackedBefore = MomoDatabase.SnapshotTrackedEntities(context);
+
+        context.Remove(entity);
+        Assert.Equal(EntityState.Deleted, context.Entry(entity).State);
+
+        MomoDatabase.RestoreTrackerAfterAttempt(context, trackedBefore);
+
+        Assert.Equal(EntityState.Unchanged, context.Entry(entity).State);
+        Assert.Equal("删", entity.Name);
     }
 }

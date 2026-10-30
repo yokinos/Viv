@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
@@ -63,6 +64,12 @@ namespace Viv.Momo.Core
         private readonly Lock _lock = new();
 
         private bool _disposed = false;
+
+        /// <summary>
+        /// 内层 <c>commitWhen</c> 拒绝提交。没有保存点，只能等最外层整笔回滚。
+        /// 每次真正开事务时清掉，重试的下一次尝试不继承上一次的拒绝。
+        /// </summary>
+        private bool _rollbackOnly;
 
         /// <summary>
         /// 用默认库配置构造。options 在构造时定死 —— 建过上下文之后再换配置，
@@ -295,10 +302,15 @@ namespace Viv.Momo.Core
         {
             ArgumentNullException.ThrowIfNull(work);
 
-            // 已在事务里：并入外层。这里绝不能新开一个，也不能单独重试 —— 边界由外层拥有
+            // 已在事务里：并入外层。这里绝不能新开一个，也不能单独重试 —— 边界由外层拥有。
+            // 内层拒绝提交只打标记，等最外层回滚；直接返回会让外层把失败当成成功提交。
             if (_transaction is not null)
             {
-                return await work(cancellationToken).ConfigureAwait(false);
+                var nested = await work(cancellationToken).ConfigureAwait(false);
+                if (commitWhen is not null && !commitWhen(nested))
+                    _rollbackOnly = true;
+
+                return nested;
             }
 
             var context = GetAppContext(DbReadWriteType.Write);
@@ -310,9 +322,8 @@ namespace Viv.Momo.Core
             {
                 return await strategy.ExecuteAsync(async () =>
                 {
-                    // 重试会重放 work：上一次尝试 new 出来的实体仍留在 ChangeTracker 里（SaveChanges 失败
-                    // 不会把它们清掉），不清就会在重放时一起 INSERT —— 重复消息、重复审批单。
-                    // 记下进入本次尝试时已被跟踪的实体，失败时只摘掉这之后新增的 Added 项。
+                    // 重试会重放 work。记下进入本次尝试时的跟踪器（含当前值），失败时整份还原：
+                    // 只摘 Added 不够 —— SaveChanges 成功后实体已是 Unchanged，重试发现不了修改。
                     var trackedBefore = SnapshotTrackedEntities(context);
 
                     _attemptListener?.OnAttemptStarting();
@@ -328,16 +339,28 @@ namespace Viv.Momo.Core
 
                     try
                     {
+                        // 每次尝试重新计。上一次尝试里内层拒绝过提交，不能把这次重试也拖成回滚
+                        _rollbackOnly = false;
+
                         var result = await work(cancellationToken).ConfigureAwait(false);
+
+                        if (_rollbackOnly)
+                        {
+                            throw new VivUnitOfWorkException("内层事务已拒绝提交，整笔回滚。");
+                        }
 
                         if (commitWhen is null || commitWhen(result))
                         {
-                            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                            // 提交和回滚不跟调用方的令牌走。MVC 传来的是 RequestAborted，
+                            // 客户端在提交途中断开会让「库已经提交、调用方却看到失败」然后重试出第二笔。
+                            await transaction.CommitAsync(CancellationToken.None).ConfigureAwait(false);
                         }
                         else
                         {
-                            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                            DetachAddedSince(context, trackedBefore);
+                            // 业务失败信封：库要回滚，这次尝试入队的外部状态也要撤，否则后面的成功路径会把它们 Flush 出去
+                            _attemptListener?.OnAttemptFailed();
+                            RestoreTrackerAfterAttempt(context, trackedBefore);
+                            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                         }
 
                         return result;
@@ -348,11 +371,11 @@ namespace Viv.Momo.Core
                         _attemptListener?.OnAttemptFailed();
 
                         // 回滚之后这笔写就没了，对应实体也不能留在跟踪器里等人下次 SaveChanges 顺手带出去
-                        DetachAddedSince(context, trackedBefore);
+                        RestoreTrackerAfterAttempt(context, trackedBefore);
 
                         try
                         {
-                            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                         }
                         catch (Exception rollbackEx)
                         {
@@ -411,27 +434,93 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
-        /// 记录当前已被跟踪的实体（**按引用比较**）。
-        /// ChangeTracker.Entries() 每次返回新的包装对象，按 EntityEntry 比会永远不相等，只能比实体本身。
+        /// 进入一次事务尝试时的跟踪器快照。按实体引用认人，不按 <see cref="EntityEntry"/>
+        /// —— Entries() 每次都是新包装。
         /// </summary>
-        internal static HashSet<object> SnapshotTrackedEntities(EFAppContext context)
-            => new(context.ChangeTracker.Entries().Select(static e => e.Entity), ReferenceEqualityComparer.Instance);
+        internal sealed class TrackedEntrySnapshot
+        {
+            public TrackedEntrySnapshot(object entity, EntityState state, PropertyValues current, PropertyValues original)
+            {
+                Entity = entity;
+                State = state;
+                Current = current;
+                Original = original;
+            }
+
+            public object Entity { get; }
+
+            public EntityState State { get; }
+
+            public PropertyValues Current { get; }
+
+            public PropertyValues Original { get; }
+        }
 
         /// <summary>
-        /// 摘掉「本次尝试新加进来、但没落库」的实体，供事务回滚/重试前调用。
+        /// 记下当前已被跟踪的实体，连同状态和当前值 / 原始值。
         ///
-        /// 只处理 <see cref="EntityState.Added"/>：Modified 是绝对赋值（基线+增量），重放会赋同样的值，幂等；
-        /// 也不能直接 <c>ChangeTracker.Clear()</c> —— 那会把事务**外**加载的实体一起 detach，
-        /// 之后 Update 会退化成全字段覆盖，把并发写入抹掉。
+        /// 只记引用不够：SaveChanges 成功后实体变成 Unchanged，原始值也被收成当前值。
+        /// 提交若在这一步之后失败，重试时 EF 认为没有变更，更新就丢了。
         /// </summary>
-        internal static void DetachAddedSince(EFAppContext context, HashSet<object> trackedBefore)
+        internal static List<TrackedEntrySnapshot> SnapshotTrackedEntities(EFAppContext context)
         {
+            var snapshots = new List<TrackedEntrySnapshot>();
             foreach (var entry in context.ChangeTracker.Entries())
             {
-                if (entry.State == EntityState.Added && !trackedBefore.Contains(entry.Entity))
-                {
+                snapshots.Add(new TrackedEntrySnapshot(
+                    entry.Entity,
+                    entry.State,
+                    entry.CurrentValues.Clone(),
+                    entry.OriginalValues.Clone()));
+            }
+
+            return snapshots;
+        }
+
+        /// <summary>
+        /// 一次尝试失败后把跟踪器放回进入尝试时的样子。
+        ///
+        /// 尝试中新出现的实体直接摘掉（SaveChanges 已经把它们收成 Unchanged 也一样，库上的写入会随事务回滚）。
+        /// 尝试前就在跟踪器里的，把当前值、原始值和状态都还原，重试才能再次发现修改。
+        /// 不能 <c>ChangeTracker.Clear()</c> —— 那会把事务外加载的实体一起摘掉，之后 Update 变成全字段覆盖。
+        /// </summary>
+        internal static void RestoreTrackerAfterAttempt(EFAppContext context, List<TrackedEntrySnapshot> trackedBefore)
+        {
+            var known = new HashSet<object>(ReferenceEqualityComparer.Instance);
+            foreach (var snapshot in trackedBefore)
+                known.Add(snapshot.Entity);
+
+            var current = new List<EntityEntry>();
+            foreach (var entry in context.ChangeTracker.Entries())
+                current.Add(entry);
+
+            foreach (var entry in current)
+            {
+                if (!known.Contains(entry.Entity))
                     entry.State = EntityState.Detached;
+            }
+
+            foreach (var snapshot in trackedBefore)
+            {
+                var entry = context.Entry(snapshot.Entity);
+                if (entry.State == EntityState.Detached)
+                {
+                    // Added 走 Attach 会变成 Unchanged，重试时这条插入就不再发出去
+                    if (snapshot.State == EntityState.Added)
+                        context.Add(snapshot.Entity);
+                    else
+                        context.Attach(snapshot.Entity);
+
+                    entry = context.Entry(snapshot.Entity);
                 }
+
+                // Deleted 上改当前值会抛。先拉回 Unchanged，值还原完再放回快照里的状态。
+                if (entry.State == EntityState.Deleted)
+                    entry.State = EntityState.Unchanged;
+
+                entry.CurrentValues.SetValues(snapshot.Current);
+                entry.OriginalValues.SetValues(snapshot.Original);
+                entry.State = snapshot.State;
             }
         }
 

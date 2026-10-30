@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Engine.UnitOfWork;
 using Viv.Fakes;
@@ -120,6 +121,60 @@ public class UnitOfWorkTests
 
         Assert.Equal("begin|rollback", kernel.Trace());
         Assert.Equal(0, kernel.Count("commit"));
+    }
+
+    [Fact]
+    public async Task 嵌套_内层拒绝提交_外层回滚并抛出()
+    {
+        var (uow, kernel, _) = New();
+
+        // 内层的失败信封必须拖垮整笔。只把结果交回外层、外层再返回成功的话，
+        // 拦截器会当成成功，本地事件照样 Flush。
+        var ex = await Assert.ThrowsAsync<VivUnitOfWorkException>(() =>
+            uow.ExecuteAsync(async _ =>
+            {
+                var inner = await uow.ExecuteAsync(
+                    async _ =>
+                    {
+                        await Task.Yield();
+                        return "no";
+                    },
+                    commitWhen: static r => r == "ok");
+
+                Assert.Equal("no", inner);
+                await Task.Yield();
+                return 1;
+            }));
+
+        Assert.Equal("内层事务已拒绝提交，整笔回滚。", ex.Message);
+        Assert.Equal("begin|rollback", kernel.Trace());
+        Assert.Equal(1, kernel.Count("begin"));
+    }
+
+    [Fact]
+    public async Task 嵌套拒绝提交_不污染下一次事务()
+    {
+        var (uow, kernel, _) = New();
+
+        await Assert.ThrowsAsync<VivUnitOfWorkException>(() =>
+            uow.ExecuteAsync<int>(async _ =>
+            {
+                await uow.ExecuteAsync(async _ =>
+                {
+                    await Task.Yield();
+                    return "no";
+                }, commitWhen: static r => r == "ok");
+                return 1;
+            }));
+
+        var result = await uow.ExecuteAsync(async _ =>
+        {
+            await Task.Yield();
+            return 7;
+        });
+
+        Assert.Equal(7, result);
+        Assert.Equal("begin|rollback|begin|commit", kernel.Trace());
     }
 
     [Fact]

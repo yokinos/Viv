@@ -156,18 +156,21 @@ public class LocalEventTests
     public async Task Mark与RewindTo_丢弃标记之后入队的事件()
     {
         // 重试场景的护栏：失败那次尝试入队的事件必须能撤回，否则成功那次会连它们一起分发
-        var bus = NewBus(new RecordingLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));
+        var bus = NewBus(
+            new RecordingLogger(),
+            InvokerFor<OrderCreated>(new OrderCreatedHandler()),
+            InvokerFor<StockChanged>(new StockChangedHandler()));
 
         await bus.PublishAsync(new OrderCreated());   // 标记之前：属于外层，必须保留
         var mark = bus.Mark();
 
-        await bus.PublishAsync(new OrderCreated());   // 标记之后：失败尝试产生的，要丢掉
+        await bus.PublishAsync(new StockChanged());   // 标记之后：失败尝试产生的，要丢掉
         bus.RewindTo(mark);
 
         await bus.FlushAsync();
 
-        // 只剩标记之前那一条
-        Assert.Single(Hits);
+        // 两种事件的处理器写进同一个汇，留错那条也会是一条，必须看内容
+        Assert.Equal("order-1", string.Join("|", Hits));
     }
 
     [Fact]
@@ -201,18 +204,21 @@ public class LocalEventTests
     public async Task 尝试观察者_失败尝试入队的事件被回退()
     {
         // 事务重试的护栏：失败那一次尝试的事件不能混进成功那次
-        var bus = NewBus(new RecordingLogger(), InvokerFor<OrderCreated>(new OrderCreatedHandler()));
+        var bus = NewBus(
+            new RecordingLogger(),
+            InvokerFor<OrderCreated>(new OrderCreatedHandler()),
+            InvokerFor<StockChanged>(new StockChangedHandler()));
         var listener = new LocalEventAttemptListener(bus);
 
         await bus.PublishAsync(new OrderCreated());   // 事务之外，必须保留
 
         listener.OnAttemptStarting();
-        await bus.PublishAsync(new OrderCreated());   // 本次尝试产生，随后失败
+        await bus.PublishAsync(new StockChanged());   // 本次尝试产生，随后失败
         listener.OnAttemptFailed();
 
         await bus.FlushAsync();
 
-        Assert.Single(Hits);
+        Assert.Equal("order-1", string.Join("|", Hits));
     }
 
     [Fact]
