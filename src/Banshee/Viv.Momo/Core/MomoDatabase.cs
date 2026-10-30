@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
@@ -277,7 +278,13 @@ namespace Viv.Momo.Core
 
         /// <summary>
         /// 委托式事务：BEGIN / COMMIT 由执行策略包住，work 抛异常则整笔回滚。
-        /// 已处于外层事务里时直接内联（不重开、不重试）。
+        /// 已处于外层事务里时直接内联（不重开、不重试）。内层的 commitWhen 不参与判定，
+        /// 提交与否只看最外层 —— 和工作单元的嵌套合并是同一条规则。
+        ///
+        /// <paramref name="cancellationToken"/> 只用于开事务和 work 里的命令。
+        /// 提交和回滚是收尾，固定用 <see cref="CancellationToken.None"/>：
+        /// 调用方令牌多半是请求中止或停机，取消提交会出现「调用方以为失败、库里已经落下」，
+        /// 取消回滚则会留下没关掉的事务。
         /// </summary>
         public virtual Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default)
             => ExecuteInTransactionCoreAsync(work, commitWhen: null, cancellationToken);
@@ -295,7 +302,8 @@ namespace Viv.Momo.Core
         {
             ArgumentNullException.ThrowIfNull(work);
 
-            // 已在事务里：并入外层。这里绝不能新开一个，也不能单独重试 —— 边界由外层拥有
+            // 已在事务里：并入外层。这里绝不能新开一个，也不能单独重试 —— 边界由外层拥有。
+            // commitWhen 也只在最外层生效；内层传了也不看，否则内层一次 false 会把外层已经决定要提交的结果改掉。
             if (_transaction is not null)
             {
                 return await work(cancellationToken).ConfigureAwait(false);
@@ -310,10 +318,11 @@ namespace Viv.Momo.Core
             {
                 return await strategy.ExecuteAsync(async () =>
                 {
-                    // 重试会重放 work：上一次尝试 new 出来的实体仍留在 ChangeTracker 里（SaveChanges 失败
-                    // 不会把它们清掉），不清就会在重放时一起 INSERT —— 重复消息、重复审批单。
-                    // 记下进入本次尝试时已被跟踪的实体，失败时只摘掉这之后新增的 Added 项。
-                    var trackedBefore = SnapshotTrackedEntities(context);
+                    // 重试会重放 work。SaveChanges 成功之后实体会变成 Unchanged，并且原始值被收成新值；
+                    // 事务随后回滚，库回到旧值，跟踪器却还以为新值已经落库。重放时 Update 的 SetValues
+                    // 看到「当前值等于原始值」就不会再写。所以失败时按进入本次尝试前的快照整份还原，
+                    // 尝试期间新出现的实体（含已经 SaveChanges 过的）直接摘掉。
+                    var trackedBefore = SnapshotTracker(context);
 
                     _attemptListener?.OnAttemptStarting();
 
@@ -332,12 +341,14 @@ namespace Viv.Momo.Core
 
                         if (commitWhen is null || commitWhen(result))
                         {
-                            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                            await transaction.CommitAsync(CancellationToken.None).ConfigureAwait(false);
                         }
                         else
                         {
-                            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                            DetachAddedSince(context, trackedBefore);
+                            // 业务返回失败信封：库要回到尝试前，跟踪器和本地事件也要，否则后面的成功操作会把它们带出去
+                            _attemptListener?.OnAttemptFailed();
+                            RestoreTracker(context, trackedBefore);
+                            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                         }
 
                         return result;
@@ -348,11 +359,11 @@ namespace Viv.Momo.Core
                         _attemptListener?.OnAttemptFailed();
 
                         // 回滚之后这笔写就没了，对应实体也不能留在跟踪器里等人下次 SaveChanges 顺手带出去
-                        DetachAddedSince(context, trackedBefore);
+                        RestoreTracker(context, trackedBefore);
 
                         try
                         {
-                            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+                            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                         }
                         catch (Exception rollbackEx)
                         {
@@ -411,29 +422,59 @@ namespace Viv.Momo.Core
         }
 
         /// <summary>
-        /// 记录当前已被跟踪的实体（**按引用比较**）。
-        /// ChangeTracker.Entries() 每次返回新的包装对象，按 EntityEntry 比会永远不相等，只能比实体本身。
+        /// 进入一次事务尝试之前的跟踪器快照。实体按引用认，值是 Clone 出来的，
+        /// 之后 SaveChanges 改原始值不会把这份基线一起改掉。
         /// </summary>
-        internal static HashSet<object> SnapshotTrackedEntities(EFAppContext context)
-            => new(context.ChangeTracker.Entries().Select(static e => e.Entity), ReferenceEqualityComparer.Instance);
-
-        /// <summary>
-        /// 摘掉「本次尝试新加进来、但没落库」的实体，供事务回滚/重试前调用。
-        ///
-        /// 只处理 <see cref="EntityState.Added"/>：Modified 是绝对赋值（基线+增量），重放会赋同样的值，幂等；
-        /// 也不能直接 <c>ChangeTracker.Clear()</c> —— 那会把事务**外**加载的实体一起 detach，
-        /// 之后 Update 会退化成全字段覆盖，把并发写入抹掉。
-        /// </summary>
-        internal static void DetachAddedSince(EFAppContext context, HashSet<object> trackedBefore)
+        internal static List<TrackerBaseline> SnapshotTracker(EFAppContext context)
         {
+            var list = new List<TrackerBaseline>();
             foreach (var entry in context.ChangeTracker.Entries())
             {
-                if (entry.State == EntityState.Added && !trackedBefore.Contains(entry.Entity))
+                list.Add(new TrackerBaseline(
+                    entry.Entity,
+                    entry.State,
+                    entry.OriginalValues.Clone(),
+                    entry.CurrentValues.Clone()));
+            }
+
+            return list;
+        }
+
+        /// <summary>
+        /// 把跟踪器收回进入本次尝试之前的样子。
+        ///
+        /// 尝试期间才出现的实体一律摘掉，不管现在是 Added 还是已经被 SaveChanges 收成 Unchanged。
+        /// 尝试之前就在跟踪里的，当前值、原始值和状态都写回去 —— 不能 Clear()，
+        /// 那会把事务外加载、事后还要 Update 的实体一起摘掉。
+        /// </summary>
+        internal static void RestoreTracker(EFAppContext context, List<TrackerBaseline> baseline)
+        {
+            var known = new Dictionary<object, TrackerBaseline>(ReferenceEqualityComparer.Instance);
+            foreach (var item in baseline)
+            {
+                known[item.Entity] = item;
+            }
+
+            foreach (var entry in context.ChangeTracker.Entries().ToList())
+            {
+                if (!known.TryGetValue(entry.Entity, out var saved))
                 {
                     entry.State = EntityState.Detached;
+                    continue;
                 }
+
+                entry.CurrentValues.SetValues(saved.Current);
+                entry.OriginalValues.SetValues(saved.Original);
+                entry.State = saved.State;
             }
         }
+
+        /// <summary>一次尝试开始前，某个已跟踪实体的状态和两套属性值。</summary>
+        internal readonly record struct TrackerBaseline(
+            object Entity,
+            EntityState State,
+            PropertyValues Original,
+            PropertyValues Current);
 
         /// <inheritdoc />
         public virtual Task ExecuteInTransactionAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken = default)
