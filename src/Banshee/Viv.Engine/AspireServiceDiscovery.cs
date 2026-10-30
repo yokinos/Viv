@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Viv.Echo.Grpc;
 
 namespace Viv.Engine
 {
@@ -32,7 +33,15 @@ namespace Viv.Engine
                     continue;
                 }
 
-                var name = SplitServiceName(key.Substring(ServicesEnvPrefix.Length));
+                var remainder = key.Substring(ServicesEnvPrefix.Length);
+                // gRPC 端点（services__viv-apex-api__grpc__0）和 REST 都是 http，
+                // 环境变量顺序不定。并进同一条服务会把网关指到 HTTP/2 端口。
+                if (IsGrpcEndpoint(remainder))
+                {
+                    continue;
+                }
+
+                var name = SplitServiceName(remainder);
                 if (string.IsNullOrEmpty(name) || !Uri.TryCreate(value, UriKind.Absolute, out var uri))
                 {
                     continue;
@@ -82,11 +91,25 @@ namespace Viv.Engine
         }
 
         /// <summary>
+        /// gRPC 端点名与 <see cref="VivGrpcExtensions.ServiceDiscoveryEndpointName"/> 一致。
+        /// 服务名本身含不了这个段（按 <c>__</c> 切开后整段相等才算）。
+        /// </summary>
+        private static bool IsGrpcEndpoint(string remainder)
+        {
+            var parts = remainder.Split("__", StringSplitOptions.RemoveEmptyEntries);
+            return parts.Any(part => part.Equals(
+                VivGrpcExtensions.ServiceDiscoveryEndpointName,
+                StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
         /// 去掉 services__ 之后末尾的端点描述段，还原服务名：
         ///   viv-apex-api__http__0         -> viv-apex-api
         ///   viv-apex-api__0               -> viv-apex-api
         ///   viv-apex-api__default__0      -> viv-apex-api
         ///   viv-apex-api__0__endpoints__0 -> viv-apex-api
+        /// grpc 段不在这里剥：剥掉会和 REST 合成同一个名字，http 地址就被 gRPC 端口盖掉。
+        /// 那种 key 在 <see cref="Load"/> 里直接跳过。
         /// </summary>
         private static string? SplitServiceName(string remainder)
         {

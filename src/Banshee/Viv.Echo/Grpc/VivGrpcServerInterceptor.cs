@@ -13,7 +13,12 @@ namespace Viv.Echo.Grpc
     /// gRPC 服务端租户上下文恢复拦截器。
     ///
     /// VivContextMiddleware 只对 /api 前缀水合上下文，gRPC 路径必须由此拦截器从 x-viv-* 头恢复。
-    /// 配置了 InternalToken 时必须验 x-request-token；未配置密钥则不信任裸头（不灌上下文）。
+    /// 未配置 InternalToken 时不信任裸头（不灌上下文，也不拒绝，方便本地没配密钥的服务）。
+    /// 配了密钥则先验签：失败一律 <see cref="StatusCode.Unauthenticated"/>，不区分缺签名和坏签名。
+    /// 验过之后 AppId 必须为正才灌快照；UserId / SubjectId 可以缺省或为 0（服务间调用往往只有 AppId）。
+    ///
+    /// 这里不清理上下文。LocalEventFlushMiddleware 挂在拦截器外面，提前 Clear 会让 gRPC 上的
+    /// 本地事件处理器看不到租户。请求结束由外层 VivContextMiddleware / RequestTrackMiddleware 清。
     /// </summary>
     public class VivGrpcServerInterceptor : Interceptor
     {
@@ -31,15 +36,8 @@ namespace Viv.Echo.Grpc
             where TRequest : class
             where TResponse : class
         {
-            var scope = BeginVivContext(context);
-            try
-            {
-                return await continuation(request, context).ConfigureAwait(false);
-            }
-            finally
-            {
-                scope.Dispose();
-            }
+            ApplyVivContext(context);
+            return await continuation(request, context).ConfigureAwait(false);
         }
 
         public override async Task ServerStreamingServerHandler<TRequest, TResponse>(
@@ -50,15 +48,8 @@ namespace Viv.Echo.Grpc
             where TRequest : class
             where TResponse : class
         {
-            var scope = BeginVivContext(context);
-            try
-            {
-                await continuation(request, responseStream, context).ConfigureAwait(false);
-            }
-            finally
-            {
-                scope.Dispose();
-            }
+            ApplyVivContext(context);
+            await continuation(request, responseStream, context).ConfigureAwait(false);
         }
 
         public override async Task<TResponse> ClientStreamingServerHandler<TRequest, TResponse>(
@@ -68,15 +59,8 @@ namespace Viv.Echo.Grpc
             where TRequest : class
             where TResponse : class
         {
-            var scope = BeginVivContext(context);
-            try
-            {
-                return await continuation(requestStream, context).ConfigureAwait(false);
-            }
-            finally
-            {
-                scope.Dispose();
-            }
+            ApplyVivContext(context);
+            return await continuation(requestStream, context).ConfigureAwait(false);
         }
 
         public override async Task DuplexStreamingServerHandler<TRequest, TResponse>(
@@ -87,33 +71,27 @@ namespace Viv.Echo.Grpc
             where TRequest : class
             where TResponse : class
         {
-            var scope = BeginVivContext(context);
-            try
-            {
-                await continuation(requestStream, responseStream, context).ConfigureAwait(false);
-            }
-            finally
-            {
-                scope.Dispose();
-            }
+            ApplyVivContext(context);
+            await continuation(requestStream, responseStream, context).ConfigureAwait(false);
         }
 
-        private IDisposable BeginVivContext(ServerCallContext context)
+        private void ApplyVivContext(ServerCallContext context)
         {
-            var vivContext = context.GetHttpContext().RequestServices.GetRequiredService<IVivContext>();
-            var content = TryBuildContext(context.RequestHeaders);
-            if (content != null)
+            var content = BuildContext(context.RequestHeaders);
+            if (content == null)
             {
-                vivContext.SetSnapshot(content);
+                return;
             }
 
-            return new VivContextScope(vivContext);
+            var vivContext = context.GetHttpContext().RequestServices.GetRequiredService<IVivContext>();
+            vivContext.SetSnapshot(content);
         }
 
         /// <summary>
-        /// AppId + UserId 必须为正才认头；SubjectId 可选。有 InternalToken 时必须 HMAC 通过。
+        /// 无密钥返回 null（调用继续，上下文保持空）。有密钥则用头上的原始字符串验签，
+        /// 这样 UserId 写成 "0" 也能对上客户端签出来的载荷。
         /// </summary>
-        private VivContextContent? TryBuildContext(Metadata headers)
+        private VivContextContent? BuildContext(Metadata headers)
         {
             var secret = _tokenOptions.InternalToken;
             if (string.IsNullOrWhiteSpace(secret))
@@ -121,70 +99,40 @@ namespace Viv.Echo.Grpc
                 return null;
             }
 
-            if (!TryReadPositiveLong(headers, VivHeaderContract.AppId, out var appId))
-            {
-                return null;
-            }
-
-            if (!TryReadPositiveLong(headers, VivHeaderContract.UserId, out var userId))
-            {
-                return null;
-            }
-
-            TryReadPositiveLong(headers, VivHeaderContract.SubjectId, out var subjectId);
+            var appIdRaw = headers.Get(VivHeaderContract.AppId)?.Value ?? "";
+            var subjectRaw = headers.Get(VivHeaderContract.SubjectId)?.Value ?? "";
+            var userRaw = headers.Get(VivHeaderContract.UserId)?.Value ?? "";
             var serviceName = headers.Get(VivHeaderContract.ServiceName)?.Value ?? "";
+            var holderRaw = headers.Get(VivHeaderContract.HolderId)?.Value ?? "";
             var token = headers.Get(VivHeaderContract.InnerRequestToken)?.Value;
 
-            if (!VivRequestToken.TryVerify(
-                    token,
-                    headers.Get(VivHeaderContract.AppId)?.Value ?? "",
-                    headers.Get(VivHeaderContract.SubjectId)?.Value ?? "",
-                    headers.Get(VivHeaderContract.UserId)?.Value ?? "",
-                    serviceName,
-                    headers.Get(VivHeaderContract.HolderId)?.Value ?? "",
-                    secret))
+            if (!VivRequestToken.TryVerify(token, appIdRaw, subjectRaw, userRaw, serviceName, holderRaw, secret))
+            {
+                throw new RpcException(new Status(StatusCode.Unauthenticated, "未通过内部签名校验"));
+            }
+
+            if (!long.TryParse(appIdRaw, out var appId) || appId <= 0)
             {
                 return null;
             }
 
-            var holderId = headers.Get(VivHeaderContract.HolderId)?.Value;
-            if (!string.IsNullOrWhiteSpace(holderId))
+            if (!string.IsNullOrWhiteSpace(holderRaw))
             {
-                LockHolderContext.SetHolderId(holderId);
+                LockHolderContext.SetHolderId(holderRaw);
             }
 
             return new VivContextContent
             {
                 AppId = appId,
-                SubjectId = subjectId,
-                UserId = userId,
-                HolderId = string.IsNullOrWhiteSpace(holderId) ? null : holderId
+                SubjectId = ReadPositiveLong(subjectRaw),
+                UserId = ReadPositiveLong(userRaw),
+                HolderId = string.IsNullOrWhiteSpace(holderRaw) ? null : holderRaw
             };
         }
 
-        private static bool TryReadPositiveLong(Metadata headers, string key, out long value)
+        private static long ReadPositiveLong(string raw)
         {
-            value = 0;
-            var entry = headers.Get(key);
-            return entry != null && long.TryParse(entry.Value, out value) && value > 0;
-        }
-
-        private sealed class VivContextScope : IDisposable
-        {
-            private readonly IVivContext _vivContext;
-
-            public VivContextScope(IVivContext vivContext)
-            {
-                _vivContext = vivContext;
-            }
-
-            public void Dispose()
-            {
-                _vivContext.Clear();
-                // 与 HTTP(RequestTrackMiddleware) / Nana(VivConsumer) 对齐：
-                // gRPC 请求结束必须清锁持有者，否则 AsyncLocal 残留会串到线程池复用的下一个请求。
-                LockHolderContext.Clear();
-            }
+            return long.TryParse(raw, out var value) && value > 0 ? value : 0;
         }
     }
 }

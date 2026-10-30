@@ -1,7 +1,13 @@
 ﻿using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
+using Viv.Contracts.Options;
 using Viv.Echo.Grpc;
 using Viv.Sandrone.Impl;
 using Viv.ServiceProxy.Tests.Protos;
@@ -103,7 +109,7 @@ namespace Viv.ServiceProxy.Tests
         }
 
         [Fact]
-        public async Task Unary_未签名头_不恢复租户()
+        public async Task Unary_未签名头_配了密钥则拒绝()
         {
             using var channel = GrpcChannel.ForAddress(_server.Address, new GrpcChannelOptions
             {
@@ -111,12 +117,99 @@ namespace Viv.ServiceProxy.Tests
             });
             var unsigned = new TenantGrpcService.TenantGrpcServiceClient(channel);
 
-            var response = await unsigned.GetTenantAsync(new GetTenantRequest());
+            var ex = await Assert.ThrowsAsync<RpcException>(() => unsigned.GetTenantAsync(new GetTenantRequest()).ResponseAsync);
+
+            Assert.Equal(StatusCode.Unauthenticated, ex.StatusCode);
+        }
+
+        [Fact]
+        public async Task Unary_坏签名_同样拒绝()
+        {
+            using var channel = GrpcChannel.ForAddress(_server.Address, new GrpcChannelOptions
+            {
+                HttpHandler = new SocketsHttpHandler { EnableMultipleHttp2Connections = true }
+            });
+            var client = new TenantGrpcService.TenantGrpcServiceClient(channel);
+            var headers = new Metadata
+            {
+                { "x-viv-appid", "1001" },
+                { "x-viv-userid", "5" },
+                { "x-request-token", "1:not-a-real-signature" }
+            };
+
+            var ex = await Assert.ThrowsAsync<RpcException>(
+                () => client.GetTenantAsync(new GetTenantRequest(), headers).ResponseAsync);
+
+            Assert.Equal(StatusCode.Unauthenticated, ex.StatusCode);
+        }
+
+        [Fact]
+        public async Task Unary_只签AppId_仍恢复应用身份()
+        {
+            var accessor = new VivContextAccessor();
+            var vivContext = new VivContext(accessor);
+            vivContext.SetSnapshot(new VivContextContent { AppId = 42 });
+
+            using var channel = GrpcChannel.ForAddress(_server.Address, new GrpcChannelOptions
+            {
+                HttpHandler = new SocketsHttpHandler { EnableMultipleHttp2Connections = true }
+            });
+            var client = new TenantGrpcService.TenantGrpcServiceClient(
+                channel.Intercept(new VivGrpcInterceptor(vivContext, GrpcTestToken.Options)));
+
+            var response = await client.GetTenantAsync(new GetTenantRequest());
 
             Assert.True(response.Success);
-            Assert.Equal(0, response.Tenant!.AppId);
+            Assert.Equal(42, response.Tenant!.AppId);
             Assert.Equal(0, response.Tenant.UserId);
             Assert.Equal(0, response.Tenant.SubjectId);
+        }
+
+        [Fact]
+        public async Task Unary_未配置密钥_裸头不恢复也不拒绝()
+        {
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.ConfigureKestrel(o =>
+                o.ConfigureEndpointDefaults(e => e.Protocols = HttpProtocols.Http2));
+            builder.WebHost.UseUrls("http://127.0.0.1:0");
+
+            var empty = new VivInternalTokenOptions { InternalToken = "", ServiceName = "viv.test.grpc" };
+            builder.Services.AddVivGrpcServer();
+            builder.Services.AddSingleton<IVivContextAccessor, VivContextAccessor>();
+            builder.Services.AddScoped<IVivContext, VivContext>();
+            builder.Services.AddScoped<TenantGrpcStub>();
+            builder.Services.AddSingleton(empty);
+
+            var app = builder.Build();
+            app.UseOuterContextCleanup();
+            app.UseRouting();
+            app.MapGrpcService<TenantGrpcStub>();
+            await app.StartAsync();
+            try
+            {
+                var accessor = new VivContextAccessor();
+                var vivContext = new VivContext(accessor);
+                vivContext.SetSnapshot(new VivContextContent { AppId = 9, SubjectId = 4, UserId = 3 });
+
+                using var channel = GrpcChannel.ForAddress(app.Urls.First(), new GrpcChannelOptions
+                {
+                    HttpHandler = new SocketsHttpHandler { EnableMultipleHttp2Connections = true }
+                });
+                var client = new TenantGrpcService.TenantGrpcServiceClient(
+                    channel.Intercept(new VivGrpcInterceptor(vivContext, empty)));
+
+                var response = await client.GetTenantAsync(new GetTenantRequest());
+
+                Assert.True(response.Success);
+                Assert.Equal(0, response.Tenant!.AppId);
+                Assert.Equal(0, response.Tenant.UserId);
+                Assert.Equal(0, response.Tenant.SubjectId);
+            }
+            finally
+            {
+                await app.StopAsync();
+                await app.DisposeAsync();
+            }
         }
     }
 }

@@ -43,6 +43,7 @@ namespace Viv.ServiceProxy.Tests.Grpc
             VivGrpcDiscovery.RegisterServices(builder.Services);
 
             var app = builder.Build();
+            app.UseOuterContextCleanup();
             app.UseRouting();
             // 配置驱动接线：自动映射，宿主不再手工 MapGrpcService<TenantGrpcStub>()
             VivGrpcDiscovery.MapServices(app);
