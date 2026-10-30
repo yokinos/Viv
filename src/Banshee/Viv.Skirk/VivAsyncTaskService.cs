@@ -22,13 +22,13 @@ namespace Viv.Skirk
 
         private static bool _tableReady;
 
-        private readonly VivAsyncTaskStore _store;
+        private readonly IVivAsyncTaskStore _store;
         private readonly ILoggerContract _logger;
         private readonly SkirkOption _option;
         private readonly IVivContext _context;
 
         public VivAsyncTaskService(
-            VivAsyncTaskStore store,
+            IVivAsyncTaskStore store,
             ILoggerContract logger,
             SkirkOption option,
             IVivContext context)
@@ -57,7 +57,7 @@ namespace Viv.Skirk
 
             await EnsureTableAsync(cancellationToken).ConfigureAwait(false);
 
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             var task = new VivAsyncTask
             {
                 Id = IdMagic.NextId(),
@@ -78,19 +78,29 @@ namespace Viv.Skirk
                 CreatedAt = now,
             };
 
+            bool inserted;
             try
             {
-                await _store.InsertAsync(task, cancellationToken).ConfigureAwait(false);
-                return task.Id;
+                inserted = await _store.InsertAsync(task, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception) when (task.IdempotencyKey is not null)
+            catch (Exception ex) when (task.IdempotencyKey is not null && VivAsyncTaskErrors.IsUniqueViolation(ex))
             {
-                // 并发/重放：唯一索引冲突说明别人已经建过了，返回那条的 Id（幂等语义）
-                var existingId = await _store.FindIdByIdempotencyKeyAsync(task.IdempotencyKey, cancellationToken).ConfigureAwait(false);
-                if (existingId is not null) return existingId.Value;
-
-                throw;
+                // SQL Server 唯一索引冲突不会把事务打成 aborted，可以接着回查。
+                // PostgreSQL 走 ON CONFLICT DO NOTHING，正常不会进到这里。
+                inserted = false;
             }
+
+            if (inserted) return task.Id;
+
+            if (task.IdempotencyKey is null)
+            {
+                throw new InvalidOperationException("任务入队没有写入行");
+            }
+
+            var existingId = await _store.FindIdByIdempotencyKeyAsync(task.IdempotencyKey, cancellationToken).ConfigureAwait(false);
+            if (existingId is not null) return existingId.Value;
+
+            throw new InvalidOperationException($"幂等键冲突但未找到已有任务：{task.IdempotencyKey}");
         }
 
         /// <inheritdoc />

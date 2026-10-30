@@ -38,6 +38,8 @@ public class VivAsyncTaskSqlTests
         Assert.Contains("params_json text", statements[0]);
         Assert.Contains("cancel_requested boolean", statements[0]);
         Assert.Contains("status integer", statements[0]);
+        Assert.Contains("timestamptz", statements[0]);
+        Assert.DoesNotContain(" timestamp ", statements[0]);
     }
 
     [Fact]
@@ -56,8 +58,9 @@ public class VivAsyncTaskSqlTests
     {
         var sql = VivAsyncTaskSql.ClaimBatch(Sql);
 
-        Assert.Contains("WITH (READPAST)", sql);
+        Assert.Contains("WITH (UPDLOCK, READPAST, ROWLOCK)", sql);
         Assert.Contains("OUTPUT INSERTED.*", sql);
+        Assert.Contains("AND [Status] = @Pending", sql);
         Assert.Contains("SELECT TOP (@BatchSize)", sql);
         Assert.Contains("[Status] = @Running", sql);
         Assert.DoesNotContain("SKIP LOCKED", sql);
@@ -70,6 +73,7 @@ public class VivAsyncTaskSqlTests
 
         Assert.Contains("FOR UPDATE SKIP LOCKED", sql);
         Assert.Contains("RETURNING *", sql);
+        Assert.Contains("AND status = @Pending", sql);
         Assert.Contains("LIMIT @BatchSize", sql);
         Assert.Contains("status = @Running", sql);
         Assert.DoesNotContain("READPAST", sql);
@@ -140,7 +144,35 @@ public class VivAsyncTaskSqlTests
         var sql = VivAsyncTaskSql.RequestCancel(Sql);
 
         Assert.Contains("CancelRequested", sql.Replace("[CancelRequested]", "CancelRequested"));
+        Assert.Contains("@CancelRequested", sql);
+        Assert.DoesNotContain("= 1", sql);
         Assert.Contains("@Pending", sql);
         Assert.Contains("@Running", sql);
+
+        var pg = VivAsyncTaskSql.RequestCancel(Pg);
+        Assert.Contains("cancel_requested = @CancelRequested", pg);
+        Assert.DoesNotContain("= 1", pg);
+    }
+
+    [Fact]
+    public void 入队_Postgres用ON_CONFLICT吞掉幂等冲突()
+    {
+        var pg = VivAsyncTaskSql.Insert(Pg);
+        Assert.Contains("ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING", pg);
+
+        var sql = VivAsyncTaskSql.Insert(Sql);
+        Assert.DoesNotContain("ON CONFLICT", sql);
+    }
+
+    [Fact]
+    public void 回收过期租约_超过重试上限标失败()
+    {
+        foreach (var dialect in new[] { Sql, Pg })
+        {
+            var sql = VivAsyncTaskSql.ReleaseExpiredLeases(dialect);
+            Assert.Contains("@Failed", sql);
+            Assert.Contains("@Pending", sql);
+            Assert.Contains("MaxAttempts", sql.Replace("max_attempts", "MaxAttempts"));
+        }
     }
 }

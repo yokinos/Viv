@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Viv.Kinna.Contracts;
 using Viv.Kinna.Ports;
 using Viv.Log;
 
@@ -48,33 +49,62 @@ namespace Viv.Kinna.Connections
                 try
                 {
                     await Task.Delay(_interval, stoppingToken).ConfigureAwait(false);
+                    await SweepOnceAsync(stoppingToken).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
                     return;
                 }
-
-                var removed = _session.Pool.SweepExpired(_ttl);
-                _clock.Record(removed.Count);
-
-                if (removed.Count == 0) continue;
-
-                await OfflineAsync(removed).ConfigureAwait(false);
-
-                _logger.Warning($"[{_session.Hub}] 清理超租约连接 {removed.Count} 条");
+                catch (Exception ex)
+                {
+                    // 清扫抛出去会把整个宿主停掉。这一轮失败，下一轮再扫。
+                    _logger.Error($"[{_session.Hub}] 连接清扫失败", ex);
+                }
             }
         }
 
-        private async Task OfflineAsync(List<KinnaConnectionInfo> removed)
+        /// <summary>扫一轮：摘表、扣在线态、软踢。软踢之后客户端重连才会重新 Register。</summary>
+        internal async Task SweepOnceAsync(CancellationToken cancellationToken = default)
+        {
+            var removed = _session.Pool.SweepExpired(_ttl);
+            _clock.Record(removed.Count);
+
+            if (removed.Count == 0) return;
+
+            await DisconnectAsync(removed, cancellationToken).ConfigureAwait(false);
+
+            _logger.Warning($"[{_session.Hub}] 清理超租约连接 {removed.Count} 条");
+        }
+
+        private async Task DisconnectAsync(List<KinnaConnectionInfo> removed, CancellationToken cancellationToken)
         {
             await using var scope = _scopes.CreateAsyncScope();
-
             var presence = scope.ServiceProvider.GetService<IKinnaPresenceSink<THub>>();
-            if (presence == null) return;
 
             foreach (var info in removed)
             {
-                await presence.OfflineAsync(info.SubjectId, info.UserId).ConfigureAwait(false);
+                if (presence != null)
+                {
+                    try
+                    {
+                        await presence.OfflineAsync(info.SubjectId, info.UserId).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        _logger.Error($"[{_session.Hub}] 连接 {info.ConnectionId} 扣在线态失败", ex);
+                    }
+                }
+
+                try
+                {
+                    await _session.Sender
+                        .SendToConnectionAsync(info.ConnectionId, KinnaClientMethods.ForceDisconnect, [], cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.Error($"[{_session.Hub}] 连接 {info.ConnectionId} 软踢失败", ex);
+                }
             }
         }
     }

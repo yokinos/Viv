@@ -368,6 +368,20 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
+        public async Task KickAsync_摘表的同时扣在线态()
+        {
+            var pool = new KinnaConnectionPool();
+            var presence = new StubKinnaPresenceSink<TestHub>();
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), presence: presence);
+            await coordinator.RegisterAsync("c1", Identity());
+
+            await coordinator.KickAsync("c1");
+
+            Assert.Equal((SubjectId, UserId), Assert.Single(presence.OfflineUsers));
+            Assert.Empty(pool.GetConnectionIds(SubjectId, UserId));
+        }
+
+        [Fact]
         public async Task KickUserAsync_踢掉该用户全部连接()
         {
             var pool = new KinnaConnectionPool();

@@ -20,10 +20,13 @@ namespace Viv.Skirk.Core
         /// <summary>找不到返回 null（Worker 会把它标成 Failed，而不是卡在队列里）</summary>
         public Type? ResolveHandlerType(string taskType, IServiceProvider scope)
         {
-            EnsureBuilt(scope);
+            Build(scope);
 
             return _handlers.TryGetValue(taskType, out var type) ? type : null;
         }
+
+        /// <summary>启动时建表。TaskType 重复在这里抛，不等到第一条任务。</summary>
+        public void Build(IServiceProvider scope) => EnsureBuilt(scope);
 
         private void EnsureBuilt(IServiceProvider scope)
         {

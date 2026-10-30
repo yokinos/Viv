@@ -1,13 +1,26 @@
-﻿using Viv.Delusion.Generic;
+﻿using System.Data;
+using System.Data.Common;
+
+using Dapper;
+
+using Viv.Contracts.Enums;
+using Viv.Contracts.Exceptions;
+using Viv.Delusion.Generic;
 using Viv.Momo;
+using Viv.Momo.Core;
 using Viv.Momo.Dialect;
+using Viv.Momo.Enums;
 
 namespace Viv.Skirk.Core
 {
     /// <summary>
     /// 任务表读写。手写 SQL + Dapper，不经过 EF（模块独立、不参与实体扫描）。
+    ///
+    /// 建表另开一条连接，不并进调用方的业务事务：DDL 跟着业务回滚的话，
+    /// 进程里的「表已建好」标记会指着一张并不存在的表。
+    /// 认领、取消标记、幂等回查打主库，并带上当前事务句柄。
     /// </summary>
-    public sealed class VivAsyncTaskStore
+    public sealed class VivAsyncTaskStore : IVivAsyncTaskStore
     {
         private readonly IMomoDbContext _db;
 
@@ -20,12 +33,29 @@ namespace Viv.Skirk.Core
 
         #region 建表
 
-        /// <summary>建表 + 建索引（幂等）</summary>
+        /// <summary>建表 + 建索引（幂等）。走独立连接，提交与业务事务无关。</summary>
         public async Task EnsureTableAsync(CancellationToken cancellationToken = default)
         {
-            foreach (var sql in VivAsyncTaskSql.CreateTable(Dialect))
+            var template = _db.GetDbConnection(DbReadWriteType.Write);
+            if (template is not DbConnection db || string.IsNullOrWhiteSpace(db.ConnectionString))
             {
-                await _db.ExecuteSqlAsync(sql, null, cancellationToken).ConfigureAwait(false);
+                throw new InvalidOperationException("写库连接未就绪，无法在事务外建表");
+            }
+
+            var created = Activator.CreateInstance(db.GetType(), db.ConnectionString);
+            if (created is not DbConnection owned)
+            {
+                throw new InvalidOperationException($"无法为 {db.GetType().FullName} 另开一条连接来建表");
+            }
+
+            await using (owned)
+            {
+                await owned.OpenAsync(cancellationToken).ConfigureAwait(false);
+                foreach (var sql in VivAsyncTaskSql.CreateTable(Dialect))
+                {
+                    await owned.ExecuteAsync(new CommandDefinition(sql, cancellationToken: cancellationToken))
+                        .ConfigureAwait(false);
+                }
             }
         }
 
@@ -38,8 +68,10 @@ namespace Viv.Skirk.Core
                 VivAsyncTaskSql.SelectById(Dialect), new { Id = id }, cancellationToken);
 
         public Task<long?> FindIdByIdempotencyKeyAsync(string idempotencyKey, CancellationToken cancellationToken = default)
-            => _db.FindScalarAsync<long?>(
-                VivAsyncTaskSql.SelectByIdempotencyKey(Dialect), new { IdempotencyKey = idempotencyKey }, cancellationToken);
+            => QuerySingleOnWriteAsync<long?>(
+                VivAsyncTaskSql.SelectByIdempotencyKey(Dialect),
+                new { IdempotencyKey = idempotencyKey },
+                cancellationToken);
 
         public Task<bool> InsertAsync(VivAsyncTask task, CancellationToken cancellationToken = default)
             => _db.ExecuteSqlAsync(VivAsyncTaskSql.Insert(Dialect), task, cancellationToken);
@@ -84,6 +116,7 @@ namespace Viv.Skirk.Core
                 new
                 {
                     Id = id,
+                    CancelRequested = true,
                     Pending = (int)VivAsyncTaskStatus.Pending,
                     Running = (int)VivAsyncTaskStatus.Running,
                 },
@@ -94,24 +127,42 @@ namespace Viv.Skirk.Core
         #region Worker
 
         /// <summary>原子认领最多 <paramref name="batchSize"/> 条任务</summary>
-        public Task<List<VivAsyncTask>> ClaimBatchAsync(
+        public async Task<List<VivAsyncTask>> ClaimBatchAsync(
             int batchSize,
             string leaseOwner,
             DateTime now,
             DateTime leaseUntil,
             CancellationToken cancellationToken = default)
-            => _db.FindListAsync<VivAsyncTask>(
-                VivAsyncTaskSql.ClaimBatch(Dialect),
-                new
-                {
-                    BatchSize = Math.Max(1, batchSize),
-                    LeaseOwner = leaseOwner,
-                    Now = now,
-                    LeaseUntil = leaseUntil,
-                    Pending = (int)VivAsyncTaskStatus.Pending,
-                    Running = (int)VivAsyncTaskStatus.Running,
-                },
-                cancellationToken);
+        {
+            try
+            {
+                var rows = await QueryOnWriteAsync<VivAsyncTask>(
+                    VivAsyncTaskSql.ClaimBatch(Dialect),
+                    new
+                    {
+                        BatchSize = Math.Max(1, batchSize),
+                        LeaseOwner = leaseOwner,
+                        Now = now,
+                        LeaseUntil = leaseUntil,
+                        Pending = (int)VivAsyncTaskStatus.Pending,
+                        Running = (int)VivAsyncTaskStatus.Running,
+                    },
+                    cancellationToken).ConfigureAwait(false);
+
+                return rows.AsList();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                var connType = Dialect.Source == DatabaseSourceType.PostgreSQL
+                    ? VivConnType.PostgreSQL
+                    : VivConnType.SqlServer;
+                throw new VivConnectionException(connType, "Skirk ClaimBatch", ex);
+            }
+        }
 
         /// <summary>续租：返回 false 说明租约已被别人拿走（本副本应放弃该任务）</summary>
         public async Task<bool> RenewLeaseAsync(long id, string leaseOwner, DateTime leaseUntil, CancellationToken cancellationToken = default)
@@ -120,11 +171,19 @@ namespace Viv.Skirk.Core
                 new { Id = id, LeaseOwner = leaseOwner, LeaseUntil = leaseUntil },
                 cancellationToken).ConfigureAwait(false);
 
-        /// <summary>回收过期租约（执行方崩溃后任务回到待执行）</summary>
-        public Task<bool> ReleaseExpiredLeasesAsync(DateTime now, CancellationToken cancellationToken = default)
+        /// <summary>回收过期租约。还没到重试上限的回到待执行，已经用尽的标成失败。</summary>
+        public Task<bool> ReleaseExpiredLeasesAsync(DateTime now, DateTime expireAt, CancellationToken cancellationToken = default)
             => _db.ExecuteSqlAsync(
                 VivAsyncTaskSql.ReleaseExpiredLeases(Dialect),
-                new { Now = now, Pending = (int)VivAsyncTaskStatus.Pending, Running = (int)VivAsyncTaskStatus.Running },
+                new
+                {
+                    Now = now,
+                    ExpireAt = expireAt,
+                    Pending = (int)VivAsyncTaskStatus.Pending,
+                    Running = (int)VivAsyncTaskStatus.Running,
+                    Failed = (int)VivAsyncTaskStatus.Failed,
+                    ErrorMessage = "执行方崩溃且已达到重试上限",
+                },
                 cancellationToken);
 
         public Task<bool> CompleteAsync(
@@ -185,7 +244,26 @@ namespace Viv.Skirk.Core
                 cancellationToken);
 
         public Task<bool?> IsCancelRequestedAsync(long id, CancellationToken cancellationToken = default)
-            => _db.FindScalarAsync<bool?>(VivAsyncTaskSql.IsCancelRequested(Dialect), new { Id = id }, cancellationToken);
+            => QuerySingleOnWriteAsync<bool?>(VivAsyncTaskSql.IsCancelRequested(Dialect), new { Id = id }, cancellationToken);
+
+        /// <summary>主库上的查询。带上当前事务，避免打到从库，也避免事务内命令被拒绝。</summary>
+        private async Task<T?> QuerySingleOnWriteAsync<T>(string sql, object parameters, CancellationToken cancellationToken)
+        {
+            var connection = _db.GetDbConnection(DbReadWriteType.Write);
+            return await connection.QuerySingleOrDefaultAsync<T>(
+                new CommandDefinition(sql, parameters, AmbientTransaction, cancellationToken: cancellationToken))
+                .ConfigureAwait(false);
+        }
+
+        private async Task<IEnumerable<T>> QueryOnWriteAsync<T>(string sql, object parameters, CancellationToken cancellationToken)
+        {
+            var connection = _db.GetDbConnection(DbReadWriteType.Write);
+            return await connection.QueryAsync<T>(
+                new CommandDefinition(sql, parameters, AmbientTransaction, cancellationToken: cancellationToken))
+                .ConfigureAwait(false);
+        }
+
+        private IDbTransaction? AmbientTransaction => (_db as MomoDatabase)?.AmbientTransaction;
 
         /// <summary>清理保留期已过的终态任务</summary>
         public Task<bool> CleanupAsync(int batchSize, DateTime now, CancellationToken cancellationToken = default)

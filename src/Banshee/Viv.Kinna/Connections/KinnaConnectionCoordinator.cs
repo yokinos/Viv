@@ -177,7 +177,14 @@ namespace Viv.Kinna.Connections
 
         public async Task KickAsync(string connectionId, CancellationToken cancellationToken = default)
         {
-            _session.Pool.Remove(connectionId);
+            // 和清扫同一条路：先摘表再扣在线态，最后软踢。
+            // OnDisconnected 随后 Unregister 时表里已经没有这条，不会再扣一次。
+            var info = _session.Pool.Remove(connectionId);
+            if (info != null)
+            {
+                await _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId).ConfigureAwait(false);
+            }
+
             await _session.Sender
                 .SendToConnectionAsync(connectionId, KinnaClientMethods.ForceDisconnect, [], cancellationToken)
                 .ConfigureAwait(false);

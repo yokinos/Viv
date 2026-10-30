@@ -146,5 +146,16 @@ namespace Viv.Kinna.Tests
             Assert.Empty(pool.GetConnections(1));
             Assert.Empty(pool.GetConnectionIds(1, 2));
         }
+
+        [Fact]
+        public void Remove最后一条后再登记_新连接仍能被查到()
+        {
+            var pool = new KinnaConnectionPool();
+            pool.Add("c1", appId: 3, subjectId: 1, userId: 2);
+            pool.Remove("c1");
+            pool.Add("c2", appId: 3, subjectId: 1, userId: 2);
+
+            Assert.Equal(new[] { "c2" }, pool.GetConnectionIds(1, 2));
+        }
     }
 }
