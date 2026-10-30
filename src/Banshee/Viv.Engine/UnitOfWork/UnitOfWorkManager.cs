@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Viv.Contracts.Exceptions;
 using Viv.Contracts.Interface;
 using Viv.Log;
 
@@ -13,8 +14,8 @@ namespace Viv.Engine.UnitOfWork
     /// 被解析到根作用域的话并发请求会共用一个状态机。
     ///
     /// 嵌套：只有最外层真正开事务，内层直接并入外层执行（不重开、不单独提交、不重试）。
-    /// 没有保存点，内层失败会拖垮整笔 —— 与旧实现一致，只是「内层没提交」不再是错误，
-    /// 因为委托式写法里没有「忘记提交」这种状态了。
+    /// 没有保存点。内层抛异常，或内层 <c>commitWhen</c> 返回 false，都会把整笔打成只能回滚：
+    /// 前者原样上抛，后者在最外层抛 <see cref="VivUnitOfWorkException"/>，拦截器才能 Discard 本地事件。
     ///
     /// 不用锁 —— 一个作用域内的事务不该被多个线程同时驱动。
     /// </summary>
@@ -26,6 +27,9 @@ namespace Viv.Engine.UnitOfWork
         /// 当前未结束的事务层数。0 = 没有进行中的事务
         /// </summary>
         private int _depth;
+
+        /// <summary>内层拒绝过提交。最外层看到它就回滚并抛，不能把外层的成功返回值交出去。</summary>
+        private bool _rollbackOnly;
 
         public UnitOfWorkManager(ITransactionKernel kernel, ILoggerContract logger)
         {
@@ -43,15 +47,22 @@ namespace Viv.Engine.UnitOfWork
             // 嵌套：并入外层。提交与否由最外层决定，内层不重试
             if (_depth > 0)
             {
-                return work(cancellationToken);
+                return ExecuteNestedAsync(work, commitWhen, cancellationToken);
             }
 
             return _kernel.ExecuteAsync(async innerToken =>
             {
                 _depth = 1;
+                _rollbackOnly = false;
                 try
                 {
-                    return await work(innerToken).ConfigureAwait(false);
+                    var result = await work(innerToken).ConfigureAwait(false);
+                    if (_rollbackOnly)
+                    {
+                        throw new VivUnitOfWorkException("内层事务已拒绝提交，整笔回滚。");
+                    }
+
+                    return result;
                 }
                 finally
                 {
@@ -59,6 +70,30 @@ namespace Viv.Engine.UnitOfWork
                     _depth = 0;
                 }
             }, commitWhen, cancellationToken);
+        }
+
+        /// <summary>
+        /// 内层把结果交回调用方，拒绝提交只打标记。
+        /// 在这里抛的话，外层方法体看不到内层的失败信封。
+        /// </summary>
+        private async Task<T> ExecuteNestedAsync<T>(
+            Func<CancellationToken, Task<T>> work,
+            Func<T, bool>? commitWhen,
+            CancellationToken cancellationToken)
+        {
+            _depth++;
+            try
+            {
+                var result = await work(cancellationToken).ConfigureAwait(false);
+                if (commitWhen is not null && !commitWhen(result))
+                    _rollbackOnly = true;
+
+                return result;
+            }
+            finally
+            {
+                _depth--;
+            }
         }
 
         public Task ExecuteAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken = default)

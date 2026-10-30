@@ -174,10 +174,18 @@ namespace Viv.Engine.LocalEvents
                 if (_state != LocalEventBusState.Pending)
                     return;
 
-                while (_pending.Count > mark)
-                {
-                    _pending.Dequeue();
-                }
+                // 队列是 FIFO，Dequeue 丢掉的是队头。标记之前的事件在队头，必须留下；
+                // 这次尝试新入队的在队尾，才是要撤的。
+                if (mark >= _pending.Count)
+                    return;
+
+                var kept = new LocalEvent[mark];
+                for (var i = 0; i < mark; i++)
+                    kept[i] = _pending.Dequeue();
+
+                _pending.Clear();
+                foreach (var item in kept)
+                    _pending.Enqueue(item);
             }
         }
 
