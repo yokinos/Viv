@@ -47,6 +47,11 @@ namespace Viv.Apex.Core.IRepository
         /// </summary>
         Task<PagedList<AtClientApp>> GetAppPagedListAsync(IApiPagedRequest request);
 
+        /// <summary>
+        /// 全部未删除的客户端应用。数量小，筛选和分页放在服务里做。
+        /// </summary>
+        Task<List<AtClientApp>> ListAppsAsync();
+
         // ==================== AtClientAppVersion ====================
 
         /// <summary>

@@ -19,6 +19,15 @@ namespace Viv.Apex.Core.Repository
         public Task<List<AtMenu>> GetEnabledByAppAsync(long clientAppId)
             => _dbContext.FindListAsync<AtMenu>(x => x.ClientAppId == clientAppId && x.Status == EmStatus.Enabled);
 
+        public Task<List<AtMenu>> GetByAppAsync(long clientAppId)
+            => _dbContext.FindListAsync<AtMenu>(x => x.ClientAppId == clientAppId);
+
+        public async Task<int> NextBitIndexAsync(long clientAppId)
+        {
+            var menus = await GetByAppAsync(clientAppId);
+            return menus.Count == 0 ? 0 : menus.Max(x => x.BitIndex) + 1;
+        }
+
         public Task<AtMenu?> GetAsync(long id)
             => _dbContext.SingleOrDefaultAsync<AtMenu>(x => x.Id == id);
 

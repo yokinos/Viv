@@ -8,6 +8,12 @@ namespace Viv.Apex.Core.IRepository
         /// <summary>取该应用下启用的菜单节点（软删除由全局过滤器挡掉）</summary>
         Task<List<AtMenu>> GetEnabledByAppAsync(long clientAppId);
 
+        /// <summary>取该应用下全部未删除菜单，含停用。后台维护用</summary>
+        Task<List<AtMenu>> GetByAppAsync(long clientAppId);
+
+        /// <summary>该应用下一个空闲的权限位。没有菜单时从 0 开始</summary>
+        Task<int> NextBitIndexAsync(long clientAppId);
+
         /// <summary>按 Id 取，不存在或已删返回 null</summary>
         Task<AtMenu?> GetAsync(long id);
 

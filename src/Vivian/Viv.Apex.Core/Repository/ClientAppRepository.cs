@@ -118,6 +118,9 @@ namespace Viv.Apex.Core.Repository
             return await _dbContext.PageAsync<AtClientApp>(sql, request.PageIndex, request.PageSize, parameter);
         }
 
+        public Task<List<AtClientApp>> ListAppsAsync()
+            => _dbContext.FindListAsync<AtClientApp>(x => x.Id > 0);
+
         // ==================== AtClientAppVersion ====================
 
         public async Task<bool> AddVersionAsync(AtClientAppVersion version)

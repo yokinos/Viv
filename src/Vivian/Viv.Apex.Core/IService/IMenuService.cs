@@ -1,3 +1,4 @@
+using Viv.Apex.Core.Entity.Dto.App;
 using Viv.Apex.Core.Entity.Dto.Menu;
 using Viv.Elysia.Request;
 using Viv.Engine;
@@ -18,5 +19,14 @@ namespace Viv.Apex.Core.IService
 
         /// <summary>软删除菜单及其子页面；有子菜单时拒绝</summary>
         Task<VivApiResult> DeleteAsync(ApiIdRequest request);
+
+        /// <summary>指定应用的菜单维护树（含停用）。只给超级管理员</summary>
+        Task<VivApiResult> GetAdminTreeAsync(AppMenuTreeRequest request);
+
+        /// <summary>给指定应用新增或更新菜单。只给超级管理员</summary>
+        Task<VivApiResult> SaveForAppAsync(SaveAppMenuRequest request);
+
+        /// <summary>删除指定应用下的菜单。只给超级管理员</summary>
+        Task<VivApiResult> DeleteForAppAsync(DeleteAppMenuRequest request);
     }
 }
