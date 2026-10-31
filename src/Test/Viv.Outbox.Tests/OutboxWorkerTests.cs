@@ -275,7 +275,7 @@ public class OutboxWorkerTests
         var repo = new StubOutboxRepository { EnsureTableException = new Exception("表建不出来") };
         var logger = new RecordingLogger();
 
-        // 表都建不出来还继续跑，只会每轮刷一条一模一样的错误，把真正的问题埋掉
+        // 这一次失败。调度层隔一个轮询间隔再试，不在这里空转。
         Assert.False(await Build(repo, new RecordingEventPublisher(), logger).StartupAsync());
 
         Assert.Single(logger.Errors);
@@ -360,7 +360,8 @@ public class OutboxWorkerTests
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            async () => await Build(repo, publisher, new RecordingLogger()).DeliverAsync(repo, publisher, Row(1), cts.Token));
+            async () => await Build(repo, publisher, new RecordingLogger()).DeliverAsync(
+                repo, publisher, Row(1), DateTime.UtcNow, cts.Token));
 
         Assert.Empty(repo.Pending);
         Assert.Empty(repo.Failed);
@@ -396,5 +397,43 @@ public class OutboxWorkerTests
 
         // 投递的是**冻结的信封**：拿投递时刻的 holder 覆盖它，会让消费端的消费锁认错身份
         Assert.Equal("holder-at-publish", envelope.Context!.HolderId);
+    }
+
+    [Fact]
+    public async Task 正文为空_置Failed_不标成已发送()
+    {
+        var repo = new StubOutboxRepository();
+        var publisher = new RecordingEventPublisher();
+        var logger = new RecordingLogger();
+        var row = Row(1);
+        row.Payload = "{}";
+        repo.ClaimScript.Enqueue(new List<OutboxMessage> { row });
+
+        await Build(repo, publisher, logger).RunOnceAsync();
+
+        Assert.Empty(publisher.Envelopes);
+        Assert.Empty(repo.Sent);
+        Assert.Empty(repo.Pending);
+        Assert.Equal("投递内容为空", Assert.Single(repo.Failed).LastError);
+        Assert.Contains(logger.Errors, x => x.Contains("正文为空"));
+    }
+
+    [Fact]
+    public async Task 租约已不属于本轮_不改行()
+    {
+        var repo = new StubOutboxRepository { OwnsLease = false };
+        var publisher = new RecordingEventPublisher();
+        var logger = new RecordingLogger();
+        repo.ClaimScript.Enqueue(new List<OutboxMessage> { Row(1) });
+
+        await Build(repo, publisher, logger).RunOnceAsync();
+
+        Assert.NotEmpty(publisher.Envelopes);
+        Assert.Empty(repo.Sent);
+        Assert.Empty(repo.Pending);
+        Assert.Empty(repo.Failed);
+        Assert.Equal(1, repo.MarkSentCalls);
+        Assert.Equal(repo.LastClaimLeaseUntil, repo.LastMarkLeaseUntil);
+        Assert.Contains(logger.Warnings, x => x.Contains("租约已不在本轮"));
     }
 }

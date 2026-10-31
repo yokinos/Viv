@@ -109,35 +109,37 @@ namespace Viv.Outbox.Core
             }
         }
 
-        public async Task MarkSentAsync(long id, DateTime now, CancellationToken cancellationToken = default)
+        public Task<bool> MarkSentAsync(long id, DateTime now, DateTime leaseUntil, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await _db.ExecuteSqlAsync(OutboxSql.MarkSent, new { Id = id, Now = now }).ConfigureAwait(false);
+            return _db.ExecuteSqlAsync(OutboxSql.MarkSent, new { Id = id, Now = now, LeaseUntil = leaseUntil });
         }
 
-        public async Task MarkPendingAsync(
-            long id, int retryCount, DateTime nextRetryAt, string? lastError, CancellationToken cancellationToken = default)
+        public Task<bool> MarkPendingAsync(
+            long id, int retryCount, DateTime nextRetryAt, DateTime leaseUntil, string? lastError, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await _db.ExecuteSqlAsync(OutboxSql.MarkPending, new
+            return _db.ExecuteSqlAsync(OutboxSql.MarkPending, new
             {
                 Id = id,
                 RetryCount = retryCount,
                 NextRetryAt = nextRetryAt,
+                LeaseUntil = leaseUntil,
                 LastError = Truncate(lastError),
-            }).ConfigureAwait(false);
+            });
         }
 
-        public async Task MarkFailedAsync(
-            long id, int retryCount, string? lastError, CancellationToken cancellationToken = default)
+        public Task<bool> MarkFailedAsync(
+            long id, int retryCount, DateTime leaseUntil, string? lastError, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await _db.ExecuteSqlAsync(OutboxSql.MarkFailed, new
+            return _db.ExecuteSqlAsync(OutboxSql.MarkFailed, new
             {
                 Id = id,
                 RetryCount = retryCount,
+                LeaseUntil = leaseUntil,
                 LastError = Truncate(lastError),
-            }).ConfigureAwait(false);
+            });
         }
 
         public Task<bool> CleanupBatchAsync(DateTime cutoff, int batchSize, CancellationToken cancellationToken = default)

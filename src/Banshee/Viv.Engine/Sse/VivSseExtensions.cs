@@ -1,15 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Text.Json;
-using System.Threading;
 using Microsoft.AspNetCore.Http;
 
-namespace Viv.Elysia.Sse
+namespace Viv.Engine.Sse
 {
     /// <summary>
     /// SSE 写入扩展：把帧信封序列化成 data 帧并立即 flush。
-    /// 控制器只调一次 <see cref="WriteSseStreamAsync"/>，传输细节留在框架里
+    /// 控制器只调一次 <see cref="WriteSseStreamAsync"/>。
     /// </summary>
     public static class VivSseExtensions
     {
@@ -18,7 +14,6 @@ namespace Viv.Elysia.Sse
         /// <summary>
         /// 把响应切换为 SSE 模式（设置 Content-Type、禁用缓存与代理缓冲）
         /// </summary>
-        /// <param name="response">当前响应</param>
         public static void UseVivSse(this HttpResponse response)
         {
             response.ContentType = "text/event-stream; charset=utf-8";
@@ -30,9 +25,6 @@ namespace Viv.Elysia.Sse
         /// <summary>
         /// 写一帧信封并立即 flush
         /// </summary>
-        /// <param name="response">当前响应</param>
-        /// <param name="frame">帧信封</param>
-        /// <param name="cancellationToken">取消令牌</param>
         public static async Task WriteSseFrameAsync(this HttpResponse response, VivSseFrame frame, CancellationToken cancellationToken = default)
         {
             var json = JsonSerializer.Serialize(frame, JsonOptions);
@@ -44,11 +36,6 @@ namespace Viv.Elysia.Sse
         /// 把增量文本流一次写完：每段一个 { delta, seq } 帧，末尾补一个结束帧；
         /// 客户端断开按正常结束处理，异常则写一个错误帧
         /// </summary>
-        /// <param name="response">当前响应</param>
-        /// <param name="deltas">增量文本流</param>
-        /// <param name="traceId">链路追踪标识</param>
-        /// <param name="summaryFactory">结束帧的汇总数据工厂（可为空）</param>
-        /// <param name="cancellationToken">取消令牌</param>
         public static async Task WriteSseStreamAsync(this HttpResponse response,
             IAsyncEnumerable<string> deltas,
             string? traceId = null,

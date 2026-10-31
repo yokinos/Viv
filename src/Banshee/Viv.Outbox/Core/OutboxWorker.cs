@@ -63,8 +63,8 @@ namespace Viv.Outbox.Core
             }
             catch (Exception ex)
             {
-                // 表都建不出来还继续跑，只会每轮刷一条一模一样的错误，把真正的问题埋掉
-                _logger.Error("发件箱投递器启动失败，不再运行 —— 发件箱里的消息会只进不出", ex);
+                // 这一次起不来。调度层隔一个轮询间隔再试，库恢复之后不用重启进程。
+                _logger.Error("发件箱投递器启动失败，稍后重试 —— 这一轮还发不出去", ex);
                 return false;
             }
         }
@@ -97,7 +97,7 @@ namespace Viv.Outbox.Core
 
                 foreach (var message in batch)
                 {
-                    await DeliverAsync(repository, publisher, message, cancellationToken).ConfigureAwait(false);
+                    await DeliverAsync(repository, publisher, message, leaseUntil, cancellationToken).ConfigureAwait(false);
                 }
 
                 delivered += batch.Count;
@@ -126,6 +126,7 @@ namespace Viv.Outbox.Core
             IOutboxRepository repository,
             IVivEventPublisher publisher,
             OutboxMessage message,
+            DateTime leaseUntil,
             CancellationToken cancellationToken = default)
         {
             var sender = _senderFactory.Resolve(message.EventType);
@@ -136,19 +137,38 @@ namespace Viv.Outbox.Core
                 _logger.Error(
                     $"发件箱消息的事件类型解析不出来，置为 Failed：EventType={message.EventType}, " +
                     $"MessageId={message.MessageId}, Id={message.Id}");
-                await repository
-                    .MarkFailedAsync(message.Id, message.RetryCount, $"未知事件类型：{message.EventType}", cancellationToken)
+                await MarkTerminalFailureAsync(
+                    repository, message, leaseUntil, message.RetryCount, $"未知事件类型：{message.EventType}", cancellationToken)
                     .ConfigureAwait(false);
-                OutboxMetrics.RecordFailed();
                 return;
             }
 
             try
             {
                 var started = Stopwatch.GetTimestamp();
-                await sender.SendAsync(publisher, message.Payload, message.MessageId, cancellationToken).ConfigureAwait(false);
-                OutboxMetrics.RecordDelivered((long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-                await repository.MarkSentAsync(message.Id, DateTime.UtcNow, cancellationToken).ConfigureAwait(false);
+                var published = await sender.SendAsync(publisher, message.Payload, message.MessageId, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!published)
+                {
+                    // 正文反序列化成空。重试不会让它长出内容，按未知类型同样直接 Failed。
+                    _logger.Error(
+                        $"发件箱消息正文为空，置为 Failed：EventType={message.EventType}, " +
+                        $"MessageId={message.MessageId}, Id={message.Id}");
+                    await MarkTerminalFailureAsync(
+                        repository, message, leaseUntil, message.RetryCount, "投递内容为空", cancellationToken)
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                var elapsed = (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                if (await repository.MarkSentAsync(message.Id, DateTime.UtcNow, leaseUntil, cancellationToken).ConfigureAwait(false))
+                {
+                    OutboxMetrics.RecordDelivered(elapsed);
+                }
+                else
+                {
+                    LogLeaseLost(message, "标记已发送");
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -157,7 +177,7 @@ namespace Viv.Outbox.Core
             }
             catch (Exception ex)
             {
-                await HandleFailureAsync(repository, message, ex, cancellationToken).ConfigureAwait(false);
+                await HandleFailureAsync(repository, message, leaseUntil, ex, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -166,7 +186,7 @@ namespace Viv.Outbox.Core
         /// 两类在这里的处理本来就是同一个：记 LastError + 退避重投，到上限才置 Failed。
         /// </summary>
         private async Task HandleFailureAsync(
-            IOutboxRepository repository, OutboxMessage message, Exception ex, CancellationToken cancellationToken)
+            IOutboxRepository repository, OutboxMessage message, DateTime leaseUntil, Exception ex, CancellationToken cancellationToken)
         {
             var maxRetryCount = Math.Max(1, _options.MaxRetryCount);
             var retryCount = message.RetryCount + 1;
@@ -177,8 +197,8 @@ namespace Viv.Outbox.Core
                     $"发件箱消息重试 {retryCount} 次仍失败，置为 Failed（等人工介入）：" +
                     $"MessageId={message.MessageId}, Id={message.Id}, EventType={message.EventType}",
                     ex);
-                await repository.MarkFailedAsync(message.Id, retryCount, ex.Message, cancellationToken).ConfigureAwait(false);
-                OutboxMetrics.RecordFailed();
+                await MarkTerminalFailureAsync(repository, message, leaseUntil, retryCount, ex.Message, cancellationToken)
+                    .ConfigureAwait(false);
                 return;
             }
 
@@ -186,9 +206,36 @@ namespace Viv.Outbox.Core
             _logger.Warning(
                 $"发件箱消息投递失败，第 {retryCount}/{maxRetryCount} 次重试将于 {nextRetryAt:yyyy-MM-dd HH:mm:ss} UTC 进行：" +
                 $"MessageId={message.MessageId}, Id={message.Id}, {ex.Message}");
-            await repository
-                .MarkPendingAsync(message.Id, retryCount, nextRetryAt, ex.Message, cancellationToken)
-                .ConfigureAwait(false);
+            if (!await repository
+                .MarkPendingAsync(message.Id, retryCount, nextRetryAt, leaseUntil, ex.Message, cancellationToken)
+                .ConfigureAwait(false))
+            {
+                LogLeaseLost(message, "退回待投");
+            }
+        }
+
+        /// <summary>永久失败。不增加调用方已经算好的次数；租约丢了就不改行，避免盖住后来的认领。</summary>
+        private async Task MarkTerminalFailureAsync(
+            IOutboxRepository repository,
+            OutboxMessage message,
+            DateTime leaseUntil,
+            int retryCount,
+            string? lastError,
+            CancellationToken cancellationToken)
+        {
+            if (await repository.MarkFailedAsync(message.Id, retryCount, leaseUntil, lastError, cancellationToken).ConfigureAwait(false))
+            {
+                OutboxMetrics.RecordFailed();
+                return;
+            }
+
+            LogLeaseLost(message, "置为失败");
+        }
+
+        private void LogLeaseLost(OutboxMessage message, string action)
+        {
+            _logger.Warning(
+                $"发件箱消息租约已不在本轮，跳过{action}：MessageId={message.MessageId}, Id={message.Id}, EventType={message.EventType}");
         }
 
         private async Task CleanupAsync(IOutboxRepository repository, CancellationToken cancellationToken)

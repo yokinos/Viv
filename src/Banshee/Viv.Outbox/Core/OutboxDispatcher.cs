@@ -34,9 +34,26 @@ namespace Viv.Outbox.Core
         {
             var pollDelay = TimeSpan.FromSeconds(Math.Max(1, _options.PollIntervalSeconds));
 
-            if (!await _worker.StartupAsync(stoppingToken).ConfigureAwait(false))
+            while (!stoppingToken.IsCancellationRequested)
             {
-                return;
+                if (await _worker.StartupAsync(stoppingToken).ConfigureAwait(false))
+                {
+                    break;
+                }
+
+                if (stoppingToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await Task.Delay(pollDelay, stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
             }
 
             while (!stoppingToken.IsCancellationRequested)

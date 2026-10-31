@@ -130,4 +130,28 @@ public class OutboxDispatcherTests
             await provider.DisposeAsync();
         }
     }
+
+    [Fact]
+    public async Task 启动建表失败_隔一轮再试_成功后继续投递()
+    {
+        var repo = new StubOutboxRepository { EnsureTableFailTimes = 1 };
+        var logger = new RecordingLogger();
+        var (dispatcher, provider) = Build(repo, new RecordingEventPublisher(), logger);
+
+        try
+        {
+            await dispatcher.StartAsync(CancellationToken.None);
+
+            Assert.True(
+                await WaitForAsync(() => repo.EnsureTableCalls >= 2 && repo.ReleaseExpiredCalls >= 1, TimeSpan.FromSeconds(10)),
+                "建表失败之后投递器没有再试");
+        }
+        finally
+        {
+            await dispatcher.StopAsync(CancellationToken.None);
+            await provider.DisposeAsync();
+        }
+
+        Assert.Contains(logger.Errors, x => x.Contains("稍后重试"));
+    }
 }

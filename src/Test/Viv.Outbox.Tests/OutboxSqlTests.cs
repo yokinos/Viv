@@ -87,6 +87,16 @@ public class OutboxSqlTests
     }
 
     [Fact]
+    public void 状态回写_只改仍持有这次租约的Processing行()
+    {
+        foreach (var sql in new[] { OutboxSql.MarkSent, OutboxSql.MarkPending, OutboxSql.MarkFailed })
+        {
+            Assert.Contains("Status = 1", sql);
+            Assert.Contains("LeaseUntil = @LeaseUntil", sql);
+        }
+    }
+
+    [Fact]
     public void 释放过期租约_只碰Processing且只碰已过期的()
     {
         var sql = OutboxSql.ReleaseExpiredLeases;
@@ -102,9 +112,21 @@ public class OutboxSqlTests
     {
         var sql = OutboxSql.ClaimBatch(source);
 
-        // 单条 UPDATE 把「判给谁」和「占住」做成一件事 —— 先 SELECT 再 UPDATE 会留一个窗口，
-        // 两个实例各投一遍同一条消息（而且它编译通过、测试也通过）
-        Assert.StartsWith("UPDATE VivOutboxMessage", sql, StringComparison.OrdinalIgnoreCase);
+        // 一条语句里完成「占住 + 改状态」。拆成先查再改的两次往返，两个实例会各投一遍。
+        // PostgreSQL 的 FOR UPDATE 也含 UPDATE 这个词，不能算成第二次更新。
+        var updates = Regex.Count(sql, @"\bUPDATE\b", RegexOptions.IgnoreCase)
+                      - Regex.Count(sql, @"\bFOR\s+UPDATE\b", RegexOptions.IgnoreCase);
+        Assert.Equal(1, updates);
+        if (source == DatabaseSourceType.PostgreSQL)
+        {
+            Assert.StartsWith("UPDATE VivOutboxMessage", sql, StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            Assert.Contains("UPDLOCK", sql);
+            Assert.Contains("ROWLOCK", sql);
+            Assert.Contains("WHERE target.Status = 0", sql);
+        }
 
         // 认领的同时就盖上租约，否则崩溃后这批行永远卡在 Processing
         Assert.Contains("LeaseUntil = @LeaseUntil", sql);
@@ -117,7 +139,8 @@ public class OutboxSqlTests
         var sqlServer = OutboxSql.ClaimBatch(DatabaseSourceType.SqlServer);
         var postgreSql = OutboxSql.ClaimBatch(DatabaseSourceType.PostgreSQL);
 
-        Assert.Contains("WITH (READPAST)", sqlServer);
+        Assert.Contains("READPAST", sqlServer);
+        Assert.Contains("UPDLOCK", sqlServer);
         Assert.DoesNotContain("SKIP LOCKED", sqlServer);
 
         Assert.Contains("FOR UPDATE SKIP LOCKED", postgreSql);

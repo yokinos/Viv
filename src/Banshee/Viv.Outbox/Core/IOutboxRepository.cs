@@ -26,19 +26,20 @@ namespace Viv.Outbox.Core
         Task<List<OutboxMessage>> ClaimBatchAsync(int batchSize, DateTime now, DateTime leaseUntil, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 投递成功。
+        /// 投递成功。只改 <paramref name="leaseUntil"/> 仍是这次认领的那一行。
+        /// <returns>false = 影响 0 行，租约已经不属于这次认领。</returns>
         /// </summary>
-        Task MarkSentAsync(long id, DateTime now, CancellationToken cancellationToken = default);
+        Task<bool> MarkSentAsync(long id, DateTime now, DateTime leaseUntil, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 投递失败但还要重试：退回 Pending 并推后 <c>NextRetryAt</c>。
+        /// 投递失败但还要重试：退回 Pending 并推后 <c>NextRetryAt</c>。租约条件同 <see cref="MarkSentAsync"/>。
         /// </summary>
-        Task MarkPendingAsync(long id, int retryCount, DateTime nextRetryAt, string? lastError, CancellationToken cancellationToken = default);
+        Task<bool> MarkPendingAsync(long id, int retryCount, DateTime nextRetryAt, DateTime leaseUntil, string? lastError, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 重试耗尽，置为 Failed 等人工介入。
+        /// 重试耗尽，置为 Failed 等人工介入。租约条件同 <see cref="MarkSentAsync"/>。
         /// </summary>
-        Task MarkFailedAsync(long id, int retryCount, string? lastError, CancellationToken cancellationToken = default);
+        Task<bool> MarkFailedAsync(long id, int retryCount, DateTime leaseUntil, string? lastError, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 删一批已发送且超保留期的行。

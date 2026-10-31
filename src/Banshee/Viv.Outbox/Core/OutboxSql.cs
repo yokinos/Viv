@@ -51,28 +51,31 @@ namespace Viv.Outbox.Core
             WHERE Status = 1 AND LeaseUntil IS NOT NULL AND LeaseUntil <= @Now
             """;
 
-        /// <summary>投递成功。</summary>
+        /// <summary>
+        /// 投递成功。只改自己认领的那一行：Status 仍是 Processing，且租约还是这次写下的值。
+        /// 租约过期被别人收回之后，这里影响 0 行，不能把别人的结果盖掉。
+        /// </summary>
         internal const string MarkSent =
             """
             UPDATE VivOutboxMessage
             SET Status = 2, SentAt = @Now, LeaseUntil = NULL, LastError = NULL
-            WHERE Id = @Id
+            WHERE Id = @Id AND Status = 1 AND LeaseUntil = @LeaseUntil
             """;
 
-        /// <summary>投递失败但要重试：退回 Pending 并把下次可投时刻推后（退避）。</summary>
+        /// <summary>投递失败但要重试：退回 Pending 并把下次可投时刻推后（退避）。租约条件同 <see cref="MarkSent"/>。</summary>
         internal const string MarkPending =
             """
             UPDATE VivOutboxMessage
             SET Status = 0, RetryCount = @RetryCount, NextRetryAt = @NextRetryAt, LeaseUntil = NULL, LastError = @LastError
-            WHERE Id = @Id
+            WHERE Id = @Id AND Status = 1 AND LeaseUntil = @LeaseUntil
             """;
 
-        /// <summary>重试耗尽，等人工介入（绝不静默丢）。</summary>
+        /// <summary>重试耗尽，等人工介入（绝不静默丢）。租约条件同 <see cref="MarkSent"/>。</summary>
         internal const string MarkFailed =
             """
             UPDATE VivOutboxMessage
             SET Status = 3, RetryCount = @RetryCount, LeaseUntil = NULL, LastError = @LastError
-            WHERE Id = @Id
+            WHERE Id = @Id AND Status = 1 AND LeaseUntil = @LeaseUntil
             """;
 
         /// <summary>
@@ -102,11 +105,17 @@ namespace Viv.Outbox.Core
                           TraceId AS "TraceId", RequestTraceId AS "RequestTraceId"
                 """,
 
-            // SQL Server 没有 SKIP LOCKED；READPAST 是同一件事的说法 —— 跳过被别人锁住的行，
-            // 既不阻塞也不重复认领。
+            // SQL Server 没有 SKIP LOCKED。READPAST 只跳过已被锁住的行，两个会话仍会读到同一批未锁的 Id。
+            // UPDLOCK 在读的时候就把这批行占住，ROWLOCK 让 READPAST 按行生效；随后的 UPDATE 是同一条语句。
             _ =>
                 """
-                UPDATE VivOutboxMessage WITH (READPAST)
+                WITH Claim AS (
+                    SELECT TOP (@BatchSize) Id
+                    FROM VivOutboxMessage WITH (UPDLOCK, READPAST, ROWLOCK)
+                    WHERE Status = 0 AND NextRetryAt <= @Now
+                    ORDER BY NextRetryAt, Id
+                )
+                UPDATE target
                 SET Status = 1, LeaseUntil = @LeaseUntil
                 OUTPUT inserted.Id AS Id, inserted.MessageId AS MessageId,
                        inserted.EventType AS EventType, inserted.Payload AS Payload,
@@ -115,11 +124,9 @@ namespace Viv.Outbox.Core
                        inserted.OccurredAt AS OccurredAt, inserted.SentAt AS SentAt,
                        inserted.LastError AS LastError,
                        inserted.TraceId AS TraceId, inserted.RequestTraceId AS RequestTraceId
-                WHERE Id IN (
-                    SELECT TOP (@BatchSize) Id FROM VivOutboxMessage WITH (READPAST)
-                    WHERE Status = 0 AND NextRetryAt <= @Now
-                    ORDER BY NextRetryAt, Id
-                )
+                FROM VivOutboxMessage AS target
+                INNER JOIN Claim ON target.Id = Claim.Id
+                WHERE target.Status = 0
                 """,
         };
 

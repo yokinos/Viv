@@ -44,6 +44,16 @@ internal class StubOutboxRepository : IOutboxRepository
 
     public Exception? EnsureTableException { get; set; }
 
+    /// <summary>前几次建表抛异常，用完后恢复成功。给调度层的重试测。</summary>
+    public int EnsureTableFailTimes { get; set; }
+
+    /// <summary>false = 状态回写影响 0 行，模拟租约已经不属于这次认领。</summary>
+    public bool OwnsLease { get; set; } = true;
+
+    public int MarkSentCalls { get; private set; }
+
+    public DateTime? LastMarkLeaseUntil { get; private set; }
+
     public bool InsertResult { get; set; } = true;
 
     /// <summary>清理是否「删掉了东西」。true 会让 worker 一直删到上限，测试要的就是这个边界。</summary>
@@ -53,6 +63,12 @@ internal class StubOutboxRepository : IOutboxRepository
     {
         EnsureTableCalls++;
         if (EnsureTableException is not null) throw EnsureTableException;
+        if (EnsureTableFailTimes > 0)
+        {
+            EnsureTableFailTimes--;
+            throw new InvalidOperationException("表建不出来");
+        }
+
         return Task.CompletedTask;
     }
 
@@ -81,23 +97,34 @@ internal class StubOutboxRepository : IOutboxRepository
         return Task.FromResult(ClaimScript.Count > 0 ? ClaimScript.Dequeue() : new List<OutboxMessage>());
     }
 
-    public Task MarkSentAsync(long id, DateTime now, CancellationToken cancellationToken = default)
+    public Task<bool> MarkSentAsync(long id, DateTime now, DateTime leaseUntil, CancellationToken cancellationToken = default)
     {
+        MarkSentCalls++;
+        LastMarkLeaseUntil = leaseUntil;
+        if (!OwnsLease) return Task.FromResult(false);
+
         Sent.Add((id, now));
-        return Task.CompletedTask;
+        return Task.FromResult(true);
     }
 
-    public Task MarkPendingAsync(
-        long id, int retryCount, DateTime nextRetryAt, string? lastError, CancellationToken cancellationToken = default)
+    public Task<bool> MarkPendingAsync(
+        long id, int retryCount, DateTime nextRetryAt, DateTime leaseUntil, string? lastError, CancellationToken cancellationToken = default)
     {
+        LastMarkLeaseUntil = leaseUntil;
+        if (!OwnsLease) return Task.FromResult(false);
+
         Pending.Add((id, retryCount, nextRetryAt, lastError));
-        return Task.CompletedTask;
+        return Task.FromResult(true);
     }
 
-    public Task MarkFailedAsync(long id, int retryCount, string? lastError, CancellationToken cancellationToken = default)
+    public Task<bool> MarkFailedAsync(
+        long id, int retryCount, DateTime leaseUntil, string? lastError, CancellationToken cancellationToken = default)
     {
+        LastMarkLeaseUntil = leaseUntil;
+        if (!OwnsLease) return Task.FromResult(false);
+
         Failed.Add((id, retryCount, lastError));
-        return Task.CompletedTask;
+        return Task.FromResult(true);
     }
 
     public Task<bool> CleanupBatchAsync(DateTime cutoff, int batchSize, CancellationToken cancellationToken = default)
