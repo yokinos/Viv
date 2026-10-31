@@ -32,14 +32,19 @@ namespace Viv.Apex.Core.Repository
 
         public async Task<bool> UpdateAppAsync(AtClientApp app)
         {
+            var previous = await _dbContext.SingleOrDefaultAsync<AtClientApp>(x => x.Id == app.Id);
             var flag = await _dbContext.UpdateAsync(app);
             if (flag)
             {
                 await RefreshAsync(app.Id);
                 await RemoveAppKeyMapAsync(app.AppKey);
+                if (!string.Equals(previous?.AppKey, app.AppKey, StringComparison.Ordinal))
+                    await RemoveAppKeyMapAsync(previous?.AppKey);
             }
             return flag;
         }
+
+        public Task ForgetAppKeyAsync(string? appKey) => RemoveAppKeyMapAsync(appKey);
 
         public async Task<bool> DeleteAppAsync(long appId)
         {
@@ -101,6 +106,7 @@ namespace Viv.Apex.Core.Repository
 
         private async Task RemoveAppKeyMapAsync(string? appKey)
         {
+            if (string.IsNullOrWhiteSpace(appKey)) return;
             await _redisService.RemoveAsync(GetAppKeyMapKey(appKey));
         }
 

@@ -21,6 +21,9 @@ namespace Viv.Apex.Core.IRepository
         /// </summary>
         Task<bool> UpdateAppAsync(AtClientApp app);
 
+        /// <summary>丢掉 AppKey → 主键的缓存。改 Key 时旧 Key 还要单独清一次。</summary>
+        Task ForgetAppKeyAsync(string? appKey);
+
         /// <summary>
         /// 物理删除客户端应用
         /// </summary>

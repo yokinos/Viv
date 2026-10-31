@@ -1,5 +1,8 @@
+using Viv.Apex.Core.Entity.Vo.App;
 using Viv.Apex.Core.IRepository;
 using Viv.Contracts.Interface;
+using Viv.Delusion.Generic;
+using Viv.Elysia.Interface;
 using Viv.Entity.Database.Apex;
 using Viv.Entity.Enums;
 using Viv.Log;
@@ -21,6 +24,12 @@ namespace Viv.Apex.Core.Repository
 
         public Task<List<AtMenu>> GetByAppAsync(long clientAppId)
             => _dbContext.FindListAsync<AtMenu>(x => x.ClientAppId == clientAppId);
+
+        public Task<PagedList<AppMenuRow>> GetPagedAsync(IApiPagedRequest request)
+        {
+            var (sql, parameters) = request.GetSqlQuery();
+            return _dbContext.PageAsync<AppMenuRow>(sql, request.PageIndex, request.PageSize, parameters);
+        }
 
         public async Task<int> NextBitIndexAsync(long clientAppId)
         {

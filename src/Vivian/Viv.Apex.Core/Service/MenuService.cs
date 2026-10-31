@@ -1,13 +1,13 @@
 using Autofac.Features.Indexed;
 using Viv.Apex.Core.Entity.Dto.App;
 using Viv.Apex.Core.Entity.Dto.Menu;
+using Viv.Apex.Core.Entity.Vo.App;
 using Viv.Apex.Core.Entity.Vo.Menu;
 using Viv.Apex.Core.IRepository;
 using Viv.Apex.Core.IService;
 using Viv.Apex.Core.Module.Access;
 using Viv.Apex.Core.Module.Menu;
 using Viv.Contracts.Interface;
-using Viv.Elysia.Request;
 using Viv.Engine;
 using Viv.Entity.Database.Apex;
 using Viv.Entity.Enums;
@@ -25,16 +25,18 @@ namespace Viv.Apex.Core.Service
         private readonly IClientAppRepository _clientApps;
         private readonly IMenuRepository _menus;
         private readonly IMenuSubPageRepository _subPages;
+        private readonly IMenuActionRepository _actions;
         private readonly IIndex<EmClientStack, IMenuRouteAdapter> _adapters;
 
         public MenuService(IVivContext context, IUserRepository users, IClientAppRepository clientApps, IMenuRepository menus,
-            IMenuSubPageRepository subPages, IIndex<EmClientStack, IMenuRouteAdapter> adapters)
+            IMenuSubPageRepository subPages, IMenuActionRepository actions, IIndex<EmClientStack, IMenuRouteAdapter> adapters)
         {
             _context = context;
             _users = users;
             _clientApps = clientApps;
             _menus = menus;
             _subPages = subPages;
+            _actions = actions;
             _adapters = adapters;
         }
 
@@ -51,14 +53,6 @@ namespace Viv.Apex.Core.Service
             return VivApiResult<object>.Success(resolved.Adapter!.BuildTree(menus, pages));
         }
 
-        public async Task<VivApiResult> SaveAsync(SaveMenuRequest request)
-        {
-            var resolved = await ResolveAsync();
-            if (resolved.Error is not null) return resolved.Error;
-
-            return await SaveCoreAsync(resolved.AppId, resolved.Adapter!, request);
-        }
-
         public async Task<VivApiResult> GetAdminTreeAsync(AppMenuTreeRequest request)
         {
             var denied = await SuperAdminGate.DenyAsync(_context, _users);
@@ -68,13 +62,63 @@ namespace Viv.Apex.Core.Service
             if (app.Error is not null) return app.Error;
 
             var menus = await _menus.GetByAppAsync(app.App!.Id);
+            var menuIds = menus.Select(x => x.Id).ToList();
+            var pages = menus.Count == 0
+                ? []
+                : await _subPages.ListByMenuIdsAsync(menuIds);
+            var actions = menus.Count == 0
+                ? []
+                : await _actions.ListByMenuIdsAsync(menuIds);
             return VivApiResult<AppMenuTreeOutput>.Success(new AppMenuTreeOutput
             {
                 ClientAppId = app.App.Id,
                 Name = app.App.Name,
                 AppKey = app.App.AppKey,
                 ClientStack = app.App.ClientStack,
-                Menus = MenuAdminTree.Build(menus)
+                Menus = MenuAdminTree.Build(menus, pages, actions)
+            });
+        }
+
+        public async Task<VivApiResult> GetAdminPageAsync(AppMenuPageRequest request)
+        {
+            var denied = await SuperAdminGate.DenyAsync(_context, _users);
+            if (denied is not null) return denied;
+
+            var app = await RequireAppAsync(request.ClientAppId);
+            if (app.Error is not null) return app.Error;
+
+            var paged = await _menus.GetPagedAsync(request);
+            var items = paged.Items.ToList();
+            var menuIds = items.Select(x => x.Id).ToList();
+            var subPages = menuIds.Count == 0 ? [] : await _subPages.ListByMenuIdsAsync(menuIds);
+            var actions = menuIds.Count == 0 ? [] : await _actions.ListByMenuIdsAsync(menuIds);
+            var subPagesByMenu = subPages.ToLookup(x => x.MenuId);
+            var actionsByMenu = actions.ToLookup(x => x.MenuId);
+
+            foreach (var item in items)
+            {
+                item.SubPages = subPagesByMenu[item.Id]
+                    .OrderBy(x => x.Sort)
+                    .ThenBy(x => x.Id)
+                    .Select(MenuSubPageAdmin.From)
+                    .ToList();
+                item.Actions = actionsByMenu[item.Id]
+                    .OrderBy(x => x.Sort)
+                    .ThenBy(x => x.Id)
+                    .Select(MenuAdminAction.From)
+                    .ToList();
+            }
+
+            return VivApiResult<AppMenuPageOutput>.Success(new AppMenuPageOutput
+            {
+                ClientAppId = app.App.Id,
+                Name = app.App.Name,
+                AppKey = app.App.AppKey,
+                ClientStack = app.App.ClientStack,
+                PageIndex = paged.PageIndex,
+                PageSize = paged.PageSize,
+                TotalCount = paged.TotalCount,
+                Items = items
             });
         }
 
@@ -100,12 +144,153 @@ namespace Viv.Apex.Core.Service
             return await DeleteCoreAsync(app.App!.Id, request.Id);
         }
 
-        public async Task<VivApiResult> DeleteAsync(ApiIdRequest request)
+        public async Task<VivApiResult> SaveActionForAppAsync(SaveAppMenuActionRequest request)
         {
-            var resolved = await ResolveAsync();
-            if (resolved.Error is not null) return resolved.Error;
+            var denied = await SuperAdminGate.DenyAsync(_context, _users);
+            if (denied is not null) return denied;
 
-            return await DeleteCoreAsync(resolved.AppId, request.Id);
+            var app = await RequireAppAsync(request.ClientAppId);
+            if (app.Error is not null) return app.Error;
+
+            var name = request.Name?.Trim();
+            if (string.IsNullOrEmpty(name))
+                return VivApiResult.Failed("动作名称不能为空");
+
+            // 动作只挂在页面菜单上（AtMenuAction.MenuId 外键），目录和子页面都不行
+            var menu = await _menus.GetAsync(request.MenuId);
+            if (menu is null || menu.ClientAppId != app.App!.Id)
+                return VivApiResult.Failed("菜单不存在");
+            if (menu.Type != EmMenuType.Page)
+                return VivApiResult.Failed("只有页面菜单可以维护动作");
+
+            if (request.Id > 0)
+            {
+                var existing = await _actions.GetAsync(request.Id);
+                if (existing is null || existing.MenuId != menu.Id)
+                    return VivApiResult.Failed("动作不存在");
+
+                existing.Name = name;
+                existing.Sort = request.Sort;
+                existing.Remark = request.Remark;
+                existing.Status = request.Status;
+
+                await _actions.UpdateAsync(existing);
+            }
+            else
+            {
+                await _actions.AddAsync(new AtMenuAction
+                {
+                    MenuId = menu.Id,
+                    BitIndex = await _actions.NextBitIndexAsync(menu.Id),
+                    Name = name,
+                    Sort = request.Sort,
+                    Remark = request.Remark,
+                    Status = request.Status
+                });
+            }
+
+            return VivApiResult.Success();
+        }
+
+        public async Task<VivApiResult> DeleteActionForAppAsync(DeleteAppMenuActionRequest request)
+        {
+            var denied = await SuperAdminGate.DenyAsync(_context, _users);
+            if (denied is not null) return denied;
+
+            var app = await RequireAppAsync(request.ClientAppId);
+            if (app.Error is not null) return app.Error;
+
+            var action = await _actions.GetAsync(request.Id);
+            if (action is null)
+                return VivApiResult.Failed("动作不存在");
+
+            // 归属校验：动作 -> 菜单 -> 应用，防止拿别的应用的动作 Id 来删
+            var menu = await _menus.GetAsync(action.MenuId);
+            if (menu is null || menu.ClientAppId != app.App!.Id)
+                return VivApiResult.Failed("动作不存在");
+
+            await _actions.SoftDeleteAsync(action.Id);
+
+            return VivApiResult.Success();
+        }
+
+        public async Task<VivApiResult> SaveSubPageForAppAsync(SaveAppMenuSubPageRequest request)
+        {
+            var denied = await SuperAdminGate.DenyAsync(_context, _users);
+            if (denied is not null) return denied;
+
+            var app = await RequireAppAsync(request.ClientAppId);
+            if (app.Error is not null) return app.Error;
+
+            var title = request.Title?.Trim();
+            if (string.IsNullOrEmpty(title))
+                return VivApiResult.Failed("子页面名称不能为空");
+
+            // 子页面依附页面菜单（AtMenuSubPage.MenuId 外键），目录不能有子页面
+            var menu = await _menus.GetAsync(request.MenuId);
+            if (menu is null || menu.ClientAppId != app.App!.Id)
+                return VivApiResult.Failed("菜单不存在");
+            if (menu.Type != EmMenuType.Page)
+                return VivApiResult.Failed("只有页面菜单可以维护子页面");
+
+            if (!_adapters.TryGetValue(app.App.ClientStack, out var adapter) || adapter is null)
+                return VivApiResult.Failed("该客户端没有对应的菜单适配器");
+            if (!adapter.IsValidConfig(request.RouteConfig))
+                return VivApiResult.Failed("路由配置格式不正确");
+
+            if (request.Id > 0)
+            {
+                var existing = await _subPages.GetAsync(request.Id);
+                if (existing is null || existing.MenuId != menu.Id)
+                    return VivApiResult.Failed("子页面不存在");
+
+                existing.Title = title;
+                existing.Sort = request.Sort;
+                existing.IsVisible = request.IsVisible;
+                existing.RouteConfig = request.RouteConfig;
+                existing.Remark = request.Remark;
+                existing.Status = request.Status;
+
+                await _subPages.UpdateAsync(existing);
+            }
+            else
+            {
+                await _subPages.AddAsync(new AtMenuSubPage
+                {
+                    MenuId = menu.Id,
+                    BitIndex = await _subPages.NextBitIndexAsync(menu.Id),
+                    Title = title,
+                    Sort = request.Sort,
+                    IsVisible = request.IsVisible,
+                    RouteConfig = request.RouteConfig,
+                    Remark = request.Remark,
+                    Status = request.Status
+                });
+            }
+
+            return VivApiResult.Success();
+        }
+
+        public async Task<VivApiResult> DeleteSubPageForAppAsync(DeleteAppMenuSubPageRequest request)
+        {
+            var denied = await SuperAdminGate.DenyAsync(_context, _users);
+            if (denied is not null) return denied;
+
+            var app = await RequireAppAsync(request.ClientAppId);
+            if (app.Error is not null) return app.Error;
+
+            var subPage = await _subPages.GetAsync(request.Id);
+            if (subPage is null)
+                return VivApiResult.Failed("子页面不存在");
+
+            // 归属校验：子页面 -> 菜单 -> 应用
+            var menu = await _menus.GetAsync(subPage.MenuId);
+            if (menu is null || menu.ClientAppId != app.App!.Id)
+                return VivApiResult.Failed("子页面不存在");
+
+            await _subPages.SoftDeleteAsync(subPage.Id);
+
+            return VivApiResult.Success();
         }
 
         private async Task<VivApiResult> SaveCoreAsync(long appId, IMenuRouteAdapter adapter, SaveMenuRequest request)
@@ -188,6 +373,7 @@ namespace Viv.Apex.Core.Service
                 return VivApiResult.Failed("请先删除子菜单");
 
             await _subPages.SoftDeleteByMenuAsync(menuId);
+            await _actions.SoftDeleteByMenuAsync(menuId);
             await _menus.SoftDeleteAsync(menuId);
 
             return VivApiResult.Success();

@@ -14,9 +14,10 @@ namespace Viv.Apex.Core.Entity.Dto.Menu
         /// <summary>父节点Id，0 = 顶级</summary>
         public long ParentId { get; set; }
 
+        /// <summary>菜单名称。</summary>
         [Required]
-        [DisplayName("菜单名称")]
         [StringLength(100)]
+        [DisplayName("菜单名称")]
         public string Title { get; set; } = string.Empty;
 
         /// <summary>目录 / 页面</summary>
@@ -24,6 +25,7 @@ namespace Viv.Apex.Core.Entity.Dto.Menu
 
         /// <summary>图标标识</summary>
         [StringLength(500)]
+        [DisplayName("图标")]
         public string? Icon { get; set; }
 
         /// <summary>排序号，越小越靠前</summary>
@@ -37,6 +39,7 @@ namespace Viv.Apex.Core.Entity.Dto.Menu
 
         /// <summary>备注（仅后台使用）</summary>
         [StringLength(500)]
+        [DisplayName("备注")]
         public string? Description { get; set; }
 
         /// <summary>启用 / 禁用</summary>

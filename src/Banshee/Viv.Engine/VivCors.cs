@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Cors.Infrastructure;
 namespace Viv.Engine
 {
     /// <summary>
-    /// API 与网关共用的 CORS 装配：显式 Origin，禁止 AllowAnyOrigin。
+    /// API 与网关共用的 CORS 装配：生产只认显式 Origin，禁止 AllowAnyOrigin；
+    /// 开发环境未配 Origin 时放行任意来源（回显具体 Origin，才和 AllowCredentials 共存），
+    /// 覆盖局域网 IP / 机器名访问 dev server 的场景。
     /// </summary>
     public static class VivCors
     {
@@ -22,7 +24,9 @@ namespace Viv.Engine
             }
             else if (isDevelopment)
             {
-                policy.SetIsOriginAllowed(IsLoopbackOrigin);
+                // 回显请求的 Origin：浏览器用局域网 IP / 主机名打开 dev server 时，
+                // 它并不是 loopback，只认 IsLoopbackOrigin 会被拦成跨域。
+                policy.SetIsOriginAllowed(static _ => true);
             }
 
             if (allowCredentials)

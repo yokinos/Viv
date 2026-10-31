@@ -11,6 +11,7 @@ using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using Serilog;
+using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -169,6 +170,22 @@ namespace Viv.Engine
             {
                 KeepAliveInterval = webSocketKeepAliveInterval ?? TimeSpan.FromSeconds(15)
             });
+
+            // 开发环境：浏览器用局域网 IP / 主机名打开前端时，调本机网关属于 Private Network Access，
+            // Chrome 的预检会要求显式回 Access-Control-Allow-Private-Network，否则按跨域拦截。
+            var corsIsDev = builder.Environment.IsDevelopment() || VivEngine.VivOptions?.EnvOption?.Env == Viv.Contracts.Enums.VivEnv.Development;
+            if (corsIsDev)
+            {
+                app.Use(async (context, next) =>
+                {
+                    if (string.Equals(context.Request.Headers["Access-Control-Request-Private-Network"], "true", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.Headers["Access-Control-Allow-Private-Network"] = "true";
+                    }
+
+                    await next();
+                });
+            }
 
             app.UseCors(DefaultCorsPolicyName);
             app.UseOutputCache();

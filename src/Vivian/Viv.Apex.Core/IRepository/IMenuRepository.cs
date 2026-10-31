@@ -1,3 +1,6 @@
+using Viv.Apex.Core.Entity.Vo.App;
+using Viv.Delusion.Generic;
+using Viv.Elysia.Interface;
 using Viv.Entity.Database.Apex;
 
 namespace Viv.Apex.Core.IRepository
@@ -10,6 +13,9 @@ namespace Viv.Apex.Core.IRepository
 
         /// <summary>取该应用下全部未删除菜单，含停用。后台维护用</summary>
         Task<List<AtMenu>> GetByAppAsync(long clientAppId);
+
+        /// <summary>后台维护分页。SQL 由 <see cref="IApiPagedRequest.GetSqlQuery"/> 给出，行上带父级名称与下级数量</summary>
+        Task<PagedList<AppMenuRow>> GetPagedAsync(IApiPagedRequest request);
 
         /// <summary>该应用下一个空闲的权限位。没有菜单时从 0 开始</summary>
         Task<int> NextBitIndexAsync(long clientAppId);

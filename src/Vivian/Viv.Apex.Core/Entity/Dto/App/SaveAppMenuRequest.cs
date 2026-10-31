@@ -5,6 +5,7 @@ namespace Viv.Apex.Core.Entity.Dto.App
     /// <summary>给指定应用新增或更新菜单。Id 为 0 是新增。</summary>
     public class SaveAppMenuRequest : SaveMenuRequest
     {
+        /// <summary>菜单所属的客户端应用 Id。</summary>
         public long ClientAppId { get; set; }
     }
 }

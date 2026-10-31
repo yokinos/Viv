@@ -14,14 +14,14 @@ namespace Viv.Elysia.Request
         /// </summary>
         [DisplayName("当前页码")]
         [Range(1, double.MaxValue)]
-        public int PageIndex { get; set; }
+        public int PageIndex { get; set; } = 1;
 
         /// <summary>
         /// 每页条数
         /// </summary>
         [DisplayName("每页条数")]
         [Range(1, 10000)]
-        public int PageSize { get; set; }
+        public int PageSize { get; set; } = 20;
 
         /// <summary>
         /// 获取分页查询sql及请求参数
