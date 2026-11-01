@@ -42,6 +42,19 @@ public class DistributedLockAccessorTests
         Assert.Equal(2, ex.RetryCount);
     }
 
+    [Fact]
+    public async Task AcquireLockWithRetryAsync_RetryCount为零_仍尝试一次()
+    {
+        // maxRetryCount 是「重试次数」：0 = 只尝试一次，不是一次都不试
+        var accessor = new DistributedLockAccessor(ThrowingRedis(), new RecordingLogger());
+
+        var ex = await Assert.ThrowsAsync<DistributedLockException>(
+            () => accessor.AcquireLockWithRetryAsync("lock:k", TimeSpan.FromSeconds(1), maxRetryCount: 0));
+
+        Assert.Equal(0, ex.RetryCount);
+        Assert.IsType<VivConnectionException>(ex.InnerException);
+    }
+
     private static IRedisService ThrowingRedis()
         => TestProxy.Create<IRedisService>(p =>
         {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Viv.Contracts;
@@ -87,7 +87,10 @@ namespace Viv.Engine
             var lockKey = LockKeyMagic.Generate(key);
             var sw = Stopwatch.StartNew();
 
-            for (int attempt = 1; attempt <= maxRetryCount; attempt++)
+            // maxRetryCount 是「重试次数」，首次尝试不算：0 = 只尝试一次
+            var attempts = maxRetryCount < 0 ? 0 : maxRetryCount + 1;
+
+            for (int attempt = 1; attempt <= attempts; attempt++)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
@@ -107,11 +110,11 @@ namespace Viv.Engine
                 catch (VivConnectionException ex)
                 {
                     _logger.Error($"获取锁异常，第 {attempt} 次尝试，Key: {lockKey}", ex);
-                    if (attempt >= maxRetryCount)
+                    if (attempt >= attempts)
                         throw new DistributedLockException(lockKey, maxRetryCount, ex);
                 }
 
-                if (attempt < maxRetryCount)
+                if (attempt < attempts)
                 {
                     var delayMs = CalculateDelay(attempt, baseDelay, maxDelay);
                     _logger.Warning($"获取锁失败，第 {attempt} 次重试，Key: {lockKey}，等待 {delayMs}ms");
@@ -142,7 +145,10 @@ namespace Viv.Engine
             var lockKey = LockKeyMagic.Generate(key);
             var sw = Stopwatch.StartNew();
 
-            for (int attempt = 1; attempt <= maxRetryCount; attempt++)
+            // maxRetryCount 是「重试次数」，首次尝试不算：0 = 只尝试一次
+            var attempts = maxRetryCount < 0 ? 0 : maxRetryCount + 1;
+
+            for (int attempt = 1; attempt <= attempts; attempt++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 try
@@ -177,7 +183,7 @@ namespace Viv.Engine
                         }
                     }
 
-                    if (attempt < maxRetryCount)
+                    if (attempt < attempts)
                     {
                         var delayMs = CalculateDelay(attempt, baseDelay, maxDelay);
                         _logger.Warning($"获取锁失败，第 {attempt} 次重试，Key: {lockKey}，等待 {delayMs}ms");
@@ -190,7 +196,7 @@ namespace Viv.Engine
                 {
                     // 只剩取锁/Redis 本身的异常才重试
                     _logger.Error($"获取锁异常，第 {attempt} 次尝试，Key: {lockKey}", ex);
-                    if (attempt >= maxRetryCount)
+                    if (attempt >= attempts)
                     {
                         // 走到这里业务委托一次都没跑过，所以这段耗时是纯取锁 + 退避
                         RedisMetrics.RecordLockAcquire(sw.ElapsedMilliseconds, false);
