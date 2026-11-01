@@ -132,18 +132,18 @@ namespace Viv.Contracts.Attributes
         /// <summary>重试间隔（毫秒），默认 200；<see cref="RetryCount"/> 为 0 时无意义。</summary>
         public int RetryDelayMilliseconds { get; set; } = 200;
 
-        /// <summary>是否允许同一持有者重入，默认 true。</summary>
-        public bool Reentrant { get; set; } = true;
-
-        /// <summary>取锁失败时返回给客户端的默认提示文案。</summary>
-        public const string DefaultBusyMessage = "请勿重复提交，请稍等";
+        /// <summary>
+        /// 是否允许同一持有者重入，默认 false（不可重入）。
+        /// 打开后同一 holder 重复获取同一把锁会累加计数，需成对释放；跨方法嵌套同一 key 时才需要。
+        /// </summary>
+        public bool Reentrant { get; set; }
 
         /// <summary>
-        /// 取锁失败时返回给客户端的提示文案，默认 <see cref="DefaultBusyMessage"/>。
+        /// 取锁失败时返回给客户端的提示文案。
         /// 只在 fail-closed（<see cref="FailOpen"/> = false）时生效；进程内直接调用时它就是异常 Message。
         /// 这个串会<b>原样返回给客户端</b>，别把内部 key / 表名写进来 —— 排查要用的 LockKey 在异常属性里。
         /// </summary>
-        public string Message { get; set; } = DefaultBusyMessage;
+        public string Message { get; set; } = "请勿重复提交，请稍等";
 
         /// <summary>
         /// 取锁失败（含 Redis 故障）时是否放行方法体，默认 false（失败闭合，抛 <c>DistributedLockException</c>）。

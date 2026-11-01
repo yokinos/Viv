@@ -87,12 +87,12 @@ public class DistributedLockTests
     }
 
     [Fact]
-    public void 默认失败文案()
+    public void 默认失败文案与不可重入()
     {
         var attribute = new VivDistributedLockAttribute("test");
 
         Assert.Equal("请勿重复提交，请稍等", attribute.Message);
-        Assert.Equal(VivDistributedLockAttribute.DefaultBusyMessage, attribute.Message);
+        Assert.False(attribute.Reentrant);
     }
 
     [Fact]
