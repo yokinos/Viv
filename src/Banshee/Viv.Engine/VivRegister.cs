@@ -10,6 +10,7 @@ using Viv.Echo;
 using Viv.Engine.HealthChecks;
 using Viv.Engine.HostedServices;
 using Viv.Engine.LocalEvents;
+using Viv.Engine.Locking;
 using Viv.Engine.Metrics;
 using Viv.Engine.Options;
 using Viv.Engine.UnitOfWork;

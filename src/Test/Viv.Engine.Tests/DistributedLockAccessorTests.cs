@@ -1,5 +1,6 @@
 using Viv.Contracts.Enums;
 using Viv.Contracts.Exceptions;
+using Viv.Engine.Locking;
 using Viv.Fakes;
 using Viv.Redis;
 

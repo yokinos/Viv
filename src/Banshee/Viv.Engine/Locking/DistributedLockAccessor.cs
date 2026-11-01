@@ -8,7 +8,7 @@ using Viv.Delusion.Magic;
 using Viv.Log;
 using Viv.Redis;
 
-namespace Viv.Engine
+namespace Viv.Engine.Locking
 {
     /// <summary>
     /// 分布式锁业务处理者（带指数退避重试）
