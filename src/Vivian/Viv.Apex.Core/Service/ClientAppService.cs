@@ -3,6 +3,7 @@ using Viv.Apex.Core.Entity.Vo.App;
 using Viv.Apex.Core.IRepository;
 using Viv.Apex.Core.IService;
 using Viv.Apex.Core.Module.Access;
+using Viv.Contracts.Attributes;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Generic;
 using Viv.Delusion.Magic;
@@ -26,7 +27,7 @@ namespace Viv.Apex.Core.Service
             _clientAppRepository = clientAppRepository;
         }
 
-        public async Task<VivApiResult> PageAsync(AppPageRequest request)
+        public async Task<VivApiResult> GetPageAsync(AppPageRequest request)
         {
             var denied = await SuperAdminGate.DenyAsync(_context, _userRepository);
             if (denied is not null) return denied;
@@ -55,6 +56,7 @@ namespace Viv.Apex.Core.Service
             return VivApiResult<ClientAppListItem>.Success(ClientAppListItem.From(app));
         }
 
+        //[VivDistributedLock("app")]
         public async Task<VivApiResult> SaveAsync(SaveAppRequest request)
         {
             var denied = await SuperAdminGate.DenyAsync(_context, _userRepository);

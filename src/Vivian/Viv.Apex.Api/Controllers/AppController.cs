@@ -36,7 +36,7 @@ namespace Viv.Apex.Api.Controllers
         [HttpPost("getAppPage")]
         public async Task<IActionResult> GetAppPageAsync(AppPageRequest request)
         {
-            return await _clientAppService.PageAsync(request);
+            return await _clientAppService.GetPageAsync(request);
         }
 
         /// <summary>

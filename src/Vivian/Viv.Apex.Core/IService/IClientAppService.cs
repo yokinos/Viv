@@ -7,7 +7,7 @@ namespace Viv.Apex.Core.IService
     /// <summary>客户端应用的后台查询。列表不含密钥。</summary>
     public interface IClientAppService
     {
-        Task<VivApiResult> PageAsync(AppPageRequest request);
+        Task<VivApiResult> GetPageAsync(AppPageRequest request);
 
         /// <summary>按 Id 取单个应用（不含密钥）。</summary>
         Task<VivApiResult> GetAppAsync(ApiIdRequest request);

@@ -41,7 +41,7 @@ namespace Viv.Apex.Tests
             };
             var service = new ClientAppService(new ContextProbe { UserId = 7 }, new UserProbe(Super()), apps);
 
-            var page = await service.PageAsync(new AppPageRequest { PageIndex = 1, PageSize = 10, Keyword = "app" });
+            var page = await service.GetPageAsync(new AppPageRequest { PageIndex = 1, PageSize = 10, Keyword = "app" });
 
             var data = Assert.IsType<PagedList<ClientAppListItem>>(Assert.IsType<VivApiResult<PagedList<ClientAppListItem>>>(page).Data);
             Assert.Equal(2, data.TotalCount);
