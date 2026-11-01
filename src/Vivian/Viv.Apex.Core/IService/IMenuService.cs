@@ -1,4 +1,5 @@
 using Viv.Apex.Core.Entity.Dto.App;
+using Viv.Elysia.Request;
 using Viv.Engine;
 
 namespace Viv.Apex.Core.IService
@@ -12,11 +13,11 @@ namespace Viv.Apex.Core.IService
         /// </summary>
         Task<VivApiResult> GetRouteTreeAsync();
 
-        /// <summary>指定应用的菜单维护树（含停用）。只给超级管理员</summary>
-        Task<VivApiResult> GetAdminTreeAsync(AppMenuTreeRequest request);
-
         /// <summary>指定应用的菜单分页，行上带子页面与动作。只给超级管理员</summary>
         Task<VivApiResult> GetAdminPageAsync(AppMenuPageRequest request);
+
+        /// <summary>指定应用的上级菜单候选项（只带组树需要的字段）。只给超级管理员</summary>
+        Task<VivApiResult> GetMenuOptionsAsync(ApiIdRequest request);
 
         /// <summary>给指定应用新增或更新菜单。只给超级管理员</summary>
         Task<VivApiResult> SaveForAppAsync(SaveAppMenuRequest request);

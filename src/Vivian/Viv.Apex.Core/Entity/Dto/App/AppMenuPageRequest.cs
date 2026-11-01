@@ -52,7 +52,7 @@ namespace Viv.Apex.Core.Entity.Dto.App
             if (!string.IsNullOrEmpty(keyword))
                 sql.Append(" AND m.Title LIKE @Keyword");
 
-            sql.AppendLine().Append("ORDER BY m.ParentId, m.Sort, m.Id");
+            sql.AppendLine().Append("ORDER BY m.Type, m.ParentId, m.Sort, m.Id");
 
             return (sql.ToString(), new { ClientAppId, Keyword = $"%{keyword}%" });
         }

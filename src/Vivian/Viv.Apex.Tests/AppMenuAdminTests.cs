@@ -28,38 +28,6 @@ namespace Viv.Apex.Tests
         }
 
         [Fact]
-        public void 菜单树包含停用节点_孤儿挂到根上_同级按排序()
-        {
-            var tree = MenuAdminTree.Build(
-            [
-                Menu(3, 1, "停用页", EmStatus.Disabled, sort: 2),
-                Menu(2, 1, "页面", EmStatus.Enabled, sort: 1),
-                Menu(1, 0, "目录", EmStatus.Enabled, sort: 0),
-                Menu(9, 404, "孤儿", EmStatus.Enabled, sort: 5)
-            ]);
-
-            Assert.Equal(["目录", "孤儿"], tree.Select(node => node.Title));
-            var directory = tree[0];
-            Assert.Equal(["页面", "停用页"], directory.Children.Select(node => node.Title));
-            Assert.Equal(EmStatus.Disabled, directory.Children[1].Status);
-        }
-
-        [Fact]
-        public void 子页面挂在所属菜单后面()
-        {
-            var tree = MenuAdminTree.Build(
-                [Menu(1, 0, "页面", EmStatus.Enabled, sort: 0)],
-                [
-                    new AtMenuSubPage { Id = 8, MenuId = 1, Title = "角色", Sort = 2, IsVisible = true, Status = EmStatus.Enabled },
-                    new AtMenuSubPage { Id = 7, MenuId = 1, Title = "菜单管理", Sort = 1, IsVisible = false, Status = EmStatus.Disabled }
-                ]);
-
-            Assert.Equal(["菜单管理", "角色"], tree[0].Children.Select(node => node.Title));
-            Assert.All(tree[0].Children, node => Assert.True(node.IsSubPage));
-            Assert.Equal(EmStatus.Disabled, tree[0].Children[0].Status);
-        }
-
-        [Fact]
         public async Task 分页按名称和AppKey筛选_不带出密钥()
         {
             var apps = new AppProbe
@@ -75,7 +43,7 @@ namespace Viv.Apex.Tests
 
             var page = await service.PageAsync(new AppPageRequest { PageIndex = 1, PageSize = 10, Keyword = "app" });
 
-            var data = Assert.IsType<ClientAppPageOutput>(Assert.IsType<VivApiResult<ClientAppPageOutput>>(page).Data);
+            var data = Assert.IsType<PagedList<ClientAppListItem>>(Assert.IsType<VivApiResult<PagedList<ClientAppListItem>>>(page).Data);
             Assert.Equal(2, data.TotalCount);
             Assert.Equal(["根控制台", "门店端"], data.Items.Select(item => item.Name));
             Assert.Equal(200, page.Code);
@@ -126,14 +94,14 @@ namespace Viv.Apex.Tests
         }
 
         [Fact]
-        public async Task 非超管不能读应用菜单()
+        public async Task 非超管不能读菜单分页()
         {
             var service = MenuServiceOf(new ContextProbe { UserId = 7 }, new UserProbe(new AtUser { Id = 7, Status = EmStatus.Enabled }));
 
-            var result = await service.GetAdminTreeAsync(new AppMenuTreeRequest { ClientAppId = 1 });
+            var result = await service.GetAdminPageAsync(new AppMenuPageRequest { ClientAppId = 1 });
 
             Assert.NotEqual(200, result.Code);
-            Assert.Equal("只有超级管理员可以管理应用", result.Message);
+            Assert.Equal("无权操作", result.Message);
         }
 
         [Fact]
@@ -181,23 +149,6 @@ namespace Viv.Apex.Tests
             Assert.Equal(200, deleted.Code);
             Assert.Equal([2L], pages.DeletedMenuIds);
             Assert.DoesNotContain(menus.Rows, row => row.Id == 2);
-        }
-
-        [Fact]
-        public void 动作挂在页面菜单上_不混进子页面()
-        {
-            var tree = MenuAdminTree.Build(
-                [Menu(1, 0, "页面", EmStatus.Enabled, sort: 0)],
-                [new AtMenuSubPage { Id = 8, MenuId = 1, Title = "子页面", Sort = 1, IsVisible = true, Status = EmStatus.Enabled }],
-                [
-                    new AtMenuAction { Id = 21, MenuId = 1, Name = "删除", Sort = 2, Status = EmStatus.Enabled },
-                    new AtMenuAction { Id = 20, MenuId = 1, Name = "新增", Sort = 1, Status = EmStatus.Disabled }
-                ]);
-
-            Assert.Equal(["新增", "删除"], tree[0].Actions.Select(action => action.Name));
-            Assert.Equal(EmStatus.Disabled, tree[0].Actions[0].Status);
-            // 子页面不是 AtMenu 节点，动作不会挂到它身上
-            Assert.Empty(tree[0].Children.Single(node => node.IsSubPage).Actions);
         }
 
         [Fact]
@@ -283,15 +234,17 @@ namespace Viv.Apex.Tests
 
             var result = await service.GetAdminPageAsync(new AppMenuPageRequest { ClientAppId = 8, PageIndex = 1, PageSize = 10 });
 
-            var data = Assert.IsType<AppMenuPageOutput>(Assert.IsType<VivApiResult<AppMenuPageOutput>>(result).Data);
+            var data = Assert.IsType<PagedList<AppMenuRow>>(Assert.IsType<VivApiResult<PagedList<AppMenuRow>>>(result).Data);
             Assert.Equal(2, data.TotalCount);
-            Assert.Equal(["页面", "另一个"], data.Items.Select(item => item.Title));
-            Assert.Equal("子页", data.Items[0].SubPages.Single().Title);
-            Assert.Equal("删除", data.Items[0].Actions.Single().Name);
-            Assert.Empty(data.Items[1].SubPages);
+            // 先按类型（目录在前），再按 ParentId、排序号
+            var items = data.Items.ToList();
+            Assert.Equal(["另一个", "页面"], items.Select(item => item.Title));
+            Assert.Equal("子页", items[1].SubPages.Single().Title);
+            Assert.Equal("删除", items[1].Actions.Single().Name);
+            Assert.Empty(items[0].SubPages);
 
             var filtered = await service.GetAdminPageAsync(new AppMenuPageRequest { ClientAppId = 8, Keyword = "另一" });
-            var filteredData = Assert.IsType<AppMenuPageOutput>(Assert.IsType<VivApiResult<AppMenuPageOutput>>(filtered).Data);
+            var filteredData = Assert.IsType<PagedList<AppMenuRow>>(Assert.IsType<VivApiResult<PagedList<AppMenuRow>>>(filtered).Data);
             Assert.Equal(1, filteredData.TotalCount);
             Assert.Equal("另一个", filteredData.Items.Single().Title);
         }
@@ -350,15 +303,6 @@ namespace Viv.Apex.Tests
             AppSecret = secret,
             Status = EmStatus.Enabled,
             ClientStack = EmClientStack.Vue
-        };
-
-        private static AtMenu Menu(long id, long parentId, string title, EmStatus status, int sort) => new()
-        {
-            Id = id,
-            ParentId = parentId,
-            Title = title,
-            Status = status,
-            Sort = sort
         };
 
         private static SaveAppMenuRequest Save(long appId, long id, string title) => new()
@@ -510,7 +454,12 @@ namespace Viv.Apex.Tests
                     .GroupBy(row => row.ParentId)
                     .ToDictionary(group => group.Key, group => group.Count());
 
-                var ordered = rows.OrderBy(row => row.ParentId).ThenBy(row => row.Sort).ThenBy(row => row.Id).ToList();
+                var ordered = rows
+                    .OrderBy(row => row.Type)
+                    .ThenBy(row => row.ParentId)
+                    .ThenBy(row => row.Sort)
+                    .ThenBy(row => row.Id)
+                    .ToList();
                 var pageIndex = request.PageIndex < 1 ? 1 : request.PageIndex;
                 var pageSize = request.PageSize < 1 ? 20 : request.PageSize;
                 var items = ordered

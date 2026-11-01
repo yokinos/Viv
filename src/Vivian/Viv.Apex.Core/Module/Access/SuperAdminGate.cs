@@ -17,7 +17,7 @@ namespace Viv.Apex.Core.Module.Access
 
             var user = await users.GetUserAsync(context.UserId);
             if (user is null || user.Status != EmStatus.Enabled || !user.IsSuperAdmin)
-                return VivApiResult.Failed("只有超级管理员可以管理应用");
+                return VivApiResult.Failed("无权操作");
 
             return null;
         }

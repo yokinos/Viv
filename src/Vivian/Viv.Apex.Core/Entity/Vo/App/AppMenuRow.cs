@@ -1,5 +1,6 @@
 using Viv.Apex.Core.Entity.Vo.Menu;
 using Viv.Entity.Enums;
+
 namespace Viv.Apex.Core.Entity.Vo.App
 {
     /// <summary>菜单分页的一行。子页面与动作直接挂在行上，供页面上的「子页面 / 动作」抽屉使用。</summary>
@@ -46,33 +47,5 @@ namespace Viv.Apex.Core.Entity.Vo.App
 
         /// <summary>页面下的动作（目录为空）。</summary>
         public List<MenuAdminAction> Actions { get; set; } = [];
-    }
-
-    /// <summary>菜单分页结果。</summary>
-    public class AppMenuPageOutput
-    {
-        /// <summary>客户端应用 Id。</summary>
-        public long ClientAppId { get; set; }
-
-        /// <summary>应用名称。</summary>
-        public string? Name { get; set; }
-
-        /// <summary>客户端对外标识。</summary>
-        public string? AppKey { get; set; }
-
-        /// <summary>前端技术栈。只有 Vue 才允许在这个页面改菜单。</summary>
-        public EmClientStack ClientStack { get; set; }
-
-        /// <summary>当前页码，从 1 开始。</summary>
-        public int PageIndex { get; set; }
-
-        /// <summary>每页条数。</summary>
-        public int PageSize { get; set; }
-
-        /// <summary>符合条件的总条数。</summary>
-        public long TotalCount { get; set; }
-
-        /// <summary>当前页的菜单行。</summary>
-        public List<AppMenuRow> Items { get; set; } = [];
     }
 }

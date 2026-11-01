@@ -5,6 +5,8 @@ using Viv.Apex.Core.Entity.Dto.App;
 using Viv.Apex.Core.Entity.Vo.App;
 using Viv.Apex.Core.Entity.Vo.Menu;
 using Viv.Apex.Core.IService;
+using Viv.Delusion.Generic;
+using Viv.Elysia.Request;
 
 namespace Viv.Apex.Api.Controllers
 {
@@ -30,9 +32,9 @@ namespace Viv.Apex.Api.Controllers
         /// </summary>
         /// <param name="request"></param>
         /// <returns></returns>
-        [ProducesResponseType(typeof(ClientAppPageOutput), StatusCodes.Status200OK)]
-        [HttpPost("page")]
-        public async Task<IActionResult> PageAsync(AppPageRequest request)
+        [ProducesResponseType(typeof(PagedList<ClientAppListItem>), StatusCodes.Status200OK)]
+        [HttpPost("getAppPage")]
+        public async Task<IActionResult> GetAppPageAsync(AppPageRequest request)
         {
             return await _clientAppService.PageAsync(request);
         }
@@ -43,22 +45,34 @@ namespace Viv.Apex.Api.Controllers
         /// <param name="request"></param>
         /// <returns></returns>
         [ProducesResponseType(typeof(SaveAppOutput), StatusCodes.Status200OK)]
-        [HttpPost("save")]
-        public async Task<IActionResult> SaveAsync(SaveAppRequest request)
+        [HttpPost("saveApp")]
+        public async Task<IActionResult> SaveAppAsync(SaveAppRequest request)
         {
             return await _clientAppService.SaveAsync(request);
         }
 
         /// <summary>
-        /// 指定应用的菜单维护树，含停用节点
+        /// 按 Id 取单个应用（不含密钥）
         /// </summary>
         /// <param name="request"></param>
         /// <returns></returns>
-        [ProducesResponseType(typeof(AppMenuTreeOutput), StatusCodes.Status200OK)]
-        [HttpPost("menus")]
-        public async Task<IActionResult> MenusAsync(AppMenuTreeRequest request)
+        [ProducesResponseType(typeof(ClientAppListItem), StatusCodes.Status200OK)]
+        [HttpPost("getApp")]
+        public async Task<IActionResult> GetAppAsync(ApiIdRequest request)
         {
-            return await _menuService.GetAdminTreeAsync(request);
+            return await _clientAppService.GetAppAsync(request);
+        }
+
+        /// <summary>
+        /// 指定应用的上级菜单候选项（只带 Id/上级/名称/排序/类型）
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
+        [ProducesResponseType(typeof(List<MenuOption>), StatusCodes.Status200OK)]
+        [HttpPost("getMenuOptions")]
+        public async Task<IActionResult> GetMenuOptionsAsync(ApiIdRequest request)
+        {
+            return await _menuService.GetMenuOptionsAsync(request);
         }
 
         /// <summary>
@@ -66,9 +80,9 @@ namespace Viv.Apex.Api.Controllers
         /// </summary>
         /// <param name="request"></param>
         /// <returns></returns>
-        [ProducesResponseType(typeof(AppMenuPageOutput), StatusCodes.Status200OK)]
-        [HttpPost("pageMenu")]
-        public async Task<IActionResult> PageMenuAsync(AppMenuPageRequest request)
+        [ProducesResponseType(typeof(PagedList<AppMenuRow>), StatusCodes.Status200OK)]
+        [HttpPost("getMenuPage")]
+        public async Task<IActionResult> GetMenuPageAsync(AppMenuPageRequest request)
         {
             return await _menuService.GetAdminPageAsync(request);
         }

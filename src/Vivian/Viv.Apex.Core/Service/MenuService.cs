@@ -8,6 +8,8 @@ using Viv.Apex.Core.IService;
 using Viv.Apex.Core.Module.Access;
 using Viv.Apex.Core.Module.Menu;
 using Viv.Contracts.Interface;
+using Viv.Delusion.Generic;
+using Viv.Elysia.Request;
 using Viv.Engine;
 using Viv.Entity.Database.Apex;
 using Viv.Entity.Enums;
@@ -53,32 +55,6 @@ namespace Viv.Apex.Core.Service
             return VivApiResult<object>.Success(resolved.Adapter!.BuildTree(menus, pages));
         }
 
-        public async Task<VivApiResult> GetAdminTreeAsync(AppMenuTreeRequest request)
-        {
-            var denied = await SuperAdminGate.DenyAsync(_context, _users);
-            if (denied is not null) return denied;
-
-            var app = await RequireAppAsync(request.ClientAppId);
-            if (app.Error is not null) return app.Error;
-
-            var menus = await _menus.GetByAppAsync(app.App!.Id);
-            var menuIds = menus.Select(x => x.Id).ToList();
-            var pages = menus.Count == 0
-                ? []
-                : await _subPages.ListByMenuIdsAsync(menuIds);
-            var actions = menus.Count == 0
-                ? []
-                : await _actions.ListByMenuIdsAsync(menuIds);
-            return VivApiResult<AppMenuTreeOutput>.Success(new AppMenuTreeOutput
-            {
-                ClientAppId = app.App.Id,
-                Name = app.App.Name,
-                AppKey = app.App.AppKey,
-                ClientStack = app.App.ClientStack,
-                Menus = MenuAdminTree.Build(menus, pages, actions)
-            });
-        }
-
         public async Task<VivApiResult> GetAdminPageAsync(AppMenuPageRequest request)
         {
             var denied = await SuperAdminGate.DenyAsync(_context, _users);
@@ -88,14 +64,13 @@ namespace Viv.Apex.Core.Service
             if (app.Error is not null) return app.Error;
 
             var paged = await _menus.GetPagedAsync(request);
-            var items = paged.Items.ToList();
-            var menuIds = items.Select(x => x.Id).ToList();
+            var menuIds = paged.Items.Select(x => x.Id).ToList();
             var subPages = menuIds.Count == 0 ? [] : await _subPages.ListByMenuIdsAsync(menuIds);
             var actions = menuIds.Count == 0 ? [] : await _actions.ListByMenuIdsAsync(menuIds);
             var subPagesByMenu = subPages.ToLookup(x => x.MenuId);
             var actionsByMenu = actions.ToLookup(x => x.MenuId);
 
-            foreach (var item in items)
+            foreach (var item in paged.Items)
             {
                 item.SubPages = subPagesByMenu[item.Id]
                     .OrderBy(x => x.Sort)
@@ -109,17 +84,33 @@ namespace Viv.Apex.Core.Service
                     .ToList();
             }
 
-            return VivApiResult<AppMenuPageOutput>.Success(new AppMenuPageOutput
-            {
-                ClientAppId = app.App.Id,
-                Name = app.App.Name,
-                AppKey = app.App.AppKey,
-                ClientStack = app.App.ClientStack,
-                PageIndex = paged.PageIndex,
-                PageSize = paged.PageSize,
-                TotalCount = paged.TotalCount,
-                Items = items
-            });
+            return VivApiResult<PagedList<AppMenuRow>>.Success(paged);
+        }
+
+        public async Task<VivApiResult> GetMenuOptionsAsync(ApiIdRequest request)
+        {
+            var denied = await SuperAdminGate.DenyAsync(_context, _users);
+            if (denied is not null) return denied;
+
+            var app = await RequireAppAsync(request.Id);
+            if (app.Error is not null) return app.Error;
+
+            var menus = await _menus.GetByAppAsync(app.App!.Id);
+            var options = menus
+                .OrderBy(x => x.ParentId)
+                .ThenBy(x => x.Sort)
+                .ThenBy(x => x.Id)
+                .Select(menu => new MenuOption
+                {
+                    Id = menu.Id,
+                    ParentId = menu.ParentId,
+                    Title = menu.Title ?? string.Empty,
+                    Sort = menu.Sort,
+                    Type = menu.Type
+                })
+                .ToList();
+
+            return VivApiResult<List<MenuOption>>.Success(options);
         }
 
         public async Task<VivApiResult> SaveForAppAsync(SaveAppMenuRequest request)
