@@ -140,13 +140,8 @@ namespace Viv.Engine.UnitOfWork
             if (method.IsStatic)
                 throw new InvalidOperationException($"[VivUnitOfWork] 标在静态方法上，代理拦不到：{where}");
 
-            // 只判 !IsVirtual 是错的（实测踩过）：C# 会把隐式实现接口的 public 方法编译成
-            // virtual + final，IsVirtual 为 true 但 sealed 重写不了 —— 那条检查恰好把最容易
-            // 写出的方法放了过去。决定「Castle 能不能重写」的是 IsVirtual && !IsFinal。
-            if (!method.IsVirtual || method.IsFinal)
-                throw new InvalidOperationException(
-                    $"[VivUnitOfWork] 标在不可重写的方法上（非 virtual，或已 sealed）：{where}。" +
-                    "接口代理拦不到它，事务不会生效。请显式加 virtual。");
+            // 不要求 virtual：接口代理走 CreateInterfaceProxyWithTarget，按接口调用、反射转给目标实例，
+            // 非 virtual（含隐式实现接口的 virtual + final）同样能拦到 —— 有测试钉着。
 
             if (method.IsGenericMethodDefinition)
                 throw new InvalidOperationException($"[VivUnitOfWork] 标在泛型方法上，代理拦不到：{where}");

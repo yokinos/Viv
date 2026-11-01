@@ -60,10 +60,10 @@ namespace Viv.Engine.Filter
             var method = httpContext.Request.Method;
 
             // 记录日志（结构化日志，包含堆栈）
-            // 分布式锁异常只记 Warning，避免告警风暴
-            if (mappedEx is DistributedLockException)
+            // 分布式锁异常只记 Warning，避免告警风暴；LockKey 只进日志，不返回客户端
+            if (mappedEx is DistributedLockException lockEx)
             {
-                _logger.Warning("[全局异常] {Method} {Path} | RequestId: {RequestId} | Message: {Message}", mappedEx, method, path, traceId, mappedEx.Message);
+                _logger.Warning("[全局异常] {Method} {Path} | RequestId: {RequestId} | LockKey: {LockKey} | Message: {Message}", mappedEx, method, path, traceId, lockEx.LockKey, mappedEx.Message);
             }
             else
             {

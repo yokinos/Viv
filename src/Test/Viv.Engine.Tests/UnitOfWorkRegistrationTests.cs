@@ -92,14 +92,14 @@ public class UnitOfWorkRegistrationTests
         public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
     }
 
-    /// <summary>类级特性：方法级不用逐个标；不可拦截的公开方法启动失败</summary>
+    /// <summary>类级特性：方法级不用逐个标；拦不到的方法（如同步方法）启动失败</summary>
     [VivUnitOfWork]
     public class ClassLevelService : IGoodService
     {
         public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
     }
 
-    /// <summary>类级 + 隐式接口实现（virtual+final）—— 必须启动失败</summary>
+    /// <summary>类级 + 隐式接口实现（virtual+final）—— 接口代理照样拦得到</summary>
     [VivUnitOfWork]
     public class ClassLevelImplicitService : IGoodService
     {
@@ -204,27 +204,25 @@ public class UnitOfWorkRegistrationTests
     }
 
     [Fact]
-    public void 非virtual方法带特性_抛且消息指名道姓()
+    public void 非virtual方法带特性_可以拦截()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(NoVirtualService)]));
+        // 接口代理按接口调用、反射转给目标实例，不要求实现方法 virtual
+        var intercepted = Resolve([typeof(NoVirtualService)]);
 
-        Assert.Contains("RunAsync", ex.Message);
-        Assert.Contains("virtual", ex.Message);
+        Assert.Contains(typeof(NoVirtualService), intercepted);
     }
 
     [Fact]
-    public void 隐式实现接口的公开方法_元数据里是virtual但final_拦截不了()
+    public void 隐式实现接口的公开方法_元数据是virtual_final_但接口代理仍能拦()
     {
-        // 钉住一个实测事实，也是启动期校验最容易写错的地方：
         // C# 会把「隐式实现接口的 public 方法」编译成 virtual + final。
-        // 只判 !IsVirtual 会把它当成可拦截 → 校验恰好把最容易写出的那种方法放了过去，
-        // 且失效完全无声。必须判 IsVirtual && !IsFinal。
+        // 接口代理（CreateInterfaceProxyWithTarget）按接口调用、反射转给目标实例，不依赖虚方法表，
+        // 所以 IsFinal 不影响拦截 —— 别把 IsVirtual / IsFinal 再当成注册条件加回来。
         var implicitImpl = typeof(NoVirtualService).GetMethod(nameof(NoVirtualService.RunAsync))!;
         Assert.True(implicitImpl.IsVirtual, "隐式实现接口的方法在元数据里是 virtual");
-        Assert.True(implicitImpl.IsFinal, "但它同时是 sealed —— Castle 重写不了");
+        Assert.True(implicitImpl.IsFinal, "它同时是 final");
 
-        // 显式写了 virtual 的才是真可重写
-        Assert.False(typeof(GoodService).GetMethod(nameof(GoodService.RunAsync))!.IsFinal);
+        Assert.Contains(typeof(NoVirtualService), Resolve([typeof(NoVirtualService)]));
     }
 
     [Fact]
@@ -313,12 +311,9 @@ public class UnitOfWorkRegistrationTests
     }
 
     [Fact]
-    public void 类级特性_隐式接口实现virtual加final_启动失败()
+    public void 类级特性_隐式接口实现virtual加final_也能拦截()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(ClassLevelImplicitService)]));
-
-        Assert.Contains("RunAsync", ex.Message);
-        Assert.Contains("virtual", ex.Message);
+        Assert.Single(Resolve([typeof(ClassLevelImplicitService)]));
     }
 
     [Fact]

@@ -1,6 +1,5 @@
 using Autofac;
 using Autofac.Extras.DynamicProxy;
-using Castle.DynamicProxy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
@@ -11,6 +10,7 @@ using Viv.Contracts.Enums;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
+using Viv.Engine.Locking;
 using Viv.Engine.Options;
 using Viv.Engine.Power;
 using Viv.Engine.UnitOfWork;
@@ -62,24 +62,35 @@ namespace Viv.Engine
                 throw new InvalidOperationException(DependencySelfCheck.BuildMessage(unregistered));
 
             // 工作单元：先解析出哪些类型要开接口代理，并做启动期校验 ——
-            // 拦不住的情况（非 virtual / 同步方法 / 没按接口注册）一律在此硬报错，
+            // 拦不住的情况（同步方法 / ValueTask / 没按接口注册）一律在此硬报错，
             // 绝不让「标了特性但没有事务」这种静默失效漏到运行期
-            var intercepted = UnitOfWorkRegistration.Resolve(
+            var uowIntercepted = UnitOfWorkRegistration.Resolve(
                 serviceImplTypes.Concat(repoImplTypes),
                 dependencyTypes,
                 vivOptions.DatabaseOption != null);
 
-            RegisterWorkUnitInterceptors(builder, intercepted);
+            // 分布式锁：同样在注册期把 Key 与代理能不能拦到的判定全部做完
+            var lockIntercepted = DistributedLockRegistration.Resolve(
+                serviceImplTypes.Concat(repoImplTypes),
+                dependencyTypes,
+                vivOptions.CacheOption is { CacheProviderType: DistributedCacheType.Redis });
 
-            RegisterScannedTypes(builder, serviceImplTypes, intercepted);
-            RegisterScannedTypes(builder, repoImplTypes, intercepted);
+            RegisterWorkUnitInterceptors(builder, uowIntercepted);
+            RegisterDistributedLockInterceptors(builder, lockIntercepted);
+
+            RegisterScannedTypes(builder, serviceImplTypes, uowIntercepted, lockIntercepted);
+            RegisterScannedTypes(builder, repoImplTypes, uowIntercepted, lockIntercepted);
         }
 
         /// <summary>
-        /// 注册扫描到的实现类型。<b>只有带 <c>[VivUnitOfWork]</c> 的类型才开接口代理</b> ——
-        /// 没标的一律走原路，零代理开销、零调试干扰。
+        /// 注册扫描到的实现类型。<b>只有带 <c>[VivUnitOfWork]</c> / <c>[VivDistributedLock]</c>
+        /// 的类型才开接口代理</b> —— 没标的一律走原路，零代理开销、零调试干扰。
+        ///
+        /// 两种特性同时命中时，锁的拦截器排在事务前面（外层）：先拿锁再开事务，
+        /// 提交完成后才释放锁，避免等锁期间占着数据库连接。
         /// </summary>
-        private static void RegisterScannedTypes(ContainerBuilder builder, List<Type> implTypes, IReadOnlyCollection<Type> intercepted)
+        private static void RegisterScannedTypes(ContainerBuilder builder, List<Type> implTypes,
+            IReadOnlyCollection<Type> uowIntercepted, IReadOnlyCollection<Type> lockIntercepted)
         {
             if (implTypes.IsNullOrEmpty()) return;
 
@@ -88,22 +99,30 @@ namespace Viv.Engine
 
             if (closedTypes.Length != 0)
             {
-                var interceptedSet = new HashSet<Type>(intercepted);
-                var plain = closedTypes.Where(t => !interceptedSet.Contains(t)).ToArray();
-                var proxied = closedTypes.Where(interceptedSet.Contains).ToArray();
+                var uowSet = new HashSet<Type>(uowIntercepted);
+                var lockSet = new HashSet<Type>(lockIntercepted);
+
+                var plain = closedTypes.Where(t => !uowSet.Contains(t) && !lockSet.Contains(t)).ToArray();
+                var proxied = closedTypes.Where(t => uowSet.Contains(t) || lockSet.Contains(t)).ToArray();
 
                 if (plain.Length != 0)
                 {
                     builder.RegisterTypes(plain).AsImplementedInterfaces().InstancePerLifetimeScope();
                 }
 
-                if (proxied.Length != 0)
+                foreach (var type in proxied)
                 {
-                    builder.RegisterTypes(proxied)
+                    var interceptorTypes = new List<Type>(2);
+
+                    // 顺序即执行顺序：锁先拿到，再进事务
+                    if (lockSet.Contains(type)) interceptorTypes.Add(typeof(DistributedLockInterceptorAdapter));
+                    if (uowSet.Contains(type)) interceptorTypes.Add(typeof(UnitOfWorkInterceptorAdapter));
+
+                    builder.RegisterType(type)
                         .AsImplementedInterfaces()
                         .InstancePerLifetimeScope()
                         .EnableInterfaceInterceptors()
-                        .InterceptedBy(typeof(AsyncDeterminationInterceptor));
+                        .InterceptedBy(interceptorTypes.ToArray());
                 }
             }
 
@@ -131,7 +150,22 @@ namespace Viv.Engine
 
             builder.RegisterType<VivUnitOfWorkInterceptor>().AsSelf().InstancePerLifetimeScope();
 
-            builder.Register(c => new AsyncDeterminationInterceptor(c.Resolve<VivUnitOfWorkInterceptor>()))
+            builder.Register(c => new UnitOfWorkInterceptorAdapter(c.Resolve<VivUnitOfWorkInterceptor>()))
+                .AsSelf()
+                .InstancePerLifetimeScope();
+        }
+
+        /// <summary>
+        /// 注册分布式锁拦截器。作用域生命周期与工作单元一致：它注入的 <see cref="IDistributedLock"/>
+        /// 是单例，但拦截器本身随作用域走，拿到的是当前请求的 <see cref="IVivContext"/>。
+        /// </summary>
+        private static void RegisterDistributedLockInterceptors(ContainerBuilder builder, Type[] intercepted)
+        {
+            if (intercepted.Length == 0) return;
+
+            builder.RegisterType<VivDistributedLockInterceptor>().AsSelf().InstancePerLifetimeScope();
+
+            builder.Register(c => new DistributedLockInterceptorAdapter(c.Resolve<VivDistributedLockInterceptor>()))
                 .AsSelf()
                 .InstancePerLifetimeScope();
         }

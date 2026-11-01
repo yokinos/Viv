@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Viv.Contracts.Exceptions
 {
@@ -28,6 +28,16 @@ namespace Viv.Contracts.Exceptions
         public DistributedLockException(string message, Exception innerException) : base(message, innerException) { }
 
         public DistributedLockException(string lockKey, int retryCount) : base($"获取分布式锁失败，Key: {lockKey}，已重试 {retryCount} 次")
+        {
+            LockKey = lockKey;
+            RetryCount = retryCount;
+        }
+
+        /// <summary>
+        /// 用自定义提示文案构造（面向客户端的文案，不含内部 Key）。
+        /// <see cref="LockKey"/> / <see cref="RetryCount"/> 仍然保留，供日志排查。
+        /// </summary>
+        public DistributedLockException(string message, string lockKey, int retryCount) : base(message)
         {
             LockKey = lockKey;
             RetryCount = retryCount;

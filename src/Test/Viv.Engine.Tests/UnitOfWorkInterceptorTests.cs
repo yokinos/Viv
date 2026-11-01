@@ -124,6 +124,18 @@ public class UnitOfWorkInterceptorTests
             => Task.FromResult(VivApiResult.Success("方法级关掉"));
     }
 
+    /// <summary>非 virtual 实现 —— 接口代理按接口调用，同样能开事务</summary>
+    public interface INonVirtualService
+    {
+        Task<VivApiResult> RunAsync();
+    }
+
+    public class NonVirtualService : INonVirtualService
+    {
+        [VivUnitOfWork]
+        public Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success("非 virtual 也能拦"));
+    }
+
     #endregion
 
     private static (IContainer Container, KernelStub Kernel, RecordingLogger Logger) Build()
@@ -158,7 +170,25 @@ public class UnitOfWorkInterceptorTests
             .EnableInterfaceInterceptors()
             .InterceptedBy(typeof(AsyncDeterminationInterceptor));
 
+        builder.RegisterType<NonVirtualService>()
+            .As<INonVirtualService>()
+            .InstancePerLifetimeScope()
+            .EnableInterfaceInterceptors()
+            .InterceptedBy(typeof(AsyncDeterminationInterceptor));
+
         return (builder.Build(), kernel, logger);
+    }
+
+    [Fact]
+    public async Task 非virtual实现方法_同样开事务()
+    {
+        var (container, kernel, _) = Build();
+        using var scope = container.BeginLifetimeScope();
+
+        var result = await scope.Resolve<INonVirtualService>().RunAsync();
+
+        Assert.Equal(200, result.Code);
+        Assert.Equal("begin|commit", kernel.Trace());
     }
 
     /// <summary>
