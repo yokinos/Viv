@@ -85,11 +85,51 @@ public class UnitOfWorkRegistrationTests
         public virtual ValueTask<VivApiResult> RunAsync() => new(VivApiResult.Success());
     }
 
-    /// <summary>没有接口 —— AsImplementedInterfaces() 注册不出代理</summary>
+    /// <summary>没有业务接口 + public virtual —— 走类代理，可以拦截</summary>
     public class NoInterfaceService
     {
         [VivUnitOfWork]
         public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>没有业务接口 + 非 virtual —— 类代理拦不到（接口代理的那套结论不适用）</summary>
+    public class NoInterfaceNonVirtualService
+    {
+        [VivUnitOfWork]
+        public Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>没有业务接口 + sealed —— Castle 生成不出子类</summary>
+    public sealed class SealedNoInterfaceService
+    {
+        [VivUnitOfWork]
+        public Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>没有业务接口 + internal —— 动态程序集继承不了（本仓没有 DynamicProxyGenAssembly2 的 IVT）</summary>
+    internal class InternalNoInterfaceService
+    {
+        [VivUnitOfWork]
+        public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>没有业务接口 + 类级特性 + 非 virtual 方法 —— 类级特性下同样必须能拦到</summary>
+    [VivUnitOfWork]
+    public class ClassLevelNoInterfaceService
+    {
+        public Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>没有业务接口、也没标特性 —— 不进拦截清单，更不该抛</summary>
+    public class PlainNoInterfaceService
+    {
+        public Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>只实现 IDisposable —— 不算有业务接口，应该走类代理</summary>
+    public class DisposableOnlyService : IDisposable
+    {
+        public void Dispose() { }
     }
 
     /// <summary>类级特性：方法级不用逐个标；拦不到的方法（如同步方法）启动失败</summary>
@@ -270,11 +310,63 @@ public class UnitOfWorkRegistrationTests
     }
 
     [Fact]
-    public void 类型没有任何接口_抛()
+    public void 类型没有接口_virtual方法_走类代理_进拦截清单()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(NoInterfaceService)]));
+        // 无业务接口不再一律拒绝：RegisterScannedTypes 会按 AsSelf + EnableClassInterceptors
+        // 挂类代理，被拦方法 public virtual 是硬前提。
+        var intercepted = Resolve([typeof(NoInterfaceService)]);
 
-        Assert.Contains("接口", ex.Message);
+        Assert.Contains(typeof(NoInterfaceService), intercepted);
+    }
+
+    [Fact]
+    public void 类型没有接口_非virtual方法_启动失败()
+    {
+        // 接口代理不要求 virtual，类代理必须 —— 这条是两条路径最大的差别。
+        // 放过去就是「能编译、能跑、就是没事务」，所以注册期硬报错。
+        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(NoInterfaceNonVirtualService)]));
+
+        Assert.Contains(nameof(NoInterfaceNonVirtualService.RunAsync), ex.Message);
+        Assert.Contains("virtual", ex.Message);
+    }
+
+    [Fact]
+    public void 类型没有接口_sealed_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(SealedNoInterfaceService)]));
+
+        Assert.Contains("sealed", ex.Message);
+    }
+
+    [Fact]
+    public void 类型没有接口_非public_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(InternalNoInterfaceService)]));
+
+        Assert.Contains("public", ex.Message);
+    }
+
+    [Fact]
+    public void 类型没有接口_类级特性含非virtual方法_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(ClassLevelNoInterfaceService)]));
+
+        Assert.Contains(nameof(ClassLevelNoInterfaceService.RunAsync), ex.Message);
+        Assert.Contains("virtual", ex.Message);
+    }
+
+    [Fact]
+    public void 类型没有接口_没标特性_不进拦截清单也不抛()
+    {
+        Assert.Empty(Resolve([typeof(PlainNoInterfaceService)]));
+    }
+
+    [Fact]
+    public void 只实现IDisposable_不算有业务接口()
+    {
+        // 只实现 IDisposable 的类如果算「有接口」，AsImplementedInterfaces() 会把它注册成 IDisposable，
+        // 按具体类型反而解析不到 —— 所以业务接口判定要排除生命周期 / 标记接口。
+        Assert.True(ProxyPolicy.NeedsClassProxy(typeof(DisposableOnlyService)));
     }
 
     [Fact]

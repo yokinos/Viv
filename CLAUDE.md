@@ -341,7 +341,7 @@ Business-layer services and repositories are registered via **type scanning** dr
 | 模式 | 入口 | 边界 | 适合 |
 |---|---|---|---|
 | **窄事务** | `IVivTransaction`，`await using` 自动释放 | 业务自己划线，写多少包多少 | 只包住几行写；或事务里要夹非数据库动作（发消息、算东西） |
-| **完整事务** | 特性 `[VivUnitOfWork]` + Castle 接口代理 | **整个方法**：进方法开、出方法提交 | 一个应用服务方法就是一次业务操作，不想在业务代码里看见事务 |
+| **完整事务** | 特性 `[VivUnitOfWork]` + Castle 代理（有接口走接口代理，无接口走类代理） | **整个方法**：进方法开、出方法提交 | 一个应用服务方法就是一次业务操作，不想在业务代码里看见事务 |
 
 ```csharp
 // 窄事务
@@ -350,7 +350,7 @@ await _orderRepo.InsertAsync(order);
 await _itemRepo.InsertBatchAsync(items);
 await tx.CommitAsync();          // 不写这行 → 离开作用域自动回滚
 
-// 完整事务（标在实现类的 public 方法上，不要求 virtual，见下）
+// 完整事务（标在实现类的 public 方法上，无接口的类必须 public virtual，见下）
 [VivUnitOfWork]
 public virtual async Task<VivApiResult> CreateOrderAsync(...) { ... }
 ```
@@ -360,11 +360,12 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ... }
 - **⚠️ 特性一律标在实现类上，绝不标接口** —— 接口上标了**完全不生效**：类型级根本标不上去（`AttributeTargets.Class` 不覆盖 interface，实测 `CS0592`），方法级能编译但没人读（注册期扫的是**实现类型**，运行期读 `MethodInvocationTarget`；而接口成员的特性不会被实现方法继承，`inherit: true` 只沿基类链走）。表现是「能编译、能跑、就是不原子」。**本版刻意不支持接口标注**：要支持得在注册期额外扫接口方法、运行期回读 `invocation.Method`，本版不做，避免把「凡实现该接口的类都被开事务」这个副作用藏进契约里。
 - **嵌套语义（没有保存点，不是 `TransactionScope`）**：只有**最外层**那次 `BeginAsync` 真正开事务，嵌套返回**子句柄**、不穿透到数据库。子句柄 `CommitAsync()` 是**空操作**（等最外层）；子句柄**未提交就释放 / 显式 `RollbackAsync` / 抛异常** → 整个作用域打上 **rollback-only（粘性）**，此后最外层再调 `CommitAsync` 会先回滚再抛 `VivUnitOfWorkException`（不只记 Warning）—— 拦截器必须看见失败，本地事件才能 Discard 而不是 Flush。**没有保存点** —— 内层回滚不会「只撤销内层的写」，它会拖垮整个事务；要部分回滚就自己用窄事务划线。`CommitAsync`/`RollbackAsync` 均幂等。**被拦方法上的 `CancellationToken` 只传给 `BeginAsync`；`Commit`/`Rollback` 一律 `CancellationToken.None`** —— MVC action 那个令牌是 `HttpContext.RequestAborted`，客户端断线就会取消：提交被取消的后果是「业务成功返回、写却全丢」（`MomoDatabase.CommitTransactionAsync` 对 `OperationCanceledException` 是原样上抛 + `finally` 里 Dispose），回滚被取消则留下没关掉的事务。与本地事件分发那几处传 None 同一取舍。消费者侧 `ConsumerUnitOfWork` 同理。
 - **异步拦截必须用第三方包**：`Castle.Core.AsyncInterceptor` 的 `AsyncInterceptorBase`。裸 `IInterceptor.Proceed()` **在第一个 `await` 处就返回**，提交会早于业务方法真正结束 —— 事务边界直接错位。`AsyncInterceptorBase` 实现的是 `IAsyncInterceptor`（**不是** `IInterceptor`），所以 `InterceptedBy` 只认 `IInterceptor`，中间必须垫一层 `AsyncDeterminationInterceptor` 适配器（`Autofac.Extras.DynamicProxy` + `Castle.DynamicProxy`）。有测试钉死这点：提交那一刻的回调里断言业务方法体**已经跑完**。
-- **注册期硬校验（把静默失效变成启动失败）**：接口代理失效时**完全无声** —— 没代理上就没有事务，业务照跑、数据照写、只是不原子，往往到线上数据对不上才发现。所以凡是能静态判定的原因一律 `throw`，启动就挂：非 `public` / `static` / 泛型方法 / 同步方法 / 返回 `ValueTask` / 类型没有任何接口 / 类型**没按接口注册**（漏进 `DIOption` 扫描、或标了 `[VivDependency(AsSelf = true)]`）/ 标了特性却没配 `DatabaseOption` / **开放泛型类型上标了特性**（`RegisterGeneric` 不挂代理）。类级与方法级同一把尺子。
-  - **不要求 `virtual`**：接口代理走 `CreateInterfaceProxyWithTarget`，按接口调用、反射转给目标实例，非 virtual（含隐式实现接口的 `virtual final`）同样能拦到。别按 `IsVirtual` / `IsFinal` 加校验 —— 有测试钉着（`UnitOfWorkRegistrationTests.非virtual方法带特性_可以拦截`）。
-  - 类级特性与方法级同一把尺子：同步方法一律启动失败；开放泛型类型上标了特性同样启动失败（`RegisterGeneric` 不挂接口代理）。想让个别方法豁免，标 `[VivUnitOfWork(Enabled = false)]`。
-  - **只有带特性的类型才挂代理**，不开全局拦截 —— 没标的零代理开销、零调试干扰。拦截器与适配器都注册成 `InstancePerLifetimeScope`（已实测 Autofac 的接口代理从**当前**作用域解析拦截器，不会落到根作用域 —— 落根作用域会让并发请求共用同一个事务状态机）。
-  - **只剩自调用拦不住**：`this.OtherMethod()` 走真实实例、不过代理，标了也不生效。判它要分析 IL 调用点，本版不做。**特性标在最外层公开方法上。**
+- **注册期硬校验（把静默失效变成启动失败）**：代理失效时**完全无声** —— 没代理上就没有事务，业务照跑、数据照写、只是不原子，往往到线上数据对不上才发现。所以凡是能静态判定的原因一律 `throw`，启动就挂：非 `public` / `static` / 泛型方法 / 同步方法 / 返回 `ValueTask` / **无接口类型的 sealed / 非 public / 非 public 构造 / 方法非 virtual** / 类型**不是 DIOption 扫描注册的**（漏进扫描、或标了 `[VivDependency(AsSelf = true)]`）/ 标了特性却没配 `DatabaseOption` / **开放泛型类型上标了特性**（`RegisterGeneric` 不挂代理）。类级与方法级同一把尺子。
+  - **有业务接口 → 接口代理，不要求 `virtual`**：`CreateInterfaceProxyWithTarget` 按接口调用、反射转给目标实例，非 virtual（含隐式实现接口的 `virtual final`）同样能拦到。别按 `IsVirtual` / `IsFinal` 加校验 —— 有测试钉着（`UnitOfWorkRegistrationTests.非virtual方法带特性_可以拦截`）。
+  - **没有业务接口 → 类代理**：`VivEngineExtensions.RegisterScannedTypes` 按 `ProxyPolicy`（`Viv.Engine/ProxyPolicy.cs`）分流，`AsSelf` + `EnableClassInterceptors`。被拦方法必须 `public virtual`（非 virtual / sealed override 都拦不到），类型必须 public、非 sealed、有 public 构造 —— 任一不满足启动失败。只实现 `IDisposable` / `IAsyncDisposable` / `IDependency` 不算「有业务接口」。`AsSelf` 注册只对 DIOption 扫描到的类型生效；`[VivDependency(AsSelf = true)]` 那条路没有挂拦截器的位置，仍会在启动期报错。
+  - 类级特性与方法级同一把尺子：同步方法一律启动失败；开放泛型类型上标了特性同样启动失败（`RegisterGeneric` 不挂代理）。想让个别方法豁免，标 `[VivUnitOfWork(Enabled = false)]`。
+  - **只有带特性的类型才挂代理**，不开全局拦截 —— 没标的零代理开销、零调试干扰。拦截器与适配器都注册成 `InstancePerLifetimeScope`（已实测 Autofac 的代理从**当前**作用域解析拦截器，不会落到根作用域 —— 落根作用域会让并发请求共用同一个事务状态机）。
+  - **自调用语义两条路径不同**：接口代理下 `this.OtherMethod()` 走真实实例、不过代理，标了也不生效（要分析 IL 调用点，本版不做）；类代理下虚派发会重新进拦截器 —— UoW 表现为嵌套子事务（提交 no-op，安全），分布式锁表现为同一把 Key 二次取锁，默认不可重入会抛，所以锁方法互相调用必须 `Reentrant = true` 或只标最外层。**接口代理下特性标在最外层公开方法上。**
 - **成败判定与本地事件同源（同一份实现，不是两份抄得像）**：`FailDetector.IsFailed` 判 `VivApiResult` 的 **2xx 区间**（`Accepted=201` 也算成功）。`LocalEventFlushFilterAttribute.IsFailed` 对信封那一段**直接调它**——以前是抄了一份表达式、靠一个反射测试盯着两份不漂移，现在只有一份，没有可漂移的东西。**`FailDetector` 因此住在 `Viv.Engine/` 根、与它判定的对象 `VivApiResult` 并排**，而不是塞进 `UnitOfWork/`（塞进去就变成「事务的实现细节被过滤器依赖」）。判据共三条：`VivApiResult` 看 2xx；**`IBooleanResult`（`Viv.Delusion`，`FuncResult` 已实现）取反 `IsSuccess`** —— 业务方法直接返回 `FuncResult` 时成败也认；其余返回值（含未拆包的 `Task<T>`，不能 `.Result` 阻塞）一律视为成功。异常一律回滚后**原样上抛**，不吞。
 - **与本地事件的顺序天然正确，不需要钩子**：拦截器在**服务方法**边界提交，flush 触发点是 **MVC action filter**，位置在外层 ⇒ 必然 `提交 → action 返回 → flush`。绝不能反（先 flush 再提交 = handler 看见脏数据 + 回滚后留下幽灵事件）。
 - **Momo 事务内核已修（原先是坏的，且从没人用过）**：`MomoDatabase.BeginTransaction` / `BeginTransactionAsync` 原先写 `(IDbTransaction)context.Database.BeginTransaction()`，而 EF 的 `IDbContextTransaction`（`SqlServerTransaction`）**不是** `IDbTransaction` —— 强转必抛 `InvalidCastException`，**而那时真事务已经开在连接上了**，句柄没存住就成了提不了也滚不掉的**悬挂事务**（`IsInTransaction` 为 false、回滚被 `_transaction == null` 挡成 no-op）。同形状的强转在 `ExecuteSqlList` / `ExecuteSqlListAsync` 里还有 **4 处**（自建事务那条路径；外层已有事务时被 `??` 短路所以一直没暴露）。现统一走 **`MomoDatabase.GetDbTransaction(IDbContextTransaction)`**（`IInfrastructure<DbTransaction>.Instance`）——⚠️ **EF Core 10 没有现成的 `GetDbTransaction()` 扩展方法，别去找**（试过，编译不过，这个 helper 就是为此而写）。字段类型仍是 `IDbTransaction?`（Dapper 要它），判空 / `?.Dispose()` / `= null` 逻辑一字未改。实测：开/提/滚、`IsInTransaction` 全部名副其实，悬挂事务消失。

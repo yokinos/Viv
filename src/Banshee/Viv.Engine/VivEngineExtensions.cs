@@ -84,12 +84,17 @@ namespace Viv.Engine
 
         /// <summary>
         /// 注册扫描到的实现类型。<b>只有带 <c>[VivUnitOfWork]</c> / <c>[VivDistributedLock]</c>
-        /// 的类型才开接口代理</b> —— 没标的一律走原路，零代理开销、零调试干扰。
+        /// 的类型才开代理</b> —— 没标的一律走原路，零代理开销、零调试干扰。
+        ///
+        /// 代理形态按 <see cref="ProxyPolicy"/> 分两条：有业务接口的走 Castle 接口代理
+        /// （<c>AsImplementedInterfaces</c> + <c>EnableInterfaceInterceptors</c>，不要求实现方法 virtual）；
+        /// 没有业务接口的走类代理（<c>AsSelf</c> + <c>EnableClassInterceptors</c>，被拦方法必须是
+        /// public virtual —— 注册期已硬校验）。两条路径共用同一对拦截器与适配器。
         ///
         /// 两种特性同时命中时，锁的拦截器排在事务前面（外层）：先拿锁再开事务，
         /// 提交完成后才释放锁，避免等锁期间占着数据库连接。
         /// </summary>
-        private static void RegisterScannedTypes(ContainerBuilder builder, List<Type> implTypes,
+        internal static void RegisterScannedTypes(ContainerBuilder builder, List<Type> implTypes,
             IReadOnlyCollection<Type> uowIntercepted, IReadOnlyCollection<Type> lockIntercepted)
         {
             if (implTypes.IsNullOrEmpty()) return;
@@ -105,10 +110,7 @@ namespace Viv.Engine
                 var plain = closedTypes.Where(t => !uowSet.Contains(t) && !lockSet.Contains(t)).ToArray();
                 var proxied = closedTypes.Where(t => uowSet.Contains(t) || lockSet.Contains(t)).ToArray();
 
-                if (plain.Length != 0)
-                {
-                    builder.RegisterTypes(plain).AsImplementedInterfaces().InstancePerLifetimeScope();
-                }
+                RegisterPlainTypes(builder, plain);
 
                 foreach (var type in proxied)
                 {
@@ -118,18 +120,52 @@ namespace Viv.Engine
                     if (lockSet.Contains(type)) interceptorTypes.Add(typeof(DistributedLockInterceptorAdapter));
                     if (uowSet.Contains(type)) interceptorTypes.Add(typeof(UnitOfWorkInterceptorAdapter));
 
-                    builder.RegisterType(type)
-                        .AsImplementedInterfaces()
+                    var registration = builder.RegisterType(type)
                         .InstancePerLifetimeScope()
-                        .EnableInterfaceInterceptors()
                         .InterceptedBy(interceptorTypes.ToArray());
+
+                    if (ProxyPolicy.NeedsClassProxy(type))
+                    {
+                        // 没有业务接口：只能类代理。被拦方法必须是 public virtual，
+                        // UnitOfWorkRegistration / DistributedLockRegistration 已在注册期硬校验过。
+                        registration.AsSelf().EnableClassInterceptors();
+                    }
+                    else
+                    {
+                        registration.AsImplementedInterfaces().EnableInterfaceInterceptors();
+                    }
                 }
             }
 
             foreach (var openGeneric in openGenericTypes)
             {
-                builder.RegisterGeneric(openGeneric).AsImplementedInterfaces().InstancePerLifetimeScope();
+                // 开放泛型不挂代理（标了特性的开放泛型在注册期已硬报错），
+                // 这里只决定按什么注册：没有业务接口的按自身，否则按接口。
+                var registration = builder.RegisterGeneric(openGeneric).InstancePerLifetimeScope();
+
+                if (ProxyPolicy.NeedsClassProxy(openGeneric))
+                    registration.AsSelf();
+                else
+                    registration.AsImplementedInterfaces();
             }
+        }
+
+        /// <summary>
+        /// 无特性的类型：有业务接口的照旧 <c>AsImplementedInterfaces</c>；
+        /// 没有业务接口的只能 <c>AsSelf</c> —— 否则扫描到了也等于没注册，按具体类型解析不到。
+        /// </summary>
+        private static void RegisterPlainTypes(ContainerBuilder builder, IReadOnlyCollection<Type> plain)
+        {
+            if (plain.Count == 0) return;
+
+            var withContracts = plain.Where(t => !ProxyPolicy.NeedsClassProxy(t)).ToArray();
+            var selfOnly = plain.Where(ProxyPolicy.NeedsClassProxy).ToArray();
+
+            if (withContracts.Length != 0)
+                builder.RegisterTypes(withContracts).AsImplementedInterfaces().InstancePerLifetimeScope();
+
+            if (selfOnly.Length != 0)
+                builder.RegisterTypes(selfOnly).AsSelf().InstancePerLifetimeScope();
         }
 
         /// <summary>

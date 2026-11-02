@@ -61,12 +61,17 @@ namespace Viv.Contracts.Attributes
     ///
     /// <para><b>约束</b></para>
     /// <list type="bullet">
-    /// <item><description>标在实现类的 public 方法上（不要求 virtual，接口代理按接口调用），
-    /// 或标在类上作为该类所有 public 方法的默认值；标在接口上会在启动期直接报错（接口代理只认实现类上的特性）。</description></item>
+    /// <item><description>标在实现类的 public 方法上，或标在类上作为该类所有 public 方法的默认值；
+    /// 标在接口上会在启动期直接报错（代理只认实现类上的特性）。</description></item>
+    /// <item><description>有业务接口的类型走 Castle 接口代理，不要求 virtual；
+    /// 没有业务接口的类型走类代理，被拦方法必须是 <c>public virtual</c>，类型必须 public、非 sealed、
+    /// 有 public 构造函数 —— 否则注册期直接启动失败。</description></item>
     /// <item><description>方法必须返回 Task / Task&lt;T&gt;；同步方法、ValueTask、泛型方法、静态方法都拦不到，
     /// 注册期直接启动失败。</description></item>
-    /// <item><description>类型必须由 <c>DIOption</c> 按接口注册；自调用 <c>this.OtherAsync()</c> 不过代理，
-    /// 特性要标在最外层公开方法上。</description></item>
+    /// <item><description>类型必须由 <c>DIOption</c> 扫描注册（<c>[VivDependency(AsSelf = true)]</c>
+    /// 那条路不挂代理）。接口代理下自调用 <c>this.OtherAsync()</c> 不过代理，特性要标在最外层；
+    /// 类代理下自调用会被拦到，同一把 Key 会二次取锁 —— 默认不可重入，必须配
+    /// <see cref="Reentrant"/>，或只标最外层。</description></item>
     /// <item><description>消费者（VivConsumer / VivLocalConsumer）不走接口代理，标上去会启动失败；
     /// 消费场景请用 <c>GetConsumeLockKey</c>，或把锁放在消费者调用的 Service 方法上。</description></item>
     /// <item><description>需要配置 Redis（<c>VivOptions.CacheOption.CacheProviderType = Redis</c>），

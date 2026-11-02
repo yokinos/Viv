@@ -80,10 +80,57 @@ public class DistributedLockTests
     [Fact]
     public void 非virtual方法_也可以注册()
     {
-        // 接口代理按接口调用、反射转给目标实例，非 virtual 实现同样能拦到
+        // 接口代理按接口调用、反射转给目标实例，非 virtual 实现同样能拦到。
+        // 无业务接口的类代理不适用这条结论 —— 见下面三条。
         var types = DistributedLockRegistration.Resolve([typeof(NonVirtualService)], [], lockEnabled: true);
 
         Assert.Contains(typeof(NonVirtualService), types);
+    }
+
+    [Fact]
+    public void 没有接口_virtual方法_走类代理_进拦截清单()
+    {
+        var types = DistributedLockRegistration.Resolve([typeof(NoInterfaceLockService)], [], lockEnabled: true);
+
+        Assert.Contains(typeof(NoInterfaceLockService), types);
+    }
+
+    [Fact]
+    public void 没有接口_非virtual方法_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            DistributedLockRegistration.Resolve([typeof(NoInterfaceNonVirtualLockService)], [], lockEnabled: true));
+
+        Assert.Contains(nameof(NoInterfaceNonVirtualLockService.DoAsync), ex.Message);
+        Assert.Contains("virtual", ex.Message);
+    }
+
+    [Fact]
+    public void 没有接口_sealed_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            DistributedLockRegistration.Resolve([typeof(SealedNoInterfaceLockService)], [], lockEnabled: true));
+
+        Assert.Contains("sealed", ex.Message);
+    }
+
+    [Fact]
+    public void 没有接口_非public_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            DistributedLockRegistration.Resolve([typeof(InternalNoInterfaceLockService)], [], lockEnabled: true));
+
+        Assert.Contains("public", ex.Message);
+    }
+
+    [Fact]
+    public void 没有接口_类级特性含非virtual方法_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            DistributedLockRegistration.Resolve([typeof(ClassLevelNoInterfaceLockService)], [], lockEnabled: true));
+
+        Assert.Contains(nameof(ClassLevelNoInterfaceLockService.DoAsync), ex.Message);
+        Assert.Contains("virtual", ex.Message);
     }
 
     [Fact]
@@ -166,6 +213,41 @@ public class DistributedLockTests
     {
         [VivDistributedLock("test", KeyTemplate = "{id}")]
         public Task DoAsync(long id) => Task.CompletedTask;
+    }
+
+    /// <summary>没有业务接口 + public virtual —— 走类代理，可以拦截</summary>
+    public class NoInterfaceLockService
+    {
+        [VivDistributedLock("test", Global = true)]
+        public virtual Task DoAsync() => Task.CompletedTask;
+    }
+
+    /// <summary>没有业务接口 + 非 virtual —— 类代理拦不到</summary>
+    public class NoInterfaceNonVirtualLockService
+    {
+        [VivDistributedLock("test", Global = true)]
+        public Task DoAsync() => Task.CompletedTask;
+    }
+
+    /// <summary>没有业务接口 + sealed —— Castle 生成不出子类</summary>
+    public sealed class SealedNoInterfaceLockService
+    {
+        [VivDistributedLock("test", Global = true)]
+        public Task DoAsync() => Task.CompletedTask;
+    }
+
+    /// <summary>没有业务接口 + internal —— 动态程序集继承不了</summary>
+    internal class InternalNoInterfaceLockService
+    {
+        [VivDistributedLock("test", Global = true)]
+        public virtual Task DoAsync() => Task.CompletedTask;
+    }
+
+    /// <summary>没有业务接口 + 类级特性 + 非 virtual 方法</summary>
+    [VivDistributedLock("test", Global = true)]
+    public class ClassLevelNoInterfaceLockService
+    {
+        public Task DoAsync() => Task.CompletedTask;
     }
 }
 

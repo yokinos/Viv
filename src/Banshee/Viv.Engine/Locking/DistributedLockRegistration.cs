@@ -9,8 +9,8 @@ namespace Viv.Engine.Locking
     /// <summary>
     /// 分布式锁的注册期筛选与启动期校验。
     ///
-    /// <para>与工作单元同一套逻辑：只在「按接口注册」的类型上开代理。锁没生效是无声的，
-    /// 所以凡是能静态判定的失效原因都前移到启动期硬报错。</para>
+    /// <para>与工作单元同一套逻辑：有业务接口的类型走接口代理，没有业务接口的走类代理。
+    /// 锁没生效是无声的，所以凡是能静态判定的失效原因都前移到启动期硬报错。</para>
     ///
     /// <para><b>Key 校验</b></para>
     /// <list type="bullet">
@@ -21,24 +21,25 @@ namespace Viv.Engine.Locking
     /// </list>
     ///
     /// <para><b>拦不到的情况</b>：非 public / static / 泛型 / 同步 / ValueTask 方法，
-    /// 类型没有接口，特性标在接口上，标在消费者上，开放泛型，以及没配 Redis。
-    /// 逐条报错并给出处理建议。实现方法不要求 virtual —— 接口代理按接口调用，非 virtual 也能拦到。</para>
+    /// 无接口类型的 sealed / 非 public / 非 virtual 方法，特性标在接口上，标在消费者上，开放泛型，
+    /// 以及没配 Redis。逐条报错并给出处理建议。接口代理下实现方法不要求 virtual；
+    /// 类代理下必须是 public virtual。</para>
     /// </summary>
     internal static class DistributedLockRegistration
     {
         public static Type[] Resolve(
-            IEnumerable<Type> interfaceRegisteredTypes,
+            IEnumerable<Type> scannedTypes,
             IEnumerable<Type> dependencyTypes,
             bool lockEnabled)
         {
-            var registered = interfaceRegisteredTypes
+            var registered = scannedTypes
                 .Where(t => !t.IsGenericTypeDefinition && !t.IsAbstract)
                 .Distinct()
                 .ToArray();
 
             var registeredSet = new HashSet<Type>(registered);
 
-            var attributedOpenGenerics = interfaceRegisteredTypes
+            var attributedOpenGenerics = scannedTypes
                 .Concat(dependencyTypes)
                 .Where(t => t.IsGenericTypeDefinition && HasAttribute(t))
                 .Distinct()
@@ -47,7 +48,7 @@ namespace Viv.Engine.Locking
             if (attributedOpenGenerics.Length > 0)
             {
                 throw new InvalidOperationException(
-                    "[VivDistributedLock] 标在开放泛型类型上，扫描注册不会为开放泛型挂接口代理，锁不会生效：" +
+                    "[VivDistributedLock] 标在开放泛型类型上，扫描注册不会为开放泛型挂代理，锁不会生效：" +
                     string.Join(", ", attributedOpenGenerics.Select(t => t.FullName)) +
                     "。请把特性标在闭合实现上。");
             }
@@ -86,11 +87,13 @@ namespace Viv.Engine.Locking
                         "请把锁放在它调用的 Service 方法上，或用 GetConsumeLockKey 定制消费锁。");
                 }
 
-                if (type.GetInterfaces().Length == 0)
+                // 没有业务接口 → Castle 类代理。类代理生成子类，所以类型必须 public、非 sealed、
+                // 有 public 构造；被拦方法必须 public virtual。任何一条不满足都是静默无锁，启动期硬报错。
+                var classProxy = ProxyPolicy.NeedsClassProxy(type);
+
+                if (classProxy)
                 {
-                    throw new InvalidOperationException(
-                        $"[VivDistributedLock] 标在 {type.FullName} 上，但该类型没有任何接口 —— " +
-                        "接口代理生成不出来，锁不会生效。请改为按接口注册。");
+                    ValidateClassProxyType(type);
                 }
 
                 var classLevel = type.GetCustomAttribute<VivDistributedLockAttribute>(inherit: true);
@@ -103,6 +106,7 @@ namespace Viv.Engine.Locking
                     if (methodAttribute is null || !methodAttribute.Enabled) continue;
 
                     ValidateMethod(type, method, methodAttribute);
+                    if (classProxy) RequireVirtual(type, method);
                 }
 
                 if (classLevel is { Enabled: true })
@@ -117,6 +121,7 @@ namespace Viv.Engine.Locking
                         if (methodAttribute is not null) continue;
 
                         ValidateMethod(type, method, classLevel);
+                        if (classProxy) RequireVirtual(type, method);
                     }
                 }
 
@@ -136,12 +141,52 @@ namespace Viv.Engine.Locking
                 }
 
                 throw new InvalidOperationException(
-                    $"[VivDistributedLock] 标在 {type.FullName} 上，但该类型不是按接口注册的" +
+                    $"[VivDistributedLock] 标在 {type.FullName} 上，但该类型不是由 DIOption 扫描注册的" +
                     "（可能标了 [VivDependency(AsSelf = true)]，或不在 DIOption 扫描范围内）—— " +
-                    "没有接口就生成不出代理，锁不会生效。请改为按接口注册。");
+                    "代理挂不上去，锁不会生效。请把它移进 ServiceImplementation / RepositoryImplementation " +
+                    "的扫描范围，或为它定义接口后按接口注册。");
             }
 
             return intercepted.ToArray();
+        }
+
+        /// <summary>
+        /// 无业务接口的类型只能走 Castle 类代理 —— 生成子类，所以类型必须 public、非 sealed，
+        /// 且有 public 构造函数。任何一条不满足，代理都根本生成不出来。
+        /// </summary>
+        private static void ValidateClassProxyType(Type type)
+        {
+            if (!type.IsVisible)
+            {
+                throw new InvalidOperationException(
+                    $"[VivDistributedLock] {type.FullName} 没有业务接口，只能走类代理，但该类型不是 public —— " +
+                    "Castle 无法在动态程序集里继承它。请把类型改成 public（internal 还要给业务程序集加 " +
+                    "InternalsVisibleTo(\"DynamicProxyGenAssembly2\")，本仓没有这条约定），或为它定义接口。");
+            }
+
+            if (type.IsSealed)
+            {
+                throw new InvalidOperationException(
+                    $"[VivDistributedLock] {type.FullName} 没有业务接口，只能走类代理，但该类型是 sealed —— " +
+                    "Castle 生成不出子类。请去掉 sealed，或为它定义接口。");
+            }
+
+            if (type.GetConstructors(BindingFlags.Public | BindingFlags.Instance).Length == 0)
+            {
+                throw new InvalidOperationException(
+                    $"[VivDistributedLock] {type.FullName} 没有业务接口，只能走类代理，但没有 public 构造函数 —— " +
+                    "Autofac 选不到构造，代理生成不出来。请补一个 public 构造函数，或为它定义接口。");
+            }
+        }
+
+        /// <summary>类代理只能拦 public virtual 方法；非 virtual 或 sealed override 都是静默无锁。</summary>
+        private static void RequireVirtual(Type type, MethodInfo method)
+        {
+            if (method.IsVirtual && !method.IsFinal) return;
+
+            throw new InvalidOperationException(
+                $"[VivDistributedLock] 无业务接口的类型走类代理，只能拦 public virtual 方法：{type.FullName}.{method.Name}。" +
+                "非 virtual 或 sealed override 都拦不到，请加 virtual，或为它定义接口。");
         }
 
         private static void ValidateMethod(Type type, MethodInfo method, VivDistributedLockAttribute attribute)
@@ -155,8 +200,8 @@ namespace Viv.Engine.Locking
                 throw new InvalidOperationException($"[VivDistributedLock] 标在静态方法上，代理拦不到：{where}");
 
             // 接口代理（CreateInterfaceProxyWithTarget）按接口调用、反射转给目标实例，
-            // 实现方法不需要 virtual —— 非 virtual 也能拦到（实测）。这里只拦静态/同步，
-            // 不再要求 virtual；与工作单元那条校验不同。
+            // 实现方法不需要 virtual —— 非 virtual 也能拦到（实测）。类代理则必须 public virtual，
+            // 由 RequireVirtual 单独校验；这里只拦静态 / 同步 / 泛型 / ValueTask。
 
             if (method.IsGenericMethodDefinition)
                 throw new InvalidOperationException($"[VivDistributedLock] 标在泛型方法上，代理拦不到：{where}");
