@@ -32,8 +32,8 @@ namespace Viv.Elysia.Tests
         [Fact]
         public void Validate_PageIndexZero_ReturnsRangeError()
         {
-            var error = new TestPagedRequest { Version = 1000 }.Validate();
-            Assert.Contains("当前页码", error);
+            var error = new TestPagedRequest { Version = 1000, PageIndex = 0 }.Validate();
+            Assert.Contains("PageIndex必须在1到" + int.MaxValue + "之间", error);
         }
 
         [Fact]

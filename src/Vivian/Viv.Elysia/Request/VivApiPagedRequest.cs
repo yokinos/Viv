@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
+using Viv.Delusion.Extension;
 using Viv.Elysia.Interface;
 
 namespace Viv.Elysia.Request
@@ -28,5 +29,20 @@ namespace Viv.Elysia.Request
         /// </summary>
         /// <returns></returns>
         public abstract (string sql, object parameters) GetSqlQuery();
+
+        public override string Validate()
+        {
+            if (!PageIndex.Between(1, int.MaxValue))
+            {
+                return "PageIndex必须在1到" + int.MaxValue + "之间";
+            }
+
+            if (!PageSize.Between(1, 2000))
+            {
+                return "PageSize必须在1到2000之间";
+            }
+
+            return base.Validate();
+        }
     }
 }
