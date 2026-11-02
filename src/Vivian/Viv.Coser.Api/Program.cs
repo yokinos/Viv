@@ -1,4 +1,4 @@
-using TickerQ.DependencyInjection;
+﻿using TickerQ.DependencyInjection;
 using Viv.Aspire.ServiceDefaults;
 using Viv.Elysia.Filter;
 using Viv.Engine;
@@ -11,7 +11,7 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
-        builder.AddVivApi(new ApiInitSetting("Viv Coser API"), mvc => mvc.Filters.Add<RequestFilterAttribute>());
+        builder.AddVivApi(mvc => mvc.Filters.Add<RequestFilterAttribute>());
         builder.RunVivApi(app =>
         {
             app.MapDefaultEndpoints();

@@ -15,7 +15,7 @@ public class Program
         // 本项目暂时不需要。注：OperationLogFilterAttribute 对 IVivEventPublisher 的硬依赖已修成
         // 可选依赖（2026-10-06），所以现在即使注入它、且不配 NanaOption 也不会再 500 ——
         // 想开操作日志，把 mvc => mvc.Filters.AddElysiaFilter() 加回来即可。
-        builder.AddVivApi(new ApiInitSetting("Viv Ouroboros API", "ouroboros"));
+        builder.AddVivApi();
 
         builder.RunVivApi(app => app.MapDefaultEndpoints());
     }

@@ -1,4 +1,4 @@
-using Viv.Aspire.ServiceDefaults;
+﻿using Viv.Aspire.ServiceDefaults;
 using Viv.Elysia.Filter;
 using Viv.Engine;
 using Viv.Herta.Core.IService;
@@ -13,7 +13,7 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
-        builder.AddVivApi(new ApiInitSetting("Viv Herta API", "herta"), mvc => mvc.Filters.Add<RequestFilterAttribute>());
+        builder.AddVivApi(mvc => mvc.Filters.Add<RequestFilterAttribute>());
 
         // 不在 Service 命名空间里，DIOption 扫不到，显式登记
         builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();

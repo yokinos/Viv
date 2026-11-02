@@ -36,17 +36,16 @@ namespace Viv.Engine
         /// </summary>
         /// <param name="configureMvc">注册额外 MVC 过滤器（默认已添加 VivExceptionFilterAttribute）</param>
         public static WebApplicationBuilder AddVivApi(this WebApplicationBuilder builder,
-            [NotNull] ApiInitSetting initSetting,
             Action<MvcOptions>? configureMvc = null,
             Action<IServiceCollection>? serviceCollectionConfigure = null)
         {
-            ArgumentNullException.ThrowIfNull(initSetting);
-
             // 绑定 + 写 VivEngine.VivOptions 快照 + 注册进 DI，三件事在这一次调用里做完
             var vivOptions = builder.AddVivConfig();
+            var envOption = vivOptions.EnvOption;
 
-            // 暂存标题供 RunVivApi 使用
-            builder.Configuration[ApiTitleKey] = initSetting.ApiName;
+            // 标题与网关前缀都来自配置（EnvOption.DisplayName / ShortName），宿主代码不再传名字
+            builder.Configuration[ApiTitleKey] =
+                string.IsNullOrWhiteSpace(envOption?.DisplayName) ? envOption?.ServiceName ?? string.Empty : envOption.DisplayName;
             builder.Services.AddHttpContextAccessor();
 
             // Autofac 容器
@@ -114,13 +113,15 @@ namespace Viv.Engine
             {
                 options.AddOperationTransformer<VivOpenApiOperationTransformer>();
                 options.AddSchemaTransformer<VivOpenApiSchemaTransformer>();
-                if (!initSetting.ServiceName.IsNullOrEmpty())
+                // Scalar 的 "Try it out" 走网关前缀；短名没配就不设，等同于直连服务
+                if (!string.IsNullOrWhiteSpace(envOption?.ShortName))
                 {
+                    var shortName = envOption.ShortName;
                     options.AddDocumentTransformer((document, context, cancellationToken) =>
                     {
                         document.Servers =
                         [
-                            new OpenApiServer(){ Url = initSetting.ServiceName, Description = "API Gateway" }
+                            new OpenApiServer { Url = shortName, Description = "API Gateway" }
                         ];
                         return Task.CompletedTask;
                     });
@@ -218,20 +219,5 @@ namespace Viv.Engine
 
             app.Run();
         }
-    }
-
-
-    public class ApiInitSetting
-    {
-        public ApiInitSetting() { }
-        public ApiInitSetting(string? apiName, string? serviceName = null)
-        {
-            ApiName = apiName;
-            ServiceName = serviceName;
-        }
-
-        public string? ApiName { get; set; }
-
-        public string? ServiceName { get; set; }
     }
 }

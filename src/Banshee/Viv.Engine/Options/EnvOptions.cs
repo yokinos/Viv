@@ -11,6 +11,17 @@ namespace Viv.Engine.Options
 
         public string? ServiceName { get; set; }
 
+        /// <summary>
+        /// 显示名称，OpenAPI/Scalar 的标题用。不配就回落 <see cref="ServiceName"/>
+        /// </summary>
+        public string? DisplayName { get; set; }
+
+        /// <summary>
+        /// 网关路径前缀（如 apex → /apex/api/...）。只用于本服务的 OpenAPI 文档展示，
+        /// 不参与路由生成 —— 网关的短名在它的 VivGateway:ShortNames 里配
+        /// </summary>
+        public string? ShortName { get; set; }
+
         public int MachineId { get; set; }
 
         public VivServiceType ServiceType { get; set; }

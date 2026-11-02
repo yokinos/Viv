@@ -1,4 +1,4 @@
-using Viv.Aspire.ServiceDefaults;
+﻿using Viv.Aspire.ServiceDefaults;
 using Viv.Elysia.Filter;
 using Viv.Engine;
 using Viv.Herta.Link.Extensions;
@@ -15,7 +15,7 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         builder.AddServiceDefaults();
-        builder.AddVivApi(new ApiInitSetting("Viv Herta Link", "hertalink"), mvc => mvc.Filters.Add<RequestFilterAttribute>());
+        builder.AddVivApi(mvc => mvc.Filters.Add<RequestFilterAttribute>());
         builder.Services.AddHertaLink(builder.Configuration);
         builder.RunVivApi(app =>
         {

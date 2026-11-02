@@ -20,7 +20,8 @@ namespace Viv.Engine
         /// <summary>
         /// 枚举 Aspire 注入的 services__* 环境变量。同一服务有多个端点（http/https）时优先 http。
         /// </summary>
-        public static List<GatewayService> Load()
+        /// <param name="shortNames">服务名 → 短名；配了就用配置，没配才按服务名推断</param>
+        public static List<GatewayService> Load(IReadOnlyDictionary<string, string>? shortNames = null)
         {
             var found = new Dictionary<string, Uri>(StringComparer.OrdinalIgnoreCase);
             foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
@@ -54,18 +55,51 @@ namespace Viv.Engine
                 }
             }
 
-            return found
-                .Select(kv => new GatewayService(kv.Key, kv.Value, ToShortName(kv.Key, found.Keys)))
+            var services = found
+                .Select(kv => new GatewayService(kv.Key, kv.Value, ResolveShortName(kv.Key, found.Keys, shortNames)))
                 .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+
+            EnsureUniqueShortNames(services);
+            return services;
         }
 
         /// <summary>
-        /// 短名推导：split('-') 取第二段（viv-apex-api -> apex）。
-        /// 第二段冲突时（如 viv-herta-api 与 viv-herta-link 都是 herta），
-        /// 默认 -api 服务保留基础短名，其余服务拼接剩余段（herta + link -> hertalink），保证集群 ID 唯一。
+        /// 决定网关短名：配置优先（VivGateway:ShortNames），没配才推断。
+        /// 推断规则：split('-') 取第二段（viv-apex-api -> apex）；第二段冲突时 -api 保留基础短名，
+        /// 其余角色拼接剩余段（viv-herta-link -> hertalink）。
+        /// 结果统一转小写并校验字符集 —— 短名会拼进路由模板，带 / 或空格会在运行期才炸。
         /// </summary>
-        private static string ToShortName(string name, ICollection<string> allNames)
+        public static string ResolveShortName(
+            string name,
+            ICollection<string> allNames,
+            IReadOnlyDictionary<string, string>? configured = null)
+        {
+            // 配了就用配置（配成空串也当场报错，不悄悄退回推断 —— 那会让人以为改了没生效）
+            if (configured != null && configured.TryGetValue(name, out var configuredName))
+                return Normalize(name, configuredName);
+
+            return Normalize(name, InferShortName(name, allNames));
+        }
+
+        /// <summary>短名唯一性：两个服务撞一个名字，路由和集群会互相覆盖</summary>
+        public static void EnsureUniqueShortNames(IReadOnlyList<GatewayService> services)
+        {
+            var duplicates = services
+                .GroupBy(s => s.ShortName, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .ToList();
+
+            if (duplicates.Count == 0) return;
+
+            var detail = string.Join("；", duplicates.Select(g =>
+                $"{g.Key} ← {string.Join(", ", g.Select(s => s.Name))}"));
+
+            throw new InvalidOperationException(
+                $"网关短名重复：{detail}。请在网关配置 VivGateway:ShortNames 里给其中一个换名字");
+        }
+
+        private static string InferShortName(string name, ICollection<string> allNames)
         {
             var parts = name.Split('-');
             if (parts.Length < 2)
@@ -88,6 +122,19 @@ namespace Viv.Engine
             // 冲突：-api 保留基础短名；其它角色（-link/-worker 等）拼接剩余段
             var rest = string.Concat(parts.Skip(2));
             return rest.Equals("api", StringComparison.OrdinalIgnoreCase) || rest.Length == 0 ? baseName : baseName + rest;
+        }
+
+        private static string Normalize(string serviceName, string shortName)
+        {
+            var value = (shortName ?? string.Empty).Trim().ToLowerInvariant();
+
+            if (value.Length == 0 || !value.All(c => c is >= 'a' and <= 'z' or >= '0' and <= '9' or '-'))
+            {
+                throw new InvalidOperationException(
+                    $"网关短名不合法：服务 {serviceName} 的短名 '{shortName}'，只允许小写字母、数字和连字符");
+            }
+
+            return value;
         }
 
         /// <summary>

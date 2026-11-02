@@ -94,8 +94,10 @@ namespace Viv.Engine
             var jwtConfigure = configureJwt == null ? (Action<JwtBearerOptions>)AddAccessTokenFromQuery : options => { AddAccessTokenFromQuery(options); configureJwt(options); };
             VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, jwtConfigure, throwIfMissing: true);
 
-            // YARP 反向代理：路由/集群从 Aspire 服务发现（services__* 环境变量）自动生成，零手写 JSON
-            gatewayRouter ??= new VivGatewayRouteBuilder();
+            // YARP 反向代理：路由/集群从 Aspire 服务发现（services__* 环境变量）自动生成，零手写 JSON。
+            // 短名优先取网关配置 VivGateway:ShortNames，没配才按服务名推断
+            var gatewayOptions = builder.Configuration.GetSection(VivGatewayOptions.SectionName).Get<VivGatewayOptions>();
+            gatewayRouter ??= new VivGatewayRouteBuilder(gatewayOptions?.ShortNames);
             var (gatewayRoutes, gatewayClusters) = gatewayRouter.Build();
             builder.Services.AddReverseProxy().LoadFromMemory(gatewayRoutes, gatewayClusters);
 

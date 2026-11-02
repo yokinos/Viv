@@ -14,13 +14,20 @@ namespace Viv.Engine
     ///   /ws/{short}/{**catch-all}   -> /{**catch-all}     （SignalR / WebSocket 透传，如 hertalink 的 /chat hub）
     ///
     /// 路由不带 AuthorizationPolicy —— 网关不强制鉴权，只解析透传上下文头，由下游服务自行鉴权。
-    /// 短名 = Aspire 服务名 split('-') 第二段（viv-apex-api -> apex），冲突时拼接（viv-herta-link -> hertalink）。
+    /// 短名优先读网关配置 VivGateway:ShortNames，没配才按服务名推断（见 <see cref="AspireServiceDiscovery.ResolveShortName"/>）。
     /// </summary>
     public class VivGatewayRouteBuilder : IGatewayRouteProvider
     {
+        private readonly IReadOnlyDictionary<string, string>? _shortNames;
+
+        public VivGatewayRouteBuilder(IReadOnlyDictionary<string, string>? shortNames = null)
+        {
+            _shortNames = shortNames;
+        }
+
         public (IReadOnlyList<RouteConfig> Routes, IReadOnlyList<ClusterConfig> Clusters) Build()
         {
-            var services = AspireServiceDiscovery.Load();
+            var services = AspireServiceDiscovery.Load(_shortNames);
             var clusters = new List<ClusterConfig>(services.Count);
             var routes = new List<RouteConfig>(services.Count * 3);
 
