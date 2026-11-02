@@ -32,14 +32,9 @@ namespace Viv.Elysia.Request
 
         public override string Validate()
         {
-            if (!PageIndex.Between(1, int.MaxValue))
+            if (!PageIndex.Between(1, int.MaxValue) || !PageSize.Between(1, 2000))
             {
-                return "PageIndex必须在1到" + int.MaxValue + "之间";
-            }
-
-            if (!PageSize.Between(1, 2000))
-            {
-                return "PageSize必须在1到2000之间";
+                return "分页参数错误,pageIndex不得小于1,pageSize不得小于1且不得大于2000";
             }
 
             return base.Validate();
