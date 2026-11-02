@@ -5,7 +5,7 @@ namespace Viv.Clockwork
 {
     /// <summary>
     /// TickerQ 任务的默认包装：成功 Flush 本地事件、失败 Discard，开工前必须有租户/系统租户快照。
-    /// SakuMai 的 <c>BaseJob</c> 走 <see cref="VivTickerJobBase"/>，所有 [TickerFunction] 入口都经这里。
+    /// Coser 的 <c>BaseJob</c> 走 <see cref="VivTickerJobBase"/>，所有 [TickerFunction] 入口都经这里。
     /// </summary>
     public static class VivTickerJob
     {

@@ -18,7 +18,7 @@ var hertaLink = builder.AddProject<Projects.Viv_Herta_Link>("viv-herta-link")
 var deepRedApi = builder.AddProject<Projects.Viv_DeepRed_Api>("viv-deepred-api")
     .WithDeveloperCertificateTrust(true);
 
-var sakumaiApi = builder.AddProject<Projects.Viv_SakuMai_Api>("viv-sakumai-api")
+var coserApi = builder.AddProject<Projects.Viv_Coser_Api>("viv-coser-api")
     .WithDeveloperCertificateTrust(true);
 
 var ouroborosApi = builder.AddProject<Projects.Viv_Ouroboros_Api>("viv-ouroboros-api")
@@ -31,7 +31,7 @@ builder.AddProject<Projects.Viv_Aspire_Gateway>("viv-aspire-gateway")
     .WithReference(hertaApi)
     .WithReference(hertaLink)
     .WithReference(deepRedApi)
-    .WithReference(sakumaiApi)
+    .WithReference(coserApi)
     // 网关路由按服务发现构建，不 WithReference 就找不到这个服务（之前漏了 Ouroboros）
     .WithReference(ouroborosApi)
     .WithDeveloperCertificateTrust(true);

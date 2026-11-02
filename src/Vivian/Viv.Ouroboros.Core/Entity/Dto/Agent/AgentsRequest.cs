@@ -9,7 +9,7 @@ namespace Viv.Ouroboros.Core.Entity.Dto.Agent
     /// </summary>
     /// <param name="AgentKey">业务键，全局唯一且不可改（能力绑定、提示词、会话都按它引用）</param>
     /// <param name="AgentType">Agent 类型，取 EmAgentType</param>
-    /// <param name="OwnerDomain">归属域：ouroboros / apex / herta / deepred / sakumai</param>
+    /// <param name="OwnerDomain">归属域：ouroboros / apex / herta / deepred / coser</param>
     /// <param name="DisplayName">展示名称</param>
     /// <param name="Description">什么时候该用这个 Agent（主 Agent 选子 Agent 就靠这句话）</param>
     /// <param name="ActivePromptVersion">生效的提示词版本；大于 0 时必须已存在该版本</param>

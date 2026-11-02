@@ -9,7 +9,7 @@ using TickerQ.EntityFrameworkCore.DbContextFactory;
 
 #nullable disable
 
-namespace Viv.SakuMai.Api.Migrations.TickerQ
+namespace Viv.Coser.Api.Migrations.TickerQ
 {
     [DbContext(typeof(TickerQDbContext))]
     [Migration("20260622072852_InitTickerQ")]

@@ -5,7 +5,7 @@ using Viv.EventContracts.Apex;
 using Viv.Log;
 using Viv.Nana;
 
-namespace Viv.SakuMai.Api.Jobs
+namespace Viv.Coser.Api.Jobs
 {
     public class Interval30SecondJob : BaseJob
     {

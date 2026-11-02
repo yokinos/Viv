@@ -171,7 +171,7 @@ Viv/
 │   │   ├── Viv.Apex.Core|Api|Worker/     # Apex 领域
 │   │   ├── Viv.DeepRed.Core|Api|Worker/  # DeepRed 领域
 │   │   ├── Viv.Herta.Core|Api|Link/      # Herta 领域（Link = SignalR 实时通道）
-│   │   ├── Viv.SakuMai.Api/              # SakuMai API（TickerQ 集成）
+│   │   ├── Viv.Coser.Api/                # Coser API（TickerQ 集成）
 │   │   │
 │   │   └── Viv.Aspire/
 │   │       ├── Viv.Aspire.AppHost/        # Aspire 统一编排

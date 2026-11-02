@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Viv.SakuMai.Api.Controllers
+namespace Viv.Coser.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]

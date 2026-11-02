@@ -25,7 +25,7 @@ namespace Viv.Entity.Database.Ouroboros
         public EmAgentType AgentType { get; set; }
 
         /// <summary>
-        /// 归属域：ouroboros / apex / herta / deepred / sakumai
+        /// 归属域：ouroboros / apex / herta / deepred / coser
         /// </summary>
         public string OwnerDomain { get; set; } = string.Empty;
 

@@ -8,7 +8,7 @@ using TickerQ.EntityFrameworkCore.DbContextFactory;
 
 #nullable disable
 
-namespace Viv.SakuMai.Api.Migrations.TickerQ
+namespace Viv.Coser.Api.Migrations.TickerQ
 {
     [DbContext(typeof(TickerQDbContext))]
     partial class TickerQDbContextModelSnapshot : ModelSnapshot

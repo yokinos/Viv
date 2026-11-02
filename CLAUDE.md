@@ -55,7 +55,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | **Apex** | `Viv.Apex.Core` | `Viv.Apex.Api` | `Viv.Apex.Worker` |
 | **DeepRed** | `Viv.DeepRed.Core` | `Viv.DeepRed.Api` | `Viv.DeepRed.Worker` |
 | **Herta** | `Viv.Herta.Core` | `Viv.Herta.Api` + `Viv.Herta.Link` (SignalR) | — |
-| **SakuMai** | — | `Viv.SakuMai.Api` (TickerQ integrated) | — |
+| **Coser** | — | `Viv.Coser.Api` (TickerQ integrated) | — |
 
 **Shared/cross-cutting:**
 
@@ -196,7 +196,7 @@ finally { await app.StopAsync(); }
 
 ### Configuration: `VivOptions` node in `appsettings.json`
 
-> **凭据不入库**：入库的 `appsettings.json` 里所有凭据类值都是空串 —— `EnvOption.InternalToken`、`TokenOption.SecretKey`、`S3Option.AccessKey/SecretKey`、`LogOption.SeqApiKey`、`CacheOption.RedisOptions.ConnectionString/Password`、`DatabaseOption.MasterConnectionString`、`NanaOption.Password/SagaConnectionString`、SakuMai 的 TickerQ 连接串。三处来源按环境补上：
+> **凭据不入库**：入库的 `appsettings.json` 里所有凭据类值都是空串 —— `EnvOption.InternalToken`、`TokenOption.SecretKey`、`S3Option.AccessKey/SecretKey`、`LogOption.SeqApiKey`、`CacheOption.RedisOptions.ConnectionString/Password`、`DatabaseOption.MasterConnectionString`、`NanaOption.Password/SagaConnectionString`、Coser 的 TickerQ 连接串。三处来源按环境补上：
 > 1. **本地开发**：`appsettings.Development.json`（`.gitignore` 已排除，且是**整份覆盖**，所以每个 host 都有一份带真实值的副本）—— 新机器 clone 后没有这个文件，要自己建或向团队要；
 > 2. **生产**：环境变量 `VivOptions__TokenOption__SecretKey` / `VivOptions__EnvOption__InternalToken` / `VivOptions__DatabaseOption__MasterConnectionString` 等（层级用双下划线连接，标准配置链已生效）；
 > 3. **不要再往 `appsettings.json` 里填**：那份是共享的、会被提交的。
@@ -331,7 +331,7 @@ Business-layer services and repositories are registered via **type scanning** dr
 - **handler 必须跑完**：HTTP / 消费者 / `IVivLocalEventScope` 触发点一律传 `CancellationToken.None`，**刻意不用 `HttpContext.RequestAborted`** —— 客户端中途断开不该造成「主业务已提交、通知没发出去」的脱节。真能容忍不执行的逻辑就不该用本地事件，该走 MQ。
 - **触发点**：① HTTP 主路径 `LocalEventFlushFilterAttribute`（`AddVivApi` 的 `AddMvc` 全局过滤器，排在 `VivExceptionFilterAttribute` **之后**）—— 用 action filter 而不是中间件，因为位置在结果执行/响应写出**之前**，且**看得见业务成败**：异常过滤器置 `ExceptionHandled=true` 后 MVC 会剥离 `ActionExecutedContext.Exception`，唯一的失败信号只剩 `context.Result` 里那个错误 `VivApiResult`（判定用 **2xx 区间**，`Accepted=201` 也算成功）。`next()` 抛异常时过滤器 catch 后 Discard 再上抛，避免「异常过滤器把 HTTP 写成 200、中间件按状态码 Flush」。Flush 失败（主写入若已提交）会把信封改成错误并记 Error「主业务已提交，本地事件分发失败」。② 兜底 `LocalEventFlushMiddleware`（覆盖非 MVC 端点 gRPC / SignalR / health），**必须挂在 `VivContextMiddleware` 之内**（分发要跑在它 `finally Clear()` 租户上下文之前，否则处理器拿不到 `IVivContext`、租户过滤失效）。除 HTTP ≥400 外，还读 `HttpContext.Items[VivRunDefine.ApiResultItemKey]` 里写出的信封，避免「HTTP 200 + 信封非 2xx」误 Flush。响应已开始则无法改写信封，只记日志并丢弃剩余事件。
 - **触发点 ③ 消息消费**：`VivConsumer<T>` / `VivLocalConsumer<T>` 的 `HandleAsync` 在 `finally` 里分发 —— 消费成功才 `FlushAsync(CancellationToken.None)`，其余路径（抢锁失败 / `Requeue` / 失败丢弃 / 抛异常）一律 `Discard()`。**依赖是「Nana 的消费者基类认识一个 `Viv.Contracts` 里的接口」**，层级方向正常、不产生新项目引用（`Viv.Nana` 本来就引用 `Viv.Contracts`）—— 与当初把 `VivUnitOfWorkAttribute` 放进 Contracts 是同一个先例。「不耦合 Nana」那条约束针对的是**四族事件互相继承**，不是这个。两个细节：① **必须在 `_context?.Clear()` 之前**（同 HTTP 侧中间件必须挂在 `VivContextMiddleware` 之内那个坑）；② **失败走 `Discard` 而非 `Flush`** —— `Discard` 不抛异常，而 `FlushAsync` 会，`finally` 里抛出的异常会**顶掉在途的 `VivRequeueException`**，把重投语义换成不相干的异常。依赖经 `VivConsumerDependency._localEventBus` / `VivLocalConsumerDependency._localEventBus` 注入，**必填不给默认值**（它总是注册的，可空只会制造「忘了传就静默不分发」的坑）。构造点全在测试里（`Viv.Nana.Tests` 的 6 个 helper + `Viv.Herta.Tests` 一处），生产侧一律 DI 注入，业务消费者只管 `: base(dependency)` 透传，零改动。
-- **触发点 ④ TickerQ 定时任务**：继承 `VivTickerJobBase`（`Viv.Clockwork`），任务体走它保护的 `RunAsync` 即可 —— 内部经 `VivTickerJob.ExecuteAsync` 调 `IVivLocalEventScope.RunAsync`（成功 Flush、失败 Discard 后上抛），并在开工前**硬校验租户快照**（`EnsureSnapshot`：没 `SetSnapshot` 或 `AppId <= 0` 直接抛，不让全 0 快照静默跑 —— 那会让 EF 租户过滤失效、跨租户读）。SakuMai 的 `BaseJob` 就是这么写的，两个 `[TickerFunction]` 入口都经过 `RunAsync`。**手写 `BackgroundService` 没有统一入口可挂**（`Apex.Worker/Worker.cs`、`DeepRed.Worker/Worker.cs` 是 `dotnet new worker` 模板残留，一秒打一行日志、不碰库），真要发本地事件得自己包 `IVivLocalEventScope.RunAsync` 并放在清理 `IVivContext` 之前；不包的话作用域结束只记一条「未分发」Warning，事件不会被分发。
+- **触发点 ④ TickerQ 定时任务**：继承 `VivTickerJobBase`（`Viv.Clockwork`），任务体走它保护的 `RunAsync` 即可 —— 内部经 `VivTickerJob.ExecuteAsync` 调 `IVivLocalEventScope.RunAsync`（成功 Flush、失败 Discard 后上抛），并在开工前**硬校验租户快照**（`EnsureSnapshot`：没 `SetSnapshot` 或 `AppId <= 0` 直接抛，不让全 0 快照静默跑 —— 那会让 EF 租户过滤失效、跨租户读）。Coser 的 `BaseJob` 就是这么写的，两个 `[TickerFunction]` 入口都经过 `RunAsync`。**手写 `BackgroundService` 没有统一入口可挂**（`Apex.Worker/Worker.cs`、`DeepRed.Worker/Worker.cs` 是 `dotnet new worker` 模板残留，一秒打一行日志、不碰库），真要发本地事件得自己包 `IVivLocalEventScope.RunAsync` 并放在清理 `IVivContext` 之前；不包的话作用域结束只记一条「未分发」Warning，事件不会被分发。
 - **与 UoW 的衔接（⚠️ 单向，别想反）**：目前 `MomoDatabaseContext` 每次写当场提交，「主业务失败 → 事件不发」**现在就有**（失败则整队丢弃）。反过来**做不到**：分发触发点（action filter / middleware / 消费者 `HandleAsync` 的 `finally`）在**服务方法的提交边界之外**，等 handler 跑到时事务早就提交了 —— 此时 handler 失败**无法回滚已提交的写**。所以 handler 里只能做「失败就记日志 / 走补偿」的动作，别指望它还原子；真需要原子就得让 handler 自己开窄事务，或者把这段逻辑收回主业务流。⚠️ **上一版这里写着「届时只需把 flush 触发点上移到事务提交后」—— 那句是错的**，提交后 flush 拿不回已经落库的写。
 
 ### Unit of Work（事务）
@@ -402,7 +402,7 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outb
 - **`Payload` 是 `NanaEnvelope<T>` 的 JSON，自产自销**：由 Outbox 自己 `Serialize`、自己 `Deserialize`，**Wolverine 从头到尾看不到这个 Json**（重投时 Wolverine 才用**它自己的**序列化器把重建出的信封发上线）。因此完全不需要知道 Wolverine 的 `JsonSerializerOptions`，也就没有「选项漂移导致静默反序列化成默认值」的风险。选项固定成 `new JsonSerializerOptions(JsonSerializerDefaults.Web)`（camelCase + 大小写不敏感），由 `OutboxContractTests` 的 round-trip 钉住。**投递时 `MessageId` 从数据库列回填、覆盖 payload 里的值** —— 它是消费端 `nana:{ServiceName}:{EventType}:{MessageId}` 那把消费锁的去重键，必须活过重投。
 - **投递走 `IVivEventPublisher.PublishEnvelopeAsync`（新增的信封版，刻意不叫 `PublishAsync` 重载）**：「原样重发」保留 MessageId / Context / ReDeliverCount / CreatedAt，且**不重新盖 holderId**（投递的是冻结的信封）。⚠️ 不能走内容版：内容版每次新建信封、`MessageId` 重新生成，消费端去重键就没了。**为什么不叫 `PublishAsync`**：与内容版同为一个参数时，调用点写 `PublishAsync<T>(null)` 的 `null` 字面量对两个重载都成立且互不更优 → `CS0121` 二义（实测踩过），换个名字彻底躲开。
 - **投递器 `OutboxDispatcher : BackgroundService` 每轮**：① 释放过期租约（`Status=1 AND LeaseUntil <= @Now` → 退回 Pending，崩溃/被杀后卡住的行靠这条复活）② **排空**认领 + 投递（一直认领到认不出为止；只看一批的话积压时投递速度会被轮询间隔卡死）③ 分批清理 `Status=2 AND SentAt < @Cutoff` ④ 睡 `PollIntervalSeconds`（默认 5s，**纯轮询、无「提交后立即试投」的快路径** —— 投递只有一条代码路径）。
-- **`AddHostedService<OutboxDispatcher>()` —— 这是本模块对既有约定唯一的刻意破坏**：框架至今从不自己注册 `IHostedService`。但只有 Apex / DeepRed 有 Worker 进程，而 Herta.Api / SakuMai.Api 也会写 outbox —— 投递器只在 Worker 跑，这些服务的消息就永远发不出去；让每个宿主手工 `AddHostedService` 又违背「一行启动」的姿态。故由配置门控自动注册，凡调 `AddViv` 的宿主（API + Worker）都会跑投递器，与 `AddVivGrpcKestrel` 的配置驱动装配同一姿态。**它是 Singleton，所以不能构造注入任何 Scoped 服务**（`IVivEventPublisher` / `IOutboxRepository` 都是 Scoped），每轮由 `OutboxWorker` 自己 `CreateScope` 去解析。
+- **`AddHostedService<OutboxDispatcher>()` —— 这是本模块对既有约定唯一的刻意破坏**：框架至今从不自己注册 `IHostedService`。但只有 Apex / DeepRed 有 Worker 进程，而 Herta.Api / Coser.Api 也会写 outbox —— 投递器只在 Worker 跑，这些服务的消息就永远发不出去；让每个宿主手工 `AddHostedService` 又违背「一行启动」的姿态。故由配置门控自动注册，凡调 `AddViv` 的宿主（API + Worker）都会跑投递器，与 `AddVivGrpcKestrel` 的配置驱动装配同一姿态。**它是 Singleton，所以不能构造注入任何 Scoped 服务**（`IVivEventPublisher` / `IOutboxRepository` 都是 Scoped），每轮由 `OutboxWorker` 自己 `CreateScope` 去解析。
 - **后台异常一律吞掉**：`BackgroundService` 里逃出去的异常在 .NET 6+ 会**直接停掉整个宿主** —— MQ 抖一下整个业务进程跟着死。`OutboxDispatcher` catch 后记 Error 继续下一轮。**真正干活的一轮逻辑在 `OutboxWorker`（可测：`RunOnceAsync` 返回本轮投递条数），它负责报错、不负责吞**（吞是调度层的职责）。
 - **失败处理**：投递失败一律先重试，**不区分「MQ 挂了」和「序列化/路由问题」**（两类在这里的处理本来就是同一个）。记 `LastError`（截断到列宽）+ 指数退避（5s 起、×2、封顶 60s、+0~30% 抖动，与 `GenerateExponentialBackoff` 同形），`RetryCount >= MaxRetryCount` 才置 `Status=3` + Error。`OperationCanceledException`（停机）**直接上抛、不消耗重试次数**，租约到期后自然被重新认领。
 - **租约兜底**：`LeaseSeconds` 配成 0 或负数一律 `Math.Max(1, ...)` 取 1 秒 —— 租约 0 秒 = 认领的瞬间就过期，多个实例会把同一条消息翻来覆去地投。
@@ -489,7 +489,7 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outb
 
 两条边界要跟运维讲清楚，否则数会被读歪：**这是当前进程的视图**（多副本下每个实例各一份，跨实例汇总仍归 OTel 面板管，别把单副本的数当全局），以及**计数活在进程内存里，重启即归零**。口径是「自组装起（`AddViv` 那一刻）」，不是进程生命周期也不是某个时间窗口。
 
-`VivMeter` **不给 HTTP 端点** —— 管理后台的控制器由业务自己在 `Viv.SakuMai.Api` 写，按那边的鉴权与路由风格来。
+`VivMeter` **不给 HTTP 端点** —— 管理后台的控制器由业务自己在 `Viv.Coser.Api` 写，按那边的鉴权与路由风格来。
 
 ⚠️ 收账口径（`Viv.` 前缀）与 **OTel 的导出白名单是两回事**：`Viv.Aspire.ServiceDefaults/Extensions.cs` 里是手写死的四条 `.AddMeter("Viv.Xxx")`。以后谁新建一个 `Viv.` 开头的 meter，管理后台看得见、Grafana 看不见。要一致就把那边也改成前缀式，别只改一边。
 
@@ -523,7 +523,7 @@ Aspire 给的是**传输层**：OTLP 导出、dashboard、跨服务串联（`tra
 
 **不做（范围外）**：gRPC 客户端埋点（`AddVivGrpcClient` 目前零生产调用方，`Extensions.cs` 里那行注释留着）；框架自有语义的 span（消费锁、本地事件分发、发件箱认领 —— 那是第三层）。另外一条**既有的**口子：EF 命令抛异常时走的是 `CommandFailed` 而不是 `Executed`，所以失败的 EF 命令既不进指标也不出 span。
 
-**测试的边界**：单测钉的是「`Record` / 发布方法发出的 span 名字 / 标签 / **时长** / **父子关系**」与「没监听者时不炸」，**不是**「`ExecuteRedis*` 真的发了 span」—— 那要连真 Redis，仓库没有那条测试基座。接线只有手工验：Aspire 起来打一个既查库又读缓存的接口，那条 HTTP span 下应该挂出若干 `db.query` 与 `redis.command`（点开一条看 `path` 是 `ef` 还是 `dapper`、**duration 不是 0**）。消费侧那条线**已经实测过**：SakuMai 定时任务发的消息，同一条 traceId 在日志里从 `Enqueued for sending ... to local://durable/` 一路串到 `Enqueued for sending NanaEnvelope\`1#... to rabbitmq://exchange/TestApexExchange`；`Wolverine.Runtime.WolverineTracing.ActivitySource.Name` 也经反射确认就是 `"Wolverine"`（不是从 DLL 字符串表猜的，不用再去试 `"Wolverine.Diagnostics"`）。⚠️ 单独 `dotnet run` 跑服务时 `OTEL_EXPORTER_OTLP_ENDPOINT` 不会被注入，**什么都不会导出**，别当成埋点没生效。
+**测试的边界**：单测钉的是「`Record` / 发布方法发出的 span 名字 / 标签 / **时长** / **父子关系**」与「没监听者时不炸」，**不是**「`ExecuteRedis*` 真的发了 span」—— 那要连真 Redis，仓库没有那条测试基座。接线只有手工验：Aspire 起来打一个既查库又读缓存的接口，那条 HTTP span 下应该挂出若干 `db.query` 与 `redis.command`（点开一条看 `path` 是 `ef` 还是 `dapper`、**duration 不是 0**）。消费侧那条线**已经实测过**：Coser 定时任务发的消息，同一条 traceId 在日志里从 `Enqueued for sending ... to local://durable/` 一路串到 `Enqueued for sending NanaEnvelope\`1#... to rabbitmq://exchange/TestApexExchange`；`Wolverine.Runtime.WolverineTracing.ActivitySource.Name` 也经反射确认就是 `"Wolverine"`（不是从 DLL 字符串表猜的，不用再去试 `"Wolverine.Diagnostics"`）。⚠️ 单独 `dotnet run` 跑服务时 `OTEL_EXPORTER_OTLP_ENDPOINT` 不会被注入，**什么都不会导出**，别当成埋点没生效。
 
 ### 读过滤器（`IMomoDataFilter` + `IDataFilter`）
 

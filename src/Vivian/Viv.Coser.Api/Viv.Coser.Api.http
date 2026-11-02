@@ -1,0 +1,6 @@
+@Viv.Coser.Api_HostAddress = http://localhost:5123
+
+GET {{Viv.Coser.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -4,7 +4,7 @@ using Viv.Contracts.Interface;
 using Viv.Log;
 using Viv.Nana;
 
-namespace Viv.SakuMai.Api.Jobs
+namespace Viv.Coser.Api.Jobs
 {
     /// <summary>
     /// 每天 3 点执行的定时任务。

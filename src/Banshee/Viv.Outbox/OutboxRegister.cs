@@ -14,7 +14,7 @@ namespace Viv.Outbox
         /// 配置就绪时注册发件箱，并在 <c>EnableDispatcher</c> 打开时挂上投递器的后台宿主。
         ///
         /// 这里会注册 <c>IHostedService</c>，而框架其余部分从不自己注册宿主服务。
-        /// 原因是会写发件箱的服务不止 Apex / DeepRed 这两个有 Worker 的，Herta.Api / SakuMai.Api 也会写；
+        /// 原因是会写发件箱的服务不止 Apex / DeepRed 这两个有 Worker 的，Herta.Api / Coser.Api 也会写；
         /// 投递器只在 Worker 跑的话这些服务的消息就永远发不出去，而让每个宿主手工 AddHostedService
         /// 又违背「一行启动」。
         /// </summary>

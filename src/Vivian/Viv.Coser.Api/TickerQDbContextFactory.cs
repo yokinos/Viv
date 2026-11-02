@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Design;
 using TickerQ.EntityFrameworkCore;
 using TickerQ.EntityFrameworkCore.DbContextFactory;
 
-namespace Viv.SakuMai.Api
+namespace Viv.Coser.Api
 {
     public class TickerQDbContextFactory : IDesignTimeDbContextFactory<TickerQDbContext>
     {
@@ -16,7 +16,7 @@ namespace Viv.SakuMai.Api
         {
             string conn = "";
             var builder = new DbContextOptionsBuilder<TickerQDbContext>();
-            builder.UseSqlServer(conn, o => o.MigrationsAssembly("Viv.SakuMai.Api"));
+            builder.UseSqlServer(conn, o => o.MigrationsAssembly("Viv.Coser.Api"));
             return new TickerQDbContext(builder.Options);
         }
     }

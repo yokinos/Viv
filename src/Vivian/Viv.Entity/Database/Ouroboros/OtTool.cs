@@ -19,7 +19,7 @@ namespace Viv.Entity.Database.Ouroboros
         public string ToolKey { get; set; } = string.Empty;
 
         /// <summary>
-        /// 归属域：apex / herta / deepred / sakumai / ouroboros
+        /// 归属域：apex / herta / deepred / coser / ouroboros
         /// </summary>
         public string OwnerDomain { get; set; } = string.Empty;
 

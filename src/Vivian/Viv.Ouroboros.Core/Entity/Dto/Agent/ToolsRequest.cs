@@ -8,7 +8,7 @@ namespace Viv.Ouroboros.Core.Entity.Dto.Agent
     /// 工具管理接口的新增请求
     /// </summary>
     /// <param name="ToolKey">工具键，也是模型可见的工具名，全局唯一且不可改（能力绑定按它引用）</param>
-    /// <param name="OwnerDomain">归属域：apex / herta / deepred / sakumai / ouroboros</param>
+    /// <param name="OwnerDomain">归属域：apex / herta / deepred / coser / ouroboros</param>
     /// <param name="Description">给模型看的描述，写清"什么时候用"</param>
     /// <param name="ParamsSchema">入参 JSON Schema；必须是合法 JSON 对象，否则报错不入库</param>
     /// <param name="Transport">传输方式，取 EmToolTransport</param>

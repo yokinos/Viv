@@ -64,8 +64,8 @@
     <Project Path="src/Vivian/Viv.Ouroboros.Core/Viv.Ouroboros.Core.csproj" Id="7c465fc3-6e57-4ad8-9fbd-728fc67ab807" />
     <Project Path="src/Vivian/Viv.Ouroboros.Worker/Viv.Ouroboros.Worker.csproj" />
   </Folder>
-  <Folder Name="/src/Vivian/SakuMai/">
-    <Project Path="src/Vivian/Viv.SakuMai.Api/Viv.SakuMai.Api.csproj" />
+  <Folder Name="/src/Vivian/Coser/">
+    <Project Path="src/Vivian/Viv.Coser.Api/Viv.Coser.Api.csproj" />
   </Folder>
   <Folder Name="/src/Vivian/Tests/">
     <Project Path="src/Vivian/Viv.Apex.Tests/Viv.Apex.Tests.csproj" />

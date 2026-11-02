@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Viv.SakuMai.Api.Migrations.TickerQ
+namespace Viv.Coser.Api.Migrations.TickerQ
 {
     /// <inheritdoc />
     public partial class InitTickerQ : Migration
