@@ -6,14 +6,14 @@
 
 # Viv
 
-**基于 .NET 10 的微服务基础设施框架** — 从数据访问、消息队列、缓存、认证到网关编排的一站式方案。
+**基于 .NET 10 的微服务基础设施框架** — 数据访问、消息、缓存、长连接、网关、可观测性一次装配。
 
-业务侧只需声明 **实体 + Service + Repository**，框架自动完成扫描注册、租户隔离、统一响应与运维支撑。
+业务侧只写 **实体 + Service + Repository + Handler**，框架负责扫描注册、租户隔离、统一响应、事务与投递语义。
 
 <p align="center">
   <img src="https://img.shields.io/github/actions/workflow/status/yokinos/Viv/dotnet.yml?style=flat&logo=githubactions&logoColor=white&label=CI" />
   <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=flat&logo=dotnet" />
-  <img src="https://img.shields.io/badge/C%23-13.0-239120?style=flat&logo=csharp" />
+  <img src="https://img.shields.io/badge/C%23-14.0-239120?style=flat&logo=csharp" />
   <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat&logo=postgresql" />
   <img src="https://img.shields.io/badge/SQL_Server-2022-CC2927?style=flat&logo=microsoftsqlserver" />
   <img src="https://img.shields.io/badge/Redis-7.x-DC382D?style=flat&logo=redis" />
@@ -34,22 +34,28 @@
 
 ## 核心能力
 
-- **多租户隔离** — `Org > Company > Tenant` 分层组织；`IVivContext`（AsyncLocal）承载租户身份，EF 全局过滤 / Dapper 自动追加租户条件，业务零手写
-- **数据访问** — EF Core + Dapper 混合（小操作走变更追踪、大查询走纯 SQL），读写分离、软删除、事务、按实体自动建表
-- **消息** — Wolverine + RabbitMQ 发布订阅、延迟重投、Saga 状态机；消费锁 + 死信兜底
-- **缓存与分布式锁** — Redis 多库路由、Cache-Aside 防击穿，可重入 / 非重入锁 + 自动续期
-- **网关** — YARP 反向代理，路由自动生成；JWT 解析 + `x-request-token` HMAC 验签回填，防绕过直连伪造身份
-- **跨服务通信** — HTTP + gRPC 双通道、服务发现、`x-viv-*` 上下文透传
-- **可观测性** — 健康检查（`/health` + `/alive`）、Meter 指标 + 进程内读取（`IVivMeter`）、链路追踪（db / redis / mq 三族 span）、慢查询日志
-- **工程化** — 中央包管理、Aspire 统一编排、OpenTelemetry + Seq、TickerQ 调度、代码生成
+- **多租户隔离** — `Org > Company > Tenant` 分层；`IVivContext`（AsyncLocal）承载身份，EF 全局过滤、Dapper 自动追加租户条件
+- **数据访问** — EF Core + Dapper 混合；读写分离、软删除、事务、按实体同步表结构
+- **消息** — Wolverine + RabbitMQ 发布订阅（fanout，每个服务一条独立队列）、消费锁、延迟重投、死信
+- **可靠投递** — Outbox 与业务写入同事务；Inbox 按消息级/业务级两族键去重
+- **异步任务** — Skirk：长任务持久化、认领执行、进度上报、协作式取消、幂等入队
+- **缓存与锁** — Redis 多库路由、Cache-Aside、分布式锁（可重入 + 自动续期）
+- **长连接** — Kinna：连接表、租约、Ack/Resync 投递水位、单客户端单连接、上行限流、健康检查
+- **网关** — YARP 反向代理；路由自动生成、短名可配置；JWT 解析 + `x-request-token` HMAC 验签
+- **跨服务通信** — HTTP + gRPC，服务发现，`x-viv-*` 上下文透传
+- **可观测性** — `/health` + `/alive`、`Viv.*` Meter、`IVivMeter` 进程内读数、db/redis/mq 链路 span、慢查询日志
+- **工程化** — 中央包管理、Aspire 编排、OpenTelemetry + Seq、TickerQ 调度、源生成器、CLI
 
 ---
 
 ## 目录
 
 - [快速开始](#快速开始)
+- [配置与凭据](#配置与凭据)
 - [架构](#架构)
 - [框架用法](#框架用法)
+- [测试与 CI](#测试与-ci)
+- [约定与文档](#约定与文档)
 
 ---
 
@@ -59,44 +65,74 @@
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - PostgreSQL 16+ 或 SQL Server 2022+
-- Redis 7.x
-- RabbitMQ 3.x
+- Redis 7.x、RabbitMQ 3.x（不用的子系统可以不配，对应节点写 null）
 
-### 启动
+### 构建与启动
 
 ```bash
-# 构建
-dotnet build
+# 构建全量（诊断用：-m:1 -nodeReuse:false 可避开并发编译的文件锁问题）
+dotnet build Viv.slnx
 
-# 一键启动全部服务（AppHost 编排，含网关）
+# 一键启动全部服务（Aspire 编排，含网关）
 dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.AppHost
 
 # 或单独启动
 dotnet run --project src/Vivian/Viv.Apex.Api
 dotnet run --project src/Vivian/Viv.Apex.Worker
 dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.Gateway
+
+# 全量测试
+dotnet test Viv.slnx
 ```
 
-### 中央包管理（Central Package Management）
+### 中央包管理
 
-所有 NuGet 包版本集中在仓库根 [Directory.Packages.props](Directory.Packages.props) 声明，各项目的 `<PackageReference>` 一律不写 `Version`：
+所有 NuGet 版本集中在根目录 [Directory.Packages.props](Directory.Packages.props)，各项目 `<PackageReference>` 不写 `Version`；已开启 `CentralPackageTransitivePinningEnabled`。
 
-```xml
-<!-- Directory.Packages.props -->
-<PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+---
 
-<!-- 任一 csproj -->
-<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+## 配置与凭据
+
+### 凭据不入库
+
+已入库的 `appsettings.json` 里，凭据类字段一律是空串：
+
+```
+TokenOption.SecretKey、EnvOption.InternalToken、S3Option.AccessKey/SecretKey、
+LogOption.SeqApiKey、CacheOption.RedisOptions.ConnectionString/Password、
+DatabaseOption.MasterConnectionString、NanaOption.Password/SagaConnectionString
 ```
 
-- **升级 / 加包 / 钉传递依赖版本，只改 `Directory.Packages.props` 一处**，全仓库同步生效
-- 已开启 `CentralPackageTransitivePinningEnabled`：中央文件里即使无项目直接引用的包也会按中央版本解析
+三处来源按环境补：
+
+1. **本地开发** — `appsettings.Development.json`（`.gitignore` 已排除，整份覆盖）。新机器 clone 后没有这个文件，需要自备。
+2. **生产** — 环境变量，层级用双下划线：`VivOptions__TokenOption__SecretKey`、`VivOptions__EnvOption__InternalToken`、`VivOptions__DatabaseOption__MasterConnectionString`。
+3. **不要写回 `appsettings.json`** —— 那份是共享且会提交的。
+
+缺失时是**响亮的失败**：`TokenOption.SecretKey` 为空会让 JwtBearer 注册直接抛 `IDX10720`；连接串为空会在首次使用时报错。
+
+### 宿主标识
+
+`EnvOption` 里决定"我是谁、显示成什么、挂在网关哪个前缀下"：
+
+```jsonc
+"EnvOption": {
+  "Env": 0,
+  "ServiceName": "viv.apex.api",     // 服务标识（x-viv-serviceName）
+  "DisplayName": "Viv Apex API",     // OpenAPI / Scalar 标题，缺省回落 ServiceName
+  "ShortName": "apex",               // Scalar 里的网关前缀，缺省不设（等同直连服务）
+  "MachineId": 2,
+  "InternalToken": ""
+}
+```
+
+> `ShortName` 只影响本服务自己的文档展示，**不参与网关路由**。网关的短名在网关自己的 `VivGateway:ShortNames` 里配（见 [网关](#网关)）。
 
 ---
 
 ## 架构
 
-### 架构总览
+### 总览
 
 ```
                   ┌─────────────────────┐
@@ -104,96 +140,97 @@ dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.Gateway
                   └──────────┬──────────┘
                              │
                   ┌──────────▼──────────┐
-                  │  Viv.Aspire.Gateway  │   YARP 反向代理 + 限流 + 输出缓存 + JWT 解析透传
+                  │  Viv.Aspire.Gateway  │   YARP + 限流 + 输出缓存 + 上下文头透传
                   └──────────┬──────────┘
                              │
-         ┌───────────────────┼───────────────────┐
-         │                   │                   │
-   ┌─────▼─────┐  ┌─────▼─────┐  ┌─────▼─────┐
-   │ Apex.Api  │  │DeepRed.Api│  │Herta.Api  │  ...  Vivian 服务（API / Worker / Link）
-   │Apex.Worker│  │D.R.Worker │  │Herta.Link │
-   └─────┬─────┘  └─────┬─────┘  └─────┬─────┘
-         │              │              │
-         └──────────────┼──────────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        │               │               │
-  ┌─────▼─────┐  ┌─────▼─────┐  ┌─────▼─────┐
-  │   Momo    │  │   Nana    │  │   Redis   │  Banshee 基础设施
-  │ EF+Dapper │  │Wolverine  │  │ 缓存/分布式锁│
-  │ 读写分离   │  │+RabbitMQ  │  │           │
-  └───────────┘  └───────────┘  └───────────┘
+        ┌────────────────────┼────────────────────┐
+        │                    │                    │
+  ┌─────▼─────┐      ┌───────▼──────┐    ┌────────▼──────┐
+  │ Apex.Api  │      │ DeepRed.Api  │    │ Herta.Api     │   Vivian 应用层
+  │Apex.Worker│      │D.R.Worker    │    │ Herta.Link    │
+  │Coser.Api  │      │Ouroboros     │    │ (SignalR)     │
+  └─────┬─────┘      └───────┬──────┘    └────────┬──────┘
+        │                    │                    │
+        └────────────────────┼────────────────────┘
+                             │
+     ┌───────────┬───────────┼───────────┬────────────┐
+     │           │           │           │            │
+ ┌───▼───┐ ┌─────▼─────┐ ┌───▼───┐ ┌─────▼─────┐ ┌────▼────┐
+ │ Momo  │ │   Nana    │ │ Redis │ │  Outbox   │ │  Kinna  │  Banshee 框架层
+ │EF+Dao │ │Wolverine  │ │缓存/锁│ │ + Inbox   │ │ 长连接  │
+ │多租户 │ │+RabbitMQ  │ │       │ │  + Skirk  │ │         │
+ └───────┘ └───────────┘ └───────┘ └───────────┘ └─────────┘
 ```
 
 ### 请求链路
 
-一次请求经 **网关 → 下游服务 → 数据层** 三级，身份与多租户上下文沿链路逐级验真：
-
 ```
 客户端携带 JWT
  → 网关：剥离客户端伪造的 x-viv-* 头与 query 身份参数 → JwtBearer 验签
- → 从 claims 回填 x-viv-* 头（含 holder-id），HMAC-SHA256 签名写 x-request-token（{unixSeconds}:{base64Sig}，≤300s 时效）
- → 下游：VivContextMiddleware 验 x-request-token 通过才信任 x-viv-* 头 → IVivContext（AsyncLocal）
+ → 从 claims 回填 x-viv-*（含 holder-id），HMAC-SHA256 签名写 x-request-token（≤300s）
+ → 下游：VivContextMiddleware 验签通过才信任头 → IVivContext（AsyncLocal）
  → 数据层：EF 全局租户过滤 / Dapper 自动追加 AND TenantId = @TenantId
  → 返回：{ Code, Message, Data }（HTTP 恒 200）
 ```
 
-上下文头契约（由网关验签后回填，下游验签才信任）：`x-viv-appId`（claims: appId）、`x-viv-subjectId`（租户 ID = TenantId）、`x-viv-userId`（claims: sub）、`x-viv-serviceName`、`x-viv-holder-id`（分布式锁持有者 Id）、`x-request-token`（上述头的 HMAC 签名，密钥 `EnvOption.InternalToken`，网关与所有服务同值，不回落 `TokenOption.SecretKey`）。SignalR / WebSocket 升级请求无法带 Authorization 头，改用 `?access_token=<JWT>`（网关 `OnMessageReceived` 读取）。
+上下文头：`x-viv-appId`、`x-viv-subjectId`（= TenantId）、`x-viv-userId`、`x-viv-serviceName`、`x-viv-holder-id`、`x-request-token`。
+签名密钥是 `EnvOption.InternalToken`（网关与所有服务同值，不回落 `TokenOption.SecretKey`）。
+SignalR/WebSocket 升级带不了 Authorization 头，用 `?access_token=<JWT>`。
 
 ### 项目结构
 
 ```
 Viv/
 ├── src/
-│   ├── Banshee/                          # 框架层
-│   │   ├── Viv.Contracts/                # 基础接口与枚举（IVivContext、IVivMeter、IDependency…）
-│   │   ├── Viv.Delusion/                 # 通用工具 — 类型扫描、对象映射、加密、字符串
-│   │   ├── Viv.Aoi/                      # DI 桥接 — VivLocator（MS DI ↔ Autofac）
-│   │   ├── Viv.Engine/                   # 核心引擎 — 配置加载、AddViv 注册、启动扩展、统一状态码、健康检查、指标读取（IVivMeter）
-│   │   ├── Viv.Log/                      # 日志 — Serilog / No-op，Seq 集成
-│   │   ├── Viv.Momo/                     # 数据库 — EF Core + Dapper 混合、读写分离、多租户
-│   │   ├── Viv.Nana/                     # 消息 — Wolverine + RabbitMQ 发布订阅、Saga
-│   │   ├── Viv.Redis/                    # 缓存 — Redis 服务 + 分布式锁（自动续期）
-│   │   ├── Viv.Sandrone/                 # 云能力 — JWT、S3、二维码
-│   │   ├── Viv.Clockwork/                # 调度 — TickerQ 集成 + 仪表盘
-│   │   ├── Viv.Echo/                     # 跨服务通信 — HTTP + gRPC
-│   │   ├── Viv.Cli/                      # CLI 框架 — REPL + 命令自动发现
-│   │   └── Viv.Forge/                    # 代码生成
+│   ├── Banshee/                              # 框架层
+│   │   ├── Viv.Contracts/                    # 基础契约（IVivContext、IDependency、IDistributedLock…）
+│   │   ├── Viv.Delusion/                     # 工具：类型扫描、SafeMapper、加密、扩展
+│   │   ├── Viv.Aoi/                          # DI 桥接（VivLocator）+ 内置容器 Paradox
+│   │   ├── Viv.Engine/                       # 核心引擎：配置、AddViv、启动扩展、网关路由、自检
+│   │   ├── Viv.Log/                          # Serilog / No-op + Seq
+│   │   ├── Viv.Momo/                         # EF Core + Dapper 混合、读写分离、多租户、建表
+│   │   ├── Viv.Nana/                         # Wolverine + RabbitMQ 发布订阅、Saga、MQTT
+│   │   ├── Viv.Outbox/                       # Outbox（事务性投递）+ Inbox（消费幂等）
+│   │   ├── Viv.Skirk/                        # 异步任务：入队、认领执行、进度、取消
+│   │   ├── Viv.Redis/                        # 缓存 + 分布式锁（自动续期）
+│   │   ├── Viv.Sandrone/                     # JWT、S3、二维码
+│   │   ├── Viv.Echo/                         # HTTP + gRPC 客户端/服务端、服务发现
+│   │   ├── Viv.Kinna/                        # 长连接推送框架（连接表、Ack/Resync、限流）
+│   │   ├── Viv.Clockwork/                    # TickerQ 调度
+│   │   ├── Viv.Cli/                          # REPL + 命令自动发现
+│   │   └── Viv.Forge/                        # 源生成器基类
 │   │
-│   ├── Vivian/                           # 应用层
-│   │   ├── Viv.Entity/                   # 数据库实体（按领域分目录）
-│   │   ├── Viv.Elysia/                   # 请求校验管线（RequestFilterAttribute、RequestValidator<T>）
-│   │   ├── Viv.EventContracts/           # 跨服务消息定义
-│   │   ├── Viv.ServiceProxy/             # 业务侧 gRPC 示例（proto + 实现；框架装配在 Echo）
-│   │   ├── Viv.Generators/               # 应用源生成器（继承 Viv.Forge）
-│   │   ├── Viv.Meta/                     # 生成代码宿主
-│   │   │
-│   │   ├── Viv.Apex.Core|Api|Worker/     # Apex 领域
-│   │   ├── Viv.DeepRed.Core|Api|Worker/  # DeepRed 领域
-│   │   ├── Viv.Herta.Core|Api|Link/      # Herta 领域（Link = SignalR 实时通道）
-│   │   ├── Viv.Coser.Api/                # Coser API（TickerQ 集成）
-│   │   │
+│   ├── Vivian/                               # 应用层
+│   │   ├── Viv.Entity/                       # 数据库实体（按领域分目录）
+│   │   ├── Viv.Elysia/                       # 请求校验管线 + 操作日志
+│   │   ├── Viv.EventContracts/               # 跨服务事件定义
+│   │   ├── Viv.ServiceProxy/                 # 业务侧 gRPC 契约与客户端（IClientAppQuery 等）
+│   │   ├── Viv.Generators/、Viv.Meta/        # 应用源生成器与宿主
+│   │   ├── Viv.Apex.Core|Api|Worker/         # Apex 领域
+│   │   ├── Viv.DeepRed.Core|Entity|Api|Worker/
+│   │   ├── Viv.Herta.Core|Api|Link/          # Herta（Link = SignalR）
+│   │   ├── Viv.Ouroboros.Core|Api|Worker/
+│   │   ├── Viv.Coser.Api/                    # Coser（TickerQ）
+│   │   ├── Viv.Toolbox/                      # 控制台工具箱（VivAppBuilder 实例）
 │   │   └── Viv.Aspire/
-│   │       ├── Viv.Aspire.AppHost/        # Aspire 统一编排
-│   │       ├── Viv.Aspire.Gateway/        # YARP 反向代理（路由自动生成）
-│   │       └── Viv.Aspire.ServiceDefaults/ # OpenTelemetry（指标/追踪）、/health + /alive、服务发现、韧性
+│   │       ├── Viv.Aspire.AppHost/
+│   │       ├── Viv.Aspire.Gateway/
+│   │       └── Viv.Aspire.ServiceDefaults/
 │   │
-│   └── Test/                             # 框架单元测试套件（每 Banshee 项目一套）
+│   └── Test/                                 # 框架各项目单测 + Viv.Fakes（统一替身）
 ```
 
 ---
 
 ## 框架用法
 
-### 一行动员：API / Worker / Gateway
-
-每个服务只需三行，基础设施由框架一键装配：
+### 一行启动：API / Worker / Gateway
 
 ```csharp
 // ── API ──────────────────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
-builder.AddVivApi(new ApiInitSetting("Viv Apex API", "apex"), mvc => mvc.Filters.Add<RequestFilterAttribute>());
+builder.AddVivApi(mvc => mvc.Filters.Add<RequestFilterAttribute>());
 builder.RunVivApi(app => app.MapDefaultEndpoints());
 
 // ── Worker（消息消费者 / 后台任务）──────────────────
@@ -203,39 +240,47 @@ builder.AddVivWorker();
 builder.Services.AddHostedService<Worker>();
 builder.RunVivWorker();
 
-// ── Gateway（YARP 反向代理）──────────────────────────
+// ── Gateway（YARP）───────────────────────────────────
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.AddVivGateway(ignoreSslErrors: builder.Environment.IsDevelopment());
 builder.RunVivGateway(app => app.MapDefaultEndpoints());
 ```
 
-`AddVivApi` / `AddVivWorker` / `AddVivGateway` 自动完成：加载 appsettings.json 的 `VivOptions` 节点 → 装配 Autofac 容器 → `AddViv()` 注册全部子系统 → MVC / CORS / Swagger / 编码 → 中间件管线。`RunVivApi` 的 `configure` 回调可追加自定义端点（如 `app.UseTickerQ()`、`app.MapHub()`）。
+`AddVivApi` 依次完成：绑定 `VivOptions` → Autofac 容器 → `AddViv()` → JWT → MVC/JSON/CORS/OpenAPI → 编码注册。
+标题与网关前缀取自 `EnvOption.DisplayName` / `ShortName`，宿主代码不再传名字。
+`RunVivApi` 的 `configure` 回调可追加端点（`app.UseTickerQ()`、`app.MapHub<ChatHub>("/chat")` 等）。
 
-### 配置：appsettings.json 的 `VivOptions` 节点
+### `VivOptions` 各段
 
-每个服务项目的 `appsettings.json` 携带一个 `VivOptions` 节点，框架按节驱动子系统装配。最小可用配置：
+| 段 | 作用 | 备注 |
+|---|---|---|
+| `EnvOption` | 环境、服务标识、`InternalToken`、`DisplayName`/`ShortName` | `InternalToken` 网关与服务必须同值 |
+| `DIOption` | Service / Repository 扫描规则 | 与 `IDependency` 标记共同构成注册来源 |
+| `CacheOption` | Redis 连接、模式、多库分配 | 支持 Standalone / Cluster / Sentinel |
+| `LogOption` | Serilog、Seq | |
+| `DatabaseOption` | 方言、读写分离、实体扫描、慢查询阈值 | |
+| `NanaOption` | RabbitMQ、消费类型、重试、Saga | |
+| `OutboxOption` | 发件箱投递器、保留期 | 为 null = 不启用 |
+| `InboxOption` | Inbox 清理保留期 | 与别段不同：为 null 不是"不启用" |
+| `MqttOption` | MQTT 连接 | |
+| `TokenOption` | JWT 密钥、有效期、签发方 | |
+| `TickOption` | TickerQ 调度 | |
+| `EchoOption` | HTTP / gRPC 服务端 | `GrpcOption.Port` 需要独立端口 |
+| `CorsOption` | 允许的 Origin | 未配置时 Development 只放行本机回环 |
+| `S3Option` | 对象存储 | |
+| `SkirkOption` | 异步任务（`EnableWorker` 决定本宿主跑不跑） | |
 
-```jsonc
-{
-  "EnvOption": { "Env": 0, "ServiceName": "viv.apex.api", "MachineId": 101, "InternalToken": "<32位随机hex>" },
-  "DIOption": { // Service / Repository 自动扫描注册
-    "ServiceImplementation": { "AssemblyName": "Viv.Apex.Core", "Namespace": "Viv.Apex.Core.Service", "ClassNameEndsWith": "Service" },
-    "RepositoryImplementation": { "AssemblyName": "Viv.Apex.Core", "Namespace": "Viv.Apex.Core.Repository", "ClassNameEndsWith": "Repository" }
-  },
-  "CacheOption": { "CacheProviderType": 1, "RedisOptions": { "ConnectionString": "localhost:6379,password=***", "DefaultDatabase": 0, "MaxDbIndex": 12 } },
-  "LogOption": { "LogType": 1, "IsUseSeq": true, "SeqUrl": "https://seq.example.com" },
-  "DatabaseOption": { "DatabaseSource": 0, "MasterConnectionString": "Server=...;Database=viv;...", "SlowQueryThresholdMs": 1000 },
-  "NanaOption": { "Host": "localhost", "Port": 5672, "UserName": "viv", "VirtualHost": "VivNet", "RetryCount": 3 },
-  "TokenOption": { "SecretKey": "***", "ExpireMinutes": 120, "Issuer": "viv.system.net", "Audience": "viv.system.net" }
-}
-```
+### DI 注册与启动自检
 
-各段要点：`EnvOption.InternalToken` 是 `x-request-token` 签名密钥，**网关与所有服务必须同一个值**（不回落 `TokenOption.SecretKey`）；`CacheOption.RedisOptions` 支持 Standalone / Cluster / Sentinel 三模式、`MaxDbIndex` 多租户按租户分库；`DatabaseOption` 支持 PostgreSQL / SQL Server、`IsReadWriteSplit` 读写分离、`SlowQueryThresholdMs` 慢查询阈值（0 = 关）；`NanaOption.SagaConnectionString` 不配则不启用 Saga 持久化。可选段：`TickOption`（TickerQ 调度，不用则为 null）、`EchoOption`（HTTP + gRPC 跨服务通信）、`S3Option`（对象存储）。
+两条注册路径并存：
+
+- **`DIOption` 扫描** —— 按程序集 + 命名空间 + 类名后缀（`Service` / `Repository`）注册为 Scoped
+- **`IDependency` 标记** —— 实现类自己声明，可配 `[VivDependency(Lifetime = ..., AsSelf = ..., tag)]` 控制生命周期、自注册、keyed 注册（如按用户类型、客户端技术栈取不同实现）
+
+启动时会做一次**漏注册自检**：名字以 `Service` / `Repository` 结尾、却既没实现 `IDependency` 也不在扫描范围内的类，直接抛异常并点名 —— 否则要等到某个接口解析失败才发现，现场看不出是谁漏了。测试项目与 `Viv.Fakes` 不参与自检。
 
 ### 数据库 Momo
-
-`IMomoDbContext` 是统一数据访问入口，EF Core 与 Dapper 按阈值混合使用（小操作走 EF 变更追踪，大查询走 Dapper 纯 SQL）：
 
 ```csharp
 public class UserService : IUserService
@@ -243,100 +288,162 @@ public class UserService : IUserService
     private readonly IMomoDbContext _db;
     public UserService(IMomoDbContext db) => _db = db;
 
-    public async Task<VivApiResult<User>> GetByIdAsync(long id)
+    public async Task<VivApiResult> GetByIdAsync(long id)
     {
-        var user = await _db.FindAsync<User>(id);           // 按 Id 查询（自动租户隔离）
+        var user = await _db.FindAsync<User>(id);       // 自动租户隔离
         return user is not null
-            ? VivApiResult<User>.Success(data: user)
-            : VivApiResult<User>.Failed("用户不存在");
+            ? VivApiResult.Success(user)
+            : VivApiResult.Failed("用户不存在");
     }
 }
 ```
 
-内置能力：**读写分离**（`EFAppContext` 锁定读写方向）、**多租户隔离**（实现 `ITenant` 自动附加租户过滤）、**软删除**（实现 `ISoftDelete`）、**事务**（`BeginTransactionAsync` 三件套）、**建表**（`SyncTableAsync` 按实体自动同步）。
+内置：读写分离、`ITenant` 租户过滤、`ISoftDeleted` 软删除、事务三件套、`SyncTableAsync` 按实体同步表。
 
-> [!NOTE]
-> 访问失败统一抛 `VivConnectionException`（映射 `-501` 数据库错误），`Insert` / `Update` / `Delete` 的 `false` 只表示影响 0 行或入参无效，不表示数据库故障。
+> [!IMPORTANT]
+> `SchemaSynchronizer` 只建/改表，**不生成索引**。唯一索引要手工 DDL；`SyncTableAsync` 也不在启动路径上（Toolbox 的 `initviv` 命令才会触发）。
 
-### 消息 Nana（Wolverine + RabbitMQ）
+### 消息：Nana / Outbox / Skirk
 
-发布订阅语义：每条事件进 fanout 交换机 `{EventName}Exchange`，每个订阅服务持一条独立队列各收一份；同服务只执行一次由 `VivConsumer<T>` 基类按 `nana:{ServiceName}:{EventType}:{MessageId}` 取 Redis 锁（拿不到当前实例直接 ack return，未配 Redis 跳过取锁）。
+**发布订阅**：事件进 fanout 交换机 `{EventName}Exchange`，每个订阅服务一条独立队列各收一份；同服务只处理一次由消费锁 `nana:{ServiceName}:{EventType}:{MessageId}` 保证。
 
 ```csharp
-// 发布（消息类需继承 NanaEvent）
-public interface IVivEventPublisher
-{
-    ValueTask<bool> PublishAsync<T>(T content, CancellationToken ct = default) where T : NanaEvent;
-    ValueTask<bool> PublishDelayAsync<T>(TimeSpan delay, T content, CancellationToken ct = default) where T : NanaEvent;
-}
+// 事务性投递：与业务写入同一个本地事务，提交后才可能被投递
+await _outbox.EnqueueAsync(new SendMessageEvent { /* ... */ });
 
-// 消费（继承 VivConsumer<T>，实现业务逻辑）
+// 消费
 public class UserCreatedConsumer : VivConsumer<UserCreated>
 {
-    public UserCreatedConsumer(ILoggerContract logger) : base(logger) { }
+    public UserCreatedConsumer(VivConsumerDependency dependency) : base(dependency) { }
 
-    public override async Task<SubscribeResult> ReceiveMessageAsync(
+    public override Task<SubscribeResult> ReceiveMessageAsync(
         NanaEnvelope<UserCreated> message, CancellationToken ct = default)
+        => Task.FromResult(SubscribeResult.Success());
+}
+```
+
+**异步任务（Skirk）**：长任务持久化到 `VivAsyncTask`，Worker 原子认领后执行，支持进度上报与协作式取消。
+
+```csharp
+var taskId = await _tasks.EnqueueAsync("export-users", new ExportParams(tenantId), idempotencyKey: $"{userId}:export:{tenantId}");
+// 处理器
+public class ExportUsersHandler : VivAsyncTaskHandler<ExportParams>
+{
+    public override string TaskType => "export-users";
+    protected override async Task ExecuteAsync(ExportParams? request, IVivAsyncTaskContext context, CancellationToken ct)
     {
-        // ... 业务处理（多租户上下文随信封透传，message.Context）
-        return SubscribeResult.Success();              // 成功确认
-        // return SubscribeResult.Fail(isRequeue: true, "重试");  // 要求重投
+        for (var i = 0; i < 100; i++)
+        {
+            context.ThrowIfCancelRequested();
+            await context.ReportAsync(i + 1, 100, "导出中");
+        }
     }
 }
 ```
 
-消费失败自动按 `RetryCount × 1s` 重试，耗尽后进死信队列；Saga 状态机可基于 EF 持久化（配 `SagaConnectionString` 自动启用）。
+### 缓存与分布式锁
 
-> [!TIP]
-> **消费并发 / 预取调优**：框架默认每通道预取 **20** 条（低于 Wolverine 原生 100，降低崩溃重投放大）、队列用 **Quorum** 类型（多副本防丢消息）。需要吞吐时给消费者标特性覆盖：`[NanaConsumer(ConsumerCount = 4, PrefetchCount = 200, MaximumParallelMessages = 32)]`。`ConsumerCount` > 1 会丢失同队列内的严格顺序，多实例时总数 = 通道数 × 实例数。
+```csharp
+await _redis.AddAsync("key", value, TimeSpan.FromMinutes(5));
+await _lock.AcquireLockWithExecuteAsync("biz:order:42", TimeSpan.FromSeconds(30), async () =>
+{
+    /* 临界区 */
+    return true;
+});
+```
+
+Redis 故障时读路径回源数据库、取锁走回源兜底；写路径仍抛 `VivConnectionException`（映射 `-502`）。
+
+### 跨服务通信：Echo
+
+- **HTTP**：`AddVivGrpcClient` 同源的客户端封装，透传 `x-viv-*` 并签名
+- **gRPC**：`[BindServiceMethod]` 实现自动发现并映射；客户端 `GrpcChannel` 走 HTTP/2
+- **端口约束**：明文下 `Http1AndHttp2` 只认 TLS/ALPN，因此 **REST 与 gRPC 必须分端口** —— gRPC 端口严格 HTTP/2，REST 端口强制 HTTP/1.1。浏览器/curl 直接访问 gRPC 端口会得到 `An HTTP/1.x request was sent to an HTTP/2 only endpoint`
+
+### 长连接：Kinna
+
+一个 Hub 一套运行实例，进程内连接表按 `(SubjectId, UserId)` 与 `(AppId, SubjectId, UserId)` 双索引：
+
+```csharp
+builder.Services.AddKinna<ChatHub>();
+builder.Services.AddKinnaPusher<ChatHub, SendMessageEvent, ChatMessagePusher>();
+// ...
+app.MapKinnaHub<ChatHub>("/chat");
+```
+
+- **Ack / Resync**：客户端确认已收到的消息，重连时拿水位判断是否补拉；存储走 `IKinnaDeliveryStore<THub>` 端口，业务侧决定落库还是落缓存
+- **单客户端单连接**：按 AppId 判，新连接登记时摘掉同租户同用户的旧连接（本副本内）
+- **健康检查 / 上行限流**：`Ping`/`Ack` 按连接限流，被挡的 Ping 回 Pong 但不续租
 
 ### 可观测性
 
-健康检查、指标与链路追踪三件套开箱即用，数据全部汇入 Aspire Dashboard / OTLP。
-
-- **健康检查**（`/health` + `/alive`，全环境映射）— `/health` 走全部检查（数据库 `SELECT 1`、Redis 真 `PING`，按配置挂载、没配不挂）；`/alive` 只判进程存活，依赖挂了摘流量但不判"该重启"
-- **指标**（Meter 名 `Viv.*`）— `Viv.Momo`（查询耗时 / 慢查询 / 库失败）、`Viv.Redis`（命令耗时 / 缓存命中 / 取锁·续期·释放）、`Viv.Nana` + `Viv.Outbox`（消息发布 / 消费）
-- **进程内指标读取**（`IVivMeter`，给管理后台用）— `Meters` 列已收账 meter 名、`Snapshot()` 当前读数、`Reset()` 清零并返回清零前快照。口径：自 `AddViv` 起累计、清零只影响框架自持份（OTel 面板仍是连续累计）
-- **链路追踪**（`ActivitySource: Viv`）— `db.query`（EF + Dapper 一处收口，标签 path/op）、`redis.command`、`mq.publish`；消费侧复用 Wolverine 自带源。发件箱消息入队时持久化 `TraceId` / `RequestTraceId`（投递器后台作用域重建不出入队语境），面板按 traceId 反查完整处理链
-- **慢查询日志** — `SlowQueryThresholdMs`（默认 1000ms）超阈值记 Warning + `viv.momo.query.slow` 计数
+- **健康检查** — `/health`（全检查）、`/alive`（只判进程）
+- **指标** — Meter `Viv.Momo` / `Viv.Redis` / `Viv.Nana` / `Viv.Outbox` / `Viv.Kinna`；`IVivMeter` 提供进程内读数（给管理后台用）
+- **链路追踪** — `ActivitySource: Viv`：`db.query`、`redis.command`、`mq.publish`；消费侧用 Wolverine 自带源
+- **慢查询** — `SlowQueryThresholdMs`（默认 1000，0 = 关），超阈值记 Warning
 
 ### 统一响应
 
-所有 API 返回 `VivApiResult` 信封。**业务成败走信封 `Code`，与 HTTP 状态码无关**——业务失败也是 HTTP 200。需要原样返回 301/304/404 等时，先写 `Response.StatusCode`（仅白名单内状态码会保留）：
-
 ```json
-{ "code": 200, "message": "请求处理成功", "data": { ... } }
+{ "code": 200, "message": "请求处理成功", "data": { } }
 ```
 
-错误码区间：`2xx` 成功（200 请求成功 / 201 已创建）、`-2xx` 参数业务（-200 通用 / -201 缺参）、`-4xx` 鉴权身份（-400 Token 空 / -401 Token 异常 / -404 资源不存在）、`-5xx` 系统（-500 兜底 / -501 数据库 / -502 缓存 / -503 消息队列）、`-6xx` 权限（-601 无权限 / -602 越权）。细分业务错误统一用 `-200`，自定义提示文案即可，不新增业务专属枚举。
+业务成败看 `Code`，与 HTTP 状态码无关（业务失败也是 HTTP 200）。区间：`2xx` 成功、`-2xx` 参数/业务、`-4xx` 身份、`-5xx` 系统（`-501` 数据库 / `-502` 缓存 / `-503` 消息队列）、`-6xx` 权限。
 
-### 多租户与网关
+### 网关
 
-`VivContextMiddleware` 解析 `x-viv-*` 头（或 JWT claims）填充 `IVivContext`，数据层据此自动租户过滤（头契约见 [请求链路](#请求链路)）。
-
-**网关路由自动生成**（零手写 JSON）：从 Aspire 服务发现为每个服务生成 3 条路由 + 1 个集群：
+路由从 Aspire 服务发现自动生成，零手写 JSON：
 
 ```
-/{短名}/api/{**catch-all}      →  /api/{**catch-all}        标准 API（如 /apex/api/...）
-/docs/{短名}/{**catch-all}     →  /{**catch-all}            Scalar 文档（经网关透出）
-/ws/{短名}/{**catch-all}       →  /{**catch-all}            WebSocket / SignalR
+/{短名}/api/{**catch-all}    →  /api/{**catch-all}     标准 API（如 /apex/api/...）
+/docs/{短名}/{**catch-all}   →  /{**catch-all}         Scalar 文档
+/ws/{短名}/{**catch-all}     →  /{**catch-all}         WebSocket / SignalR
 ```
 
-网关只**解析不透传强制**鉴权：JWT 有就验签回填（先剥离客户端伪造头），无则放行；鉴权由下游服务 `[Authorize]` 自己控制。限流策略在 `viv.ratelimit.json` 热重载。
+**短名优先取网关配置**，没配才按服务名推断（`split('-')` 第二段；冲突时 `-api` 保留基础名、其余拼接剩余段）：
 
-### CLI 命令
-
-引用 `Viv.Cli`，实现 `AsyncCommand` 并标注 `[VivCommand]`，自动发现注册：
-
-```csharp
-[VivCommand("migrate", "执行数据库迁移")]        // 单命令
-[VivCommand("clear, cl", "清除屏幕")]            // 多别名
-public class Cmd_Migrate : AsyncCommand
-{
-    public override Task<int> ExecuteAsync(CommandContext ctx) { ... }
+```jsonc
+// Viv.Aspire.Gateway/appsettings.json
+"VivGateway": {
+  "ShortNames": {
+    "viv-apex-api": "apex",
+    "viv-herta-link": "hertalink"
+  }
 }
 ```
 
-交互输入与格式化输出：`InputMagic.GetInput("请输入名称")` / `InputMagic.Confirm("确认?")` / `Out.PrintlnSuccess("完成")` / `Out.PrintlnFormatJson(obj)`。
+短名会拼进路由模板，因此启动时校验：只允许小写字母/数字/连字符，两个服务撞同一短名直接抛（报错点名双方），配成空串也报错。
+
+网关只解析 JWT 并回填上下文头，**不强制鉴权**；鉴权由下游 `[Authorize]` 自己控制。限流策略在 `viv.ratelimit.json` 热重载。
+
+### CLI
+
+```csharp
+[VivCommand("migrate", "执行数据库迁移")]
+public class Cmd_Migrate : AsyncCommand
+{
+    public override Task<int> ExecuteAsync(CommandContext ctx) { /* ... */ }
+}
+```
+
+`InputMagic.GetInput(...)` / `Out.PrintlnFormatJson(obj)` 提供交互与格式化输出。
 
 ---
+
+## 测试与 CI
+
+- `src/Test/` 每个框架项目一套单测；业务测试项目在各自目录旁（`Viv.Apex.Tests`、`Viv.Herta.Tests` 等）
+- `src/Test/Viv.Fakes/` 是全仓**唯一**允许手写测试替身的地方，各测试项目引用它
+- CI：GitHub Actions [.github/workflows/dotnet.yml](.github/workflows/dotnet.yml) 跑全量测试并上报覆盖率
+
+```bash
+dotnet test Viv.slnx
+```
+
+---
+
+## 约定与文档
+
+- 更细的架构决策、踩坑记录与硬约定集中在 [CLAUDE.md](CLAUDE.md)：事件契约必须 public setter、群消息读写都校验成员、会话行并发与唯一索引 DDL、投递水位落库、网关短名来源、凭据存放位置等
+- 数据库方言差异统一走 `SqlMagic`（表名/列名/分页），手写 SQL 不要写死物理表名
+- 新增业务项目：`Core`（实体模型/接口/服务/仓储）+ `Api`（控制器入口）+ 可选 `Worker`（消费者），配置里补一段 `VivOptions`
