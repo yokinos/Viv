@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using Serilog;
 using System;
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -37,7 +38,6 @@ namespace Viv.Engine
         private const string NoCachePolicyName = "NoCache";
         private const string DefaultCachePolicyName = "DefaultCache";
         private const string CustomCachePolicyName = "CustomCache";
-        internal const string DefaultRateLimiterPolicyName = "DefaultRateLimiter";
         internal const string CustomRateLimiterPolicyName = "CustomRateLimiter";
         private const int DefaultCacheSeconds = 20;
         private static readonly string[] _vivClaimTypes = ["subjectId", "userId", "appId"];
@@ -97,13 +97,17 @@ namespace Viv.Engine
             // YARP 反向代理：路由/集群从 Aspire 服务发现（services__* 环境变量）自动生成，零手写 JSON。
             // 短名优先取网关配置 VivGateway:ShortNames，没配才按服务名推断
             var gatewayOptions = builder.Configuration.GetSection(VivGatewayOptions.SectionName).Get<VivGatewayOptions>();
-            gatewayRouter ??= new VivGatewayRouteBuilder(gatewayOptions?.ShortNames);
+            var streamTimeoutSeconds = gatewayOptions?.StreamActivityTimeoutSeconds ?? 0;
+            gatewayRouter ??= new VivGatewayRouteBuilder(
+                gatewayOptions?.ShortNames,
+                streamTimeoutSeconds > 0 ? TimeSpan.FromSeconds(streamTimeoutSeconds) : (TimeSpan?)null);
             var (gatewayRoutes, gatewayClusters) = gatewayRouter.Build();
             builder.Services.AddReverseProxy().LoadFromMemory(gatewayRoutes, gatewayClusters);
 
-            // CORS：网关带凭证，必须显式 Origin（Development 默认本机回环）
+            // CORS：网关带凭证，必须显式 Origin。只按宿主环境判定，不看 VivOptions.EnvOption ——
+            // 入库配置里 Env=Development，生产容器照搬就会把「任意 Origin + 凭证」带上去。
             var corsOrigins = vivOptions.CorsOption?.Origins;
-            var corsIsDev = builder.Environment.IsDevelopment() || vivOptions.EnvOption?.Env == Viv.Contracts.Enums.VivEnv.Development;
+            var corsIsDev = builder.Environment.IsDevelopment();
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy(DefaultCorsPolicyName, policy =>
@@ -121,24 +125,21 @@ namespace Viv.Engine
             });
 
             // RateLimiter
+            // 读 IOptionsMonitor：AddJsonFile(reloadOnChange: true) 改了文件后，下一次请求就用新值。
+            // 之前的写法在启动时把值拷进 lambda，热重载配置改了也不生效。
             builder.Services.Configure<VivRateLimitOptions>(builder.Configuration.GetSection(VivRateLimitOptions.CustomRateLimit));
-            var rateLimitOptions = new VivRateLimitOptions();
-            builder.Configuration.GetSection(VivRateLimitOptions.CustomRateLimit).Bind(rateLimitOptions);
             builder.Services.AddRateLimiter(options =>
             {
-                options.AddFixedWindowLimiter(DefaultRateLimiterPolicyName, opt =>
+                options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+                // 只有这一个策略，所有自动生成的路由（api / docs / ws）都挂它。
+                // 以前还注册过一个写死 4 次/12 秒的 DefaultRateLimiter，但没有任何路由引用 —— 死配置，删掉。
+                options.AddPolicy(CustomRateLimiterPolicyName, context =>
                 {
-                    opt.PermitLimit = 4;
-                    opt.Window = TimeSpan.FromSeconds(12);
-                    opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-                    opt.QueueLimit = 2;
-                });
-                options.AddFixedWindowLimiter(CustomRateLimiterPolicyName, opt =>
-                {
-                    opt.PermitLimit = rateLimitOptions.PermitLimit;
-                    opt.Window = TimeSpan.FromSeconds(rateLimitOptions.Window);
-                    opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-                    opt.QueueLimit = rateLimitOptions.QueueLimit;
+                    var current = context.RequestServices
+                        .GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<VivRateLimitOptions>>()
+                        .CurrentValue;
+                    return BuildPartition(context, current);
                 });
             });
 
@@ -162,8 +163,8 @@ namespace Viv.Engine
             var app = builder.Build();
             VivLocator.Initialize(app.Services);
 
-            // Aspire 入口 / 前置 LB 通常不在 loopback，清空默认 KnownProxies 才能吃到 X-Forwarded-*。
-            app.UseForwardedHeaders(VivForwardedHeaders.Create(VivEngine.VivOptions?.EnvOption));
+            // Aspire 入口 / 前置 LB 通常不在 loopback；dev 信任转发头，非 dev 只认 TrustedProxies。
+            app.UseForwardedHeaders(VivForwardedHeaders.Create(VivEngine.VivOptions?.EnvOption, app.Environment.IsDevelopment()));
 
             app.UseMiddleware<RequestTrackMiddleware>();
             app.UseMiddleware<ApiStartedMiddleware>();
@@ -175,7 +176,7 @@ namespace Viv.Engine
 
             // 开发环境：浏览器用局域网 IP / 主机名打开前端时，调本机网关属于 Private Network Access，
             // Chrome 的预检会要求显式回 Access-Control-Allow-Private-Network，否则按跨域拦截。
-            var corsIsDev = builder.Environment.IsDevelopment() || VivEngine.VivOptions?.EnvOption?.Env == Viv.Contracts.Enums.VivEnv.Development;
+            var corsIsDev = builder.Environment.IsDevelopment();
             if (corsIsDev)
             {
                 app.Use(async (context, next) =>
@@ -190,11 +191,15 @@ namespace Viv.Engine
             }
 
             app.UseCors(DefaultCorsPolicyName);
-            app.UseOutputCache();
             app.UseRateLimiter();
 
             app.UseAuthentication();
             app.UseAuthorization();
+
+            // OutputCache 放在认证之后：策略要按身份区分时（VaryByHeader / VaryByValue）才拿得到
+            // 已认证的 User。放在认证前缓存键里没有身份，一旦真挂上策略就会跨用户串响应。
+            // 注：策略注册了但没有任何端点调用 .CacheOutput()，需要缓存的端点自己显式挂。
+            app.UseOutputCache();
 
             // 认证后把用户信息透传给下游（claims 仅在认证后可用）。
             // Header 契约与 RequestTokenResolver 对齐：
@@ -265,6 +270,36 @@ namespace Viv.Engine
         }
 
         /// <summary>
+        /// 按客户端 IP 分区计数。原实现用 <c>AddFixedWindowLimiter(policy)</c>，那是「全网关共用一个桶」：
+        /// PermitLimit 是整个进程的总量，一个客户端就能把其他所有人挤掉。分区后每个来源各算各的。
+        /// 分区键里带上当前配置值，热重载改了配额会自动切到新分区，不必重启。
+        /// </summary>
+        private static RateLimitPartition<string> BuildPartition(HttpContext context, VivRateLimitOptions options)
+        {
+            // UseForwardedHeaders 已把 RemoteIpAddress 换成真实客户端 IP
+            var client = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            // 约定：PermitLimit <= 0 表示不限流
+            if (options.PermitLimit <= 0)
+            {
+                return RateLimitPartition.GetNoLimiter(client);
+            }
+
+            var key = client + "|"
+                      + options.PermitLimit.ToString(CultureInfo.InvariantCulture) + "|"
+                      + options.Window.ToString(CultureInfo.InvariantCulture) + "|"
+                      + options.QueueLimit.ToString(CultureInfo.InvariantCulture);
+
+            return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = options.PermitLimit,
+                Window = TimeSpan.FromSeconds(Math.Max(1, options.Window)),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = Math.Max(0, options.QueueLimit)
+            });
+        }
+
+        /// <summary>
         /// SignalR/WebSocket：浏览器无法在升级请求里设置 Authorization 头，SignalR 客户端把 token 放 access_token 查询参数。
         /// 网关在这里把它读出来交给 JwtBearer 认证；认证通过后再回填 x-viv-* 头给下游。
         /// </summary>
@@ -274,7 +309,10 @@ namespace Viv.Engine
             {
                 OnMessageReceived = context =>
                 {
+                    // 只对 /ws/{短名}/** 生效。query 里的 token 会进访问日志 / Referer / 浏览器历史，
+                    // 不该让普通 API 也能用这条通道 —— 否则等于给所有 REST 端点开了个明文传输后门。
                     if (string.IsNullOrEmpty(context.Token)
+                        && context.HttpContext.Request.Path.StartsWithSegments("/ws")
                         && context.HttpContext.Request.Query.TryGetValue("access_token", out var token))
                     {
                         context.Token = token.ToString();
