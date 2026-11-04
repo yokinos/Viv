@@ -12,22 +12,15 @@ using Viv.Kinna.Options;
 namespace Viv.Kinna.Extensions
 {
     /// <summary>
-    /// 长连接层的接入点。业务只在两处出现具体 Hub：AddKinna&lt;THub&gt;() 和 MapKinnaHub&lt;THub&gt;()。
-    ///
-    /// 共享配置由 <c>AddViv</c> 绑进 DI（<c>VivOptions:KinnaOption</c>），这里只按 Hub 补会话等状态；
-    /// 多 Hub 时用 <c>VivOptions:KinnaOption:{Hub 类型名}</c> 覆盖。
-    ///
-    /// 为什么不能像别的子系统一样在 <c>AddViv</c> 里一次注册完：<c>IHubContext&lt;THub&gt;</c> 必须按具体
-    /// Hub 类型解析，<c>AddViv</c> 拿不到业务 Hub 的类型，只能在宿主里用泛型方法闭合。
+    /// 长连接的接入点。具体 Hub 只出现在 AddKinna&lt;THub&gt; 和 MapKinnaHub&lt;THub&gt;。
+    /// 共享配置由 AddViv 绑进 DI（VivOptions:KinnaOption），这里补每个 Hub 的会话；
+    /// 单 Hub 覆盖写 VivOptions:KinnaOption:{Hub 类型名}。
     /// </summary>
     public static class KinnaServiceCollectionExtensions
     {
         /// <param name="services">宿主容器</param>
         /// <param name="configure">代码里覆盖，多 Hub 时各给各的 HubPath 和 Prefix</param>
-        public static IServiceCollection AddKinna<THub>(
-            this IServiceCollection services,
-            Action<KinnaOptions>? configure = null)
-            where THub : Hub
+        public static IServiceCollection AddKinna<THub>(this IServiceCollection services, Action<KinnaOptions>? configure = null) where THub : Hub
         {
             // 幂等；EnableDetailedErrors 是进程级选项，由 AddViv 按 KinnaOption 配一次
             services.AddSignalR();

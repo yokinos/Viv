@@ -2,18 +2,16 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Viv.Delusion.Magic;
 
-namespace Viv.ServiceProxy.Common
+namespace Viv.ServiceProxy
 {
     public static class ProxyExtensions
     {
         /// <summary>
-        /// 注册所有下游服务代理。宿主只写这一行，不需要逐个服务加注册调用：
+        /// 注册所有下游服务代理，宿主写一行：
         /// <code>builder.Services.AddVivProxies(builder.Configuration);</code>
-        /// 配置在 <c>VivProxies</c> 集合节点里按服务短名覆盖；不配的服务用默认值。
+        /// 配置在 VivProxies 节点里按服务短名覆盖，不配就用默认值。
         /// </summary>
-        public static IServiceCollection AddVivProxies(
-            this IServiceCollection services,
-            IConfiguration? configuration = null)
+        public static IServiceCollection AddVivProxies(this IServiceCollection services, IConfiguration? configuration = null)
         {
             var options = new VivProxyOptions();
             configuration?.GetSection(VivProxyOptions.SectionName).Bind(options);
@@ -28,10 +26,7 @@ namespace Viv.ServiceProxy.Common
             return services;
         }
 
-        /// <summary>
-        /// 扫实现 <see cref="IProxyModule"/> 的类型。模块都是无状态、无参构造，
-        /// 加服务只需新增一个模块类，入口和配置结构都不用动。
-        /// </summary>
+        /// <summary>扫 IProxyModule 实现。模块无状态、无参构造，加服务只加类</summary>
         private static IEnumerable<IProxyModule> LoadModules()
         {
             var types = TypeScanMagic.ScanTypes<IProxyModule>()

@@ -3,12 +3,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Viv.Echo.Grpc;
 using Viv.ServiceProxy.Apex.Ports;
 using Viv.ServiceProxy.Apex.Proxies;
-using Viv.ServiceProxy.Common;
 using Viv.ServiceProxy.Protos;
 
 namespace Viv.ServiceProxy.Apex
 {
-    /// <summary>Apex 的代理模块：注册 gRPC 客户端与 <see cref="IProxyApexAppService"/> 实现</summary>
+    /// <summary>Apex 的代理模块，注册 gRPC 客户端和端口实现</summary>
     internal sealed class ApexProxyModule : IProxyModule
     {
         public string Key => "Apex";

@@ -7,7 +7,8 @@ namespace Viv.Herta.Link.Hubs
     /// 连接准入：身份齐不齐，以及这个 AppId 是不是 Apex 里启用的客户端。
     /// 抽出来是为了能脱离 Hub.Context 单测。
     /// </summary>
-    public sealed class HertaLinkAdmission
+    [Viv.Contracts.Attributes.VivDependency(AsSelf = true)]
+    public sealed class HertaLinkAdmission : Viv.Contracts.Interface.IDependency
     {
         private readonly IProxyApexAppService _apps;
 

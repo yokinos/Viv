@@ -91,12 +91,13 @@ namespace Viv.Engine.Options
         /// </summary>
         public S3Options S3Option { get; set; }
 
-        /// <summary>异步任务（Viv.Skirk）。为 null = 不启用；Api 与 Worker 共享任务表，谁执行看 EnableWorker</summary>
+        /// <summary>
+        /// 异步任务（Viv.Skirk）。为 null = 不启用；Api 与 Worker 共享任务表，谁执行看 EnableWorker
+        /// </summary>
         public SkirkOption SkirkOption { get; set; }
 
         /// <summary>
-        /// 长连接（Viv.Kinna）。为 null = 这个宿主没有长连接，<c>AddKinna&lt;THub&gt;</c> 直接不注册。
-        /// 放在 VivOptions 里而不是顶层 KinnaOptions 节点：配置只有一个根，快照/DI 才带得到它。
+        /// 长连接（Viv.Kinna）。为 null = 不启用
         /// </summary>
         public KinnaOptions KinnaOption { get; set; }
     }

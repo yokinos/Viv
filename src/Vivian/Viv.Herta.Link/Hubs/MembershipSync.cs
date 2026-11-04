@@ -1,4 +1,4 @@
-using Viv.EventContracts.Herta;
+﻿using Viv.EventContracts.Herta;
 using Viv.Kinna.Connections;
 using Viv.Log;
 
@@ -7,7 +7,7 @@ namespace Viv.Herta.Link.Hubs
     /// <summary>
     /// 成员变更只作用于本进程持有的连接。入参暂时还是 Herta 自己的事件类型，泛化留到后面。
     /// </summary>
-    public class MembershipSync : IMembershipSync
+    public class MembershipSync : IMembershipSync, Viv.Contracts.Interface.IDependency
     {
         private readonly IKinnaSession<ChatHub> _session;
         private readonly ILoggerContract _logger;

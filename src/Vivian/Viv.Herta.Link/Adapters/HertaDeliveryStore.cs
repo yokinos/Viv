@@ -1,4 +1,4 @@
-using StackExchange.Redis;
+﻿using StackExchange.Redis;
 using Viv.Herta.Core.IRepository;
 using Viv.Herta.Link.Delivery;
 using Viv.Herta.Link.Hubs;
@@ -20,7 +20,7 @@ namespace Viv.Herta.Link.Adapters
     /// Redis 失败时 Ack 仍会写库，Resync 退化成"读得到水位、没有明细"，客户端补拉一次，
     /// 不会出现"确认过的东西又算没确认"。
     /// </summary>
-    public sealed class HertaDeliveryStore : IKinnaDeliveryStore<ChatHub>
+    public sealed class HertaDeliveryStore : IKinnaDeliveryStore<ChatHub>, Viv.Contracts.Interface.IDependency
     {
         private static readonly TimeSpan Retention = TimeSpan.FromDays(7);
 

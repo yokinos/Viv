@@ -1,4 +1,4 @@
-using Viv.Herta.Core.IService;
+﻿using Viv.Herta.Core.IService;
 using Viv.Herta.Link.Hubs;
 using Viv.Kinna.Ports;
 
@@ -7,7 +7,7 @@ namespace Viv.Herta.Link.Adapters
     /// <summary>
     /// 把 Herta 的在线态存储接到 Kinna 的端口上。在线态不参与投递，只给多端在线查询用。
     /// </summary>
-    public sealed class HertaPresenceSink : IKinnaPresenceSink<ChatHub>
+    public sealed class HertaPresenceSink : IKinnaPresenceSink<ChatHub>, Viv.Contracts.Interface.IDependency
     {
         private readonly IPresenceStore _presence;
 

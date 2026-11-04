@@ -344,8 +344,8 @@ namespace Viv.Engine
         }
 
         /// <summary>
-        /// 长连接的共享部分。Hub 是泛型（<c>IHubContext&lt;THub&gt;</c>），这里只能配 SignalR 的进程级选项；
-        /// 每个 Hub 的会话、清扫、健康检查由宿主 <c>AddKinna&lt;THub&gt;()</c> 注册。
+        /// 长连接的共享部分。Hub 是泛型，这里只能配 SignalR 的进程级选项；
+        /// 每个 Hub 的会话由宿主 AddKinna&lt;THub&gt;() 注册。
         /// </summary>
         private static void RegisterKinna(IServiceCollection services, VivOptions options)
         {

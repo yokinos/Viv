@@ -152,5 +152,7 @@ namespace Viv.Momo.Base
             var cacheKey = bucket.GetCacheKey(keys);
             return await _redisService.RemoveAsync(cacheKey).ConfigureAwait(false);
         }
+
+        protected string Col(string name) => _dbContext.Dialect.QuoteIdentifier(name);
     }
 }

@@ -1,13 +1,11 @@
 using Viv.Log;
 using Viv.ServiceProxy.Apex.Ports;
-using Viv.ServiceProxy.Common;
 using Viv.ServiceProxy.Protos;
 
 namespace Viv.ServiceProxy.Apex.Proxies
 {
     /// <summary>
-    /// Apex 应用代理：把 gRPC 客户端、校验缓存、失败语义收在一处。
-    /// 注册为 Scoped（gRPC 客户端本身按作用域），缓存放单例 <see cref="AppCheckCache"/>，跨请求共用。
+    /// Apex 应用代理。包住 gRPC 客户端和准入缓存；代理是 Scoped，缓存是单例。
     /// </summary>
     internal sealed class ApexAppServiceProxy : IProxyApexAppService
     {
@@ -53,7 +51,7 @@ namespace Viv.ServiceProxy.Apex.Proxies
             }
             catch (Exception ex)
             {
-                // 依赖挂了也不放行：宁可连不上，也不要让未知客户端混进来
+                // 依赖挂了也不放行
                 _logger.Error($"校验 AppId={clientAppId} 失败", ex);
                 return AppCheckResult.Denied("客户端校验服务不可用");
             }
@@ -63,7 +61,7 @@ namespace Viv.ServiceProxy.Apex.Proxies
         {
             ArgumentNullException.ThrowIfNull(request);
 
-            // 服务端还会再收敛一次；这里先挡住明显的非法值，避免发出去才发现
+            // 服务端还会再收敛，这里先挡明显非法值
             var index = Math.Max(1, request.PageIndex);
             var size = Math.Clamp(request.PageSize, 1, 200);
 
@@ -83,7 +81,7 @@ namespace Viv.ServiceProxy.Apex.Proxies
             }
             catch (Exception ex)
             {
-                // 批处理路径不该拿到一个裸 RpcException：至少带上"第几页"的上下文
+                // 带上页码，排障时能看出卡在哪一页
                 _logger.Error($"取应用分页失败: page={index} size={size}", ex);
                 throw;
             }

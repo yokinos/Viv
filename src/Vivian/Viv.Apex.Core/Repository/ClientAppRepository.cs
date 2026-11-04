@@ -138,10 +138,9 @@ namespace Viv.Apex.Core.Repository
         {
             var dialect = _dbContext.Dialect;
 
-            string Col(string name) => dialect.QuoteIdentifier(name);
             var table = dialect.GetTableName<AtClientApp>();
 
-            // 软删除在 SQL 里挡：这段 SQL 不走 EF 全局过滤器
+            // 软删除在 SQL 里挡，这段不走 EF 全局过滤器
             var sql = $"SELECT * FROM {table} WHERE {Col("IsDeleted")} = @notDeleted";
 
             if (!string.IsNullOrWhiteSpace(keyword))
@@ -161,8 +160,6 @@ namespace Viv.Apex.Core.Repository
 
         public Task<List<AtClientApp>> ListAppsAsync()
             => _dbContext.FindListAsync<AtClientApp>(x => x.Id > 0);
-
-        // ==================== AtClientAppVersion ====================
 
         public async Task<bool> AddVersionAsync(AtClientAppVersion version)
         {

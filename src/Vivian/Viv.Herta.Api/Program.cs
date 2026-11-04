@@ -3,7 +3,7 @@ using Viv.Elysia.Filter;
 using Viv.Engine;
 using Viv.Herta.Core.IService;
 using Viv.Herta.Core.Service;
-using Viv.ServiceProxy.Common;
+using Viv.ServiceProxy;
 
 namespace Viv.Herta.Api;
 

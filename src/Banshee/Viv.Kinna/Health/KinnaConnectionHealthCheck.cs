@@ -28,7 +28,7 @@ namespace Viv.Kinna.Health
         {
             var options = _session.Options;
 
-            // 注册是无条件的（注册期拿不到配置），关掉时在这里短路
+            // 注册期拿不到配置，关闭时在这里短路
             if (!options.EnableHealthCheck)
                 return Task.FromResult(HealthCheckResult.Healthy("长连接健康检查已关闭"));
 
