@@ -16,12 +16,7 @@ namespace Viv.Apex.Core.Repository
 {
     public class ClientAppRepository : DataAccessCacheBase<EntityBucket<AtClientApp>>, IClientAppRepository
     {
-        public ClientAppRepository(
-            IVivContext context,
-            IMomoDbContext dbContext,
-            IRedisService redisService,
-            IDistributedLock distributedLock,
-            ILoggerContract logger)
+        public ClientAppRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, IDistributedLock distributedLock, ILoggerContract logger)
             : base(context, dbContext, redisService, distributedLock, logger)
         {
         }
