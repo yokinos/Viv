@@ -126,7 +126,13 @@ namespace Viv.Engine.Filter
                 ErrorCode = (ex as IVivBusinessException)?.Code   // 如果业务异常未注册，但实现了此接口
             };
 
-            return VivApiResult.ApiResult(ApiResultCode.ServerError, ex.Message, output);
+            // 异常原文只在开发环境回给客户端：未映射的异常可能带 SQL 语句、连接串、内网路径，
+            // 生产环境统一给固定文案，排查靠日志里的 RequestId。
+            var message = _environment.IsDevelopment()
+                ? ex.Message
+                : "服务器内部错误，请稍后重试；如需排查请提供 RequestId";
+
+            return VivApiResult.ApiResult(ApiResultCode.ServerError, message, output);
         }
 
         /// <summary>

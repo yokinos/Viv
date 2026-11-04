@@ -122,9 +122,23 @@ DatabaseOption.MasterConnectionString、NanaOption.Password/SagaConnectionString
   "DisplayName": "Viv Apex API",     // OpenAPI / Scalar 标题，缺省回落 ServiceName
   "ShortName": "apex",               // Scalar 里的网关前缀，缺省不设（等同直连服务）
   "MachineId": 2,
-  "InternalToken": ""
+  "InternalToken": "",
+  "TrustedProxies": ["172.16.0.0/12"] // 反向代理 / 网关网段；非 Development 不配就只信任 loopback
 }
 ```
+
+> **`Env` 不是宿主环境。** CORS、`X-Forwarded-*` 的信任判定只看 `ASPNETCORE_ENVIRONMENT`（`IHostEnvironment`），
+> 不看这里的 `Env` —— 入库的 `appsettings.json` 写的是 `0`(Development)，生产容器照搬配置不会因此放开跨域或信任任意转发头。
+> 未签名内部头的逃生开关（`AllowUnsignedInternalTrust`）现在要求**两个条件同时成立**：
+> `EnvOption.Env` 与宿主环境都是 Development，所以「照搬配置 + 带开关」在生产会直接启动失败，而不是静默放行。
+>
+> `Env` 仍参与内部信任、密钥校验等业务分档，枚举值是 `0=Development / 1=Test / 2=PreRelease / 3=Production`。
+> **生产必须用环境变量覆盖成 `3`**（`VivOptions__EnvOption__Env=3`），并同时设 `ASPNETCORE_ENVIRONMENT=Production`。
+>
+> **容器 / 反向代理部署**：非 Development 下未配 `TrustedProxies` 时只信任 loopback，Docker 网段来的
+> `X-Forwarded-*` 会被丢弃，客户端 IP 退化成代理 IP（限流按代理 IP 分区 = 所有人共用一个桶）。
+> 网关与服务都要配，例如 `VivOptions__EnvOption__TrustedProxies__0=172.16.0.0/12`；
+> 网段按实际 `docker network inspect` 结果填，配错只会让转发头失效，不会放开信任。
 
 > `ShortName` 只影响本服务自己的文档展示，**不参与网关路由**。网关的短名在网关自己的 `VivGateway:ShortNames` 里配（见 [网关](#网关)）。
 
@@ -267,7 +281,7 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 | `TokenOption` | JWT 密钥、有效期、签发方 | |
 | `TickOption` | TickerQ 调度 | |
 | `EchoOption` | HTTP / gRPC 服务端 | `GrpcOption.Port` 需要独立端口 |
-| `CorsOption` | 允许的 Origin | 未配置时 Development 只放行本机回环 |
+| `CorsOption` | 允许的 Origin | 未配置时：Development 回显任意 Origin（局域网访问 dev server 需要），其余环境不放行任何跨域来源 |
 | `S3Option` | 对象存储 | |
 | `SkirkOption` | 异步任务（`EnableWorker` 决定本宿主跑不跑） | |
 
@@ -395,10 +409,18 @@ app.MapKinnaHub<ChatHub>("/chat");
 路由从 Aspire 服务发现自动生成，零手写 JSON：
 
 ```
-/{短名}/api/{**catch-all}    →  /api/{**catch-all}     标准 API（如 /apex/api/...）
-/docs/{短名}/{**catch-all}   →  /{**catch-all}         Scalar 文档
-/ws/{短名}/{**catch-all}     →  /{**catch-all}         WebSocket / SignalR
+/{短名}/api/{**catch-all}             →  /api/{**catch-all}       标准 API（如 /apex/api/...）
+/docs/{短名}/scalar/{**catch-all}     →  /scalar/{**catch-all}    Scalar 文档
+/docs/{短名}/openapi/{**catch-all}    →  /openapi/{**catch-all}   OpenAPI 文档
+/ws/{短名}/{**catch-all}              →  /{**catch-all}          WebSocket / SignalR
 ```
+
+文档路由只放 `/scalar/**` 与 `/openapi/**` 两段：早期是全通配 `/docs/{短名}/**`，等于给下游任意路径
+（含 `/api/**`）开了一条不经过限流的旁路。
+
+`/ws` 路由保留全通配，是因为 Hub 的挂载路径由各服务自己决定（`MapKinnaHub<THub>("/chat")`），网关不掌握清单。
+代价是 `/ws/{短名}/api/xxx` 在 HTTP 语义上也能打到下游 `/api/xxx`，所以这条路由**必须**依赖下游自身的
+`[Authorize]`；网关侧的保障是：JWT 认证（`access_token` 查询参数只允许出现在 `/ws` 前缀下）+ 与 api 路由相同的限流策略。
 
 **短名优先取网关配置**，没配才按服务名推断（`split('-')` 第二段；冲突时 `-api` 保留基础名、其余拼接剩余段）：
 
@@ -414,7 +436,9 @@ app.MapKinnaHub<ChatHub>("/chat");
 
 短名会拼进路由模板，因此启动时校验：只允许小写字母/数字/连字符，两个服务撞同一短名直接抛（报错点名双方），配成空串也报错。
 
-网关只解析 JWT 并回填上下文头，**不强制鉴权**；鉴权由下游 `[Authorize]` 自己控制。限流策略在 `viv.ratelimit.json` 热重载。
+网关只解析 JWT 并回填上下文头，**不强制鉴权**；鉴权由下游 `[Authorize]` 自己控制。
+限流策略在 `viv.ratelimit.json` 里配，按**客户端 IP 分区**计数（不是全网关共用一个桶），改文件后下一次请求即生效。
+`PermitLimit <= 0` 表示不限流；超限返回 429。
 
 ### CLI
 

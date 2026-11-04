@@ -103,3 +103,7 @@ docker-compose.override.yml
 # VS Code 配置
 .vscode/
 /.claude
+# WorkBuddy 会话/评审缓存（本地数据，不入库）
+.workbuddy/
+# 根目录 viv/ 是一次误 clone 的完整副本，不是本项目源码
+viv/
