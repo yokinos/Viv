@@ -17,7 +17,7 @@
     <ProjectReference Include="..\Viv.Entity\Viv.Entity.csproj" />
     <ProjectReference Include="..\Viv.EventContracts\Viv.EventContracts.csproj" />
     <!-- 登录要问 Apex 这个 AppId 是不是有效客户端 -->
-    <ProjectReference Include="..\Viv.ServiceProxy\Viv.ServiceProxy.csproj" />
+    <ProjectReference Include="..\Viv.Apex.Proxy\Viv.Apex.Proxy.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Outbox\Viv.Outbox.csproj" />
   </ItemGroup>
 

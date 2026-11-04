@@ -1,4 +1,4 @@
-namespace Viv.ServiceProxy.Apex.Ports
+namespace Viv.Apex.Proxy.Ports
 {
     /// <summary>分页请求。PageIndex 从 1 开始，PageSize 服务端会压到 1..200</summary>
     public sealed class AppPageRequest

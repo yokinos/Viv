@@ -19,8 +19,6 @@
     <ProjectReference Include="..\..\Test\Viv.Fakes\Viv.Fakes.csproj" />
     <ProjectReference Include="..\Viv.Herta.Core\Viv.Herta.Core.csproj" />
     <ProjectReference Include="..\Viv.Herta.Link\Viv.Herta.Link.csproj" />
-    <!-- HertaLinkAdmission 的构造参数是 IClientAppQuery / ClientAppCheck，用得到就要显式引 -->
-    <ProjectReference Include="..\Viv.ServiceProxy\Viv.ServiceProxy.csproj" />
   </ItemGroup>
 
   <ItemGroup>

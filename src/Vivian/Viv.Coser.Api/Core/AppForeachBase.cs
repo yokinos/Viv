@@ -1,5 +1,5 @@
 using Viv.Contracts.Interface;
-using Viv.ServiceProxy.Apex.Ports;
+using Viv.Apex.Proxy.Ports;
 
 namespace Viv.Coser.Api.Core
 {

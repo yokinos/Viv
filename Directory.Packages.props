@@ -58,6 +58,14 @@
     <PackageVersion Include="Grpc.Net.Client" Version="2.84.0" />
     <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.84.0" />
     <PackageVersion Include="Grpc.Tools" Version="2.84.0" />
+    <!-- ── MagicOnion（C# 接口 + MessagePack，与 gRPC 并存的第二条 RPC 通道）──
+         四包必须同版；MessagePack 显式抬到 3.1.12（MagicOnion 7.11 要求 >= 3.1.7）。
+         MagicOnion 7.11 自带 net10.0 目标，对 Grpc.* 的要求是 2.57.0，本仓库的 2.84.0 更高，
+         由中央包管理统一收口（CentralPackageTransitivePinning）。 -->
+    <PackageVersion Include="MagicOnion.Abstractions" Version="7.11.0" />
+    <PackageVersion Include="MagicOnion.Client" Version="7.11.0" />
+    <PackageVersion Include="MagicOnion.Server" Version="7.11.0" />
+    <PackageVersion Include="MessagePack" Version="3.1.12" />
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
     <!-- ── OpenTelemetry ──────────────────────────────────── -->
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.19.1" />

@@ -1,8 +1,11 @@
-namespace Viv.ServiceProxy.Apex.Ports
+namespace Viv.Apex.Proxy.Ports
 {
     /// <summary>
-    /// Apex 应用查询的远程入口。地址、签名头、缓存都在实现里。
+    /// Apex 应用查询的远程入口（业务端口）。地址、签名头、缓存都在实现里。
     /// 命名按 IProxy{服务}{能力}Service，前缀表示这条调用走网络。
+    ///
+    /// 保留这一层是为了让业务层（Herta.Core 等）只看见 <see cref="Task{T}"/> 与普通 DTO，
+    /// 不把 MagicOnion 的 <c>UnaryResult</c> 与 MessagePack 特性漏进领域代码。
     /// </summary>
     public interface IProxyApexAppService
     {

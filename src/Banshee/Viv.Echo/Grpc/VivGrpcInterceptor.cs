@@ -1,11 +1,15 @@
 using Grpc.Core;
 using Grpc.Core.Interceptors;
-using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Options;
+using Viv.Echo.Identity;
 
 namespace Viv.Echo.Grpc
 {
+    /// <summary>
+    /// gRPC 客户端身份头拦截器。头的构造与签名在 <see cref="VivIdentityHeaders"/> 里（传输无关），
+    /// 这里只负责把值写进 gRPC <see cref="Metadata"/>，并按“已存在就不覆盖”的语义补齐。
+    /// </summary>
     public class VivGrpcInterceptor : Interceptor
     {
         private readonly IVivContext _vivContext;
@@ -67,29 +71,18 @@ namespace Viv.Echo.Grpc
 
         private void AddVivHeaders(Metadata headers)
         {
-            var serviceName = _tokenOptions.ServiceName ?? "";
+            var values = VivIdentityHeaders.Build(_vivContext, _tokenOptions);
 
-            AddIfNotExist(headers, VivHeaderContract.AppId.ToLowerInvariant(), _vivContext.AppId.ToString());
-            AddIfNotExist(headers, VivHeaderContract.SubjectId.ToLowerInvariant(), _vivContext.SubjectId.ToString());
-            AddIfNotExist(headers, VivHeaderContract.UserId.ToLowerInvariant(), _vivContext.UserId.ToString());
-            AddIfNotExist(headers, VivHeaderContract.ServiceName.ToLowerInvariant(), serviceName);
-            AddIfNotExist(headers, VivHeaderContract.HolderId.ToLowerInvariant(), LockHolderContext.CurrentHolderId);
+            AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.AppId), values.AppId);
+            AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.SubjectId), values.SubjectId);
+            AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.UserId), values.UserId);
+            AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.ServiceName), values.ServiceName);
+            AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.HolderId), values.HolderId);
 
-            var secret = _tokenOptions.InternalToken;
-            if (string.IsNullOrWhiteSpace(secret)
-                || headers.Get(VivHeaderContract.InnerRequestToken) != null)
+            if (!string.IsNullOrWhiteSpace(values.RequestToken))
             {
-                return;
+                AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.InnerRequestToken), values.RequestToken);
             }
-
-            var token = VivRequestToken.Sign(
-                headers.Get(VivHeaderContract.AppId)?.Value ?? "",
-                headers.Get(VivHeaderContract.SubjectId)?.Value ?? "",
-                headers.Get(VivHeaderContract.UserId)?.Value ?? "",
-                headers.Get(VivHeaderContract.ServiceName)?.Value ?? "",
-                headers.Get(VivHeaderContract.HolderId)?.Value ?? "",
-                secret);
-            headers.Add(VivHeaderContract.InnerRequestToken.ToLowerInvariant(), token);
         }
 
         private static void AddIfNotExist(Metadata headers, string key, string value)

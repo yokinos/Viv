@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    Apex 的 RPC 契约 + 客户端代理，一个包两端共用：
+    - 服务端（Viv.Apex.Api）只引它拿接口与 DTO；
+    - 消费方（Herta / Coser / Link）引它拿端口与已装配好的 MagicOnion 客户端。
+    MagicOnion 没有生成的服务端 Base，服务端引用本包不会再被客户端实现“绑架”；
+    只需守住一条：服务端不调 AddVivRpcProxies、不注入 IProxyApexAppService。
+  -->
+  <ItemGroup>
+    <PackageReference Include="MagicOnion.Abstractions" />
+    <PackageReference Include="MessagePack" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Banshee\Viv.Echo\Viv.Echo.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Log\Viv.Log.csproj" />
+  </ItemGroup>
+
+</Project>

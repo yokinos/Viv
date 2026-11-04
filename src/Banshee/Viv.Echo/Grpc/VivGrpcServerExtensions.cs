@@ -21,21 +21,26 @@ namespace Viv.Echo.Grpc
         }
 
         /// <summary>
-        /// 专用 gRPC 端口的 Kestrel 配置：<paramref name="grpcPort"/> 严格 HTTP/2（明文 h2c），REST 端口沿用
+        /// 专用 RPC 端口的 Kestrel 配置：<paramref name="grpcPort"/> 严格 HTTP/2（明文 h2c），REST 端口沿用
         /// urls（--urls / ASPNETCORE_URLS / launchSettings）显式绑定为 HTTP/1.1（https:// 条目保留 TLS/开发证书，
         /// http:// 条目明文），无 urls 时回落 Kestrel 默认 5000。
-        /// 同时自动注册 gRPC 服务端（含 <see cref="VivGrpcServerInterceptor"/> 租户上下文恢复拦截器）——
-        /// 声明 gRPC 端口即自动装配，宿主无需再手动调 <c>AddVivGrpcServer</c>。
-        /// 配置驱动时由框架 <c>AddVivApi</c>（Viv.Engine）调用，映射由 <see cref="VivGrpcDiscovery"/> 自动完成。
+        ///
+        /// <para><paramref name="enableGrpcServer"/> 决定是否顺带注册 gRPC 服务端（含
+        /// <see cref="VivGrpcServerInterceptor"/> 租户上下文恢复拦截器）。它现在是独立开关：
+        /// MagicOnion 与 gRPC 共用同一条 HTTP/2 端口，协议切到 MagicOnion 时端口仍要绑，但不能注册 gRPC 服务端。
+        /// 配置驱动时由框架 <c>AddVivApi</c>（Viv.Engine）按 <see cref="GrpcOptions.EffectiveProtocol"/> 调用。</para>
         ///
         /// 为什么必须分开端口：gRPC 需要 HTTP/2，明文下 <c>Http1AndHttp2</c> 只认 TLS/ALPN，不认 h2c prior-knowledge
         /// 前缀（Grpc.Net.Client 明文即发前缀），会回 <c>HTTP_1_1_REQUIRED</c>；而严格 Http2 会把 HTTP/1.1 REST 打挂（400）。
-        /// 故 REST 与 gRPC 各占一个端口。显式 <c>Listen</c> 会顶掉 urls 生成的端点（"Overriding address(es)..."），
+        /// 故 REST 与 RPC 各占一个端口。显式 <c>Listen</c> 会顶掉 urls 生成的端点（"Overriding address(es)..."），
         /// 因此 REST 端口也必须显式 Listen 回来。
         /// </summary>
-        public static void AddVivGrpcKestrel(this WebApplicationBuilder builder, int grpcPort)
+        public static void AddVivGrpcKestrel(this WebApplicationBuilder builder, int grpcPort, bool enableGrpcServer = true)
         {
-            builder.Services.AddVivGrpcServer();
+            if (enableGrpcServer)
+            {
+                builder.Services.AddVivGrpcServer();
+            }
 
             builder.WebHost.ConfigureKestrel(o =>
             {

@@ -1,4 +1,4 @@
-﻿<Solution>
+<Solution>
   <Folder Name="/src/" />
   <Folder Name="/src/Banshee/">
     <Project Path="src/Banshee/Viv.Aoi/Viv.Aoi.csproj" Id="67f8aa78-ac0b-458f-85dc-4011a9aaaf30" />
@@ -37,7 +37,7 @@
     <Project Path="src/Vivian/Viv.EventContracts/Viv.EventContracts.csproj" Id="d57ba383-4d07-4564-8be6-5dcbddbab6b6" />
     <Project Path="src/Vivian/Viv.Generators/Viv.Generators.csproj" Id="e49ddb54-4408-4ee4-a61b-85a341534235" />
     <Project Path="src/Vivian/Viv.Meta/Viv.Meta.csproj" Id="632440ed-6953-4e13-9d8e-f47f220d99bd" />
-    <Project Path="src/Vivian/Viv.ServiceProxy/Viv.ServiceProxy.csproj" Id="0ef53c7e-fdf2-4e23-af0c-e1a8e1f76127" />
+    <Project Path="src/Vivian/Viv.Apex.Proxy/Viv.Apex.Proxy.csproj" />
   </Folder>
   <Folder Name="/src/Vivian/Apex/">
     <Project Path="src/Vivian/Viv.Apex.Api/Viv.Apex.Api.csproj" />

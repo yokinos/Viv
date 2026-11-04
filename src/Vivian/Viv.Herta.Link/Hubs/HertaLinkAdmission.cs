@@ -1,5 +1,5 @@
 ﻿using Viv.Contracts.Models;
-using Viv.ServiceProxy.Apex.Ports;
+using Viv.Apex.Proxy.Ports;
 
 namespace Viv.Herta.Link.Hubs
 {

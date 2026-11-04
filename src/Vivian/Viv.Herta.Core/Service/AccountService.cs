@@ -6,7 +6,7 @@ using Viv.Herta.Core.Entity.Dto.Account;
 using Viv.Herta.Core.Entity.Vo.Account;
 using Viv.Herta.Core.IRepository;
 using Viv.Herta.Core.IService;
-using Viv.ServiceProxy.Apex.Ports;
+using Viv.Apex.Proxy.Ports;
 
 namespace Viv.Herta.Core.Service
 {

@@ -33,8 +33,8 @@
     <ProjectReference Include="..\Viv.Aspire\Viv.Aspire.ServiceDefaults\Viv.Aspire.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Viv.EventContracts\Viv.EventContracts.csproj" />
     <ProjectReference Include="..\Viv.Herta.Core\Viv.Herta.Core.csproj" />
-    <!-- gRPC 契约与客户端：Apex 的客户端应用查询 -->
-    <ProjectReference Include="..\Viv.ServiceProxy\Viv.ServiceProxy.csproj" />
+    <!-- Apex 客户端应用查询：契约 + MagicOnion 客户端 -->
+    <ProjectReference Include="..\Viv.Apex.Proxy\Viv.Apex.Proxy.csproj" />
   </ItemGroup>
 
 </Project>

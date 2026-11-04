@@ -4,7 +4,7 @@ using Viv.Herta.Link.Adapters;
 using Viv.Herta.Link.Dispatch;
 using Viv.Herta.Link.Hubs;
 using Viv.Kinna.Extensions;
-using Viv.ServiceProxy;
+using Viv.Echo.Proxies;
 
 namespace Viv.Herta.Link.Extensions
 {
@@ -24,7 +24,7 @@ namespace Viv.Herta.Link.Extensions
             services.AddKinnaPusher<ChatHub, MessageRecalledEvent, ChatRecallPusher>();
 
             // 准入问 Apex，不维护本地白名单
-            services.AddVivProxies(configuration);
+            services.AddVivRpcProxies(configuration);
 
             return services;
         }

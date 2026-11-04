@@ -23,7 +23,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Test\Viv.Fakes\Viv.Fakes.csproj" />
-    <ProjectReference Include="..\Viv.ServiceProxy\Viv.ServiceProxy.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Sandrone\Viv.Sandrone.csproj" />
   </ItemGroup>
 

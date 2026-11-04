@@ -4,8 +4,8 @@ using Grpc.Core.Interceptors;
 using Microsoft.Extensions.DependencyInjection;
 using Viv.Contracts;
 using Viv.Contracts.Interface;
-using Viv.Contracts.Models;
 using Viv.Contracts.Options;
+using Viv.Echo.Identity;
 
 namespace Viv.Echo.Grpc
 {
@@ -13,9 +13,11 @@ namespace Viv.Echo.Grpc
     /// gRPC 服务端租户上下文恢复拦截器。
     ///
     /// VivContextMiddleware 只对 /api 前缀水合上下文，gRPC 路径必须由此拦截器从 x-viv-* 头恢复。
+    /// 验签与还原逻辑在 <see cref="VivIdentityValidator"/>（传输无关，MagicOnion 的 Filter 用同一份），
+    /// 这里只负责把结果写进 DI 里的 <see cref="IVivContext"/> 与 <see cref="LockHolderContext"/>，
+    /// 并把 <see cref="VivIdentityException"/> 映射成 gRPC 的 Unauthenticated。
+    ///
     /// 未配置 InternalToken 时不信任裸头（不灌上下文，也不拒绝，方便本地没配密钥的服务）。
-    /// 配了密钥则先验签：失败一律 <see cref="StatusCode.Unauthenticated"/>，不区分缺签名和坏签名。
-    /// 验过之后 AppId 必须为正才灌快照；UserId / SubjectId 可以缺省或为 0（服务间调用往往只有 AppId）。
     ///
     /// 这里不清理上下文。LocalEventFlushMiddleware 挂在拦截器外面，提前 Clear 会让 gRPC 上的
     /// 本地事件处理器看不到租户。请求结束由外层 VivContextMiddleware / RequestTrackMiddleware 清。
@@ -77,62 +79,33 @@ namespace Viv.Echo.Grpc
 
         private void ApplyVivContext(ServerCallContext context)
         {
-            var content = BuildContext(context.RequestHeaders);
-            if (content == null)
+            VivIdentityResult result;
+            try
+            {
+                result = VivIdentityValidator.Validate(
+                    name => context.RequestHeaders.Get(name)?.Value,
+                    _tokenOptions);
+            }
+            catch (VivIdentityException ex)
+            {
+                // 失败一律 Unauthenticated，不区分缺签名 / 坏签名 / 过期。
+                throw new RpcException(new Status(StatusCode.Unauthenticated, ex.Message));
+            }
+
+            if (result.Context is not { } content)
             {
                 return;
             }
 
-            var vivContext = context.GetHttpContext().RequestServices.GetRequiredService<IVivContext>();
-            vivContext.SetSnapshot(content);
-        }
-
-        /// <summary>
-        /// 无密钥返回 null（调用继续，上下文保持空）。有密钥则用头上的原始字符串验签，
-        /// 这样 UserId 写成 "0" 也能对上客户端签出来的载荷。
-        /// </summary>
-        private VivContextContent? BuildContext(Metadata headers)
-        {
-            var secret = _tokenOptions.InternalToken;
-            if (string.IsNullOrWhiteSpace(secret))
+            if (result.HolderId is { } holderId)
             {
-                return null;
+                LockHolderContext.SetHolderId(holderId);
             }
 
-            var appIdRaw = headers.Get(VivHeaderContract.AppId)?.Value ?? "";
-            var subjectRaw = headers.Get(VivHeaderContract.SubjectId)?.Value ?? "";
-            var userRaw = headers.Get(VivHeaderContract.UserId)?.Value ?? "";
-            var serviceName = headers.Get(VivHeaderContract.ServiceName)?.Value ?? "";
-            var holderRaw = headers.Get(VivHeaderContract.HolderId)?.Value ?? "";
-            var token = headers.Get(VivHeaderContract.InnerRequestToken)?.Value;
-
-            if (!VivRequestToken.TryVerify(token, appIdRaw, subjectRaw, userRaw, serviceName, holderRaw, secret))
-            {
-                throw new RpcException(new Status(StatusCode.Unauthenticated, "未通过内部签名校验"));
-            }
-
-            if (!long.TryParse(appIdRaw, out var appId) || appId <= 0)
-            {
-                return null;
-            }
-
-            if (!string.IsNullOrWhiteSpace(holderRaw))
-            {
-                LockHolderContext.SetHolderId(holderRaw);
-            }
-
-            return new VivContextContent
-            {
-                AppId = appId,
-                SubjectId = ReadPositiveLong(subjectRaw),
-                UserId = ReadPositiveLong(userRaw),
-                HolderId = string.IsNullOrWhiteSpace(holderRaw) ? null : holderRaw
-            };
-        }
-
-        private static long ReadPositiveLong(string raw)
-        {
-            return long.TryParse(raw, out var value) && value > 0 ? value : 0;
+            context.GetHttpContext()
+                .RequestServices
+                .GetRequiredService<IVivContext>()
+                .SetSnapshot(content);
         }
     }
 }

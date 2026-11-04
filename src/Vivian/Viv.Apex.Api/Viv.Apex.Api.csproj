@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -18,7 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Viv.Apex.Core\Viv.Apex.Core.csproj" />
     <ProjectReference Include="..\Viv.Aspire\Viv.Aspire.ServiceDefaults\Viv.Aspire.ServiceDefaults.csproj" />
-    <ProjectReference Include="..\Viv.ServiceProxy\Viv.ServiceProxy.csproj" />
+    <ProjectReference Include="..\Viv.Apex.Proxy\Viv.Apex.Proxy.csproj" />
   </ItemGroup>
 
 </Project>

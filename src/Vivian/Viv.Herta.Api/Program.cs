@@ -3,7 +3,7 @@ using Viv.Elysia.Filter;
 using Viv.Engine;
 using Viv.Herta.Core.IService;
 using Viv.Herta.Core.Service;
-using Viv.ServiceProxy;
+using Viv.Echo.Proxies;
 
 namespace Viv.Herta.Api;
 
@@ -16,7 +16,7 @@ public class Program
         builder.AddVivApi(mvc => mvc.Filters.Add<RequestFilterAttribute>());
 
         // 登录要校验 AppId：和连接准入问的是同一个查询（带 300 秒缓存）
-        builder.Services.AddVivProxies(builder.Configuration);
+        builder.Services.AddVivRpcProxies(builder.Configuration);
 
         builder.RunVivApi(app => app.MapDefaultEndpoints());
     }

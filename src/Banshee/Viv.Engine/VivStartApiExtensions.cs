@@ -14,6 +14,7 @@ using System.Text;
 using Viv.Aoi;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
+using Viv.Echo;
 using Viv.Echo.Grpc;
 using Viv.Engine.Filter;
 using Viv.Engine.LocalEvents;
@@ -64,16 +65,22 @@ namespace Viv.Engine
             // 基础服务
             builder.Services.AddViv(vivOptions);
 
-            // gRPC 服务端（配置驱动）：appsettings.json 的 VivOptions.EchoOption.GrpcOption.EnableServer 时，
-            // 自动装配 Kestrel 专用端口（严格 HTTP/2）+ 自动发现注册 gRPC 服务，宿主零手工接线。
-            // AddVivGrpcKestrel 内部已调 AddVivGrpcServer（含 VivGrpcServerInterceptor 租户上下文恢复），
-            // 勿重复调用；EnableServer 标记经 Configuration 传给 RunVivApi 决定是否自动映射。
+            // gRPC / MagicOnion 服务端（配置驱动）：VivOptions.EchoOption.GrpcOption 的端口由两种传输共用，
+            // EffectiveProtocol 决定这一进程要注册哪些服务端实现：
+            //   Grpc       → 只注册 gRPC 服务端（拦截器 + 自动发现 + MapGrpcService）
+            //   MagicOnion → 只绑端口，服务端由 Viv.Echo.MagicOnion 的 AddVivMagicOnionServer 装配
+            //   Both       → 两边都注册（迁移期）
+            // 旧配置只写 EnableServer=true 时 EffectiveProtocol 回落为 Grpc，行为不变。
             var grpcOption = vivOptions.EchoOption?.GrpcOption;
-            if (grpcOption is { EnableServer: true })
+            if (grpcOption is not null && grpcOption.EffectiveProtocol != EchoProtocol.None)
             {
-                builder.AddVivGrpcKestrel(grpcOption.Port);
-                VivGrpcDiscovery.RegisterServices(builder.Services);
-                builder.Configuration[VivGrpcServerEnabledKey] = "true";
+                builder.AddVivGrpcKestrel(grpcOption.Port, grpcOption.ServesGrpc);
+
+                if (grpcOption.ServesGrpc)
+                {
+                    VivGrpcDiscovery.RegisterServices(builder.Services);
+                    builder.Configuration[VivGrpcServerEnabledKey] = "true";
+                }
             }
 
             // 下游自鉴权：注册 JwtBearer（读 appsettings.json 的 VivOptions.TokenOption）。
