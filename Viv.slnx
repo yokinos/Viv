@@ -24,12 +24,12 @@
     <Project Path="src/Test/Viv.Engine.Tests/Viv.Engine.Tests.csproj" Id="52a5b0c1-9c22-4387-a45c-52ffc0a21a23" />
     <Project Path="src/Test/Viv.Fakes/Viv.Fakes.csproj" />
     <Project Path="src/Test/Viv.Kinna.Tests/Viv.Kinna.Tests.csproj" />
-    <Project Path="src/Test/Viv.Skirk.Tests/Viv.Skirk.Tests.csproj" />
     <Project Path="src/Test/Viv.Momo.Tests/Viv.Momo.Tests.csproj" Id="248fec67-3ed0-42ea-b2b1-fc65fdd4faa7" />
     <Project Path="src/Test/Viv.Nana.Tests/Viv.Nana.Tests.csproj" Id="b16aac01-c8a3-4e62-b95c-34cc7a5dc3fe" />
     <Project Path="src/Test/Viv.Outbox.Tests/Viv.Outbox.Tests.csproj" />
     <Project Path="src/Test/Viv.Redis.Tests/Viv.Redis.Tests.csproj" Id="79277204-bbec-42bd-b773-8397dbd425e2" />
     <Project Path="src/Test/Viv.Sandrone.Tests/Viv.Sandrone.Tests.csproj" Id="2e5b8d7c-1a3f-4f6a-9c4b-8d2e1f0a5b6c" />
+    <Project Path="src/Test/Viv.Skirk.Tests/Viv.Skirk.Tests.csproj" />
   </Folder>
   <Folder Name="/src/Vivian/">
     <Project Path="src/Vivian/Viv.Elysia/Viv.Elysia.csproj" Id="e55f97d7-954b-4df1-84d5-f94197b74a64" />
@@ -37,11 +37,11 @@
     <Project Path="src/Vivian/Viv.EventContracts/Viv.EventContracts.csproj" Id="d57ba383-4d07-4564-8be6-5dcbddbab6b6" />
     <Project Path="src/Vivian/Viv.Generators/Viv.Generators.csproj" Id="e49ddb54-4408-4ee4-a61b-85a341534235" />
     <Project Path="src/Vivian/Viv.Meta/Viv.Meta.csproj" Id="632440ed-6953-4e13-9d8e-f47f220d99bd" />
-    <Project Path="src/Vivian/Viv.Apex.Proxy/Viv.Apex.Proxy.csproj" />
   </Folder>
   <Folder Name="/src/Vivian/Apex/">
     <Project Path="src/Vivian/Viv.Apex.Api/Viv.Apex.Api.csproj" />
     <Project Path="src/Vivian/Viv.Apex.Core/Viv.Apex.Core.csproj" Id="ea22c3ae-b774-45a4-b55c-328ce12c4213" />
+    <Project Path="src/Vivian/Viv.Apex.Proxy/Viv.Apex.Proxy.csproj" />
     <Project Path="src/Vivian/Viv.Apex.Worker/Viv.Apex.Worker.csproj" />
   </Folder>
   <Folder Name="/src/Vivian/Aspire/">
