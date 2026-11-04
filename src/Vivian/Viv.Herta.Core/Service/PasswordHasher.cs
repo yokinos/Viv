@@ -1,9 +1,10 @@
 using System.Security.Cryptography;
+using Viv.Contracts.Interface;
 using Viv.Herta.Core.IService;
 
 namespace Viv.Herta.Core.Service
 {
-    public class PasswordHasher : IPasswordHasher
+    public class PasswordHasher : IPasswordHasher, IDependency
     {
         private const int SaltSize = 16;
         private const int KeySize = 32;

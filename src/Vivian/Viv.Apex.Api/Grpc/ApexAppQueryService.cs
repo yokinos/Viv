@@ -1,4 +1,5 @@
-using Grpc.Core;
+﻿using Grpc.Core;
+using Viv.Apex.Core.Entity.Dto.App;
 using Viv.Apex.Core.IRepository;
 using Viv.Contracts.Interface;
 using Viv.Entity.Enums;
@@ -56,6 +57,43 @@ namespace Viv.Apex.Api.Grpc
                 Enabled = true,
                 Name = app.Name ?? string.Empty
             };
+        }
+
+        /// <summary>
+        /// 分页取客户端应用。定时任务（Coser 的 AppForeachBase）靠它遍历所有应用，
+        /// 不把 AtClientApp 抄一份到别的服务。
+        /// </summary>
+        public override async Task<GetClientAppPageReply> GetClientAppPage(
+            GetClientAppPageRequest request,
+            ServerCallContext context)
+        {
+            // 分页参数在这里收敛（客户端也可能不收敛），取消要透传到查询
+            var page = await _apps.GetAppPageAsync(
+                request.PageIndex,
+                request.PageSize,
+                keyword: null,
+                context.CancellationToken).ConfigureAwait(false);
+
+            var reply = new GetClientAppPageReply
+            {
+                TotalCount = (int)page.TotalCount,
+                TotalPages = page.TotalPages
+            };
+
+            foreach (var app in page.Items)
+            {
+                reply.Items.Add(new ClientAppItem
+                {
+                    Id = app.Id,
+                    AppKey = app.AppKey ?? string.Empty,
+                    Name = app.Name ?? string.Empty,
+                    Platform = (int)app.Platform,
+                    ClientStack = (int)app.ClientStack,
+                    Enabled = app.Status == EmStatus.Enabled
+                });
+            }
+
+            return reply;
         }
     }
 }

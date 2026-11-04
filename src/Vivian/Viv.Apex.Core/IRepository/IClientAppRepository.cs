@@ -51,6 +51,17 @@ namespace Viv.Apex.Core.IRepository
         Task<PagedList<AtClientApp>> GetAppPagedListAsync(IApiPagedRequest request);
 
         /// <summary>
+        /// 分页查询客户端应用（按参数，给 gRPC 这类内部调用用）。
+        /// 与 <see cref="GetAppPagedListAsync"/> 的区别：不依赖 HTTP 的 <see cref="IApiPagedRequest"/>，
+        /// 分页参数由调用方显式给，仓储负责收敛与 SQL 拼装。
+        /// </summary>
+        Task<PagedList<AtClientApp>> GetAppPageAsync(
+            int pageIndex,
+            int pageSize,
+            string? keyword = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 全部未删除的客户端应用。数量小，筛选和分页放在服务里做。
         /// </summary>
         Task<List<AtClientApp>> ListAppsAsync();

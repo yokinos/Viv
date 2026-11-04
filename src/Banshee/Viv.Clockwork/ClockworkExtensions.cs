@@ -10,8 +10,8 @@ using Viv.Momo.Enums;
 namespace Viv.Clockwork
 {
     /// <summary>
-    /// TickerQ 接入。任务入口请继承 <see cref="VivTickerJobBase"/>，经 <c>RunAsync</c> 默认包上
-    /// <c>IVivLocalEventScope</c>（成功 Flush，失败 Discard），开工前必须 SetSnapshot。
+    /// TickerQ 接入。任务入口请继承 <see cref="VivTickerJobBase"/>，经 <c>RunAsync</c> 执行 ——
+    /// 它只校验开工前必须有上下文快照，不包装本地事件。
     /// Dashboard 打开却没有凭证会启动失败。
     /// </summary>
     public static class ClockworkExtensions

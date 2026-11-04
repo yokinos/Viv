@@ -1,11 +1,11 @@
-using Microsoft.Extensions.DependencyInjection.Extensions;
+﻿using Microsoft.Extensions.DependencyInjection.Extensions;
 using Viv.EventContracts.Herta;
 using Viv.Herta.Link.Adapters;
 using Viv.Herta.Link.Dispatch;
 using Viv.Herta.Link.Hubs;
 using Viv.Kinna.Extensions;
 using Viv.Kinna.Ports;
-using Viv.ServiceProxy.Apex;
+using Viv.ServiceProxy.Common;
 
 namespace Viv.Herta.Link.Extensions
 {
@@ -17,7 +17,7 @@ namespace Viv.Herta.Link.Extensions
         /// </summary>
         public static IServiceCollection AddHertaLink(this IServiceCollection services, IConfiguration configuration)
         {
-            services.AddKinna<ChatHub>(configuration);
+            services.AddKinna<ChatHub>();
 
             // 每个事件一行，注册推送计划的同时把投递器闭合
             services.AddKinnaPusher<ChatHub, SendMessageEvent, ChatMessagePusher>();
@@ -26,7 +26,7 @@ namespace Viv.Herta.Link.Extensions
             services.TryAddScoped<IMembershipSync, MembershipSync>();
 
             // 连接准入靠 Apex 的客户端应用数据，不维护本地白名单
-            services.AddApexClientAppQuery(configuration);
+            services.AddVivProxies(configuration);
             services.TryAddScoped<HertaLinkAdmission>();
 
             // 两个端口要给实现，Kinna 不提供默认值：群列表拿不到时报错，比返回空列表好查

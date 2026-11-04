@@ -73,6 +73,8 @@ namespace Viv.Engine
             RegisterInbox(services, options);
             // 注册异步任务（Skirk）：任务表在业务主库，EnableWorker 决定本宿主跑不跑消费者
             RegisterSkirk(services, options);
+            // 注册长连接（SignalR 进程级选项；每个 Hub 的会话由宿主 AddKinna<THub>() 补）
+            RegisterKinna(services, options);
             // 注册Token
             RegisterToken(services, options);
             // 注册调度
@@ -339,6 +341,17 @@ namespace Viv.Engine
             {
                 services.AddVivTickerQ(options.TickOption);
             }
+        }
+
+        /// <summary>
+        /// 长连接的共享部分。Hub 是泛型（<c>IHubContext&lt;THub&gt;</c>），这里只能配 SignalR 的进程级选项；
+        /// 每个 Hub 的会话、清扫、健康检查由宿主 <c>AddKinna&lt;THub&gt;()</c> 注册。
+        /// </summary>
+        private static void RegisterKinna(IServiceCollection services, VivOptions options)
+        {
+            if (options.KinnaOption == null) return;
+
+            services.AddSignalR(o => o.EnableDetailedErrors = options.KinnaOption.EnableDetailedErrors);
         }
 
         #endregion

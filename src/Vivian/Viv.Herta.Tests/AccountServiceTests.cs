@@ -1,4 +1,4 @@
-using Viv.Entity.Database.Herta;
+﻿using Viv.Entity.Database.Herta;
 using Viv.Fakes;
 using Viv.Herta.Core.Entity.Dto.Account;
 using Viv.Herta.Core.Service;
@@ -11,7 +11,7 @@ namespace Viv.Herta.Tests
         private const long SubjectId = 1;
         private const long AppId = 7;
 
-        private static (AccountService Service, StubClientAppQuery ClientApps, StubChatUserRepository Users) Create()
+        private static (AccountService Service, StubApexAppService ClientApps, StubChatUserRepository Users) Create()
         {
             var users = new StubChatUserRepository();
             var hasher = new PasswordHasher();
@@ -27,7 +27,7 @@ namespace Viv.Herta.Tests
                 NickName = "Alice"
             });
 
-            var clientApps = new StubClientAppQuery();
+            var clientApps = new StubApexAppService();
             var service = new AccountService(users, hasher, new StubTokenService(), clientApps);
             return (service, clientApps, users);
         }

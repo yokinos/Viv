@@ -1,4 +1,4 @@
-﻿using Viv.Clockwork;
+using Viv.Clockwork;
 using Viv.Contracts.Interface;
 using Viv.Log;
 using Viv.Nana;
@@ -13,9 +13,8 @@ namespace Viv.Coser.Api.Jobs
         public BaseJob(
             ILoggerContract logger,
             IVivEventPublisher eventPublisher,
-            IVivContext vivContext,
-            IVivLocalEventScope localEvents)
-            : base(localEvents, vivContext)
+            IVivContext vivContext)
+            : base(vivContext)
         {
             _logger = logger;
             _eventPublisher = eventPublisher;
@@ -30,6 +29,6 @@ namespace Viv.Coser.Api.Jobs
         /// 设置租户上下文，供事件跨进程传播。
         /// </summary>
         public void SetContext(long subjectId, long? appId = null)
-            => SetTenant(subjectId, appId ?? _appId, userId: 999);
+            => SetContext(subjectId, appId ?? _appId, userId: 999);
     }
 }

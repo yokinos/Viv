@@ -198,6 +198,10 @@ namespace Viv.Engine
             // S3Option
             if (options.S3Option != null)
                 RegisterOption(services, options.S3Option);
+
+            // KinnaOption —— 长连接（只有 Herta.Link 这类宿主会配）。null = 不跑长连接
+            if (options.KinnaOption != null)
+                RegisterOption(services, options.KinnaOption);
         }
 
         /// <summary>

@@ -27,11 +27,7 @@ namespace Viv.Outbox.Core
         private readonly ILoggerContract _logger;
         private readonly OutboxOptions _options;
 
-        public OutboxWorker(
-            IServiceScopeFactory scopeFactory,
-            IOutboxEnvelopeSenderFactory senderFactory,
-            ILoggerContract logger,
-            OutboxOptions options)
+        public OutboxWorker(IServiceScopeFactory scopeFactory, IOutboxEnvelopeSenderFactory senderFactory, ILoggerContract logger, OutboxOptions options)
         {
             _scopeFactory = scopeFactory;
             _senderFactory = senderFactory;
@@ -39,7 +35,10 @@ namespace Viv.Outbox.Core
             _options = options;
         }
 
-        /// <summary>建表并打一行启动日志。<returns>false = 起不来，投递器不该继续跑。</returns></summary>
+        /// <summary>
+        /// 建表并打一行启动日志。
+        /// <returns>false = 起不来，投递器不该继续跑。</returns>
+        /// </summary>
         public async Task<bool> StartupAsync(CancellationToken cancellationToken = default)
         {
             try
@@ -69,7 +68,11 @@ namespace Viv.Outbox.Core
             }
         }
 
-        /// <summary>跑一轮。<returns>本轮认领并尝试投递的条数（测试与日志用）。</returns></summary>
+        /// <summary>
+        /// 跑一轮。
+        /// <returns>本轮认领并尝试投递的条数（测试与日志用）。
+        /// </returns>
+        /// </summary>
         public async Task<int> RunOnceAsync(CancellationToken cancellationToken = default)
         {
             using var scope = _scopeFactory.CreateScope();
@@ -123,8 +126,8 @@ namespace Viv.Outbox.Core
         }
 
         internal async Task DeliverAsync(
-            IOutboxRepository repository,
-            IVivEventPublisher publisher,
+            IOutboxRepository repository, 
+            IVivEventPublisher publisher, 
             OutboxMessage message,
             DateTime leaseUntil,
             CancellationToken cancellationToken = default)
@@ -185,8 +188,7 @@ namespace Viv.Outbox.Core
         /// 投递失败一律先重试 —— 不区分「MQ 挂了」和「序列化/路由问题」，
         /// 两类在这里的处理本来就是同一个：记 LastError + 退避重投，到上限才置 Failed。
         /// </summary>
-        private async Task HandleFailureAsync(
-            IOutboxRepository repository, OutboxMessage message, DateTime leaseUntil, Exception ex, CancellationToken cancellationToken)
+        private async Task HandleFailureAsync(IOutboxRepository repository, OutboxMessage message, DateTime leaseUntil, Exception ex, CancellationToken cancellationToken)
         {
             var maxRetryCount = Math.Max(1, _options.MaxRetryCount);
             var retryCount = message.RetryCount + 1;

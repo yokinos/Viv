@@ -27,6 +27,11 @@ namespace Viv.Kinna.Health
             CancellationToken cancellationToken = default)
         {
             var options = _session.Options;
+
+            // 注册是无条件的（注册期拿不到配置），关掉时在这里短路
+            if (!options.EnableHealthCheck)
+                return Task.FromResult(HealthCheckResult.Healthy("长连接健康检查已关闭"));
+
             var snapshot = _session.Pool.GetSnapshot();
 
             var data = new Dictionary<string, object>

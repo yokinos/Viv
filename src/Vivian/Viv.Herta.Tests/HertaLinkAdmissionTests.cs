@@ -1,4 +1,4 @@
-using Viv.Contracts.Models;
+﻿using Viv.Contracts.Models;
 using Viv.Fakes;
 using Viv.Herta.Link.Hubs;
 
@@ -10,7 +10,7 @@ namespace Viv.Herta.Tests
     /// </summary>
     public class HertaLinkAdmissionTests
     {
-        private static HertaLinkAdmission Create(StubClientAppQuery apps) => new(apps);
+        private static HertaLinkAdmission Create(StubApexAppService apps) => new(apps);
 
         private static VivContextContent Identity(long appId = 1, long subjectId = 2, long userId = 3)
             => new() { AppId = appId, SubjectId = subjectId, UserId = userId };
@@ -18,7 +18,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task Apex说是有效客户端_放行()
         {
-            var apps = new StubClientAppQuery { AllowAll = true };
+            var apps = new StubApexAppService { AllowAll = true };
 
             var check = await Create(apps).CheckAsync(Identity(appId: 7));
 
@@ -29,7 +29,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task Apex说不存在_拒绝并带上原因()
         {
-            var apps = new StubClientAppQuery { Reason = "客户端不存在" };
+            var apps = new StubApexAppService { Reason = "客户端不存在" };
 
             var check = await Create(apps).CheckAsync(Identity(appId: 9));
 
@@ -40,7 +40,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task Apex说已禁用_拒绝()
         {
-            var apps = new StubClientAppQuery { Reason = "客户端已禁用" };
+            var apps = new StubApexAppService { Reason = "客户端已禁用" };
 
             var check = await Create(apps).CheckAsync(Identity(appId: 9));
 
@@ -51,7 +51,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task 没有身份_拒绝且不问Apex()
         {
-            var apps = new StubClientAppQuery { AllowAll = true };
+            var apps = new StubApexAppService { AllowAll = true };
 
             var check = await Create(apps).CheckAsync(null);
 
@@ -63,7 +63,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task 缺AppId_拒绝且不问Apex()
         {
-            var apps = new StubClientAppQuery { AllowAll = true };
+            var apps = new StubApexAppService { AllowAll = true };
 
             var check = await Create(apps).CheckAsync(Identity(appId: 0));
 
@@ -75,7 +75,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task 身份不全_拒绝且不问Apex()
         {
-            var apps = new StubClientAppQuery { AllowAll = true };
+            var apps = new StubApexAppService { AllowAll = true };
 
             Assert.False((await Create(apps).CheckAsync(Identity(subjectId: 0))).Allowed);
             Assert.False((await Create(apps).CheckAsync(Identity(userId: 0))).Allowed);

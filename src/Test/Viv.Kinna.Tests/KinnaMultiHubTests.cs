@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Viv.Fakes;
 using Viv.Kinna.Connections;
 using Viv.Kinna.Extensions;
+using Viv.Kinna.Options;
 
 namespace Viv.Kinna.Tests
 {
@@ -26,11 +27,10 @@ namespace Viv.Kinna.Tests
             new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["KinnaOptions:EntryTtlSeconds"] = "90",
-                    ["KinnaOptions:HubA:HubPath"] = "/a",
-                    ["KinnaOptions:HubA:Prefix"] = "a",
-                    ["KinnaOptions:HubB:HubPath"] = "/b",
-                    ["KinnaOptions:HubB:Prefix"] = "b"
+                    ["VivOptions:KinnaOption:HubA:HubPath"] = "/a",
+                    ["VivOptions:KinnaOption:HubA:Prefix"] = "a",
+                    ["VivOptions:KinnaOption:HubB:HubPath"] = "/b",
+                    ["VivOptions:KinnaOption:HubB:Prefix"] = "b"
                 })
                 .Build();
 
@@ -46,9 +46,12 @@ namespace Viv.Kinna.Tests
             // 宿主里由 AddViv 注册，这里补一份，否则清扫器解析不出来
             services.AddSingleton<Viv.Log.ILoggerContract>(new RecordingLogger());
 
-            var configuration = Configuration();
-            services.AddKinna<HubA>(configuration);
-            services.AddKinna<HubB>(configuration);
+            // AddVivConfig 会把 VivOptions:KinnaOption 绑成这个实例
+            services.AddSingleton(new KinnaOptions { EntryTtlSeconds = 90 });
+            services.AddSingleton(Configuration());
+
+            services.AddKinna<HubA>();
+            services.AddKinna<HubB>();
 
             return services.BuildServiceProvider();
         }

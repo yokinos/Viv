@@ -1,4 +1,4 @@
-using Viv.Contracts.Interface;
+﻿using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Engine;
 using Viv.Entity.Database.Herta;
@@ -6,7 +6,7 @@ using Viv.Herta.Core.Entity.Dto.Account;
 using Viv.Herta.Core.Entity.Vo.Account;
 using Viv.Herta.Core.IRepository;
 using Viv.Herta.Core.IService;
-using Viv.ServiceProxy.Apex;
+using Viv.ServiceProxy.Apex.Ports;
 
 namespace Viv.Herta.Core.Service
 {
@@ -15,13 +15,13 @@ namespace Viv.Herta.Core.Service
         private readonly IChatUserRepository _users;
         private readonly IPasswordHasher _hasher;
         private readonly ITokenService _tokens;
-        private readonly IClientAppQuery _clientApps;
+        private readonly IProxyApexAppService _clientApps;
 
         public AccountService(
             IChatUserRepository users,
             IPasswordHasher hasher,
             ITokenService tokens,
-            IClientAppQuery clientApps)
+            IProxyApexAppService clientApps)
         {
             _users = users;
             _hasher = hasher;
@@ -67,7 +67,7 @@ namespace Viv.Herta.Core.Service
 
             // 登录时也问一次 Apex：AppId 会写进 token，等到连接准入再查就晚了 ——
             // 客户端已经拿着一枚带非法 AppId 的 token 了。缓存 300 秒，代价可接受
-            var clientCheck = await _clientApps.ValidateAsync(request.AppId);
+            var clientCheck = await _clientApps.CheckAsync(request.AppId);
             if (!clientCheck.Allowed)
                 return VivApiResult<HertaLoginOutput>.Failed(clientCheck.Reason);
 

@@ -5,24 +5,34 @@ namespace Viv.Clockwork
 {
     /// <summary>
     /// Viv Ticker 任务基类。子类的 [TickerFunction] 入口走 <see cref="RunAsync"/>，
-    /// 默认包上 <see cref="IVivLocalEventScope"/>（成功 Flush / 失败 Discard）并校验租户快照。
+    /// 只做一件事：开工前确保有上下文快照（租户或系统租户）。
+    ///
+    /// 本地事件不在这里包装 —— 定时任务默认只写库 / 发 MQ，这两条路的事务语义分别由
+    /// 工作单元和发件箱负责。哪个任务确实要发进程内事件，自己注入 <c>IVivLocalEventScope</c>
+    /// 在自己的回调里包一层，不要强加给所有任务。
     /// </summary>
-    public abstract class VivTickerJobBase
+    public class VivTickerJobBase
     {
-        protected readonly IVivLocalEventScope LocalEvents;
         protected readonly IVivContext Context;
 
-        protected VivTickerJobBase(IVivLocalEventScope localEvents, IVivContext context)
+        protected VivTickerJobBase(IVivContext context)
         {
-            LocalEvents = localEvents ?? throw new ArgumentNullException(nameof(localEvents));
             Context = context ?? throw new ArgumentNullException(nameof(context));
         }
 
-        /// <summary>包一层本地事件作用域再跑任务体。调用前请 <see cref="SetTenant"/> 或 <see cref="UseSystemTenant"/>。</summary>
+        /// <summary>
+        /// 执行任务体：先校验快照，没有直接失败，不带着空上下文跑
+        /// </summary>
         protected Task RunAsync(Func<Task> work, CancellationToken cancellationToken = default)
-            => VivTickerJob.ExecuteAsync(LocalEvents, Context, work, cancellationToken);
+            => VivTickerJob.RunAsync(Context, work, cancellationToken);
 
-        protected void SetTenant(long subjectId, long appId, long userId = 0)
+        /// <summary>
+        /// <see cref="RunAsync(Func{Task}, CancellationToken)"/> 的带返回值版本
+        /// </summary>
+        protected Task<TResult> RunAsync<TResult>(Func<Task<TResult>> work, CancellationToken cancellationToken = default)
+            => VivTickerJob.RunAsync(Context, work, cancellationToken);
+
+        protected void SetContext(long subjectId, long appId, long userId = 0)
         {
             Context.SetSnapshot(new VivContextContent
             {

@@ -1,6 +1,7 @@
-﻿using TickerQ.Utilities.Base;
+using TickerQ.Utilities.Base;
 using TickerQ.Utilities.Interfaces;
 using Viv.Contracts.Interface;
+using Viv.Coser.Api.Core;
 using Viv.EventContracts.Apex;
 using Viv.Log;
 using Viv.Nana;
@@ -12,9 +13,8 @@ namespace Viv.Coser.Api.Jobs
         public Interval30SecondJob(
             ILoggerContract logger,
             IVivEventPublisher vivPublisher,
-            IVivContext vivContext,
-            IVivLocalEventScope localEvents)
-            : base(logger, vivPublisher, vivContext, localEvents)
+            IVivContext vivContext)
+            : base(logger, vivPublisher, vivContext)
         {
         }
 

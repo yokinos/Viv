@@ -19,6 +19,8 @@ var deepRedApi = builder.AddProject<Projects.Viv_DeepRed_Api>("viv-deepred-api")
     .WithDeveloperCertificateTrust(true);
 
 var coserApi = builder.AddProject<Projects.Viv_Coser_Api>("viv-coser-api")
+    // 定时任务要遍历客户端应用，走 Apex 的 gRPC 分页查询
+    .WithReference(apexApi)
     .WithDeveloperCertificateTrust(true);
 
 var ouroborosApi = builder.AddProject<Projects.Viv_Ouroboros_Api>("viv-ouroboros-api")

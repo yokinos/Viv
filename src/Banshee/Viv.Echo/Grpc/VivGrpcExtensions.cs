@@ -20,16 +20,24 @@ namespace Viv.Echo.Grpc
         public static IHttpClientBuilder AddVivGrpcClient<TClient>(
             this IServiceCollection services,
             string addressOrServiceName,
-            bool useServiceDiscovery = false)
+            bool useServiceDiscovery = false,
+            TimeSpan? timeout = null)
             where TClient : class
         {
             var builder = services.AddGrpcClient<TClient>(o => o.Address = new Uri(
                 useServiceDiscovery
                     ? $"http://_{ServiceDiscoveryEndpointName}.{addressOrServiceName}"
                     : addressOrServiceName));
+
             if (useServiceDiscovery)
             {
                 builder.AddServiceDiscovery();
+            }
+
+            // 内部调用必须有上限：下游卡住时不能把调用方的线程/任务一起拖死
+            if (timeout is { } value && value > TimeSpan.Zero)
+            {
+                builder.ConfigureHttpClient(client => client.Timeout = value);
             }
 
             return builder.AddInterceptor<VivGrpcInterceptor>();

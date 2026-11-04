@@ -110,20 +110,34 @@ namespace Viv.Delusion.Magic
         }
     }
 
-
     /// <summary>
-    /// 提供密码学安全的随机数生成方法（适用于Token、密钥、敏感凭证）
+    /// 密码学安全随机数封装
     /// </summary>
+    /// <remarks>
+    /// 仅为命名一致性封装，底层直接转发到 <c>RandomNumberGenerator</c>；
+    /// 非加密场景请用 <see cref="RandomMagic"/>。
+    /// 不提供 <c>Next(maxValue)</c>：取模会引入分布偏差，确需整数随机请用拒绝采样。
+    /// </remarks>
     public static class SecureRandomMagic
     {
+        /// <summary>
+        /// 用密码学安全的随机字节填充指定缓冲区，覆盖其全部内容。
+        /// </summary>
+        /// <param name="buffer">待填充的缓冲区；传空 Span 时不写入任何内容，也不抛异常。</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void NextBytes(Span<byte> buffer) => RandomNumberGenerator.Fill(buffer);
 
+        /// <summary>
+        /// 生成指定长度的密码学安全随机字节数组。
+        /// </summary>
+        /// <param name="size">要生成的字节数，必须大于或等于 0。</param>
+        /// <returns>长度为 <paramref name="size"/> 的随机字节数组。</returns>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="size"/> 为负数时抛出。注意：底层 <c>RandomNumberGenerator.GetBytes(int)</c>
+        /// 抛出的异常参数名为 <c>count</c>，与本方法的 <c>size</c> 不一致；
+        /// 若上层依赖参数名做日志或映射，请在本方法内先做显式校验。
+        /// </exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static byte[] NextBytes(int size) => RandomNumberGenerator.GetBytes(size);
-
-        // 注意：安全随机数通常不建议封装成 Next(maxValue)，
-        // 因为取模操作会引入轻微的分布偏差（Modulo Bias），
-        // 如果非要封装，必须使用拒绝采样法（Rejection Sampling）来保证均匀分布。
     }
 }

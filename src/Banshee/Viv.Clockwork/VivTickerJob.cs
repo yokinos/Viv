@@ -4,35 +4,30 @@ using Viv.Contracts.Models;
 namespace Viv.Clockwork
 {
     /// <summary>
-    /// TickerQ 任务的默认包装：成功 Flush 本地事件、失败 Discard，开工前必须有租户/系统租户快照。
-    /// Coser 的 <c>BaseJob</c> 走 <see cref="VivTickerJobBase"/>，所有 [TickerFunction] 入口都经这里。
+    /// TickerQ 任务的公共入口：只保证"开工前有上下文快照"。
+    ///
+    /// 曾经这里还包了 <c>IVivLocalEventScope</c>（成功 Flush / 失败 Discard 本地事件），
+    /// 但那让每个定时任务都被迫依赖一个多数任务用不到的端口。现在本地事件由需要的任务
+    /// 自己注入作用域处理；跨进程投递走发件箱，写库走工作单元。
     /// </summary>
     public static class VivTickerJob
     {
-        public static Task ExecuteAsync(
-            IVivLocalEventScope scope,
-            IVivContext context,
-            Func<Task> work,
-            CancellationToken cancellationToken = default)
+        public static Task RunAsync(IVivContext context, Func<Task> work, CancellationToken cancellationToken = default)
         {
-            ArgumentNullException.ThrowIfNull(scope);
             ArgumentNullException.ThrowIfNull(context);
             ArgumentNullException.ThrowIfNull(work);
+
             EnsureSnapshot(context);
-            return scope.RunAsync(work, cancellationToken);
+            return work();
         }
 
-        public static Task<TResult> ExecuteAsync<TResult>(
-            IVivLocalEventScope scope,
-            IVivContext context,
-            Func<Task<TResult>> work,
-            CancellationToken cancellationToken = default)
+        public static Task<TResult> RunAsync<TResult>(IVivContext context, Func<Task<TResult>> work, CancellationToken cancellationToken = default)
         {
-            ArgumentNullException.ThrowIfNull(scope);
             ArgumentNullException.ThrowIfNull(context);
             ArgumentNullException.ThrowIfNull(work);
+
             EnsureSnapshot(context);
-            return scope.RunAsync(work, cancellationToken);
+            return work();
         }
 
         /// <summary>

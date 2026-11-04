@@ -9,13 +9,19 @@ using Viv.Entity.Database.Apex;
 using Viv.Log;
 using Viv.Momo;
 using Viv.Momo.Base;
+using Viv.Momo.Interface;
 using Viv.Redis;
 
 namespace Viv.Apex.Core.Repository
 {
     public class ClientAppRepository : DataAccessCacheBase<EntityBucket<AtClientApp>>, IClientAppRepository
     {
-        public ClientAppRepository(IVivContext context, IMomoDbContext dbContext, IRedisService redisService, IDistributedLock distributedLock, ILoggerContract logger)
+        public ClientAppRepository(
+            IVivContext context,
+            IMomoDbContext dbContext,
+            IRedisService redisService,
+            IDistributedLock distributedLock,
+            ILoggerContract logger)
             : base(context, dbContext, redisService, distributedLock, logger)
         {
         }
@@ -122,6 +128,35 @@ namespace Viv.Apex.Core.Repository
         {
             var (sql, parameter) = request.GetSqlQuery();
             return await _dbContext.PageAsync<AtClientApp>(sql, request.PageIndex, request.PageSize, parameter);
+        }
+
+        public Task<PagedList<AtClientApp>> GetAppPageAsync(
+            int pageIndex,
+            int pageSize,
+            string? keyword = null,
+            CancellationToken cancellationToken = default)
+        {
+            var dialect = _dbContext.Dialect;
+
+            string Col(string name) => dialect.QuoteIdentifier(name);
+            var table = dialect.GetTableName<AtClientApp>();
+
+            // 软删除在 SQL 里挡：这段 SQL 不走 EF 全局过滤器
+            var sql = $"SELECT * FROM {table} WHERE {Col("IsDeleted")} = @notDeleted";
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                sql += $" AND ({Col("Name")} LIKE @keyword OR {Col("AppKey")} LIKE @keyword)";
+            }
+
+            sql += $" ORDER BY {Col("Id")} ASC";
+
+            return _dbContext.PageAsync<AtClientApp>(
+                sql,
+                Math.Max(1, pageIndex),
+                Math.Clamp(pageSize, 1, 200),
+                new { notDeleted = false, keyword = $"%{keyword}%" },
+                cancellationToken);
         }
 
         public Task<List<AtClientApp>> ListAppsAsync()

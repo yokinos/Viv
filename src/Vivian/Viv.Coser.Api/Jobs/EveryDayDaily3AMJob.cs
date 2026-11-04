@@ -1,4 +1,4 @@
-﻿using TickerQ.Utilities.Base;
+using TickerQ.Utilities.Base;
 using TickerQ.Utilities.Interfaces;
 using Viv.Contracts.Interface;
 using Viv.Log;
@@ -14,9 +14,8 @@ namespace Viv.Coser.Api.Jobs
         public EveryDayDaily3AMJob(
             ILoggerContract logger,
             IVivEventPublisher eventPublisher,
-            IVivContext vivContext,
-            IVivLocalEventScope localEvents)
-            : base(logger, eventPublisher, vivContext, localEvents)
+            IVivContext vivContext)
+            : base(logger, eventPublisher, vivContext)
         {
         }
 

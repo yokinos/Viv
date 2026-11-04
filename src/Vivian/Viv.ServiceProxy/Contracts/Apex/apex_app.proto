@@ -1,6 +1,7 @@
 // Apex 客户端应用查询契约。
 // 其他服务在建立长连接等场景用它核对 AppId 是不是 Apex 里存在且启用的客户端，
 // 避免把「允许的客户端」抄成各服务自己的配置文件。
+// 分页查询给定时任务这类"遍历所有客户端应用"的场景用（如 Coser 的 AppForeachBase）。
 syntax = "proto3";
 
 package Viv.ServiceProxy.Protos;
@@ -20,6 +21,34 @@ message ValidateClientAppReply {
   string message = 4;
 }
 
+message GetClientAppPageRequest {
+  // 页码，从 1 开始
+  int32 page_index = 1;
+  // 每页条数，服务端会做上下限收敛
+  int32 page_size = 2;
+}
+
+message ClientAppItem {
+  // 对应 AtClientApp.Id
+  int64 id = 1;
+  // 对外应用标识（AtClientApp.AppKey）
+  string app_key = 2;
+  string name = 3;
+  // EmAppPlatform 的值
+  int32 platform = 4;
+  // EmClientStack 的值
+  int32 client_stack = 5;
+  // 是否启用（EmStatus.Enabled）
+  bool enabled = 6;
+}
+
+message GetClientAppPageReply {
+  int32 total_count = 1;
+  int32 total_pages = 2;
+  repeated ClientAppItem items = 3;
+}
+
 service ApexAppQuery {
   rpc ValidateClientApp (ValidateClientAppRequest) returns (ValidateClientAppReply);
+  rpc GetClientAppPage (GetClientAppPageRequest) returns (GetClientAppPageReply);
 }

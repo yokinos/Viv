@@ -49,27 +49,17 @@ namespace Viv.Outbox.Core
             {
                 Id = IdMagic.NextId(),
                 MessageId = envelope.MessageId,
-                // 存 FullName 而不是程序集限定名：AQN 里带着程序集版本号，
-                // 一次发版就会让库里旧行的类型解析不出来。
-                EventType = typeof(T).FullName ?? typeof(T).Name,
+                EventType = typeof(T).FullName ?? typeof(T).Name, // FullName 可能为 null（泛型类型），用 Name 兜底
                 Payload = JsonSerializer.Serialize(envelope, OutboxJson.Options),
                 Status = OutboxStatus.Pending,
                 RetryCount = 0,
                 NextRetryAt = now,
                 OccurredAt = now,
-
-                // 只有这一刻取得到。投递器跑在后台作用域里，Activity.Current 是 null，
-                // 请求上下文也早没了，入队时不存就等于永久丢。
-                //
-                // 请求 Id 走 IVivContext 而不是 HttpContext：Viv.Outbox 是纯 Microsoft.NET.Sdk，
-                // 看不到 IHttpContextAccessor，而 VivContextMiddleware 填的就是 context.TraceIdentifier。
-                // 无请求上下文时它给的是空串，存成 NULL —— 空串在库里长得像「有但是空的」。
                 TraceId = Activity.Current?.TraceId.ToString(),
                 RequestTraceId = string.IsNullOrWhiteSpace(_context.TraceId) ? null : _context.TraceId,
             };
 
             var inserted = await _repository.InsertAsync(message, cancellationToken).ConfigureAwait(false);
-
             if (inserted)
             {
                 OutboxMetrics.RecordEnqueue();

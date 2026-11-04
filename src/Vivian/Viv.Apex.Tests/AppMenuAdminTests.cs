@@ -407,6 +407,18 @@ namespace Viv.Apex.Tests
                     Items = ordered.Skip((pageIndex - 1) * pageSize).Take(pageSize).ToList()
                 });
             }
+
+            public Task<PagedList<AtClientApp>> GetAppPageAsync(
+                int pageIndex,
+                int pageSize,
+                string? keyword = null,
+                CancellationToken cancellationToken = default)
+                => GetAppPagedListAsync(new AppPageRequest
+                {
+                    PageIndex = pageIndex,
+                    PageSize = pageSize,
+                    Keyword = keyword
+                });
             public Task<bool> AddVersionAsync(AtClientAppVersion version) => throw new NotSupportedException();
             public Task<bool> UpdateVersionAsync(AtClientAppVersion version) => throw new NotSupportedException();
             public Task<bool> DeleteVersionAsync(long versionId) => throw new NotSupportedException();

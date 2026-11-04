@@ -1,11 +1,12 @@
-using Viv.ServiceProxy.Apex;
+﻿using Viv.ServiceProxy.Apex.Ports;
 
 namespace Viv.Fakes;
 
 /// <summary>
 /// 客户端应用查询替身：Apex 那边谁会通过由测试摆布，并记录最近一次问的 AppId。
+/// 分页部分给定时任务遍历用，数据集由 <see cref="Apps"/> / <see cref="TotalCount"/> 摆布。
 /// </summary>
-public sealed class StubClientAppQuery : IClientAppQuery
+public sealed class StubApexAppService : IProxyApexAppService
 {
     /// <summary>允许的 AppId 集合</summary>
     public HashSet<long> Allowed { get; } = new();
@@ -20,13 +21,34 @@ public sealed class StubClientAppQuery : IClientAppQuery
 
     public int Calls { get; private set; }
 
-    public Task<ClientAppCheck> ValidateAsync(long appId, CancellationToken cancellationToken = default)
+    /// <summary>分页查询返回的全量数据，按 PageIndex/PageSize 切片</summary>
+    public List<AppItem> Apps { get; } = new();
+
+    /// <summary>总数。不设置时取 <see cref="Apps"/> 的条数</summary>
+    public int? TotalCount { get; set; }
+
+    public int PageCalls { get; private set; }
+
+    public Task<AppCheckResult> CheckAsync(long appId, CancellationToken cancellationToken = default)
     {
         LastAppId = appId;
         Calls++;
 
         return Task.FromResult(AllowAll || Allowed.Contains(appId)
-            ? ClientAppCheck.Ok()
-            : ClientAppCheck.Denied(Reason));
+            ? AppCheckResult.Ok()
+            : AppCheckResult.Denied(Reason));
+    }
+
+    public Task<AppPage> GetAppPageAsync(AppPageRequest request, CancellationToken cancellationToken = default)
+    {
+        PageCalls++;
+
+        var index = Math.Max(1, request.PageIndex);
+        var size = Math.Max(1, request.PageSize);
+        var total = TotalCount ?? Apps.Count;
+        var totalPages = (int)Math.Ceiling(total / (double)size);
+        var items = Apps.Skip((index - 1) * size).Take(size).ToList();
+
+        return Task.FromResult(new AppPage(items, total, totalPages));
     }
 }
