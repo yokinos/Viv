@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Spectre.Console.Cli;
 using Viv.Cli;
 using Viv.Delusion.Magic;
+using Viv.Delusion.Security;
 using Viv.Entity.Database.Apex;
 using Viv.Entity.Enums;
 using Viv.Momo;
@@ -525,8 +526,9 @@ namespace Viv.Toolbox.Commands.InitViv
 
             if (userId is null or 0)
             {
-                // 密码算法与登录一致：Md5(密码 + 盐)，见 Viv.Apex.Core/Impl/Login/LoginImplBase.cs:129
-                var salt = Guid.NewGuid().ToString("N");
+                // 口令哈希与登录一致（PBKDF2-SHA256 + 独立盐），见 Viv.Delusion/Security/PasswordHash.cs。
+                // 旧版这里写的是 MD5(密码 + 盐)，新库不该再从弱算法起步。
+                var (passwordHash, passwordSalt) = PasswordHash.Hash(password);
                 userId = IdMagic.NextId();
 
                 await db.ExecuteSqlAsync(
@@ -539,8 +541,8 @@ namespace Viv.Toolbox.Commands.InitViv
                         name = userName,
                         nickName,
                         phone,
-                        password = EncryptMagic.HashMd5($"{password}{salt}"),
-                        salt,
+                        password = passwordHash,
+                        salt = passwordSalt,
                         status = StatusEnabled,
                         createdAt = now
                     },
