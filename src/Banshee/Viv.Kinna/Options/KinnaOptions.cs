@@ -57,5 +57,12 @@ namespace Viv.Kinna.Options
         /// 时需要广播踢人，暂不支持。配 false 关闭。
         /// </summary>
         public bool SingleConnectionPerApp { get; set; } = true;
+
+        /// <summary>
+        /// 浅拷贝一份。DI 里注册的是「共享配置」单例，每个 Hub 必须在这份副本上做自己的覆盖，
+        /// 否则后注册的 Hub 会把先注册的 HubPath / Prefix 改掉，两个 Hub 还指向同一个对象。
+        /// 属性全是值类型和 string，浅拷贝等同于深拷贝；以后加引用类型字段要改成显式复制。
+        /// </summary>
+        public KinnaOptions Clone() => (KinnaOptions)MemberwiseClone();
     }
 }

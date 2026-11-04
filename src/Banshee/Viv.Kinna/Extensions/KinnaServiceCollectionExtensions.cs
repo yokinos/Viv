@@ -58,7 +58,10 @@ namespace Viv.Kinna.Extensions
             string hubName,
             Action<KinnaOptions>? configure)
         {
-            var options = provider.GetService<KinnaOptions>() ?? new KinnaOptions();
+            // DI 里那份是全进程共享的单例，这里必须先拷一份再绑定：
+            // 就地 Bind 会把上一个 Hub 的 HubPath / Prefix 覆盖掉，两个 Hub 还会共用同一个对象。
+            var shared = provider.GetService<KinnaOptions>();
+            var options = shared?.Clone() ?? new KinnaOptions();
 
             provider.GetService<IConfiguration>()?
                 .GetSection($"VivOptions:KinnaOption:{hubName}")
