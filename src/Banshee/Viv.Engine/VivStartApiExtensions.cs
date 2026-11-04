@@ -135,10 +135,12 @@ namespace Viv.Engine
                 }
             });
 
-            // 跨域：显式 Origin。未配置时 Development 允许本机回环，禁止 AllowAnyOrigin。
+            // 跨域：只按宿主环境判定，不看 VivOptions.EnvOption —— 入库的 appsettings.json 里 Env 写的是
+            // Development，生产容器照搬配置就会把「dev 放行任意 Origin」带上去。未配置 Origins 时：
+            // Development 回显任意 Origin（局域网 IP 访问 dev server 需要），其余环境不放行任何跨域来源。
             var corsPolicyName = Assembly.GetEntryAssembly()?.GetName().Name ?? "VivApi";
             var corsOrigins = vivOptions.CorsOption?.Origins;
-            var corsIsDev = builder.Environment.IsDevelopment() || vivOptions.EnvOption?.Env == Viv.Contracts.Enums.VivEnv.Development;
+            var corsIsDev = builder.Environment.IsDevelopment();
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy(corsPolicyName, policy =>
@@ -168,8 +170,9 @@ namespace Viv.Engine
             VivLocator.Initialize(app.Services);
 
             // 网关代理场景：信任 YARP 透传的 X-Forwarded-Proto/Host/For。
-            // Aspire/YARP 网关不在 loopback，必须清空默认 KnownProxies，否则转发头被丢掉。
-            app.UseForwardedHeaders(VivForwardedHeaders.Create(VivEngine.VivOptions?.EnvOption));
+            // Aspire/YARP 网关不在 loopback，dev 下清空默认 KnownProxies；非 dev 只认 TrustedProxies，
+            // 没配就退回 loopback 默认，避免任意来源伪造 X-Forwarded-For。
+            app.UseForwardedHeaders(VivForwardedHeaders.Create(VivEngine.VivOptions?.EnvOption, app.Environment.IsDevelopment()));
 
             if (app.Environment.IsDevelopment())
             {

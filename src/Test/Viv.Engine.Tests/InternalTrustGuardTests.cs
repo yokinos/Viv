@@ -16,7 +16,7 @@ public class InternalTrustGuardTests
             EnvOption = new EnvOptions { Env = VivEnv.Production }
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => InternalTrustGuard.Validate(options));
+        var ex = Assert.Throws<InvalidOperationException>(() => InternalTrustGuard.Validate(options, isHostDevelopment: false));
         Assert.Contains("InternalToken", ex.Message);
     }
 
@@ -29,7 +29,7 @@ public class InternalTrustGuardTests
             DatabaseOption = new DatabaseOptions()
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => InternalTrustGuard.Validate(options));
+        var ex = Assert.Throws<InvalidOperationException>(() => InternalTrustGuard.Validate(options, isHostDevelopment: false));
         Assert.Contains("InternalToken", ex.Message);
     }
 
@@ -41,7 +41,7 @@ public class InternalTrustGuardTests
             EnvOption = new EnvOptions { Env = VivEnv.Development, ServiceType = VivServiceType.Gateway }
         };
 
-        Assert.Throws<InvalidOperationException>(() => InternalTrustGuard.Validate(options));
+        Assert.Throws<InvalidOperationException>(() => InternalTrustGuard.Validate(options, isHostDevelopment: false));
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public class InternalTrustGuardTests
             DatabaseOption = new DatabaseOptions()
         };
 
-        InternalTrustGuard.Validate(options);
+        InternalTrustGuard.Validate(options, isHostDevelopment: true);
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public class InternalTrustGuardTests
             }
         };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => InternalTrustGuard.Validate(options));
+        var ex = Assert.Throws<InvalidOperationException>(() => InternalTrustGuard.Validate(options, isHostDevelopment: false));
         Assert.Contains("AllowUnsignedInternalTrust", ex.Message);
     }
 
@@ -91,7 +91,7 @@ public class InternalTrustGuardTests
             DatabaseOption = new DatabaseOptions()
         };
 
-        InternalTrustGuard.Validate(options);
+        InternalTrustGuard.Validate(options, isHostDevelopment: false);
     }
 
     [Fact]
@@ -102,6 +102,42 @@ public class InternalTrustGuardTests
             EnvOption = new EnvOptions { Env = VivEnv.Development }
         };
 
-        InternalTrustGuard.Validate(options);
+        InternalTrustGuard.Validate(options, isHostDevelopment: true);
+    }
+
+    [Fact]
+    public void 配置写着Development但宿主是生产_逃生开关拒绝启动()
+    {
+        // 生产容器照搬入库 appsettings.json（Env=0）又带上 Development 的逃生开关：
+        // 只看 EnvOption.Env 会静默放行未签名 x-viv-* 头，必须由宿主环境兜住。
+        var options = new VivOptions
+        {
+            EnvOption = new EnvOptions
+            {
+                Env = VivEnv.Development,
+                AllowUnsignedInternalTrust = true
+            },
+            DatabaseOption = new DatabaseOptions()
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => InternalTrustGuard.Validate(options, isHostDevelopment: false));
+        Assert.Contains("AllowUnsignedInternalTrust", ex.Message);
+    }
+
+    [Fact]
+    public void 配置写着Development且宿主也是开发_逃生开关放行()
+    {
+        var options = new VivOptions
+        {
+            EnvOption = new EnvOptions
+            {
+                Env = VivEnv.Development,
+                AllowUnsignedInternalTrust = true
+            },
+            DatabaseOption = new DatabaseOptions()
+        };
+
+        InternalTrustGuard.Validate(options, isHostDevelopment: true);
     }
 }

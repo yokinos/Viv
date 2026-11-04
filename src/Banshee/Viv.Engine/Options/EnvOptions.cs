@@ -49,8 +49,15 @@ namespace Viv.Engine.Options
         public string? AiKeySecret { get; set; }
 
         /// <summary>
-        /// 信任的转发代理（IP 或 CIDR）。空 = 清空 ASP.NET 默认的 loopback 限制，
-        /// 让 Aspire/YARP 容器网关的 X-Forwarded-* 生效。生产要收紧时再填。
+        /// 信任的转发代理（IP 或 CIDR）。**配置后**用它整体替换 ASP.NET 默认的 loopback 白名单，
+        /// X-Forwarded-For/Proto/Host 只接受这些来源；配错/写空串不会退化成「信任所有人」。
+        ///
+        /// <para>
+        /// 不配时按宿主环境分档：Development 清空白名单（Aspire 动态端口、局域网机器名都能用）；
+        /// 其他环境保留 ASP.NET 默认（只信 loopback）。容器 / 反向代理部署在非 Development 下
+        /// 必须配这里（例如 Docker 网段 <c>172.16.0.0/12</c>），否则转发头会被丢弃，客户端 IP
+        /// 退化成代理 IP（限流会按代理 IP 分区，等于所有人共用一个桶）。
+        /// </para>
         /// </summary>
         public string[]? TrustedProxies { get; set; }
 
