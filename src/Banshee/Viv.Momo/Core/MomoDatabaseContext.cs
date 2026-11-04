@@ -1159,7 +1159,7 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
                 return _queryTelemetry.Measure("dapper", "scalar", sql,
-                    () => connection.QuerySingleOrDefault<T>(sql, parameters, null, _timeOut));
+                    () => connection.QuerySingleOrDefault<T>(sql, parameters, TransactionFor(context), _timeOut));
             }
             catch (InvalidOperationException ex)
             {
@@ -1260,7 +1260,7 @@ namespace Viv.Momo.Core
                 var parameters = new Dictionary<string, object> { ["Id"] = id };
                 var sql = Dialect.GetFindSqlTemplate(tableName, TenantId, GetActiveFilters<T>(), parameters);
                 return _queryTelemetry.Measure("dapper", "scalar", sql,
-                    () => connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut));
+                    () => connection.QueryFirstOrDefault<T>(sql, parameters, TransactionFor(context), _timeOut));
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1316,7 +1316,7 @@ namespace Viv.Momo.Core
                 var context = GetAppContext(DbReadWriteType.Read);
                 var connection = context.DbConnection;
                 return _queryTelemetry.Measure("dapper", "scalar", sql,
-                    () => connection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut));
+                    () => connection.QueryFirstOrDefault<T>(sql, parameters, TransactionFor(context), _timeOut));
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1385,7 +1385,7 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext(DbReadWriteType.Read);
                 var result = _queryTelemetry.Measure("dapper", "reader", sql,
-                    () => context.DbConnection.Query<T>(sql, parameters, null, true, _timeOut));
+                    () => context.DbConnection.Query<T>(sql, parameters, TransactionFor(context), true, _timeOut));
                 return result.ToList();
             }
             catch (OperationCanceledException) { throw; }
@@ -1438,7 +1438,7 @@ namespace Viv.Momo.Core
             {
                 var context = GetAppContext(DbReadWriteType.Read);
                 return _queryTelemetry.Measure("dapper", "scalar", sql,
-                    () => context.DbConnection.QueryFirstOrDefault<T>(sql, parameters, null, _timeOut));
+                    () => context.DbConnection.QueryFirstOrDefault<T>(sql, parameters, TransactionFor(context), _timeOut));
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -1483,11 +1483,11 @@ namespace Viv.Momo.Core
                 // count 与 list 合成一个样本，计时从拼完 SQL 之后起。sql 传原串，不传 pageSql
                 return _queryTelemetry.Measure("dapper", "page", sql, () =>
                 {
-                    var totalCount = context.DbConnection.ExecuteScalar<int>(countSql, parameters, null, _timeOut);
+                    var totalCount = context.DbConnection.ExecuteScalar<int>(countSql, parameters, TransactionFor(context), _timeOut);
                     if (totalCount > 0)
                     {
                         var totalPages = CalculateTotalPages(totalCount, pageSize);
-                        var list = context.DbConnection.Query<T>(pageSql, parameters, null, true, _timeOut);
+                        var list = context.DbConnection.Query<T>(pageSql, parameters, TransactionFor(context), true, _timeOut);
                         result.TotalCount = totalCount;
                         result.Items = list;
                         result.TotalPages = totalPages;

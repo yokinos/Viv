@@ -42,6 +42,8 @@ namespace Viv.Redis
 
         /// <summary>
         /// 返回 0=无权/不存在，1=重入计数减一仍持有，2=完全释放（DEL）。
+        /// 递减时用 KEEPTTL 保留原有剩余过期时间（Redis 6.0+）：之前的写法把 TTL 重置成一个固定的
+        /// 临时值 60 秒，只要嵌套层数一减，锁的实际过期时间就被缩短，续期前可能提前失效。
         /// </summary>
         public const string ReentrantRelease = OwnedByFn + """
         local currentVal = redis.call('GET', KEYS[1])
@@ -53,7 +55,7 @@ namespace Viv.Redis
         end
         local count = tonumber(string.match(currentVal, '\n(%d+)$'))
         if count and count > 1 then
-            redis.call('SET', KEYS[1], ARGV[1] .. '\n' .. (count - 1), 'EX', ARGV[2])
+            redis.call('SET', KEYS[1], ARGV[1] .. '\n' .. (count - 1), 'KEEPTTL')
             return 1
         end
         redis.call('DEL', KEYS[1])

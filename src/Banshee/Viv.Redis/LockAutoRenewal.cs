@@ -107,17 +107,36 @@ internal static class LockAutoRenewal
     }
 
     /// <summary>停止并移除指定锁的续期循环。锁不存在时无操作。</summary>
-    public static void Stop(string lockKey)
+    /// <param name="lockKey">锁键</param>
+    /// <param name="lockHolderId">
+    /// 持有者。给了就只在登记项属于它时才停 —— 释放与新持有者取锁交错时，不会把别人的续期停掉。
+    /// 传 null 表示无条件停（强制释放、运维清锁）。
+    /// </param>
+    public static void Stop(string lockKey, string? lockHolderId = null)
     {
         if (string.IsNullOrWhiteSpace(lockKey))
         {
             return;
         }
 
-        if (Tasks.TryRemove(lockKey, out var entry))
+        if (lockHolderId is null)
         {
-            entry.Cts.Cancel();
-            entry.Cts.Dispose();
+            if (Tasks.TryRemove(lockKey, out var any))
+            {
+                any.Cts.Cancel();
+                any.Cts.Dispose();
+            }
+
+            return;
+        }
+
+        // 先确认登记项仍属于该持有者，再按「键 + 实例」原子移除，避免与 Start 的替换竞态。
+        if (Tasks.TryGetValue(lockKey, out var current)
+            && current.HolderId == lockHolderId
+            && Tasks.TryRemove(new KeyValuePair<string, Entry>(lockKey, current)))
+        {
+            current.Cts.Cancel();
+            current.Cts.Dispose();
         }
     }
 }

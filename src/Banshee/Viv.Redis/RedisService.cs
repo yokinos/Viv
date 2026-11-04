@@ -11,7 +11,11 @@ using Viv.Delusion.Extension;
 using Viv.Log;
 using Viv.Redis.DbAllocator;
 
-#nullable disable
+// 这个文件还没做完整的可空迁移，先关掉警告；但 **注解要保留**：
+// 接口签名里 GetManyAsync 返回 List<string?>（键不存在是 null）、ExecuteScriptAsync 收 object?[]，
+// 实现里去掉 ? 会让调用方/后来人误以为不可空。`enable annotations` 允许写 ? 且不报 CS8632。
+#nullable disable warnings
+#nullable enable annotations
 namespace Viv.Redis
 {
     /// <summary>
@@ -26,11 +30,6 @@ namespace Viv.Redis
     /// </summary>
     public class RedisService : VivRedis, IRedisService
     {
-        /// <summary>
-        /// 重入锁释放时的临时续期时间（秒），防止释放过程中锁过期
-        /// </summary>
-        private const int ReentrantLockTempExpireSeconds = 60;
-
         public RedisService(ILoggerContract logger, IOptions<RedisOptions> options, IDbAllocator dbAllocator) : base(logger, options, dbAllocator)
         {
 
@@ -587,17 +586,17 @@ namespace Viv.Redis
 
                     var result = db.ScriptEvaluate(normalReleaseScript, [lockKey], [lockHolderId]);
                     var released = (long)result == 1;
-                    // 非重入：释放即完全释放，停续期
+                    // 非重入：释放即完全释放，停续期（带上持有者，避免误停刚拿到锁的新持有者的续期）
                     if (released)
-                        LockAutoRenewal.Stop(lockKey);
+                        LockAutoRenewal.Stop(lockKey, lockHolderId);
                     return released;
                 }
 
-                var scriptResult = db.ScriptEvaluate(RedisLockScripts.ReentrantRelease, [lockKey], [lockHolderId, ReentrantLockTempExpireSeconds]);
+                var scriptResult = db.ScriptEvaluate(RedisLockScripts.ReentrantRelease, [lockKey], [lockHolderId]);
                 var code = (long)scriptResult;
                 // 仅完全释放（count 1→0，DEL）才停续期；仅递减重入计数（count>1）时锁仍持有，续期继续
                 if (code == 2)
-                    LockAutoRenewal.Stop(lockKey);
+                    LockAutoRenewal.Stop(lockKey, lockHolderId);
                 return code >= 1;
             });
         }
@@ -627,17 +626,17 @@ namespace Viv.Redis
 
                     var res = await db.ScriptEvaluateAsync(normalReleaseScript, [lockKey], [lockHolderId]).ConfigureAwait(false);
                     var released = (long)res == 1;
-                    // 非重入：释放即完全释放，停续期
+                    // 非重入：释放即完全释放，停续期（带上持有者，避免误停刚拿到锁的新持有者的续期）
                     if (released)
-                        LockAutoRenewal.Stop(lockKey);
+                        LockAutoRenewal.Stop(lockKey, lockHolderId);
                     return released;
                 }
 
-                var scriptResult = await db.ScriptEvaluateAsync(RedisLockScripts.ReentrantRelease, [lockKey], [lockHolderId, ReentrantLockTempExpireSeconds]).ConfigureAwait(false);
+                var scriptResult = await db.ScriptEvaluateAsync(RedisLockScripts.ReentrantRelease, [lockKey], [lockHolderId]).ConfigureAwait(false);
                 var code = (long)scriptResult;
                 // 仅完全释放（count 1→0，DEL）才停续期；仅递减重入计数（count>1）时锁仍持有，续期继续
                 if (code == 2)
-                    LockAutoRenewal.Stop(lockKey);
+                    LockAutoRenewal.Stop(lockKey, lockHolderId);
                 return code >= 1;
             }).ConfigureAwait(false);
         }
