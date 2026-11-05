@@ -23,7 +23,25 @@ namespace Viv.Apex.Proxy.Proxies
             _logger = logger;
         }
 
-        public async Task<AppCheckResult> CheckAsync(long clientAppId, CancellationToken cancellationToken = default)
+        public Task<AppCheckResult> CheckAppAsync(long clientAppId, CancellationToken cancellationToken = default)
+        {
+            // UserType 保持契约默认值 -1：明确告诉服务端「只查应用，不查归属」
+            return SendAsync(new ValidateClientAppRequest { AppId = clientAppId }, clientAppId, cancellationToken);
+        }
+
+        public Task<AppCheckResult> CheckAsync(long subjectId, long clientAppId, int userType, CancellationToken cancellationToken = default)
+        {
+            // 缺归属主体就不发 RPC：服务端也会拒，但没必要为一次必然失败的调用付网络往返
+            if (subjectId <= 0)
+                return Task.FromResult(AppCheckResult.Denied("缺少归属主体"));
+
+            return SendAsync(
+                new ValidateClientAppRequest { AppId = clientAppId, SubjectId = subjectId, UserType = userType },
+                clientAppId,
+                cancellationToken);
+        }
+
+        private async Task<AppCheckResult> SendAsync(ValidateClientAppRequest request, long clientAppId, CancellationToken cancellationToken)
         {
             if (clientAppId <= 0)
                 return AppCheckResult.Denied("缺少 AppId");
@@ -31,11 +49,9 @@ namespace Viv.Apex.Proxy.Proxies
             try
             {
                 // MagicOnion 的 UnaryResult 不接受 CancellationToken，取消由客户端超时兜底。
-                var reply = await _client
-                    .ValidateClientAppAsync(new ValidateClientAppRequest { AppId = clientAppId })
-                    .ConfigureAwait(false);
+                var reply = await _client.ValidateClientAppAsync(request).ConfigureAwait(false);
 
-                return reply is { Exists: true, Enabled: true }
+                return reply is { Exists: true, Enabled: true, Allowed: true }
                     ? AppCheckResult.Ok()
                     : AppCheckResult.Denied(string.IsNullOrWhiteSpace(reply.Message) ? "客户端不可用" : reply.Message);
             }

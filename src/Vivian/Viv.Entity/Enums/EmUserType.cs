@@ -25,5 +25,10 @@ namespace Viv.Entity.Enums
         /// 租户用户
         /// </summary>
         TenantUser = 3,
+ 
+        /// <summary>
+        /// C端用户
+        /// </summary>
+        EndUser = 10,
     }
 }

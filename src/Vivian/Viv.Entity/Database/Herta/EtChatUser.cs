@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
 
@@ -15,9 +16,25 @@ namespace Viv.Entity.Database.Herta
     public class EtChatUser : EntityBase, ITenant, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
-        /// 租户ID
+        /// 归属主体 Id —— 由 <see cref="UserType"/> 决定它指向哪一层：
+        /// OrgUser → AtOrg.Id，CompanyUser → AtCompany.Id，TenantUser / EndUser → AtTenant.Id。
+        /// <para>
+        /// Master 也要求填一个真实租户 Id：这个实体实现 ITenant，租户过滤器靠这一列做隔离，
+        /// 给 0 会退化成「什么都查不到」（EF）或「什么都看得见」（原生 SQL），两种都不安全。
+        /// 所以 Master 的「至高无上」体现在<b>不校验 App 授权</b>，而不是取消租户上下文。
+        /// </para>
         /// </summary>
         public long TenantId { get; set; }
+
+        /// <summary>
+        /// 用户类型，决定登录时查哪一层的主体授权表（见 <c>ApexAppQueryService.ValidateClientAppAsync</c>）。
+        /// Master 不查授权表，只校验用户存在；注册接口一律落 EndUser，不允许客户端指定。
+        /// <para>
+        /// 初始值取 EndUser 而不是枚举默认的 0：0 是 Master，代码里 new 出来忘了赋值就会变成
+        /// 「跳过全部授权校验」的账号。DB 侧新增列也必须显式写 DEFAULT 10，否则存量行会全变 Master。
+        /// </para>
+        /// </summary>
+        public EmUserType UserType { get; set; } = EmUserType.EndUser;
 
         /// <summary>
         /// 聊天展示昵称

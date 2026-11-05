@@ -1,12 +1,13 @@
-﻿using Viv.Contracts.Interface;
+﻿using Viv.Apex.Proxy.Ports;
+using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Engine;
 using Viv.Entity.Database.Herta;
+using Viv.Entity.Enums;
 using Viv.Herta.Core.Entity.Dto.Account;
 using Viv.Herta.Core.Entity.Vo.Account;
 using Viv.Herta.Core.IRepository;
 using Viv.Herta.Core.IService;
-using Viv.Apex.Proxy.Ports;
 
 namespace Viv.Herta.Core.Service
 {
@@ -17,11 +18,7 @@ namespace Viv.Herta.Core.Service
         private readonly ITokenService _tokens;
         private readonly IProxyApexAppService _clientApps;
 
-        public AccountService(
-            IChatUserRepository users,
-            IPasswordHasher hasher,
-            ITokenService tokens,
-            IProxyApexAppService clientApps)
+        public AccountService(IChatUserRepository users, IPasswordHasher hasher, ITokenService tokens, IProxyApexAppService clientApps)
         {
             _users = users;
             _hasher = hasher;
@@ -31,8 +28,8 @@ namespace Viv.Herta.Core.Service
 
         public async Task<VivApiResult> RegisterAsync(HertaRegisterRequest request)
         {
-            if (request.SubjectId <= 0)
-                return VivApiResult.Failed("缺少租户");
+            var subjectId = request.SubjectId.GetValueOrDefault();
+            var appId = request.AppId.GetValueOrDefault();
 
             var loginCode = request.LoginCode?.Trim();
             if (string.IsNullOrEmpty(loginCode))
@@ -41,7 +38,11 @@ namespace Viv.Herta.Core.Service
             if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 6)
                 return VivApiResult.Failed("密码至少 6 位");
 
-            var existing = await _users.GetByLoginCodeAsync(request.SubjectId, loginCode);
+            var clientCheck = await _clientApps.CheckAsync(subjectId, appId, (int)EmUserType.EndUser);
+            if (!clientCheck.Allowed)
+                return VivApiResult.Failed(clientCheck.Reason);
+
+            var existing = await _users.GetByLoginCodeAsync(subjectId, loginCode);
             if (existing != null)
                 return VivApiResult.Failed("账号已存在");
 
@@ -49,7 +50,10 @@ namespace Viv.Herta.Core.Service
 
             var chatUserId = await _users.AddAsync(new EtChatUser
             {
-                TenantId = request.SubjectId,
+                TenantId = subjectId,
+                // 注册接口一律产出 C 端用户。UserType 决定「查哪张授权表」，一旦允许请求指定，
+                // 填 Master 就等于跳过全部授权校验，所以这个字段只能由服务端写。
+                UserType = EmUserType.EndUser,
                 LoginCode = loginCode,
                 Password = hash,
                 Salt = salt,
@@ -61,31 +65,32 @@ namespace Viv.Herta.Core.Service
 
         public async Task<VivApiResult<HertaLoginOutput>> HertaLoginAsync(HertaLoginRequest request)
         {
-            // 校验过滤器已经挡过一次，这里再挡一次：AppId 会进 token，后面按它认客户端
-            if (request.AppId <= 0)
-                return VivApiResult<HertaLoginOutput>.Failed("缺少客户端标识");
-
-            // 登录时也问一次 Apex：AppId 会写进 token，等到连接准入再查就晚了 ——
-            // 客户端已经拿着一枚带非法 AppId 的 token 了。缓存 300 秒，代价可接受
-            var clientCheck = await _clientApps.CheckAsync(request.AppId);
-            if (!clientCheck.Allowed)
-                return VivApiResult<HertaLoginOutput>.Failed(clientCheck.Reason);
+            // 必填与范围由基类校验保证；0 会一路被下游按「缺少」拒绝，不需要在这里重复判
+            var subjectId = request.SubjectId.GetValueOrDefault();
+            var appId = request.AppId.GetValueOrDefault();
 
             var loginCode = request.LoginCode?.Trim();
             if (string.IsNullOrEmpty(loginCode))
                 return VivApiResult<HertaLoginOutput>.Failed("登录账号不能为空");
 
-            var user = await _users.GetByLoginCodeAsync(request.SubjectId, loginCode);
+            var user = await _users.GetByLoginCodeAsync(subjectId, loginCode);
 
             // 账号不存在与密码错误返回同一句话，避免探出哪些账号存在
             if (user == null || !_hasher.Verify(request.Password, user.Password ?? string.Empty, user.Salt ?? string.Empty))
                 return VivApiResult<HertaLoginOutput>.Failed("账号或密码错误");
 
+            // 归属与类型一律取库里那一行，不看请求：请求里的 SubjectId 只用于定位账号，
+            // token 里的 SubjectId 也来自 user.TenantId。否则改个 Request 就能冒用别人的数据域。
+            // 放在验密码之后：先验明身份，再谈「这个身份买了没买这个 App」，避免未授权探测。
+            var clientCheck = await _clientApps.CheckAsync(user.TenantId, appId, (int)user.UserType);
+            if (!clientCheck.Allowed)
+                return VivApiResult<HertaLoginOutput>.Failed(clientCheck.Reason);
+
             var options = _tokens.GetOptions();
 
             var token = _tokens.GenerateToken(new TokenPayload
             {
-                AppId = request.AppId,
+                AppId = appId,
                 SubjectId = user.TenantId,
                 UserId = user.Id,
                 UserName = user.NickName ?? loginCode

@@ -31,8 +31,11 @@ namespace Viv.Herta.Link.Hubs
             if (identity.SubjectId <= 0 || identity.UserId <= 0)
                 return AppCheckResult.Denied($"身份不完整 subject={identity.SubjectId} user={identity.UserId}");
 
-            // AppId 的有效性问 Apex，本地不维护白名单
-            return await _apps.CheckAsync(identity.AppId, cancellationToken).ConfigureAwait(false);
+            // AppId 的有效性问 Apex，本地不维护白名单。
+            // 这里只查「应用本身可用」：连接上下文的 JWT 里只有 AppId，没有用户类型，
+            // 拿不到「该查哪张授权表」的信息。授权在登录时已经按库里的 UserType 校验过一次，
+            // token 是 Herta 自签的，客户端改不了；准入再查一次只会多一次 RPC，不增加保证。
+            return await _apps.CheckAppAsync(identity.AppId, cancellationToken).ConfigureAwait(false);
         }
     }
 }
