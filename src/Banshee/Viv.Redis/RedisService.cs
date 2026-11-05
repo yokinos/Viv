@@ -11,9 +11,6 @@ using Viv.Delusion.Extension;
 using Viv.Log;
 using Viv.Redis.DbAllocator;
 
-// 这个文件还没做完整的可空迁移，先关掉警告；但 **注解要保留**：
-// 接口签名里 GetManyAsync 返回 List<string?>（键不存在是 null）、ExecuteScriptAsync 收 object?[]，
-// 实现里去掉 ? 会让调用方/后来人误以为不可空。`enable annotations` 允许写 ? 且不报 CS8632。
 #nullable disable warnings
 #nullable enable annotations
 namespace Viv.Redis
