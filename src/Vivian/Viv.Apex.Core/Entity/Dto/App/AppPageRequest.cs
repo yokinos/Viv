@@ -22,16 +22,11 @@ namespace Viv.Apex.Core.Entity.Dto.App
         {
             var parameters = new DynamicParameters();
 
-            var sql = new StringBuilder("""
-                SELECT *
-                FROM AtClientApp
-                WHERE IsDeleted = 0
-                """);
-
+            var sql = new StringBuilder("SELECT * FROM AtClientApp WHERE IsDeleted = 0");
             if (!Keyword.IsNullOrEmpty())
             {
                 sql.Append(" AND (Name LIKE @Keyword OR AppKey LIKE @Keyword)");
-                parameters.Add("@Keyword", Keyword);
+                parameters.Add("@Keyword", $"%{Keyword.Trim()}%");
             }
 
             sql.Append(" ORDER BY Id ASC");
