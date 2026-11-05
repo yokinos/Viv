@@ -218,7 +218,7 @@ Viv/
 │   │   ├── Viv.Entity/                       # 数据库实体（按领域分目录）
 │   │   ├── Viv.Elysia/                       # 请求校验管线 + 操作日志
 │   │   ├── Viv.EventContracts/               # 跨服务事件定义
-│   │   ├── Viv.ServiceProxy/                 # 业务侧 gRPC 契约与客户端（IClientAppQuery 等）
+│   │   ├── Viv.Apex.Proxy/                   # 业务侧 gRPC 代理层（Ports + Contracts）
 │   │   ├── Viv.Generators/、Viv.Meta/        # 应用源生成器与宿主
 │   │   ├── Viv.Apex.Core|Api|Worker/         # Apex 领域
 │   │   ├── Viv.DeepRed.Core|Entity|Api|Worker/
