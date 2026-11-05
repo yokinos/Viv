@@ -1,4 +1,6 @@
-﻿using Viv.Entity.Database.Herta;
+﻿using System.Security.Cryptography;
+using Viv.Delusion.Security;
+using Viv.Entity.Database.Herta;
 using Viv.Entity.Enums;
 using Viv.Fakes;
 using Viv.Herta.Core.Entity.Dto.Account;
@@ -15,8 +17,10 @@ namespace Viv.Herta.Tests
         private static (AccountService Service, StubApexAppService ClientApps, StubChatUserRepository Users) Create()
         {
             var users = new StubChatUserRepository();
-            var hasher = new PasswordHasher();
-            var (hash, salt) = hasher.Hash("secret123");
+
+            // 用框架的同一份实现生成口令：测试数据必须和生产写入的格式一致，
+            // 否则「口令验证通过」这条路径永远测不到真实的哈希串格式。
+            var (hash, salt) = PasswordHash.Hash("secret123");
 
             users.Users.Add(new EtChatUser
             {
@@ -30,7 +34,7 @@ namespace Viv.Herta.Tests
             });
 
             var clientApps = new StubApexAppService();
-            var service = new AccountService(users, hasher, new StubTokenService(), clientApps);
+            var service = new AccountService(users, new StubTokenService(), clientApps);
             return (service, clientApps, users);
         }
 
@@ -65,6 +69,26 @@ namespace Viv.Herta.Tests
             Assert.Equal(AppId, clientApps.LastAppId);
             Assert.NotNull(result.Data);
             Assert.StartsWith("token-", result.Data!.Token);
+        }
+
+        [Fact]
+        public async Task HertaLogin_低强度旧口令_登录后自动升级()
+        {
+            var (service, clientApps, users) = Create();
+            clientApps.AllowAll = true;
+
+            // 造一条「算法正确但迭代次数偏低」的口令串：将来把默认迭代调高后，存量口令就是这个形态
+            var saltBytes = RandomNumberGenerator.GetBytes(16);
+            var weakKey = Rfc2898DeriveBytes.Pbkdf2(
+                "secret123", saltBytes, 1_000, HashAlgorithmName.SHA256, 32);
+            users.Users[0].Password = $"pbkdf2-sha256$1000${Convert.ToBase64String(weakKey)}";
+            users.Users[0].Salt = Convert.ToBase64String(saltBytes);
+
+            var result = await service.HertaLoginAsync(LoginRequest());
+
+            Assert.True(result.Code >= 200);
+            Assert.Equal(1, users.UpdateCalls);
+            Assert.StartsWith("pbkdf2-sha256$100000$", users.Users[0].Password);
         }
 
         [Fact]

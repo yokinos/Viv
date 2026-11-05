@@ -24,5 +24,8 @@ namespace Viv.Herta.Core.Repository
 
             return user.Id;
         }
+
+        public Task<bool> UpdateAsync(EtChatUser user)
+            => _dbContext.UpdateAsync(user);
     }
 }

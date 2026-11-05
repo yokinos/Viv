@@ -1,6 +1,7 @@
 ﻿using Viv.Apex.Proxy.Ports;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
+using Viv.Delusion.Security;
 using Viv.Engine;
 using Viv.Entity.Database.Herta;
 using Viv.Entity.Enums;
@@ -11,17 +12,20 @@ using Viv.Herta.Core.IService;
 
 namespace Viv.Herta.Core.Service
 {
+    /// <summary>
+    /// IM 账号注册与登录。
+    /// 口令哈希不在这里实现，统一走框架的 <see cref="PasswordHash"/>（PBKDF2-SHA256 + 独立盐 + 固定时间比较）——
+    /// 与 Apex 同源，避免同一套密码学逻辑维护两份。
+    /// </summary>
     public class AccountService : IAccountService
     {
         private readonly IChatUserRepository _users;
-        private readonly IPasswordHasher _hasher;
         private readonly ITokenService _tokens;
         private readonly IProxyApexAppService _clientApps;
 
-        public AccountService(IChatUserRepository users, IPasswordHasher hasher, ITokenService tokens, IProxyApexAppService clientApps)
+        public AccountService(IChatUserRepository users, ITokenService tokens, IProxyApexAppService clientApps)
         {
             _users = users;
-            _hasher = hasher;
             _tokens = tokens;
             _clientApps = clientApps;
         }
@@ -46,7 +50,7 @@ namespace Viv.Herta.Core.Service
             if (existing != null)
                 return VivApiResult.Failed("账号已存在");
 
-            var (hash, salt) = _hasher.Hash(request.Password);
+            var (hash, salt) = PasswordHash.Hash(request.Password);
 
             var chatUserId = await _users.AddAsync(new EtChatUser
             {
@@ -76,8 +80,12 @@ namespace Viv.Herta.Core.Service
             var user = await _users.GetByLoginCodeAsync(subjectId, loginCode);
 
             // 账号不存在与密码错误返回同一句话，避免探出哪些账号存在
-            if (user == null || !_hasher.Verify(request.Password, user.Password ?? string.Empty, user.Salt ?? string.Empty))
+            if (user == null || !PasswordHash.Verify(user.Password, user.Salt, request.Password, out var needsRehash))
                 return VivApiResult<HertaLoginOutput>.Failed("账号或密码错误");
+
+            // 迭代次数写在哈希串里，调高默认值时老口令会在登录后自动升级；升级失败不影响本次登录
+            if (needsRehash)
+                await UpgradePasswordHashAsync(user, request.Password);
 
             // 归属与类型一律取库里那一行，不看请求：请求里的 SubjectId 只用于定位账号，
             // token 里的 SubjectId 也来自 user.TenantId。否则改个 Request 就能冒用别人的数据域。
@@ -104,6 +112,25 @@ namespace Viv.Herta.Core.Service
                 NickName = user.NickName,
                 Avatar = user.Avatar
             });
+        }
+
+        /// <summary>
+        /// 旧格式（或迭代次数偏低）口令登录成功后升级为当前强度，与 Apex 的 LoginImplBase 同口径。
+        /// 写库失败就保持旧哈希：密码已经核对通过，不能因为升级失败把用户挡在门外，下次登录再试。
+        /// </summary>
+        private async Task UpgradePasswordHashAsync(EtChatUser user, string password)
+        {
+            try
+            {
+                var (hash, salt) = PasswordHash.Hash(password);
+                user.Password = hash;
+                user.Salt = salt;
+                await _users.UpdateAsync(user).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // 刻意吞掉：升级是尽力而为，失败不能影响本次登录
+            }
         }
     }
 }

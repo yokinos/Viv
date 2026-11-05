@@ -26,6 +26,21 @@ public sealed class StubChatUserRepository : IChatUserRepository
         Users.Add(user);
         return Task.FromResult(id);
     }
+
+    /// <summary>升序更新次数。测试用它断言「旧格式口令登录后确实被重写过」。</summary>
+    public int UpdateCalls { get; private set; }
+
+    public Task<bool> UpdateAsync(EtChatUser user)
+    {
+        UpdateCalls++;
+
+        // 列表里存的就是同一个引用，这里只需保证「按 Id 能找到」，模拟一次成功落库
+        var exists = Users.Any(x => x.Id == user.Id);
+        if (!exists)
+            return Task.FromResult(false);
+
+        return Task.FromResult(true);
+    }
 }
 
 /// <summary>令牌服务替身：记录最后一份载荷，token 用 userId 拼接便于断言。</summary>

@@ -18,6 +18,9 @@
     <ProjectReference Include="..\Viv.EventContracts\Viv.EventContracts.csproj" />
     <!-- 登录要问 Apex 这个 AppId 是不是有效客户端 -->
     <ProjectReference Include="..\Viv.Apex.Proxy\Viv.Apex.Proxy.csproj" />
+    <!-- 直接使用 Viv.Delusion.Security.PasswordHash（与 Apex 同一份口令哈希实现），
+         虽然经 Viv.Elysia → Viv.Engine 可传递获得，但直接用到其公共类型就该显式声明 -->
+    <ProjectReference Include="..\..\Banshee\Viv.Delusion\Viv.Delusion.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Outbox\Viv.Outbox.csproj" />
   </ItemGroup>
 

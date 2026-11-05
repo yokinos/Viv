@@ -8,5 +8,8 @@ namespace Viv.Herta.Core.IRepository
         Task<EtChatUser?> GetByLoginCodeAsync(long tenantId, string loginCode);
 
         Task<long> AddAsync(EtChatUser user);
+
+        /// <summary>整行更新。目前只有「登录时口令哈希升级」会用到。</summary>
+        Task<bool> UpdateAsync(EtChatUser user);
     }
 }
