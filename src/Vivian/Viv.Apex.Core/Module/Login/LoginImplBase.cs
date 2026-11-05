@@ -225,8 +225,26 @@ namespace Viv.Apex.Core.Module.Login
 
         public virtual async Task<bool> LogoutAsync(LoginoutRequest request)
         {
-            var redisSessionKey = GetSessionKey(_context.AppId, request.UserType, _context.UserId);
-            return await _redisService.RemoveAsync(redisSessionKey);
+            var userId = _context.UserId;
+            if (userId <= 0)
+            {
+                return false;
+            }
+
+            var userType = request.UserType;
+            var user = await _userRepository.GetUserAsync(userId);
+            if (user != null)
+            {
+                userType = user.UserType;
+            }
+
+            var redisSessionKey = GetSessionKey(_context.AppId, userType, userId);
+            if (await _redisService.RemoveAsync(redisSessionKey))
+            {
+                return true;
+            }
+
+            return !await _redisService.ExistAsync(redisSessionKey);
         }
     }
 }

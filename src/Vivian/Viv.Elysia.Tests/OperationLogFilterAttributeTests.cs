@@ -48,11 +48,18 @@ namespace Viv.Elysia.Tests
         }
 
         private static (OperationLogFilterAttribute filter, ActionExecutingContext ctx, ActionExecutionDelegate next, RecordingEventPublisher publisher)
-            Create(ActionDescriptor descriptor, VivApiResult? result, Action? inAction = null)
+            Create(ActionDescriptor descriptor, VivApiResult? result, Action? inAction = null, string? requestBody = null)
         {
             var publisher = new RecordingEventPublisher();
             var filter = new OperationLogFilterAttribute(new PublisherOnlyProvider(publisher), new TestContext());
-            var actionContext = new ActionContext(new DefaultHttpContext(), new RouteData(), descriptor);
+            var httpContext = new DefaultHttpContext();
+            if (requestBody != null)
+            {
+                httpContext.Request.Body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(requestBody));
+                httpContext.Request.ContentType = "application/json";
+            }
+
+            var actionContext = new ActionContext(httpContext, new RouteData(), descriptor);
             var filters = new List<IFilterMetadata>();
             var ctx = new ActionExecutingContext(actionContext, filters, new Dictionary<string, object?>(), null!);
 
@@ -166,6 +173,23 @@ namespace Viv.Elysia.Tests
             await Assert.ThrowsAsync<InvalidOperationException>(() => filter.OnActionExecutionAsync(ctx, throwing));
 
             Assert.Null(ElysiaLogContextAccessor.Current);
+        }
+
+        [Fact]
+        public async Task 登录请求体_发布前已脱敏()
+        {
+            ElysiaLogContextAccessor.Clear();
+            var (filter, ctx, next, publisher) = Create(
+                DescriptorFor(nameof(SampleController.WithLoginAttr)),
+                VivApiResult.Success("登录成功"),
+                requestBody: """{"userName":"bob","password":"P@ssw0rd!"}""");
+
+            await filter.OnActionExecutionAsync(ctx, next);
+
+            var evt = Assert.IsType<UserOperationLogEvent>(Assert.Single(publisher.Published));
+            Assert.NotNull(evt.RequestJson);
+            Assert.DoesNotContain("P@ssw0rd!", evt.RequestJson);
+            Assert.Contains("bob", evt.RequestJson);
         }
 
         [Fact]

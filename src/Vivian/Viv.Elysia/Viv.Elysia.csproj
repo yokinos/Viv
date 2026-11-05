@@ -14,4 +14,8 @@
 	  <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<InternalsVisibleTo Include="Viv.Elysia.Tests" />
+	</ItemGroup>
+
 </Project>

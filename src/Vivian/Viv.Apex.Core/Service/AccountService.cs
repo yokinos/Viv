@@ -51,11 +51,12 @@ namespace Viv.Apex.Core.Service
             }
 
             var flag = await loginImpl.LogoutAsync(request);
-            if (flag)
+            if (!flag)
             {
-                ElysiaLogContextAccessor.SetLog(EmOperationModule.User, EmOperationType.Logout);
+                return VivApiResult<LoginOutput>.Failed("退出登录失败，请重试");
             }
 
+            ElysiaLogContextAccessor.SetLog(EmOperationModule.User, EmOperationType.Logout);
             return VivApiResult<LoginOutput>.Success("退出登录成功");
         }
 

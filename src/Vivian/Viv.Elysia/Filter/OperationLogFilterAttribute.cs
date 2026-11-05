@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Viv.Contracts.Interface;
 using Viv.Elysia.Attributes;
+using Viv.Elysia.Security;
 using Viv.Engine;
 using Viv.EventContracts.Apex.Logging;
 using Viv.Log;
@@ -98,7 +99,9 @@ namespace Viv.Elysia.Filter
                     Description = opCtx.Description,
                     Module = opCtx.Module,
                     Operation = opCtx.Operation,
-                    RequestJson = requestBody,
+                    // 请求体可能是登录 / 改密 / 刷新令牌，里面带着口令与长期凭证。
+                    // 发进 MQ 的必须是打码后的版本 —— 消费端、ES、备份都会留一份。
+                    RequestJson = SensitiveDataMasker.Mask(requestBody),
                     ResponseJson = responseBody,
                 }).ConfigureAwait(false);
             }
