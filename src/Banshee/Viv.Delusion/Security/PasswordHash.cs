@@ -56,7 +56,6 @@ namespace Viv.Delusion.Security
                 return false;
             }
 
-            // 不是 PBKDF2 格式就是无效口令：不猜测其它历史算法
             if (!IsModern(hash))
             {
                 return false;
