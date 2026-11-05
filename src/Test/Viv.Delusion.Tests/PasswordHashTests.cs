@@ -39,17 +39,16 @@ public class PasswordHashTests
     }
 
     [Fact]
-    public void 旧MD5哈希仍可登录并要求升级()
+    public void 旧MD5格式一律验证失败_不再保留弱算法通道()
     {
         const string salt = "0123456789abcdef0123456789abcdef";
         const string password = "legacy-pass";
         var legacyHash = EncryptMagic.HashMd5(password + salt);
 
-        Assert.True(PasswordHash.Verify(legacyHash, salt, password, out var needsRehash));
-        Assert.True(needsRehash);
-
-        Assert.False(PasswordHash.Verify(legacyHash, salt, "wrong", out var wrongRehash));
-        Assert.False(wrongRehash);
+        // 口令本身是对的，但格式不是 PBKDF2，也必须拒绝。
+        // 这条一旦变红，说明有人又把 MD5 兼容分支加回来了。
+        Assert.False(PasswordHash.Verify(legacyHash, salt, password, out var needsRehash));
+        Assert.False(needsRehash);
     }
 
     [Fact]

@@ -1,6 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
-using Viv.Delusion.Magic;
 
 namespace Viv.Delusion.Security
 {
@@ -10,9 +8,9 @@ namespace Viv.Delusion.Security
     /// 存储格式：<c>Hash = "pbkdf2-sha256${迭代次数}${base64(key)}"</c>，<c>Salt = base64(随机盐)</c>。
     /// 迭代次数写进哈希串，将来调高默认值不必迁移旧口令。
     ///
-    /// 兼容旧格式：<c>Hash</c> 是 32 位十六进制（<c>MD5(密码 + 盐)</c>）时按旧算法验证，
-    /// 验证通过后由调用方决定是否重新哈希升级。MD5 无迭代、可被彩虹表/GPU 暴力破解，
-    /// 只作为过渡期的登录通道，不要再用它写入新口令。
+    /// <b>只认这一种格式</b>：不带 <c>pbkdf2-sha256$</c> 前缀的串（历史上的 <c>MD5(密码 + 盐)</c>）一律验证失败。
+    /// MD5 无迭代、可被彩虹表/GPU 暴力破解；既然不再有这类数据，就不该留一条弱算法验证通道——
+    /// 留着它等于让库里的一个 MD5 串重新变成可用口令。
     /// </summary>
     public static class PasswordHash
     {
@@ -46,7 +44,7 @@ namespace Viv.Delusion.Security
         }
 
         /// <summary>
-        /// 校验口令。<paramref name="needsRehash"/> 为 true 表示这次是旧格式（或迭代次数偏低）验证通过，
+        /// 校验口令。<paramref name="needsRehash"/> 为 true 表示口令正确、但迭代次数低于当前标准，
         /// 调用方应写入 <see cref="Hash(string)"/> 的新值完成升级。
         /// </summary>
         public static bool Verify(string? hash, string? salt, string? password, out bool needsRehash)
@@ -58,16 +56,13 @@ namespace Viv.Delusion.Security
                 return false;
             }
 
-            if (IsModern(hash))
+            // 不是 PBKDF2 格式就是无效口令：不猜测其它历史算法
+            if (!IsModern(hash))
             {
-                return VerifyModern(hash, salt, password, out needsRehash);
+                return false;
             }
 
-            // 旧格式：MD5(密码 + 盐)，盐可能为空（历史上允许）
-            var legacy = EncryptMagic.HashMd5(password + salt);
-            var ok = FixedTimeEqualsAscii(legacy, hash);
-            needsRehash = ok;
-            return ok;
+            return VerifyModern(hash, salt, password, out needsRehash);
         }
 
         private static bool IsModern(string hash)
@@ -114,15 +109,6 @@ namespace Viv.Delusion.Security
                 // 库里的盐/哈希不是合法 Base64，等同验证失败
                 return false;
             }
-        }
-
-        /// <summary>固定时间比较两段 ASCII（长度不同直接失败，长度本身不是秘密）。</summary>
-        private static bool FixedTimeEqualsAscii(string expected, string actual)
-        {
-            var expectedBytes = Encoding.ASCII.GetBytes(expected);
-            var actualBytes = Encoding.ASCII.GetBytes(actual);
-            return expectedBytes.Length == actualBytes.Length
-                   && CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
         }
     }
 }

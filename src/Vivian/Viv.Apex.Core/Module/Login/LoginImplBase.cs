@@ -140,7 +140,7 @@ namespace Viv.Apex.Core.Module.Login
                 return FuncResult<AtUser>.Failed("账号或者密码错误");
             }
 
-            // 兼容两代口令：PBKDF2（新）与 MD5(密码+盐)（旧）。旧格式验证通过后顺手升级。
+            // 口令只认 PBKDF2 格式；needsRehash 表示口令正确但强度偏低（迭代次数落后于当前标准），登录后顺手升级
             if (!PasswordHash.Verify(user.Password, user.Salt, password, out var needsRehash))
             {
                 return FuncResult<AtUser>.Failed("账号或者密码错误");
@@ -155,7 +155,7 @@ namespace Viv.Apex.Core.Module.Login
         }
 
         /// <summary>
-        /// 旧 MD5 口令登录成功后升级为 PBKDF2。升级失败不影响本次登录（密码已核对通过），下次登录再试。
+        /// 迭代次数偏低的口令登录成功后按当前强度重写。升级失败不影响本次登录（密码已核对通过），下次登录再试。
         /// </summary>
         private async Task UpgradePasswordHashAsync(AtUser user, string password)
         {
