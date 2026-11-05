@@ -34,14 +34,7 @@ namespace Viv.Apex.Core.Service
 
             var paged = await _clientAppRepository.GetAppPagedListAsync(request);
 
-            return VivApiResult<PagedList<ClientAppListItem>>.Success(new PagedList<ClientAppListItem>(paged.PageIndex, paged.PageSize)
-            {
-                TotalCount = paged.TotalCount,
-                TotalPages = paged.TotalPages,
-                IsHaveFrontPage = paged.IsHaveFrontPage,
-                IsHaveNextPage = paged.IsHaveNextPage,
-                Items = paged.Items.Select(ClientAppListItem.From).ToList()
-            });
+            return VivApiResult.Success(paged);
         }
 
         public async Task<VivApiResult> GetAppAsync(ApiIdRequest request)
