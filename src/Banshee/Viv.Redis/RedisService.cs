@@ -423,7 +423,10 @@ namespace Viv.Redis
             await ExecuteRedisAsync(channel, async x =>
             {
                 var subscriber = x.Multiplexer.GetSubscriber();
-                await subscriber.SubscribeAsync(channel, async (ch, msg) =>
+                // 这个 lambda 不能标 async：委托类型是 Action<RedisChannel, RedisValue>，
+                // 标了 async 又没 await 会编译成 async void —— 反序列化或 action 抛异常时没有 Task 承载，
+                // 异常直接抛到线程池，未处理就是进程终止（同时报 CS1998）。体内本来就全是同步调用。
+                await subscriber.SubscribeAsync(channel, (ch, msg) =>
                 {
                     if (!msg.IsNull)
                     {
