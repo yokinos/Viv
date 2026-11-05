@@ -148,6 +148,25 @@ namespace Viv.Momo.Core
 
         #region Update
 
+        /// <summary>
+        /// 更新 / 删除落到「库里找不到那一行」时的统一文案。
+        /// 不区分「不存在」与「属于别的租户」—— 把这两者区分开本身就是信息泄露。
+        /// </summary>
+        private const string EntityNotAccessibleMessage = "数据不存在或无权访问";
+
+        /// <summary>
+        /// 是否需要租户护栏。EF 的 <c>Update</c> / <c>Remove</c> 是按主键整行操作，不经过全局查询过滤器：
+        /// 当某行被 <see cref="TenantDataFilter"/> 藏起来（即属于别的租户）时，按主键写下去会把它搬进当前租户，
+        /// 所以「带租户上下文的 ITenant 实体 + 查询没查到」必须视为不可写，而不是回落到按主键覆盖。
+        ///
+        /// 三条不护栏的情形与过滤器本身保持一致：无租户上下文（后台任务，不知道是谁就不猜）、
+        /// 实体不实现 <see cref="ITenant"/>、调用方显式关了租户过滤器（跨租户运维）。
+        /// </summary>
+        private static bool IsTenantGuarded(EFAppContext context, Type entityType)
+            => typeof(ITenant).IsAssignableFrom(entityType)
+               && !context.HasNoTenantContext
+               && !DataFilterSwitch.IsDisabled(typeof(TenantDataFilter));
+
         public bool Update<T>(T entity) where T : IEntity
         {
             if (entity == null) return false;
@@ -155,21 +174,17 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext();
-
-                // 必须看得见被软删除的行，否则拿不到库里那一份、CopyProtectedValues 被整段跳过，
-                // 入参上的 CreatedAt/CreatedBy/TenantId 默认值会盖掉库里的值。
-                // 用开关而不是 IgnoreQueryFilters：T 只约束到 IEntity（不是 class），
-                // context.Set&lt;T&gt;() 编译不过，Find 是 EF 的非泛型入口，只能靠开关放行。
-                // 只放行软删除，租户那条照旧生效。
                 using var filterScope = DataFilterSwitch.Disable(typeof(SoftDeletedFilter));
                 var existingEntity = context.Find(typeof(T), entity.Id);
                 if (existingEntity is T existing)
                 {
-                    // 入参上 CreatedAt/CreatedBy/TenantId 通常是 default，直接 SetValues 会把库里的值冲掉 ——
-                    // 先把库里那一份补回入参，再连同盖章后的 Updated* 一起 SetValues
                     CopyProtectedValues(existing, entity);
                     AutoSetUpdateValue(entity);
                     context.Entry(existing).CurrentValues.SetValues(entity);
+                }
+                else if (IsTenantGuarded(context, typeof(T)))
+                {
+                    throw new VivBusinessException(EntityNotAccessibleMessage);
                 }
                 else
                 {
@@ -181,6 +196,7 @@ namespace Viv.Momo.Core
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
+            catch (VivBusinessException) { throw; }
             catch (Exception ex)
             {
                 throw WrapDatabaseException($"Update,{ex.Message},{entity.ToJson()}", ex);
@@ -216,6 +232,7 @@ namespace Viv.Momo.Core
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
+            catch (VivBusinessException) { throw; }
             catch (Exception ex)
             {
                 throw WrapDatabaseException($"Update（批量）,{entityList.Count},{ex.Message}", ex);
@@ -229,16 +246,17 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext();
-
-                // 同同步版：按 Id 取库里那一份要放行软删除过滤，否则 CopyProtectedValues 被跳过
                 using var filterScope = DataFilterSwitch.Disable(typeof(SoftDeletedFilter));
                 var existingEntity = await context.FindAsync(typeof(T), [entity.Id], cancellationToken).ConfigureAwait(false);
                 if (existingEntity is T existing)
                 {
-                    // 同同步版：先补回不可变列再 SetValues，否则创建信息/租户被入参的 default 冲掉
                     CopyProtectedValues(existing, entity);
                     AutoSetUpdateValue(entity);
                     context.Entry(existing).CurrentValues.SetValues(entity);
+                }
+                else if (IsTenantGuarded(context, typeof(T)))
+                {
+                    throw new VivBusinessException(EntityNotAccessibleMessage);
                 }
                 else
                 {
@@ -250,6 +268,7 @@ namespace Viv.Momo.Core
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
+            catch (VivBusinessException) { throw; }
             catch (Exception ex)
             {
                 throw WrapDatabaseException($"UpdateAsync,{ex.Message},{entity.ToJson()}", ex);
@@ -284,6 +303,7 @@ namespace Viv.Momo.Core
                 return count > 0;
             }
             catch (OperationCanceledException) { throw; }
+            catch (VivBusinessException) { throw; }
             catch (Exception ex)
             {
                 throw WrapDatabaseException($"UpdateAsync（批量）,{entityList.Count},{ex.Message}", ex);
@@ -292,32 +312,27 @@ namespace Viv.Momo.Core
 
         private static int EFBatchUpdate<T>(List<T> entities, EFAppContext context) where T : class, IEntity
         {
-            var entityIds = entities.Select(e => e.Id).ToList();
+            using var filterScope = DataFilterSwitch.Disable(typeof(SoftDeletedFilter));
+            var entityIds = entities.Select(e => e.Id).Distinct().ToList();
             var existingEntities = context.Set<T>().Where(e => entityIds.Contains(e.Id)).ToList();
 
-            foreach (var entity in entities)
-            {
-                var existing = existingEntities.FirstOrDefault(e => e.Id == entity.Id);
-                if (existing != null)
-                {
-                    CopyProtectedValues(existing, entity);
-                    context.Entry(existing).CurrentValues.SetValues(entity);
-                }
-                else
-                {
-                    context.Update(entity);
-                }
-            }
+            ApplyBatchUpdate(entities, existingEntities, context);
 
             return context.SaveChanges();
         }
 
         private static async Task<int> EFBatchUpdateAsync<T>(List<T> entities, EFAppContext context, CancellationToken cancellationToken = default) where T : class, IEntity
         {
+            using var filterScope = DataFilterSwitch.Disable(typeof(SoftDeletedFilter));
             var entityIds = entities.Select(e => e.Id).Distinct().ToList();
-            // 异步方法里用 ToListAsync，避免同步阻塞线程池线程等待 DB I/O
-            var existingEntities = await context.Set<T>().Where(e => entityIds.Contains(e.Id)).ToListAsync(cancellationToken);
+            var existingEntities = await context.Set<T>().Where(e => entityIds.Contains(e.Id)).ToListAsync(cancellationToken).ConfigureAwait(false);
 
+            ApplyBatchUpdate(entities, existingEntities, context);
+
+            return await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        private static void ApplyBatchUpdate<T>(List<T> entities, List<T> existingEntities, EFAppContext context) where T : class, IEntity
+        {
             foreach (var entity in entities)
             {
                 var existing = existingEntities.FirstOrDefault(e => e.Id == entity.Id);
@@ -326,22 +341,22 @@ namespace Viv.Momo.Core
                     CopyProtectedValues(existing, entity);
                     context.Entry(existing).CurrentValues.SetValues(entity);
                 }
+                else if (IsTenantGuarded(context, typeof(T)))
+                {
+                    throw new VivBusinessException(EntityNotAccessibleMessage);
+                }
                 else
                 {
                     context.Update(entity);
                 }
             }
-
-            return await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
 
         private int DapperBatchUpdate<T>(List<T> entities, EFAppContext context) where T : class, IEntity
         {
-            var sqlList = BuildUpdateSqlList(entities);
+            var sqlList = BuildUpdateSqlList(entities, context);
             int count = 0;
 
-            // 一个 item 一条样本，不包整个循环。BuildUpdateSqlList 按 200 分页，item 就是一条真实 UPDATE，
-            // 包住循环的话样本耗时随实体总数涨，某一条慢就看不出来了
             foreach (var item in sqlList)
             {
                 if (string.IsNullOrEmpty(item.Key)) continue;
@@ -353,7 +368,7 @@ namespace Viv.Momo.Core
 
         private async Task<int> DapperBatchUpdateAsync<T>(List<T> entities, EFAppContext context) where T : class, IEntity
         {
-            var sqlList = BuildUpdateSqlList(entities);
+            var sqlList = BuildUpdateSqlList(entities, context);
             int count = 0;
             foreach (var item in sqlList)
             {
@@ -396,12 +411,17 @@ namespace Viv.Momo.Core
             return false;
         }
 
-        private List<KeyValueItem<string, DynamicParameters>> BuildUpdateSqlList<T>(List<T> entities, int pageSize = 200) where T : class, IEntity
+        /// <summary>
+        /// 生成批量 UPDATE 语句（按 200 条分页，每页一条 CASE WHEN）。
+        /// internal 只给测试断言「租户条件有没有拼进去」用，生产调用方只有 <see cref="DapperBatchUpdate"/> 与 <see cref="DapperBatchUpdateAsync"/>。
+        /// </summary>
+        internal List<KeyValueItem<string, DynamicParameters>> BuildUpdateSqlList<T>(List<T> entities, EFAppContext context, int pageSize = 200) where T : class, IEntity
         {
             var type = typeof(T);
             var tableName = Dialect.GetTableName<T>();
             var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
             var result = new List<KeyValueItem<string, DynamicParameters>>();
+            var tenantGuarded = IsTenantGuarded(context, type);
 
             int totalPages = CalculateTotalPages(entities.Count, pageSize);
             for (int page = 1; page <= totalPages; page++)
@@ -452,6 +472,11 @@ namespace Viv.Momo.Core
                 }
 
                 sqlBuilder.Append($" WHERE {Dialect.QuoteIdentifier("Id")} IN ({string.Join(", ", idParams)})");
+                if (tenantGuarded && idParams.Count > 0)
+                {
+                    sqlBuilder.Append($" AND {Dialect.QuoteIdentifier(nameof(ITenant.TenantId))} = @VivBatchTenantId");
+                    parameters.Add("@VivBatchTenantId", TenantId);
+                }
                 result.Add(new KeyValueItem<string, DynamicParameters>(sqlBuilder.ToString(), parameters));
             }
 
@@ -469,6 +494,16 @@ namespace Viv.Momo.Core
             try
             {
                 var context = GetAppContext();
+                if (entity.Id > 0 && IsTenantGuarded(context, typeof(T)))
+                {
+                    using var guardScope = DataFilterSwitch.Disable(typeof(SoftDeletedFilter));
+                    var visible = context.Find(typeof(T), entity.Id);
+                    if (visible == null)
+                        throw new VivBusinessException(EntityNotAccessibleMessage);
+
+                    context.Entry(visible).State = EntityState.Detached;
+                }
+
                 var entry = context.Entry(entity);
                 if (entry.State == EntityState.Detached)
                     context.Attach(entity);
@@ -478,6 +513,7 @@ namespace Viv.Momo.Core
                 return affected > 0;
             }
             catch (OperationCanceledException) { throw; }
+            catch (VivBusinessException) { throw; }
             catch (Exception ex)
             {
                 throw WrapDatabaseException($"Delete,{ex.Message},{entity.ToJson()}", ex);

@@ -43,6 +43,15 @@ namespace Viv.Engine
         private static readonly string[] _vivClaimTypes = ["subjectId", "userId", "appId"];
 
         /// <summary>
+        /// 转发前必须丢弃的 query 参数。
+        /// 前三个是客户端可伪造的身份（身份只允许来自认证后回填的 x-viv-* 头）；
+        /// 后三个是 JWT 载体：网关已用它们完成认证，再原样转发就会随下游访问日志、OTel span、
+        /// Referer 和浏览器历史一路扩散，等于把明文令牌留在一串日志里。
+        /// </summary>
+        private static readonly string[] _strippedQueryKeys =
+            ["subjectId", "userId", "appId", "access_token", "refresh_token", "id_token"];
+
+        /// <summary>
         /// 配置 Viv 网关基础服务：加载配置、限流配置热重载、Autofac、AddViv、JWT 解析、YARP（路由/集群从 Aspire 服务发现自动生成）、CORS、OutputCache、RateLimiter、编码注册。
         /// 需要先调用 builder.AddServiceDefaults()。
         /// </summary>
@@ -221,18 +230,13 @@ namespace Viv.Engine
                     context.Request.Headers.Remove(header);
                 }
 
-                // 剥离客户端可伪造的身份 query 参数（subjectId/userId/appId）：
-                // 身份只允许来自认证后回填的 x-viv-* 头，客户端经 query 直传的身份一律丢弃，防止冒充任意用户/租户。
-                var spoofableIdentityKeys = _vivClaimTypes;
-                if (context.Request.Query.Count > 0)
+                // 剥离客户端可伪造的身份 query 参数（subjectId/userId/appId）与令牌载体（access_token 等）：
+                // 身份只允许来自认证后回填的 x-viv-* 头，客户端经 query 直传的身份一律丢弃，防止冒充任意用户/租户；
+                // 令牌在 UseAuthentication 里已经用掉（SignalR 的 /ws 通道），转发时不再需要，剥离后下游日志与 span 里不会再出现明文 JWT。
+                var sanitizedQuery = StripSensitiveQuery(context.Request.Query);
+                if (sanitizedQuery.HasValue)
                 {
-                    var strippedQuery = context.Request.Query
-                        .Where(kv => !spoofableIdentityKeys.Contains(kv.Key, StringComparer.OrdinalIgnoreCase))
-                        .ToArray();
-                    if (strippedQuery.Length != context.Request.Query.Count)
-                    {
-                        context.Request.QueryString = QueryString.Create(strippedQuery);
-                    }
+                    context.Request.QueryString = sanitizedQuery.Value;
                 }
 
                 if (context.User.Identity?.IsAuthenticated == true)
@@ -297,6 +301,22 @@ namespace Viv.Engine
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = Math.Max(0, options.QueueLimit)
             });
+        }
+
+        /// <summary>
+        /// 转发前清洗 query：去掉客户端可伪造的身份参数与 JWT 载体。
+        /// 返回 <c>null</c> 表示没有需要剥离的项（调用方保持原 <see cref="HttpRequest.QueryString"/> 不动），
+        /// 否则返回清洗后的 QueryString（可能为空串）。
+        /// </summary>
+        internal static QueryString? StripSensitiveQuery(IQueryCollection query)
+        {
+            if (query.Count == 0) return null;
+
+            var kept = query
+                .Where(kv => !_strippedQueryKeys.Contains(kv.Key, StringComparer.OrdinalIgnoreCase))
+                .ToArray();
+
+            return kept.Length == query.Count ? null : QueryString.Create(kept);
         }
 
         /// <summary>

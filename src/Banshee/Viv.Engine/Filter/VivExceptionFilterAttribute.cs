@@ -110,8 +110,14 @@ namespace Viv.Engine.Filter
             // 如果异常类型在映射表中，使用对应的错误码和数据
             if (_exceptionHandlers.TryGetValue(ex.GetType(), out var handler))
             {
-                // 使用映射的 Code和数据
-                return VivApiResult.ApiResult(handler.Code, ex.Message, handler.DataFactory(ex));
+                // 业务异常的 Message 本来就是写给客户端的，可以回；
+                // 锁异常不是：默认构造函数的文案里带着 LockKey（租户 + 用户 + 业务主键），
+                // 生产环境只回固定文案，Key 留在日志里（OnExceptionAsync 已按 Warning 记录）。
+                var publicMessage = ex is DistributedLockException && !_environment.IsDevelopment()
+                    ? "操作繁忙，请稍后重试"
+                    : ex.Message;
+
+                return VivApiResult.ApiResult(handler.Code, publicMessage, handler.DataFactory(ex));
             }
 
             // 未知异常（未在映射表中定义的）→ 统一返回 ServerError
