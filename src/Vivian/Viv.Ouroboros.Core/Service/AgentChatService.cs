@@ -92,7 +92,7 @@ namespace Viv.Ouroboros.Core.Service
 
         public async Task<VivApiResult> ListPendingApprovalsAsync()
         {
-            var rows = await _store.ListPendingApprovalsAsync(_context.SubjectId);
+            var rows = await _store.ListPendingApprovalsAsync(_context.SubjectId, _context.UserId);
             return VivApiResult.Success(rows.Select(x => new ApprovalItemOutput
             {
                 ApprovalId = x.ApprovalId,
@@ -312,14 +312,17 @@ namespace Viv.Ouroboros.Core.Service
             if (approval.SubjectId != _context.SubjectId) return VivApiResult.Failed("无权处理该审批");
             if (approval.Status != EmApprovalStatus.Pending) return VivApiResult.Failed("该审批已处理");
 
+            // 会话归属必须在写审批结果之前校验：否则同租户的他人可以先把状态改成 Approved，
+            // 之后再被下面拒掉 —— 续跑虽没发生，但这条审批已经被消费掉，真正的所有者再也处理不了。
+            var conversation = await _store.GetConversationByIdAsync(approval.ConversationId);
+            if (conversation is null) return VivApiResult.Failed("会话不存在");
+            if (_context.UserId > 0 && conversation.UserId != _context.UserId) return VivApiResult.Failed("无权处理该审批");
+
             approval.Status = approved ? EmApprovalStatus.Approved : EmApprovalStatus.Rejected;
             approval.DecidedBy = _context.UserId;
             approval.DecidedAt = DateTime.Now;
             approval.DecisionRemark = remark;
             await _store.UpdateApprovalAsync(approval);
-
-            var conversation = await _store.GetConversationAsync(await ResolveConversationKeyAsync(approval.ConversationId));
-            if (conversation is null) return VivApiResult.Failed("会话不存在");
 
             var agent = await _agents.GetAgentAsync(conversation.MainAgentKey);
             if (agent is null) return VivApiResult.Failed("Agent 未就绪");
@@ -365,6 +368,11 @@ namespace Viv.Ouroboros.Core.Service
 
             // 越权防线：subjectId 只认上下文，不认请求参数
             if (conversation.SubjectId != _context.SubjectId) return (null, null, "无权访问该会话");
+
+            // 同租户内也要按用户隔离：会话有 UserId，只比租户等于让 A 能续写 B 的对话。
+            // 队列消费由 VivConsumer 水合信封上下文，UserId 与投递侧一致；UserId == 0 是系统作业，只校验租户。
+            if (_context.UserId > 0 && conversation.UserId != _context.UserId) return (null, null, "无权访问该会话");
+
             if (conversation.Status != EmConversationStatus.Active) return (null, null, "会话已结束");
 
             var agent = await _agents.GetAgentAsync(conversation.MainAgentKey);
@@ -543,13 +551,6 @@ namespace Viv.Ouroboros.Core.Service
             {
                 _logger.Error("会话快照保存失败：{0}，{1}", conversationId, ex.Message);
             }
-        }
-
-        /// <summary>审批单只存了 ConversationId，这里反查会话 Key（审批续跑需要）</summary>
-        private async Task<Guid> ResolveConversationKeyAsync(long conversationId)
-        {
-            var conversations = await _store.ListConversationsAsync(_context.SubjectId, null, 1, 200);
-            return conversations.FirstOrDefault(x => x.Id == conversationId)?.ConversationKey ?? Guid.Empty;
         }
 
         #endregion

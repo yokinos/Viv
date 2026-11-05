@@ -33,6 +33,9 @@ namespace Viv.Ouroboros.Core.Service
         public async Task<OtConversation?> GetConversationAsync(Guid conversationKey)
             => await _dbContext.SingleOrDefaultAsync<OtConversation>(x => x.ConversationKey == conversationKey);
 
+        public async Task<OtConversation?> GetConversationByIdAsync(long conversationId)
+            => await _dbContext.SingleOrDefaultAsync<OtConversation>(x => x.Id == conversationId);
+
         public async Task<List<OtConversation>> ListConversationsAsync(long? subjectId, long? userId, int pageIndex, int pageSize)
         {
             var rows = await _dbContext.FindListAsync<OtConversation>(x => x.SubjectId == subjectId && (userId == null || x.UserId == userId));
@@ -121,9 +124,23 @@ namespace Viv.Ouroboros.Core.Service
         public async Task<OtApproval?> GetApprovalAsync(Guid approvalId)
             => await _dbContext.SingleOrDefaultAsync<OtApproval>(x => x.ApprovalId == approvalId);
 
-        public async Task<List<OtApproval>> ListPendingApprovalsAsync(long? subjectId)
+        public async Task<List<OtApproval>> ListPendingApprovalsAsync(long? subjectId, long? userId)
         {
             var rows = await _dbContext.FindListAsync<OtApproval>(x => x.SubjectId == subjectId && x.Status == EmApprovalStatus.Pending);
+            if (rows.Count == 0) return [];
+
+            // 审批行没有 UserId，归属只能靠会话反查。两次查询而不是逐条查：
+            // 待审批通常只有个位数，把涉及的会话一次取回来过滤即可。
+            if (userId is not null)
+            {
+                var conversationIds = rows.Select(x => x.ConversationId).Distinct().ToList();
+                var owned = await _dbContext.FindListAsync<OtConversation>(
+                    x => conversationIds.Contains(x.Id) && x.UserId == userId);
+                var ownedIds = owned.Select(x => x.Id).ToHashSet();
+
+                rows = rows.Where(x => ownedIds.Contains(x.ConversationId)).ToList();
+            }
+
             return rows.OrderBy(x => x.RequestedAt).ToList();
         }
 

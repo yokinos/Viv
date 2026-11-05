@@ -63,11 +63,12 @@ namespace Viv.Ouroboros.Core.Service
         }
 
         /// <summary>
-        /// 当前主体的会话列表
+        /// 当前用户的会话列表。
+        /// 只按 SubjectId 过滤是不够的：同一租户下有多个用户，传 null 等于把该租户所有人的会话都列出来。
         /// </summary>
         public async Task<VivApiResult> ListAsync(int pageIndex = 1, int pageSize = 20)
         {
-            var rows = await _store.ListConversationsAsync(_context.SubjectId, null, pageIndex, pageSize);
+            var rows = await _store.ListConversationsAsync(_context.SubjectId, _context.UserId, pageIndex, pageSize);
             return VivApiResult.Success(rows.Select(ToItem).ToList());
         }
 
@@ -121,12 +122,17 @@ namespace Viv.Ouroboros.Core.Service
         }
 
         /// <summary>
-        /// 取会话并校验归属：越权一律当"不存在"处理，不泄露存在性
+        /// 取会话并校验归属：越权一律当"不存在"处理，不泄露存在性。
+        /// 除租户外还要比 UserId —— 同租户的不同用户之间同样不该互读会话。
+        /// <c>UserId == 0</c> 是系统作业上下文（后台消费/定时任务），此时只校验租户。
         /// </summary>
         private async Task<OtConversation?> LoadOwnedAsync(Guid conversationKey)
         {
             var conversation = await _store.GetConversationAsync(conversationKey);
-            return conversation is null || conversation.SubjectId != _context.SubjectId ? null : conversation;
+            if (conversation is null) return null;
+            if (conversation.SubjectId != _context.SubjectId) return null;
+            if (_context.UserId > 0 && conversation.UserId != _context.UserId) return null;
+            return conversation;
         }
 
         /// <summary>

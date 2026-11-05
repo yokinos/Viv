@@ -18,6 +18,12 @@ namespace Viv.Ouroboros.Core.IService
 
         Task<OtConversation?> GetConversationAsync(Guid conversationKey);
 
+        /// <summary>
+        /// 按主键取会话。审批续跑只有 ConversationId，没有 ConversationKey，
+        /// 再走"列 200 条再内存找"既慢又会在会话变多后找不到。
+        /// </summary>
+        Task<OtConversation?> GetConversationByIdAsync(long conversationId);
+
         /// <summary>按主体/用户列出会话，按最后消息时间倒序</summary>
         Task<List<OtConversation>> ListConversationsAsync(long? subjectId, long? userId, int pageIndex, int pageSize);
 
@@ -54,8 +60,12 @@ namespace Viv.Ouroboros.Core.IService
 
         Task<OtApproval?> GetApprovalAsync(Guid approvalId);
 
-        /// <summary>待审批列表（状态 1），按发起时间升序</summary>
-        Task<List<OtApproval>> ListPendingApprovalsAsync(long? subjectId);
+        /// <summary>
+        /// 待审批列表（状态 1），按发起时间升序。
+        /// <paramref name="userId"/> 非空时只返回该用户自己会话里的审批；审批行本身没有 UserId，
+        /// 归属靠 <see cref="OtApproval.ConversationId"/> 关联会话表判断。
+        /// </summary>
+        Task<List<OtApproval>> ListPendingApprovalsAsync(long? subjectId, long? userId);
 
         Task<bool> UpdateApprovalAsync(OtApproval approval);
 
