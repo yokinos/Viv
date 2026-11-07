@@ -116,12 +116,15 @@ namespace Viv.Ouroboros.Api.Controllers
         /// <param name="conversationKey">会话标识</param>
         /// <param name="request">消息内容</param>
         /// <param name="cancellationToken">取消令牌</param>
-        /// <returns>每帧为 VivSseFrame（code/message/data/traceId），增量帧 data={delta,seq}，末尾为结束帧</returns>
+        /// <returns>
+        /// 线上为 id / event / data 三段：增量帧 event=delta（data={delta,seq}），
+        /// 正常收尾 event=done，失败 event=error（生产环境只给文案与 traceId）
+        /// </returns>
         [HttpPost("{conversationKey:guid}/stream")]
         [ProducesResponseType(typeof(VivSseFrame), StatusCodes.Status200OK)]
         public async Task StreamAsync(Guid conversationKey, [FromBody] SendMessageRequest request, CancellationToken cancellationToken)
         {
-            await Response.WriteSseStreamAsync(
+            await Response.RunVivSseAsync(
                 _chat.StreamQueuedTurnAsync(conversationKey, request, cancellationToken),
                 traceId: _context.TraceId,
                 cancellationToken: cancellationToken);
