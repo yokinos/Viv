@@ -17,6 +17,7 @@ using Viv.Momo;
 using Viv.Nana;
 using Viv.Outbox;
 using Viv.Ouroboros.Core.Entity.Dto.Agent;
+using Viv.Ouroboros.Core.Entity.Model.Agent;
 using Viv.Ouroboros.Core.Entity.Vo.Agent;
 using Viv.Ouroboros.Core.IService;
 
@@ -141,14 +142,14 @@ namespace Viv.Ouroboros.Core.Service
             return ToResult(result);
         }
 
-        public async IAsyncEnumerable<string> StreamAsync(Guid conversationKey, SendMessageRequest request,
+        public async IAsyncEnumerable<ChatStreamChunk> StreamAsync(Guid conversationKey, SendMessageRequest request,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var text = request.Text;
             var (conversation, agent, error) = await PrepareAsync(conversationKey);
             if (error is not null)
             {
-                yield return $"[错误] {error}";
+                yield return ChatStreamChunk.Fail(error);
                 yield break;
             }
 
@@ -174,7 +175,7 @@ namespace Viv.Ouroboros.Core.Service
             {
                 if (string.IsNullOrEmpty(update.Text)) continue;
                 full.Append(update.Text);
-                yield return update.Text;
+                yield return ChatStreamChunk.Delta(update.Text);
             }
 
             // 流结束后落库与快照（客户端中途断开时这一段落不到，属已知取舍）
@@ -205,13 +206,13 @@ namespace Viv.Ouroboros.Core.Service
         /// 投递必须走 <see cref="IVivEventPublisher"/>：只有它会把当前上下文打进信封，
         /// 少了这段 Worker 侧主体就是 0，会话越权校验会拒掉每一轮。
         /// </summary>
-        public async IAsyncEnumerable<string> StreamQueuedTurnAsync(Guid conversationKey, SendMessageRequest request,
+        public async IAsyncEnumerable<ChatStreamChunk> StreamQueuedTurnAsync(Guid conversationKey, SendMessageRequest request,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var (conversation, _, error) = await PrepareAsync(conversationKey);
             if (error is not null)
             {
-                yield return $"[错误] {error}";
+                yield return ChatStreamChunk.Fail(error);
                 yield break;
             }
 
@@ -219,7 +220,7 @@ namespace Viv.Ouroboros.Core.Service
             var acceptError = await AcceptTurnAsync(conversation!, conversationKey, text, cancellationToken);
             if (acceptError is not null)
             {
-                yield return $"[错误] {acceptError}";
+                yield return ChatStreamChunk.Fail(acceptError);
                 yield break;
             }
 
@@ -233,7 +234,7 @@ namespace Viv.Ouroboros.Core.Service
                 var reply = messages.FirstOrDefault(x => x.Role == EmMessageRole.Assistant && !string.IsNullOrEmpty(x.Content));
                 if (reply is not null)
                 {
-                    yield return reply.Content!;
+                    yield return ChatStreamChunk.Delta(reply.Content!);
                     yield break;
                 }
 

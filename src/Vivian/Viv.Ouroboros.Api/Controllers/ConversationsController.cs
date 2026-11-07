@@ -124,10 +124,23 @@ namespace Viv.Ouroboros.Api.Controllers
         [ProducesResponseType(typeof(VivSseFrame), StatusCodes.Status200OK)]
         public async Task StreamAsync(Guid conversationKey, [FromBody] SendMessageRequest request, CancellationToken cancellationToken)
         {
-            await Response.RunVivSseAsync(
-                _chat.StreamQueuedTurnAsync(conversationKey, request, cancellationToken),
-                traceId: _context.TraceId,
-                cancellationToken: cancellationToken);
+            await Response.RunVivSseAsync(async (session, token) =>
+            {
+                await foreach (var chunk in _chat.StreamQueuedTurnAsync(conversationKey, request, token))
+                {
+                    // 失败走 error 帧，不能当正文推：否则客户端会把「会话不存在」拼进对话气泡
+                    if (chunk.IsError)
+                    {
+                        await session.FailAsync(chunk.Error!);
+                        return;
+                    }
+
+                    if (!await session.SendDeltaAsync(chunk.Text!))
+                    {
+                        return;
+                    }
+                }
+            }, traceId: _context.TraceId, cancellationToken: cancellationToken);
         }
     }
 }
