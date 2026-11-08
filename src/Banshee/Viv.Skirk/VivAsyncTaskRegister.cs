@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using Viv.Delusion.Magic;
 using Viv.Skirk.Core;
@@ -21,6 +22,10 @@ namespace Viv.Skirk
         {
             services.AddSingleton(option);
             services.AddSingleton<VivAsyncTaskHandlerRegistry>();
+
+            // 入队时刻、认领租约、退避、保留期、进度节流全都从这里取。
+            // TryAdd：Outbox / Kinna 也注册同一个实例，重复 Add 会变成多个时钟（行为一样但没意义）。
+            services.TryAddSingleton(TimeProvider.System);
 
             // Scoped：与业务同一个 IMomoDbContext 作用域，入队才能并入业务事务
             services.AddScoped<VivAsyncTaskStore>();

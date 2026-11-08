@@ -22,6 +22,7 @@ namespace Viv.Skirk.Core
         private readonly VivAsyncTaskHandlerRegistry _registry;
         private readonly SkirkOption _option;
         private readonly ILoggerContract _logger;
+        private readonly TimeProvider _timeProvider;
 
         /// <summary>租约持有者标识：机器 + 进程 + 随机后缀，进程重启不会复用。列宽 64，这里截到 48。</summary>
         private readonly string _leaseOwner = CreateLeaseOwner(Environment.MachineName, Environment.ProcessId, Guid.NewGuid());
@@ -30,13 +31,21 @@ namespace Viv.Skirk.Core
             IServiceScopeFactory scopeFactory,
             VivAsyncTaskHandlerRegistry registry,
             SkirkOption option,
-            ILoggerContract logger)
+            ILoggerContract logger,
+            TimeProvider? timeProvider = null)
         {
             _scopeFactory = scopeFactory;
             _registry = registry;
             _option = option;
             _logger = logger;
+            _timeProvider = timeProvider ?? TimeProvider.System;
         }
+
+        /// <summary>
+        /// 写库用的统一时刻。租约、退避、保留期都从这里取 —— 全是「时间判断」，
+        /// 散着读墙钟会让这些逻辑既测不了，也扛不住时钟回拨。
+        /// </summary>
+        private DateTime UtcNow => _timeProvider.GetUtcNow().UtcDateTime;
 
         /// <summary>机器名很短时整段都放得下；超长才截断。直接 [..48] 在短字符串上会抛。</summary>
         internal static string CreateLeaseOwner(string machineName, int processId, Guid token)
@@ -58,21 +67,24 @@ namespace Viv.Skirk.Core
                 _option.PollIntervalSeconds, _option.BatchSize, _option.MaxParallelism, _option.LeaseSeconds);
 
             var poll = TimeSpan.FromSeconds(Math.Max(1, _option.PollIntervalSeconds));
-            using var timer = new PeriodicTimer(poll);
+            var cleanupEvery = TimeSpan.FromHours(6);
             var lastCleanup = DateTime.MinValue;
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    if (!await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false)) break;
+                    // 刻意不用 PeriodicTimer：它不认 TimeProvider，测试里没法把时钟拨到下一轮。
+                    // Task.Delay 带 timeProvider 重载，FakeTimeProvider 一 Advance 循环就继续。
+                    await Task.Delay(poll, _timeProvider, stoppingToken).ConfigureAwait(false);
 
                     await PollOnceAsync(stoppingToken).ConfigureAwait(false);
 
-                    if (DateTime.UtcNow - lastCleanup > TimeSpan.FromHours(6))
+                    var now = UtcNow;
+                    if (now - lastCleanup > cleanupEvery)
                     {
                         await CleanupAsync(stoppingToken).ConfigureAwait(false);
-                        lastCleanup = DateTime.UtcNow;
+                        lastCleanup = now;
                     }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -101,7 +113,7 @@ namespace Viv.Skirk.Core
             using var scope = _scopeFactory.CreateScope();
             var store = scope.ServiceProvider.GetRequiredService<IVivAsyncTaskStore>();
 
-            var now = DateTime.UtcNow;
+            var now = UtcNow;
 
             // 先把"执行方崩了、租约过期"的任务放回队列，再认领。
             // 重试次数已经用尽的标成失败，不再无限回到队列。
@@ -150,10 +162,13 @@ namespace Viv.Skirk.Core
                 TraceId = task.TraceId,
             };
 
-            var context = new VivAsyncTaskContext(task.Id, store, _option, _logger);
+            var context = new VivAsyncTaskContext(task.Id, store, _option, _logger, _timeProvider);
 
-            using var taskCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            taskCts.CancelAfter(TimeSpan.FromMinutes(Math.Max(1, _option.TaskTimeoutMinutes)));
+            // 超时也要走注入时钟，否则「执行超时」这条分支在测试里只能真等一分钟。
+            // CancellationTokenSource 只有构造重载认 TimeProvider，CancelAfter 没有，所以自己起一个源再联动。
+            using var timeoutCts = new CancellationTokenSource(
+                TimeSpan.FromMinutes(Math.Max(1, _option.TaskTimeoutMinutes)), _timeProvider);
+            using var taskCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
             using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var heartbeat = HeartbeatAsync(task, store, context, taskCts, heartbeatCts.Token);
@@ -166,8 +181,8 @@ namespace Viv.Skirk.Core
                     // 不认识的任务类型：直接终态失败，别占着队列反复重试
                     await store.FailAsync(
                         task.Id, _leaseOwner, VivAsyncTaskStatus.Failed,
-                        $"未注册的任务类型：{task.TaskType}", null, DateTime.UtcNow,
-                        DateTime.UtcNow.AddDays(Math.Max(1, _option.RetentionDays)), cancellationToken).ConfigureAwait(false);
+                        $"未注册的任务类型：{task.TaskType}", null, UtcNow,
+                        UtcNow.AddDays(Math.Max(1, _option.RetentionDays)), cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -176,7 +191,7 @@ namespace Viv.Skirk.Core
 
                 await handler.ExecuteAsync(@params, context, taskCts.Token).ConfigureAwait(false);
 
-                var finishedAt = DateTime.UtcNow;
+                var finishedAt = UtcNow;
                 var wrote = await store.CompleteAsync(
                     task.Id, _leaseOwner, null, finishedAt,
                     finishedAt.AddDays(Math.Max(1, _option.RetentionDays)), cancellationToken).ConfigureAwait(false);
@@ -187,7 +202,7 @@ namespace Viv.Skirk.Core
             }
             catch (OperationCanceledException) when (context.CanceledByUser)
             {
-                var now = DateTime.UtcNow;
+                var now = UtcNow;
                 await store.MarkCanceledAsync(task.Id, now, now.AddDays(Math.Max(1, _option.RetentionDays)), CancellationToken.None)
                     .ConfigureAwait(false);
             }
@@ -220,13 +235,15 @@ namespace Viv.Skirk.Core
             var renewEvery = TimeSpan.FromSeconds(Math.Max(5, _option.LeaseSeconds / 3));
             var cancelEvery = TimeSpan.FromMilliseconds(Math.Max(50, _option.CancelPollIntervalMs));
             var tick = cancelEvery < renewEvery ? cancelEvery : renewEvery;
-            using var timer = new PeriodicTimer(tick);
-            var nextRenewAt = DateTime.UtcNow + renewEvery;
+            var nextRenewAt = UtcNow + renewEvery;
 
             try
             {
-                while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+                while (true)
                 {
+                    // 同主循环：PeriodicTimer 不认 TimeProvider，换 Task.Delay 才能拨表测续租
+                    await Task.Delay(tick, _timeProvider, cancellationToken).ConfigureAwait(false);
+
                     var canceled = await store.IsCancelRequestedAsync(task.Id, cancellationToken).ConfigureAwait(false);
                     if (canceled == true)
                     {
@@ -235,10 +252,10 @@ namespace Viv.Skirk.Core
                         return;
                     }
 
-                    if (DateTime.UtcNow < nextRenewAt) continue;
+                    if (UtcNow < nextRenewAt) continue;
 
                     var renewed = await store
-                        .RenewLeaseAsync(task.Id, _leaseOwner, DateTime.UtcNow.AddSeconds(Math.Max(5, _option.LeaseSeconds)), cancellationToken)
+                        .RenewLeaseAsync(task.Id, _leaseOwner, UtcNow.AddSeconds(Math.Max(5, _option.LeaseSeconds)), cancellationToken)
                         .ConfigureAwait(false);
 
                     if (!renewed)
@@ -248,7 +265,7 @@ namespace Viv.Skirk.Core
                         return;
                     }
 
-                    nextRenewAt = DateTime.UtcNow + renewEvery;
+                    nextRenewAt = UtcNow + renewEvery;
                 }
             }
             catch (OperationCanceledException)
@@ -268,7 +285,7 @@ namespace Viv.Skirk.Core
             // 认领时 Attempt 已经 +1
             var attempt = task.Attempt;
             var canRetry = attempt <= Math.Max(0, task.MaxAttempts);
-            var now = DateTime.UtcNow;
+            var now = UtcNow;
 
             var status = canRetry ? VivAsyncTaskStatus.Pending : VivAsyncTaskStatus.Failed;
             var nextAttemptAt = canRetry ? now.AddSeconds(Math.Min(300, Math.Pow(2, attempt))) : (DateTime?)null;
@@ -294,7 +311,7 @@ namespace Viv.Skirk.Core
             // 分批删，避免一次锁太多行
             while (deleted < 10_000)
             {
-                var affected = await store.CleanupAsync(batchSize, DateTime.UtcNow, cancellationToken).ConfigureAwait(false);
+                var affected = await store.CleanupAsync(batchSize, UtcNow, cancellationToken).ConfigureAwait(false);
                 if (!affected) break;
 
                 deleted += batchSize;

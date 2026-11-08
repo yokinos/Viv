@@ -26,17 +26,20 @@ namespace Viv.Skirk
         private readonly ILoggerContract _logger;
         private readonly SkirkOption _option;
         private readonly IVivContext _context;
+        private readonly TimeProvider _timeProvider;
 
         public VivAsyncTaskService(
             IVivAsyncTaskStore store,
             ILoggerContract logger,
             SkirkOption option,
-            IVivContext context)
+            IVivContext context,
+            TimeProvider? timeProvider = null)
         {
             _store = store;
             _logger = logger;
             _option = option;
             _context = context;
+            _timeProvider = timeProvider ?? TimeProvider.System;
         }
 
         /// <summary>参数 JSON 选项：入队与执行两侧必须一致</summary>
@@ -57,7 +60,8 @@ namespace Viv.Skirk
 
             await EnsureTableAsync(cancellationToken).ConfigureAwait(false);
 
-            var now = DateTime.UtcNow;
+            // 入队时刻就是后续「什么时候该被认领」的起点，必须和消费者用同一个时钟
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
             var task = new VivAsyncTask
             {
                 Id = IdMagic.NextId(),

@@ -14,17 +14,19 @@ namespace Viv.Skirk.Core
         private readonly IVivAsyncTaskStore _store;
         private readonly SkirkOption _option;
         private readonly ILoggerContract _logger;
+        private readonly TimeProvider _timeProvider;
 
         private DateTime _lastReportAt = DateTime.MinValue;
 
         private volatile bool _canceledByUser;
 
-        public VivAsyncTaskContext(long taskId, IVivAsyncTaskStore store, SkirkOption option, ILoggerContract logger)
+        public VivAsyncTaskContext(long taskId, IVivAsyncTaskStore store, SkirkOption option, ILoggerContract logger, TimeProvider? timeProvider = null)
         {
             TaskId = taskId;
             _store = store;
             _option = option;
             _logger = logger;
+            _timeProvider = timeProvider ?? TimeProvider.System;
         }
 
         public long TaskId { get; }
@@ -60,8 +62,8 @@ namespace Viv.Skirk.Core
             string? message,
             CancellationToken cancellationToken)
         {
-            // 节流：进度写库比业务本身更容易把库打满
-            var now = DateTime.UtcNow;
+                // 节流：进度写库比业务本身更容易把库打满
+                var now = _timeProvider.GetUtcNow().UtcDateTime;
             if ((now - _lastReportAt).TotalMilliseconds < Math.Max(0, _option.ProgressMinIntervalMs)) return;
             _lastReportAt = now;
 
