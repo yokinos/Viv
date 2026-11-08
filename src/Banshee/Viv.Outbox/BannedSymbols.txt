@@ -9,3 +9,4 @@ P:System.DateTimeOffset.UtcNow;请注入 TimeProvider 并改用 GetUtcNow()
 P:System.DateTimeOffset.Now;请注入 TimeProvider 并改用 GetUtcNow()
 P:System.DateTime.UtcNow;请注入 TimeProvider 并改用 GetUtcNow()
 P:System.DateTime.Now;请注入 TimeProvider 并改用 GetUtcNow()
+P:System.DateTime.Today;请注入 TimeProvider 并改用 GetUtcNow()（Today 就是 Now.Date）
