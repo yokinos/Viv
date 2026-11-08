@@ -1,0 +1,11 @@
+; 禁用 API 清单（BannedApiAnalyzers，RS0030 在本项目内是 error）
+; 格式：成员签名;提示信息
+; 注意前缀：UtcNow / Now 是属性，用 P: 而不是 M:（写成 M: 不会报错，只是永远不生效）
+; 本模块的租约、心跳、清扫、限流窗口都建立在时间判断上，一律注入 TimeProvider：
+;   - 绝对时刻用 GetUtcNow()
+;   - 测量耗时用 GetTimestamp() / GetElapsedTime()
+;   - 定时等待用 Task.Delay(delay, timeProvider, ct)
+P:System.DateTimeOffset.UtcNow;请注入 TimeProvider 并改用 GetUtcNow()
+P:System.DateTimeOffset.Now;请注入 TimeProvider 并改用 GetUtcNow()
+P:System.DateTime.UtcNow;请注入 TimeProvider 并改用 GetUtcNow()
+P:System.DateTime.Now;请注入 TimeProvider 并改用 GetUtcNow()

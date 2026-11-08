@@ -95,6 +95,8 @@
     <PackageVersion Include="Autofac.Extras.DynamicProxy" Version="8.1.0" />
     <PackageVersion Include="Castle.Core.AsyncInterceptor" Version="2.1.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.9.0" />
+    <!-- 禁用 API 分析器：BannedSymbols.txt 里列出的成员在编译期报错，用来把「不许直接读墙钟」变成硬约束 -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
     <!-- 映射源生成器：partial 方法 + [Mapper]，编译期生成映射代码，运行时不反射 -->
     <PackageVersion Include="Riok.Mapperly" Version="4.3.1" />
     <!-- Roslyn 两件刻意压在 5.0.0：WolverineFx 传递的 JasperFx.RuntimeCompiler 经Microsoft.CodeAnalysis.Scripting 精确要求 CSharp =5.0.0，抬高一档就出 NU1608。直接引它们的只有两个源生成器项目，生成器引最低支持版本本就是惯例。 -->
@@ -110,6 +112,8 @@
     <!-- ── 测试 ───────────────────────────────────────────── -->
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <!-- 假时钟：时间不再「自己流逝」，由测试 Advance 推进，租约/退避这类用例才能按真实语义断言 -->
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.0.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <PackageVersion Include="Testcontainers" Version="4.15.0" />

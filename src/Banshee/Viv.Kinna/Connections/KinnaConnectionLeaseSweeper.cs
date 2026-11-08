@@ -24,6 +24,7 @@ namespace Viv.Kinna.Connections
         private readonly ILoggerContract _logger;
         private readonly KinnaSweepClock<THub> _clock;
         private readonly KinnaUplinkLimiter<THub>? _limiter;
+        private readonly TimeProvider _time;
         private readonly TimeSpan _ttl;
         private readonly TimeSpan _interval;
 
@@ -32,12 +33,14 @@ namespace Viv.Kinna.Connections
             IServiceScopeFactory scopes,
             ILoggerContract logger,
             KinnaSweepClock<THub>? clock = null,
-            KinnaUplinkLimiter<THub>? limiter = null)
+            KinnaUplinkLimiter<THub>? limiter = null,
+            TimeProvider? timeProvider = null)
         {
             _session = session;
             _scopes = scopes;
             _logger = logger;
-            _clock = clock ?? new KinnaSweepClock<THub>();
+            _time = timeProvider ?? TimeProvider.System;
+            _clock = clock ?? new KinnaSweepClock<THub>(_time);
             _limiter = limiter;
 
             var options = session.Options;
@@ -52,9 +55,10 @@ namespace Viv.Kinna.Connections
                 try
                 {
                     // 先扫一轮再睡：反过来会让启动后的第一个 interval 里
-                    // 健康检查一直读到「还没扫过」，面板上一片降级
+                    // 健康检查一直读到「还没扫过」，面板上一片降级。
+                    // 等待走 TimeProvider 的重载：测试里推一下假时钟就是一整轮，不必真等
                     await SweepOnceAsync(stoppingToken).ConfigureAwait(false);
-                    await Task.Delay(_interval, stoppingToken).ConfigureAwait(false);
+                    await Task.Delay(_interval, _time, stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -67,7 +71,7 @@ namespace Viv.Kinna.Connections
 
                     try
                     {
-                        await Task.Delay(_interval, stoppingToken).ConfigureAwait(false);
+                        await Task.Delay(_interval, _time, stoppingToken).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {

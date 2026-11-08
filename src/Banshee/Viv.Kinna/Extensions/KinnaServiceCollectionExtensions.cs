@@ -27,6 +27,10 @@ namespace Viv.Kinna.Extensions
             // 幂等；EnableDetailedErrors 是进程级选项，由 AddViv 按 KinnaOption 配一次
             services.AddSignalR();
 
+            // 时间源全进程一份：连接池、清扫器、健康检查都从这里取。
+            // 用 TryAdd 而不是 Add，多 Hub 重复调用也只会有一个实例，测试里换成 FakeTimeProvider 就能整体推进
+            services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+
             // 配置只组装一次：会话、连接表、发送器三个单例共用，
             // 否则 configure 回调会被执行三遍
             services.TryAddSingleton<KinnaHubSetup<THub>>(sp =>
@@ -47,7 +51,7 @@ namespace Viv.Kinna.Extensions
                 var options = sp.GetRequiredService<KinnaHubSetup<THub>>().Options;
 
                 return new KinnaSession<THub>(
-                    new KinnaConnectionPool(typeof(THub).Name),
+                    new KinnaConnectionPool(typeof(THub).Name, sp.GetService<TimeProvider>()),
                     new CompositeKinnaClientSender<THub>(
                         sp.GetRequiredService<KinnaWebSocketRegistry<THub>>(),
                         new KinnaClientSender<THub>(sp.GetRequiredService<IHubContext<THub>>())),

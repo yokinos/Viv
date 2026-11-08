@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Time.Testing;
 using Viv.Fakes;
 using Viv.Kinna.Connections;
 using Viv.Kinna.Health;
@@ -8,7 +9,7 @@ namespace Viv.Kinna.Tests
 {
     public class KinnaConnectionHealthCheckTests
     {
-        private static (KinnaConnectionHealthCheck<TestHub> Check, KinnaSweepClock<TestHub> Clock, StubKinnaConnectionPool Pool) Create(
+        private static (KinnaConnectionHealthCheck<TestHub> Check, KinnaSweepClock<TestHub> Clock, FakeTimeProvider Time) Create(
             int connections = 2,
             TimeSpan? maxIdle = null,
             int sweepIntervalSeconds = 60,
@@ -27,8 +28,10 @@ namespace Viv.Kinna.Tests
                     EntryTtlSeconds = entryTtlSeconds
                 });
 
-            var clock = new KinnaSweepClock<TestHub>();
-            return (new KinnaConnectionHealthCheck<TestHub>(session, clock), clock, pool);
+            // 清扫器和健康检查共用同一个时钟：差几秒这种判断只有时间可控时才测得出边界
+            var time = new FakeTimeProvider();
+            var clock = new KinnaSweepClock<TestHub>(time);
+            return (new KinnaConnectionHealthCheck<TestHub>(session, clock, time), clock, time);
         }
 
         [Fact]
@@ -58,13 +61,29 @@ namespace Viv.Kinna.Tests
         [Fact]
         public async Task 清扫卡住超过三个周期_降级()
         {
-            var (check, clock, _) = Create(sweepIntervalSeconds: 10);
-            clock.Record(0, DateTimeOffset.UtcNow.AddSeconds(-31));
+            var (check, clock, time) = Create(sweepIntervalSeconds: 10);
+            clock.Record(0);
+
+            // 上次清扫停在 T0，时钟往前走 31 秒：三个周期是 30 秒，刚好越界
+            time.Advance(TimeSpan.FromSeconds(31));
 
             var result = await check.CheckHealthAsync(new HealthCheckContext());
 
             Assert.Equal(HealthStatus.Degraded, result.Status);
             Assert.Contains("没跑", result.Description);
+        }
+
+        [Fact]
+        public async Task 清扫刚好三个周期内_不降级()
+        {
+            // 边界：判据是 sinceSweep > interval * 3，等于三个周期还算正常
+            var (check, clock, time) = Create(sweepIntervalSeconds: 10);
+            clock.Record(0);
+            time.Advance(TimeSpan.FromSeconds(30));
+
+            var result = await check.CheckHealthAsync(new HealthCheckContext());
+
+            Assert.Equal(HealthStatus.Healthy, result.Status);
         }
 
         [Fact]

@@ -20,6 +20,7 @@ namespace Viv.Kinna.Connections
         private readonly KinnaUplinkLimiter<THub>? _limiter;
         private readonly ILoggerContract _logger;
         private readonly TimeSpan _leaseTtl;
+        private readonly TimeProvider _time;
 
         public KinnaConnectionCoordinator(
             IKinnaSession<THub> session,
@@ -27,7 +28,8 @@ namespace Viv.Kinna.Connections
             IKinnaGroupSource<THub>? groups = null,
             IKinnaPresenceSink<THub>? presence = null,
             IKinnaDeliveryStore<THub>? delivery = null,
-            KinnaUplinkLimiter<THub>? limiter = null)
+            KinnaUplinkLimiter<THub>? limiter = null,
+            TimeProvider? timeProvider = null)
         {
             _session = session;
             _logger = logger;
@@ -35,6 +37,7 @@ namespace Viv.Kinna.Connections
             _presence = presence ?? NoopKinnaPresenceSink<THub>.Instance;
             _delivery = delivery ?? NoopKinnaDeliveryStore<THub>.Instance;
             _limiter = limiter;
+            _time = timeProvider ?? TimeProvider.System;
             _leaseTtl = TimeSpan.FromSeconds(Math.Max(1, session.Options.EntryTtlSeconds));
         }
 
@@ -74,7 +77,7 @@ namespace Viv.Kinna.Connections
             return new KinnaConnected
             {
                 ConnectionId = connectionId,
-                ServerTime = DateTimeOffset.UtcNow
+                ServerTime = _time.GetUtcNow()
             };
         }
 
@@ -143,7 +146,7 @@ namespace Viv.Kinna.Connections
 
         public async Task<KinnaPong> PingAsync(string connectionId, CancellationToken cancellationToken = default)
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = _time.GetUtcNow();
 
             // 被限流就不续租：客户端下一个窗口再 Ping 一次就恢复了，没必要在这里阻塞或抛错
             if (_limiter?.TryAcquire(connectionId) == false)
@@ -212,7 +215,7 @@ namespace Viv.Kinna.Connections
 
         public async Task<KinnaResyncResult> ResyncAsync(string connectionId, long? lastMessageId, CancellationToken cancellationToken = default)
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = _time.GetUtcNow();
 
             // Resync 是上行里最贵的一条：一次存储读，客户端拿到结果后往往还跟一次 HTTP 补拉。
             // 重连风暴时恰恰是它最先被打爆，所以和其它上行指令共用同一份配额

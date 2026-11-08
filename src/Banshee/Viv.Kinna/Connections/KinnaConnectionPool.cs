@@ -29,10 +29,15 @@ namespace Viv.Kinna.Connections
 
         private readonly string _hub;
 
+        // 时间从外部注入：租约是「时间到没到」的判断，用假时钟才能在测试里推进到边界
+        private readonly TimeProvider _time;
+
         /// <param name="hub">模块名，只用于指标标签</param>
-        public KinnaConnectionPool(string hub = "kinna")
+        /// <param name="timeProvider">时间源，不传就用系统时钟</param>
+        public KinnaConnectionPool(string hub = "kinna", TimeProvider? timeProvider = null)
         {
             _hub = hub;
+            _time = timeProvider ?? TimeProvider.System;
         }
 
         public void Add(string connectionId, long appId, long subjectId, long userId)
@@ -51,7 +56,7 @@ namespace Viv.Kinna.Connections
                     .TryAdd(connectionId, 0);
 
                 _connectionLookup[connectionId] = key;
-                _lastSeen[connectionId] = DateTimeOffset.UtcNow;
+                _lastSeen[connectionId] = _time.GetUtcNow();
             }
 
             // transport 从连接 Id 前缀推断：两套传输共用这本表，指标要能分开看
@@ -133,7 +138,7 @@ namespace Viv.Kinna.Connections
 
         public void Touch(string connectionId)
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = _time.GetUtcNow();
 
             // 用 TryUpdate 循环而不是「ContainsKey 后赋值」：后者中间被并发 Remove 时
             // 会把一条已经没有身份的连接重新写回心跳表，快照计数虚高到下一轮清扫
@@ -144,16 +149,9 @@ namespace Viv.Kinna.Connections
             }
         }
 
-        /// <summary>测试用：把上次心跳拨到过去，让清扫能立刻判过期。</summary>
-        internal void Backdate(string connectionId, TimeSpan age)
-        {
-            if (_lastSeen.ContainsKey(connectionId))
-                _lastSeen[connectionId] = DateTimeOffset.UtcNow - age;
-        }
-
         public List<KinnaConnectionInfo> SweepExpired(TimeSpan ttl)
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = _time.GetUtcNow();
             var expired = new List<string>();
 
             foreach (var kv in _lastSeen)
@@ -166,7 +164,7 @@ namespace Viv.Kinna.Connections
             foreach (var connectionId in expired)
             {
                 // 收集和摘除之间可能已经 Ping 续租，摘之前再看一眼
-                if (_lastSeen.TryGetValue(connectionId, out var seen) && DateTimeOffset.UtcNow - seen <= ttl)
+                if (_lastSeen.TryGetValue(connectionId, out var seen) && _time.GetUtcNow() - seen <= ttl)
                     continue;
 
                 var info = Remove(connectionId);
@@ -193,7 +191,7 @@ namespace Viv.Kinna.Connections
             if (count == 0)
                 return new KinnaConnectionPoolSnapshot(0, TimeSpan.Zero);
 
-            return new KinnaConnectionPoolSnapshot(count, DateTimeOffset.UtcNow - oldest);
+            return new KinnaConnectionPoolSnapshot(count, _time.GetUtcNow() - oldest);
         }
 
         public void Clear()

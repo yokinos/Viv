@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using Viv.Kinna.Connections;
 
 namespace Viv.Kinna.Tests
@@ -95,38 +96,60 @@ namespace Viv.Kinna.Tests
         [Fact]
         public void SweepExpired_只剔除超租约的连接()
         {
-            var pool = new KinnaConnectionPool();
+            var time = new FakeTimeProvider();
+            var pool = new KinnaConnectionPool(timeProvider: time);
             pool.Add("c1", appId: 3, subjectId: 1, userId: 2);
 
             // 刚登记的不该被扫
             Assert.Empty(pool.SweepExpired(TimeSpan.FromHours(1)));
             Assert.Single(pool.GetConnectionIds(1, 2));
 
-            // 负 ttl = 所有连接都算超时，不必真等
-            Assert.Equal(new[] { "c1" }, pool.SweepExpired(TimeSpan.FromTicks(-1)).Select(x => x.ConnectionId));
+            // 时钟推过一小时，同一份连接就过期了——不再是「拿负 TTL 骗过比较」
+            time.Advance(TimeSpan.FromHours(1) + TimeSpan.FromSeconds(1));
+            Assert.Equal(new[] { "c1" }, pool.SweepExpired(TimeSpan.FromHours(1)).Select(x => x.ConnectionId));
             Assert.Empty(pool.GetConnectionIds(1, 2));
+        }
+
+        [Fact]
+        public void SweepExpired_恰好等于租约不摘_多一个tick才摘()
+        {
+            // 判据是 now - lastSeen <= ttl，边界上「刚好到期」不算过期。
+            // 这条以前测不了：只能靠 Backdate 把时间戳硬拨到过去，差一秒和不差一秒分不出来
+            var time = new FakeTimeProvider();
+            var pool = new KinnaConnectionPool(timeProvider: time);
+            pool.Add("c1", appId: 3, subjectId: 1, userId: 2);
+
+            time.Advance(TimeSpan.FromSeconds(30));
+            Assert.Empty(pool.SweepExpired(TimeSpan.FromSeconds(30)));
+
+            time.Advance(TimeSpan.FromTicks(1));
+            Assert.Single(pool.SweepExpired(TimeSpan.FromSeconds(30)));
         }
 
         [Fact]
         public void SweepExpired_清掉租约同时清掉连接本身()
         {
-            var pool = new KinnaConnectionPool();
+            var time = new FakeTimeProvider();
+            var pool = new KinnaConnectionPool(timeProvider: time);
             pool.Add("c1", appId: 3, subjectId: 1, userId: 2);
+            time.Advance(TimeSpan.FromMinutes(5));
 
-            pool.SweepExpired(TimeSpan.FromTicks(-1));
+            pool.SweepExpired(TimeSpan.FromSeconds(30));
 
             // 连接表和租约要一起清，只清一边会剩下查不到又还在的记录
             Assert.Empty(pool.GetConnections(1));
-            Assert.Empty(pool.SweepExpired(TimeSpan.FromTicks(-1)));
+            Assert.Empty(pool.SweepExpired(TimeSpan.FromSeconds(30)));
         }
 
         [Fact]
         public void SweepExpired_返回的身份够扣在线态()
         {
-            var pool = new KinnaConnectionPool();
+            var time = new FakeTimeProvider();
+            var pool = new KinnaConnectionPool(timeProvider: time);
             pool.Add("c1", appId: 3, subjectId: 11, userId: 22);
+            time.Advance(TimeSpan.FromMinutes(5));
 
-            var swept = Assert.Single(pool.SweepExpired(TimeSpan.FromTicks(-1)));
+            var swept = Assert.Single(pool.SweepExpired(TimeSpan.FromSeconds(30)));
 
             // 清扫完要调 presence.OfflineAsync，拿的就是这两个值
             Assert.Equal("c1", swept.ConnectionId);

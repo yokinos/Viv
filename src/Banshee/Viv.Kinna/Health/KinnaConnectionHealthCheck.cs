@@ -15,11 +15,16 @@ namespace Viv.Kinna.Health
     {
         private readonly IKinnaSession<THub> _session;
         private readonly KinnaSweepClock<THub> _clock;
+        private readonly TimeProvider _time;
 
-        public KinnaConnectionHealthCheck(IKinnaSession<THub> session, KinnaSweepClock<THub> clock)
+        public KinnaConnectionHealthCheck(
+            IKinnaSession<THub> session,
+            KinnaSweepClock<THub> clock,
+            TimeProvider? timeProvider = null)
         {
             _session = session;
             _clock = clock;
+            _time = timeProvider ?? TimeProvider.System;
         }
 
         public Task<HealthCheckResult> CheckHealthAsync(
@@ -50,7 +55,7 @@ namespace Viv.Kinna.Health
                     $"[{_session.Hub}] 清扫还没跑过", data: data));
             }
 
-            var sinceSweep = DateTimeOffset.UtcNow - lastSweep;
+            var sinceSweep = _time.GetUtcNow() - lastSweep;
             data["secondsSinceSweep"] = (int)sinceSweep.TotalSeconds;
             data["lastSweepRemoved"] = _clock.LastRemoved;
 

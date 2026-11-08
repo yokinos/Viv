@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using Viv.Contracts.Models;
 using Viv.Fakes;
 using Viv.Kinna.Connections;
@@ -23,7 +24,8 @@ namespace Viv.Kinna.Tests
             StubKinnaDeliveryStore<TestHub>? delivery = null,
             KinnaUplinkLimiter<TestHub>? limiter = null,
             bool singleConnectionPerApp = true,
-            int entryTtlSeconds = 90)
+            int entryTtlSeconds = 90,
+            TimeProvider? time = null)
         {
             var session = new StubKinnaSession<TestHub>(
                 pool,
@@ -35,7 +37,7 @@ namespace Viv.Kinna.Tests
                     SingleConnectionPerApp = singleConnectionPerApp
                 });
 
-            return new KinnaConnectionCoordinator<TestHub>(session, new RecordingLogger(), groups, presence, delivery, limiter);
+            return new KinnaConnectionCoordinator<TestHub>(session, new RecordingLogger(), groups, presence, delivery, limiter, time);
         }
 
         [Fact]
@@ -546,6 +548,25 @@ namespace Viv.Kinna.Tests
             await coordinator.UnregisterAsync("c1");
 
             Assert.Equal(0, limiter.TrackedConnections);
+        }
+
+        [Fact]
+        public async Task 握手里的时刻来自注入的时钟()
+        {
+            // 客户端拿 ServerTime 和 LeaseExpiresAt 算自己该什么时候心跳。
+            // 用系统墙钟的话，这两个值没法断言，也没法在测试里把租约推到快过期
+            var time = new FakeTimeProvider();
+            var pool = new KinnaConnectionPool(timeProvider: time);
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), entryTtlSeconds: 30, time: time);
+
+            var connected = await coordinator.RegisterAsync("c1", Identity());
+            Assert.Equal(time.GetUtcNow(), connected!.ServerTime);
+
+            time.Advance(TimeSpan.FromSeconds(10));
+            var pong = await coordinator.PingAsync("c1");
+
+            Assert.Equal(time.GetUtcNow(), pong.ServerTime);
+            Assert.Equal(TimeSpan.FromSeconds(30), pong.LeaseExpiresAt - pong.ServerTime);
         }
     }
 }
