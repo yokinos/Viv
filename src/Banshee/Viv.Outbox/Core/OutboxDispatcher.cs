@@ -18,16 +18,21 @@ namespace Viv.Outbox.Core
         private readonly OutboxWorker _worker;
         private readonly ILoggerContract _logger;
         private readonly OutboxOptions _options;
+        private readonly TimeProvider _time;
 
         public OutboxDispatcher(
             IServiceScopeFactory scopeFactory,
             IOutboxEnvelopeSenderFactory senderFactory,
             ILoggerContract logger,
-            IOptions<OutboxOptions> options)
+            IOptions<OutboxOptions> options,
+            TimeProvider? timeProvider = null)
         {
             _logger = logger;
             _options = options.Value;
-            _worker = new OutboxWorker(scopeFactory, senderFactory, logger, _options);
+            _time = timeProvider ?? TimeProvider.System;
+
+            // 同一个时钟交给 worker，否则「本轮认领的时刻」和「轮询间隔」会来自两个时间源
+            _worker = new OutboxWorker(scopeFactory, senderFactory, logger, _options, _time);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -48,7 +53,7 @@ namespace Viv.Outbox.Core
 
                 try
                 {
-                    await Task.Delay(pollDelay, stoppingToken).ConfigureAwait(false);
+                    await Task.Delay(pollDelay, _time, stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -78,7 +83,7 @@ namespace Viv.Outbox.Core
 
                 try
                 {
-                    await Task.Delay(pollDelay, stoppingToken).ConfigureAwait(false);
+                    await Task.Delay(pollDelay, _time, stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {

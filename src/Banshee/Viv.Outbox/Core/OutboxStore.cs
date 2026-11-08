@@ -21,12 +21,18 @@ namespace Viv.Outbox.Core
         private readonly IOutboxRepository _repository;
         private readonly IVivContext _context;
         private readonly ILoggerContract _logger;
+        private readonly TimeProvider _time;
 
-        public OutboxStore(IOutboxRepository repository, IVivContext context, ILoggerContract logger)
+        public OutboxStore(
+            IOutboxRepository repository,
+            IVivContext context,
+            ILoggerContract logger,
+            TimeProvider? timeProvider = null)
         {
             _repository = repository;
             _context = context;
             _logger = logger;
+            _time = timeProvider ?? TimeProvider.System;
         }
 
         public async Task<bool> EnqueueAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
@@ -41,9 +47,10 @@ namespace Viv.Outbox.Core
                 Context = SnapshotWithHolder(_context.GetRawSnapshot()?.Clone()),
             };
 
-            // 统一取一次 UtcNow 给两个时间列：投递器判断「到期没到期」用的也是 C# 侧的时间
+            // 统一取一次当前时刻给两个时间列：投递器判断「到期没到期」用的也是 C# 侧的时间
             // （不依赖 SYSUTCDATETIME() / now()，省得两端时钟口径不一致）。
-            var now = DateTime.UtcNow;
+            // 走注入的时钟是为了让「入队时刻」在测试里可断言，也为了将来换授时源只改一处。
+            var now = _time.GetUtcNow().UtcDateTime;
 
             var message = new OutboxMessage
             {

@@ -24,12 +24,18 @@ namespace Viv.Outbox.Core
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILoggerContract _logger;
         private readonly InboxOptions _options;
+        private readonly TimeProvider _time;
 
-        public InboxDispatcher(IServiceScopeFactory scopeFactory, ILoggerContract logger, InboxOptions options)
+        public InboxDispatcher(
+            IServiceScopeFactory scopeFactory,
+            ILoggerContract logger,
+            InboxOptions options,
+            TimeProvider? timeProvider = null)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;
             _options = options;
+            _time = timeProvider ?? TimeProvider.System;
         }
 
         private bool Enabled => _options.RetentionDays > 0;
@@ -69,7 +75,7 @@ namespace Viv.Outbox.Core
 
                 try
                 {
-                    await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
+                    await Task.Delay(interval, _time, stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -86,7 +92,7 @@ namespace Viv.Outbox.Core
             using var scope = _scopeFactory.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IInboxRepository>();
 
-            var cutoff = DateTime.UtcNow.AddDays(-_options.RetentionDays);
+            var cutoff = _time.GetUtcNow().UtcDateTime.AddDays(-_options.RetentionDays);
             var batchSize = Math.Max(1, _options.BatchSize);
             var batches = 0;
 

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Viv.Fakes;
 using Viv.Nana;
 using Viv.Outbox.Core;
@@ -27,7 +28,10 @@ public class OutboxDispatcherTests
     }
 
     private static (OutboxDispatcher Dispatcher, ServiceProvider Provider) Build(
-        StubOutboxRepository repo, RecordingEventPublisher publisher, RecordingLogger logger)
+        StubOutboxRepository repo,
+        RecordingEventPublisher publisher,
+        RecordingLogger logger,
+        TimeProvider? time = null)
     {
         var services = new ServiceCollection();
         services.AddScoped<IOutboxRepository>(_ => repo);
@@ -39,9 +43,46 @@ public class OutboxDispatcherTests
             new OutboxEnvelopeSenderFactory(),
             logger,
             // 必须全限定：本测试的命名空间嵌在 Viv.Outbox 下，裸写 Options 会被解析成 Viv.Outbox.Options
-            Microsoft.Extensions.Options.Options.Create(new OutboxOptions { PollIntervalSeconds = 1 }));
+            Microsoft.Extensions.Options.Options.Create(new OutboxOptions { PollIntervalSeconds = 1 }),
+            time);
 
         return (dispatcher, provider);
+    }
+
+    [Fact]
+    public async Task 后台循环_轮询间隔由注入时钟驱动()
+    {
+        // 轮询延时以前挂在真实时钟上，测「隔一个间隔再跑一轮」只能真等 1 秒；
+        // 现在挂在假时钟上，Advance 一推就继续。
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero));
+        var repo = new StubOutboxRepository();
+        var (dispatcher, provider) = Build(repo, new RecordingEventPublisher(), new RecordingLogger(), time);
+
+        try
+        {
+            await dispatcher.StartAsync(CancellationToken.None);
+
+            Assert.True(
+                await WaitForAsync(() => repo.ReleaseExpiredCalls >= 1, TimeSpan.FromSeconds(10)),
+                "首轮没有跑起来");
+
+            var firstRound = repo.ReleaseExpiredCalls;
+
+            // 反复推进：延时的定时器要等循环跑到 Task.Delay 才注册，推早了这一次就白推
+            var advanced = false;
+            for (var i = 0; i < 200 && !advanced; i++)
+            {
+                time.Advance(TimeSpan.FromSeconds(1));
+                advanced = await WaitForAsync(() => repo.ReleaseExpiredCalls > firstRound, TimeSpan.FromMilliseconds(100));
+            }
+
+            Assert.True(advanced, "推进时钟后没有跑下一轮");
+        }
+        finally
+        {
+            await dispatcher.StopAsync(CancellationToken.None);
+            await provider.DisposeAsync();
+        }
     }
 
     [Fact]

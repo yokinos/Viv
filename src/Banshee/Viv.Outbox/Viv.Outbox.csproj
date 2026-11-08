@@ -29,6 +29,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 「不许直接读墙钟」的硬约束：BannedSymbols.txt 里列出的成员编译期直接报错（RS0030）。
+         投递器的退避、租约、保留期全是时间判断，散着写 UtcNow 会让这些逻辑既测不了也扛不住时钟跳变。 -->
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="BannedSymbols.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Viv.Contracts\Viv.Contracts.csproj" />
     <ProjectReference Include="..\Viv.Delusion\Viv.Delusion.csproj" />
     <ProjectReference Include="..\Viv.Log\Viv.Log.csproj" />

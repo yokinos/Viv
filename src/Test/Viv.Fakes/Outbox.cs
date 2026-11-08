@@ -130,8 +130,12 @@ internal class StubOutboxRepository : IOutboxRepository
     public Task<bool> CleanupBatchAsync(DateTime cutoff, int batchSize, CancellationToken cancellationToken = default)
     {
         CleanupCalls++;
+        LastCleanupCutoff = cutoff;
         return Task.FromResult(CleanupResult);
     }
+
+    /// <summary>最近一次清理的截止时间 —— 保留期算得对不对，只看得到这一处。</summary>
+    public DateTime? LastCleanupCutoff { get; private set; }
 
     public (long Pending, long Failed) Depth { get; set; }
 
@@ -197,11 +201,16 @@ internal sealed class StubInboxRepository : IInboxRepository
 
     public Task<bool> TryInsertAsync(string serviceName, string idempotentKey, DateTime acceptedAt, CancellationToken cancellationToken = default)
     {
+        LastAcceptedAt = acceptedAt;
+
         var key = (serviceName, idempotentKey);
         if (DuplicateReturnsFalse && !Accepted.Add(key))
             return Task.FromResult(false);
         Accepted.Add(key);
         return Task.FromResult(true);
     }
+
+    /// <summary>最近一次写入的受理时刻 —— 用来钉住「时间取自注入的时钟」。</summary>
+    public DateTime? LastAcceptedAt { get; private set; }
 }
 

@@ -1,0 +1,5 @@
+# 本目录（Viv.Outbox）内的硬约束。BannedSymbols.txt 列出的成员一旦出现就是编译错误。
+# 其他模块还没做 TimeProvider 迁移，所以这条规则只在本项目内生效，不要提到根目录。
+
+[*.cs]
+dotnet_diagnostic.RS0030.severity = error

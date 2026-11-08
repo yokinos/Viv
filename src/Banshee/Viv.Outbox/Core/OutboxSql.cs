@@ -11,7 +11,7 @@ namespace Viv.Outbox.Core
     /// 例外是 RETURNING / OUTPUT 的输出列别名 —— PG 侧必须带引号（<c>AS "Id"</c>），
     /// 否则折叠成小写后 Dapper 映射不回 POCO 的 PascalCase 属性。
     ///
-    /// 所有时间参数都必须是 <see cref="DateTime.UtcNow"/> 派生（Kind=Utc）：
+    /// 所有时间参数都必须是 <c>TimeProvider.GetUtcNow().UtcDateTime</c> 派生（Kind=Utc）：
     /// PG 侧的列是 <c>TIMESTAMPTZ</c>，Npgsql 拒绝写入 Kind=Unspecified 的值。
     /// </summary>
     internal static class OutboxSql

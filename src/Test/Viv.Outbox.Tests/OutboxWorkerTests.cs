@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Viv.Contracts;
 using Viv.Fakes;
 using Viv.Nana;
@@ -15,6 +16,14 @@ public class OutboxWorkerTests
 {
     private static string EventTypeName => typeof(OutboxTestEvent).FullName!;
 
+    /// <summary>
+    /// 固定起点的假时钟。有它才能把「退避多久之后重试」「保留期截止到哪一刻」写成确定值，
+    /// 而不是「先取 before、再取 after、最后断言落在区间里」—— 那种写法过了也不代表算对了。
+    /// </summary>
+    private static readonly DateTimeOffset Start = new(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
+
+    private static FakeTimeProvider NewClock() => new(Start);
+
     private static OutboxMessage Row(long id, string? eventType = null, int retryCount = 0)
     {
         var messageId = id * 10;
@@ -26,8 +35,8 @@ public class OutboxWorkerTests
             Payload = TestPayload.For(new OutboxTestEvent { Payload = $"p-{id}", Number = (int)id }, messageId),
             Status = OutboxStatus.Processing,
             RetryCount = retryCount,
-            NextRetryAt = DateTime.UtcNow,
-            OccurredAt = DateTime.UtcNow,
+            NextRetryAt = Start.UtcDateTime,
+            OccurredAt = Start.UtcDateTime,
         };
     }
 
@@ -44,7 +53,8 @@ public class OutboxWorkerTests
         StubOutboxRepository repo,
         RecordingEventPublisher publisher,
         RecordingLogger logger,
-        OutboxOptions? options = null)
+        OutboxOptions? options = null,
+        TimeProvider? time = null)
     {
         var services = new ServiceCollection();
         services.AddScoped<IOutboxRepository>(_ => repo);
@@ -55,7 +65,8 @@ public class OutboxWorkerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             new OutboxEnvelopeSenderFactory(),
             logger,
-            options ?? DefaultOptions());
+            options ?? DefaultOptions(),
+            time);
     }
 
     [Fact]
@@ -80,15 +91,27 @@ public class OutboxWorkerTests
     }
 
     [Fact]
+    public async Task 投递成功_SentAt取自注入时钟()
+    {
+        var repo = new StubOutboxRepository();
+        repo.ClaimScript.Enqueue(new List<OutboxMessage> { Row(1) });
+
+        await Build(repo, new RecordingEventPublisher(), new RecordingLogger(), time: NewClock()).RunOnceAsync();
+
+        var sent = Assert.Single(repo.Sent);
+        Assert.Equal(Start.UtcDateTime, sent.SentAt);
+    }
+
+    [Fact]
     public async Task 投递失败_退回Pending并按退避推后NextRetryAt()
     {
         var repo = new StubOutboxRepository();
         var publisher = new RecordingEventPublisher { PublishException = new Exception("MQ 挂了") };
         var logger = new RecordingLogger();
+        var time = NewClock();
         repo.ClaimScript.Enqueue(new List<OutboxMessage> { Row(1, retryCount: 0) });
 
-        var before = DateTime.UtcNow;
-        await Build(repo, publisher, logger).RunOnceAsync();
+        await Build(repo, publisher, logger, time: time).RunOnceAsync();
 
         var pending = Assert.Single(repo.Pending);
         Assert.Equal(1, pending.Id);
@@ -97,8 +120,9 @@ public class OutboxWorkerTests
         Assert.Empty(repo.Sent);
         Assert.Empty(repo.Failed);
 
-        // 退避第一档 5s 起（含抖动）—— 不能立刻重试，那会变成忙等
-        Assert.True(pending.NextRetryAt >= before.AddSeconds(4), $"NextRetryAt 太早：{pending.NextRetryAt:O}");
+        // 退避第一档 5s 起（含 0~30% 抖动），基准是**注入时钟**的当前时刻。
+        // 这条断言以前只能写「>= before + 4s」，因为取不到确定的时间基准。
+        Assert.InRange(pending.NextRetryAt, Start.UtcDateTime.AddSeconds(5), Start.UtcDateTime.AddSeconds(6.5));
 
         Assert.Single(logger.Warnings);
         Assert.Empty(logger.Errors);
@@ -221,12 +245,28 @@ public class OutboxWorkerTests
         options.BatchSize = 25;
         options.LeaseSeconds = 90;
 
-        await Build(repo, new RecordingEventPublisher(), new RecordingLogger(), options).RunOnceAsync();
+        await Build(repo, new RecordingEventPublisher(), new RecordingLogger(), options, NewClock()).RunOnceAsync();
 
         Assert.Equal(25, repo.LastClaimBatchSize);
-        Assert.NotNull(repo.LastClaimNow);
-        Assert.NotNull(repo.LastClaimLeaseUntil);
-        Assert.Equal(90, (repo.LastClaimLeaseUntil!.Value - repo.LastClaimNow!.Value).TotalSeconds, 1);
+
+        // 认领时刻必须来自注入的时钟，不能是墙钟 —— 否则「租约还剩多久」这件事没法在测试里验
+        Assert.Equal(Start.UtcDateTime, repo.LastClaimNow);
+        Assert.Equal(Start.UtcDateTime.AddSeconds(90), repo.LastClaimLeaseUntil);
+
+        // Kind 必须是 Utc：PG 侧是 TIMESTAMPTZ，Npgsql 拒绝写 Kind=Unspecified 的值
+        Assert.Equal(DateTimeKind.Utc, repo.LastClaimNow!.Value.Kind);
+    }
+
+    [Fact]
+    public async Task 清理截止时间_按注入时钟减保留天数()
+    {
+        var repo = new StubOutboxRepository { CleanupResult = false };
+        var options = DefaultOptions();
+        options.RetentionDays = 3;
+
+        await Build(repo, new RecordingEventPublisher(), new RecordingLogger(), options, NewClock()).RunOnceAsync();
+
+        Assert.Equal(Start.UtcDateTime.AddDays(-3), repo.LastCleanupCutoff);
     }
 
     [Theory]
@@ -361,7 +401,7 @@ public class OutboxWorkerTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             async () => await Build(repo, publisher, new RecordingLogger()).DeliverAsync(
-                repo, publisher, Row(1), DateTime.UtcNow, cts.Token));
+                repo, publisher, Row(1), Start.UtcDateTime, cts.Token));
 
         Assert.Empty(repo.Pending);
         Assert.Empty(repo.Failed);

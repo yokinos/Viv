@@ -24,12 +24,14 @@ namespace Viv.Outbox.Core
         private readonly IInboxRepository _repository;
         private readonly ILoggerContract _logger;
         private readonly string _serviceName;
+        private readonly TimeProvider _time;
 
-        public InboxStore(IInboxRepository repository, ILoggerContract logger)
+        public InboxStore(IInboxRepository repository, ILoggerContract logger, TimeProvider? timeProvider = null)
         {
             _repository = repository;
             _logger = logger;
             _serviceName = Assembly.GetEntryAssembly()?.GetName().Name ?? "unknown";
+            _time = timeProvider ?? TimeProvider.System;
         }
 
         public Task<bool> TryAcceptAsync(long messageId, CancellationToken cancellationToken = default)
@@ -50,7 +52,7 @@ namespace Viv.Outbox.Core
             cancellationToken.ThrowIfCancellationRequested();
 
             var accepted = await _repository
-                .TryInsertAsync(_serviceName, key, DateTime.UtcNow, cancellationToken)
+                .TryInsertAsync(_serviceName, key, _time.GetUtcNow().UtcDateTime, cancellationToken)
                 .ConfigureAwait(false);
 
             if (!accepted)

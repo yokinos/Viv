@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Microsoft.Extensions.Time.Testing;
 using Viv.Contracts;
 using Viv.Contracts.Models;
 using Viv.Fakes;
@@ -14,12 +15,29 @@ namespace Viv.Outbox.Tests;
 /// </summary>
 public class OutboxStoreTests
 {
-    private static (OutboxStore Store, StubOutboxRepository Repo, TestContext Context, RecordingLogger Logger) Build()
+    private static (OutboxStore Store, StubOutboxRepository Repo, TestContext Context, RecordingLogger Logger) Build(
+        TimeProvider? time = null)
     {
         var repo = new StubOutboxRepository();
         var context = new TestContext();
         var logger = new RecordingLogger();
-        return (new OutboxStore(repo, context, logger), repo, context, logger);
+        return (new OutboxStore(repo, context, logger, time), repo, context, logger);
+    }
+
+    [Fact]
+    public async Task 入队时间列取自注入时钟()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero));
+        var (store, repo, _, _) = Build(time);
+
+        await store.EnqueueAsync(new OutboxTestEvent { Payload = "p" });
+
+        var row = Assert.Single(repo.Inserted);
+        Assert.Equal(time.GetUtcNow().UtcDateTime, row.OccurredAt);
+        Assert.Equal(row.OccurredAt, row.NextRetryAt);
+
+        // Kind=Utc 是硬要求：PG 侧是 TIMESTAMPTZ，Npgsql 拒绝写 Kind=Unspecified
+        Assert.Equal(DateTimeKind.Utc, row.OccurredAt.Kind);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Time.Testing;
 using Viv.Contracts.Interface;
 using Viv.Fakes;
 using Viv.Momo.Enums;
@@ -121,6 +122,9 @@ public class InboxDispatcherTests : IDisposable
     private readonly ServiceProvider _provider;
     private readonly StubInboxRepository _repository = new();
 
+    /// <summary>固定起点的假时钟 —— 截止时间才能写成确定值。</summary>
+    private static readonly DateTimeOffset Start = new(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
+
     public InboxDispatcherTests()
     {
         var services = new ServiceCollection();
@@ -130,8 +134,8 @@ public class InboxDispatcherTests : IDisposable
 
     public void Dispose() => _provider.Dispose();
 
-    private InboxDispatcher Build(RecordingLogger logger, InboxOptions options)
-        => new(_provider.GetRequiredService<IServiceScopeFactory>(), logger, options);
+    private InboxDispatcher Build(RecordingLogger logger, InboxOptions options, TimeProvider? time = null)
+        => new(_provider.GetRequiredService<IServiceScopeFactory>(), logger, options, time);
 
     [Fact]
     public async Task 保留期不为正_一条都不删()
@@ -181,16 +185,70 @@ public class InboxDispatcherTests : IDisposable
     {
         var dispatcher = Build(
             new RecordingLogger(),
-            new InboxOptions { RetentionDays = 3, BatchSize = 250 });
+            new InboxOptions { RetentionDays = 3, BatchSize = 250 },
+            new FakeTimeProvider(Start));
         _repository.CleanupResult = false;
 
-        var before = DateTime.UtcNow.AddDays(-3);
         await dispatcher.RunOnceAsync();
-        var after = DateTime.UtcNow.AddDays(-3);
 
         Assert.Equal(250, _repository.LastCleanupBatchSize);
-        Assert.NotNull(_repository.LastCleanupCutoff);
-        Assert.InRange(_repository.LastCleanupCutoff!.Value, before.AddSeconds(-1), after.AddSeconds(1));
+
+        // 以前只能取 before/after 再断言落区间，现在截止时间是确定的
+        Assert.Equal(Start.UtcDateTime.AddDays(-3), _repository.LastCleanupCutoff);
+        Assert.Equal(DateTimeKind.Utc, _repository.LastCleanupCutoff!.Value.Kind);
+    }
+
+    [Fact]
+    public async Task 后台循环_按注入时钟的间隔反复清理()
+    {
+        // 这条以前做不到：循环里的 Task.Delay 走真实时钟，测它就得真等一分钟。
+        // 现在延时挂在假时钟上，Advance 一下就跑完一整轮。
+        var time = new FakeTimeProvider(Start);
+        var dispatcher = Build(new RecordingLogger(), new InboxOptions { CleanupIntervalMinutes = 1 }, time);
+
+        await dispatcher.StartAsync(CancellationToken.None);
+        try
+        {
+            Assert.True(await WaitUntilAsync(() => _repository.CleanupCalls >= 1, "首轮清理"));
+
+            var firstRound = _repository.CleanupCalls;
+            Assert.True(
+                await AdvanceUntilAsync(time, () => _repository.CleanupCalls > firstRound, TimeSpan.FromMinutes(1)),
+                "推进时钟后没有跑下一轮清理");
+        }
+        finally
+        {
+            await dispatcher.StopAsync(CancellationToken.None);
+        }
+    }
+
+    private static async Task<bool> WaitUntilAsync(Func<bool> condition, string what)
+    {
+        for (var i = 0; i < 200; i++)
+        {
+            if (condition()) return true;
+            await Task.Delay(10);
+        }
+
+        Assert.Fail($"等待超时: {what}");
+        return false;
+    }
+
+    /// <summary>
+    /// 反复推进假时钟直到条件成立。
+    /// 单次 Advance 不够：延时的定时器要等循环跑到 <c>Task.Delay</c> 那一刻才注册，
+    /// 推进早了这一次就白推 —— 反复推才是稳的写法。
+    /// </summary>
+    private static async Task<bool> AdvanceUntilAsync(FakeTimeProvider time, Func<bool> condition, TimeSpan step)
+    {
+        for (var i = 0; i < 200; i++)
+        {
+            if (condition()) return true;
+            time.Advance(step);
+            await Task.Delay(10);
+        }
+
+        return condition();
     }
 
     [Fact]
@@ -216,6 +274,19 @@ public class InboxStoreTests
         Assert.True(await store.TryAcceptAsync(42));
         Assert.False(await store.TryAcceptAsync(42));
         Assert.True(await store.TryAcceptAsync(43));
+    }
+
+    [Fact]
+    public async Task 受理时刻取自注入时钟()
+    {
+        var repo = new StubInboxRepository();
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero));
+        var store = new InboxStore(repo, new RecordingLogger(), time);
+
+        await store.TryAcceptAsync(42);
+
+        // 受理时刻不进任何判断，但它是清理保留期的依据 —— 写进去的值必须是调用方时钟的，不是墙钟
+        Assert.Equal(time.GetUtcNow().UtcDateTime, repo.LastAcceptedAt);
     }
 
     [Fact]

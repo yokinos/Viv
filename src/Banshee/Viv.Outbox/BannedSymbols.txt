@@ -1,0 +1,11 @@
+; 禁用 API 清单（BannedApiAnalyzers，RS0030 在本项目内是 error）
+; 格式：成员签名;提示信息
+; 注意前缀：UtcNow / Now 是属性，用 P: 而不是 M:（写成 M: 不会报错，只是永远不生效）
+; 本模块整个正确性都建立在时间判断上（认领租约、退避、保留期清理），一律注入 TimeProvider：
+;   - 绝对时刻用 GetUtcNow()，取 DateTime 用 .UtcDateTime
+;   - 测量耗时用 GetTimestamp() / GetElapsedTime()（见 OutboxWorker 的投递耗时）
+;   - 定时等待用 Task.Delay(delay, timeProvider, ct)（见两个 Dispatcher）
+P:System.DateTimeOffset.UtcNow;请注入 TimeProvider 并改用 GetUtcNow()
+P:System.DateTimeOffset.Now;请注入 TimeProvider 并改用 GetUtcNow()
+P:System.DateTime.UtcNow;请注入 TimeProvider 并改用 GetUtcNow()
+P:System.DateTime.Now;请注入 TimeProvider 并改用 GetUtcNow()

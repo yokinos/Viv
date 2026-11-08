@@ -26,14 +26,28 @@ namespace Viv.Outbox.Core
         private readonly IOutboxEnvelopeSenderFactory _senderFactory;
         private readonly ILoggerContract _logger;
         private readonly OutboxOptions _options;
+        private readonly TimeProvider _time;
 
-        public OutboxWorker(IServiceScopeFactory scopeFactory, IOutboxEnvelopeSenderFactory senderFactory, ILoggerContract logger, OutboxOptions options)
+        public OutboxWorker(
+            IServiceScopeFactory scopeFactory,
+            IOutboxEnvelopeSenderFactory senderFactory,
+            ILoggerContract logger,
+            OutboxOptions options,
+            TimeProvider? timeProvider = null)
         {
             _scopeFactory = scopeFactory;
             _senderFactory = senderFactory;
             _logger = logger;
             _options = options;
+            _time = timeProvider ?? TimeProvider.System;
         }
+
+        /// <summary>
+        /// 本轮所有时间判断的唯一来源：认领时刻、租约到期、已发送时刻、退避、保留期都从这里取。
+        /// 直接读 <c>DateTime.UtcNow</c> 会被 BannedSymbols 拦成编译错误 —— 不是洁癖：
+        /// 这条链上的每个判断都要能在测试里把时钟拨过去验证，而拨系统时钟是不可能的。
+        /// </summary>
+        private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
         /// <summary>
         /// 建表并打一行启动日志。
@@ -81,7 +95,7 @@ namespace Viv.Outbox.Core
             var publisher = scope.ServiceProvider.GetRequiredService<IVivEventPublisher>();
 
             // 1) 崩溃恢复：上次进程被 kill 时卡在 Processing 的行，租约一过就退回 Pending
-            await repository.ReleaseExpiredLeasesAsync(DateTime.UtcNow, cancellationToken).ConfigureAwait(false);
+            await repository.ReleaseExpiredLeasesAsync(UtcNow, cancellationToken).ConfigureAwait(false);
 
             var batchSize = Math.Max(1, _options.BatchSize);
             var delivered = 0;
@@ -89,7 +103,7 @@ namespace Viv.Outbox.Core
             // 2) 排空：一直认领到认不出为止 —— 只看一批的话，积压时投递速度会被轮询间隔卡死
             while (!cancellationToken.IsCancellationRequested)
             {
-                var now = DateTime.UtcNow;
+                var now = UtcNow;
                 var leaseUntil = now.AddSeconds(Math.Max(1, _options.LeaseSeconds));
 
                 var batch = await repository
@@ -164,7 +178,7 @@ namespace Viv.Outbox.Core
                 }
 
                 var elapsed = (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-                if (await repository.MarkSentAsync(message.Id, DateTime.UtcNow, leaseUntil, cancellationToken).ConfigureAwait(false))
+                if (await repository.MarkSentAsync(message.Id, UtcNow, leaseUntil, cancellationToken).ConfigureAwait(false))
                 {
                     OutboxMetrics.RecordDelivered(elapsed);
                 }
@@ -204,7 +218,7 @@ namespace Viv.Outbox.Core
                 return;
             }
 
-            var nextRetryAt = DateTime.UtcNow.Add(Backoff(retryCount));
+            var nextRetryAt = UtcNow.Add(Backoff(retryCount));
             _logger.Warning(
                 $"发件箱消息投递失败，第 {retryCount}/{maxRetryCount} 次重试将于 {nextRetryAt:yyyy-MM-dd HH:mm:ss} UTC 进行：" +
                 $"MessageId={message.MessageId}, Id={message.Id}, {ex.Message}");
@@ -244,7 +258,7 @@ namespace Viv.Outbox.Core
         {
             if (_options.RetentionDays <= 0) return;
 
-            var cutoff = DateTime.UtcNow.AddDays(-_options.RetentionDays);
+            var cutoff = UtcNow.AddDays(-_options.RetentionDays);
             var batchSize = Math.Max(1, _options.BatchSize);
 
             for (var i = 0; i < CleanupMaxBatches; i++)

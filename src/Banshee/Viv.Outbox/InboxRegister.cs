@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Viv.Contracts.Interface;
 using Viv.Outbox.Core;
 using Viv.Outbox.Options;
@@ -20,6 +21,9 @@ namespace Viv.Outbox
         {
             services.AddScoped<IInboxRepository, InboxRepository>();
             services.AddScoped<IVivInbox, InboxStore>();
+
+            // Inbox 与 Outbox 各自独立注册（启用条件不同），所以两边都要能自己拿到时钟
+            services.TryAddSingleton(TimeProvider.System);
 
             services.AddSingleton(options ?? new InboxOptions());
             services.AddHostedService<InboxDispatcher>();
