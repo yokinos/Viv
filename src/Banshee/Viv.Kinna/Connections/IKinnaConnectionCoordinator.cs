@@ -25,12 +25,14 @@ namespace Viv.Kinna.Connections
         Task<KinnaPong> PingAsync(string connectionId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 投递确认：记录客户端已收到的消息，返回当前水位。连接不在本机时返回 0。
+        /// 投递确认：记录客户端已收到的消息。返回值区分「已记录 / 被限流 / 连接未知 / 落库失败」，
+        /// 客户端据此决定要不要重报——只回一个水位的话，这四种情况没法区分。
         /// </summary>
-        Task<long> AckAsync(string connectionId, IReadOnlyList<long> messageIds, CancellationToken cancellationToken = default);
+        Task<KinnaAckResult> AckAsync(string connectionId, IReadOnlyList<long> messageIds, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 重连对齐：用已确认水位判断客户端要不要补拉。
+        /// 重连对齐：用已确认水位判断客户端要不要补拉。和其它上行指令共用配额，
+        /// 被挡下时返回 <see cref="KinnaResyncResult.Throttled"/>。
         /// </summary>
         Task<KinnaResyncResult> ResyncAsync(string connectionId, long? lastMessageId, CancellationToken cancellationToken = default);
 

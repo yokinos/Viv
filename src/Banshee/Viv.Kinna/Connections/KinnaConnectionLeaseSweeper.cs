@@ -23,6 +23,7 @@ namespace Viv.Kinna.Connections
         private readonly IServiceScopeFactory _scopes;
         private readonly ILoggerContract _logger;
         private readonly KinnaSweepClock<THub> _clock;
+        private readonly KinnaUplinkLimiter<THub>? _limiter;
         private readonly TimeSpan _ttl;
         private readonly TimeSpan _interval;
 
@@ -30,12 +31,14 @@ namespace Viv.Kinna.Connections
             IKinnaSession<THub> session,
             IServiceScopeFactory scopes,
             ILoggerContract logger,
-            KinnaSweepClock<THub>? clock = null)
+            KinnaSweepClock<THub>? clock = null,
+            KinnaUplinkLimiter<THub>? limiter = null)
         {
             _session = session;
             _scopes = scopes;
             _logger = logger;
             _clock = clock ?? new KinnaSweepClock<THub>();
+            _limiter = limiter;
 
             var options = session.Options;
             _ttl = TimeSpan.FromSeconds(Math.Max(1, options.EntryTtlSeconds));
@@ -48,8 +51,10 @@ namespace Viv.Kinna.Connections
             {
                 try
                 {
-                    await Task.Delay(_interval, stoppingToken).ConfigureAwait(false);
+                    // 先扫一轮再睡：反过来会让启动后的第一个 interval 里
+                    // 健康检查一直读到「还没扫过」，面板上一片降级
                     await SweepOnceAsync(stoppingToken).ConfigureAwait(false);
+                    await Task.Delay(_interval, stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -59,6 +64,15 @@ namespace Viv.Kinna.Connections
                 {
                     // 清扫抛出去会把整个宿主停掉。这一轮失败，下一轮再扫。
                     _logger.Error($"[{_session.Hub}] 连接清扫失败", ex);
+
+                    try
+                    {
+                        await Task.Delay(_interval, stoppingToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
                 }
             }
         }
@@ -83,6 +97,9 @@ namespace Viv.Kinna.Connections
 
             foreach (var info in removed)
             {
+                // 连接表已经摘掉了，限流窗口也要一起摘，否则每条历史连接都留一格
+                _limiter?.Release(info.ConnectionId);
+
                 if (presence != null)
                 {
                     try
@@ -97,8 +114,10 @@ namespace Viv.Kinna.Connections
 
                 try
                 {
+                    // Terminate 而不是 SendToConnection：原生连接要真的断开。
+                    // 只发一帧软踢的话，客户端不配合就永远留在「连着但收不到消息」的状态。
                     await _session.Sender
-                        .SendToConnectionAsync(info.ConnectionId, KinnaClientMethods.ForceDisconnect, [], cancellationToken)
+                        .TerminateConnectionAsync(info.ConnectionId, KinnaClientMethods.ForceDisconnect, [], cancellationToken)
                         .ConfigureAwait(false);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)

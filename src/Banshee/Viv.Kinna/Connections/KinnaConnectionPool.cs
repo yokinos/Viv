@@ -1,15 +1,19 @@
 using System.Collections.Concurrent;
+using Viv.Kinna.Contracts;
 using Viv.Kinna.Metrics;
 
 namespace Viv.Kinna.Connections
 {
     /// <summary>
     /// 进程内连接表，语义见 <see cref="IKinnaConnectionPool"/>。
+    ///
+    /// 两级索引（按人、按客户端）都靠 <see cref="_connectionLookup"/> 反查维护。
+    /// 结构变动（连上来、断开）走 <see cref="_structureLock"/>，读侧不加锁：
+    /// 读和写抢同一把锁会把每条消息的投递路径串行化，而这里的写只发生在连接建立/断开时。
     /// </summary>
     public sealed class KinnaConnectionPool : IKinnaConnectionPool
     {
         // 按「租户 + 用户」索引，多端同步、按人踢都走它；这是每条消息都要查的那一级。
-        // 空桶留着：摘掉最后一个连接时如果把整本字典移除，并发的 Add 可能刚写进这本字典就被一起丢掉。
         private readonly ConcurrentDictionary<(long SubjectId, long UserId), ConcurrentDictionary<string, byte>> _userConnections = new();
 
         // 按「客户端 + 租户 + 用户」索引，只有在指定客户端查的时候才用
@@ -19,6 +23,10 @@ namespace Viv.Kinna.Connections
         private readonly ConcurrentDictionary<string, KinnaConnectionKey> _connectionLookup = new();
 
         private readonly ConcurrentDictionary<string, DateTimeOffset> _lastSeen = new();
+
+        // 只保护索引结构（建桶、摘桶），不保护桶里的元素——那是并发字典自己的事
+        private readonly object _structureLock = new();
+
         private readonly string _hub;
 
         /// <param name="hub">模块名，只用于指标标签</param>
@@ -30,40 +38,62 @@ namespace Viv.Kinna.Connections
         public void Add(string connectionId, long appId, long subjectId, long userId)
         {
             var key = new KinnaConnectionKey(appId, subjectId, userId);
+            var added = false;
 
-            var added = _userConnections
-                .GetOrAdd((subjectId, userId), _ => new ConcurrentDictionary<string, byte>())
-                .TryAdd(connectionId, 0);
+            lock (_structureLock)
+            {
+                added = _userConnections
+                    .GetOrAdd((subjectId, userId), _ => new ConcurrentDictionary<string, byte>())
+                    .TryAdd(connectionId, 0);
 
-            _clientConnections
-                .GetOrAdd((appId, subjectId, userId), _ => new ConcurrentDictionary<string, byte>())
-                .TryAdd(connectionId, 0);
+                _clientConnections
+                    .GetOrAdd((appId, subjectId, userId), _ => new ConcurrentDictionary<string, byte>())
+                    .TryAdd(connectionId, 0);
 
+                _connectionLookup[connectionId] = key;
+                _lastSeen[connectionId] = DateTimeOffset.UtcNow;
+            }
+
+            // transport 从连接 Id 前缀推断：两套传输共用这本表，指标要能分开看
             if (added)
-                KinnaMetrics.ConnectionAdded(_hub);
-
-            _connectionLookup[connectionId] = key;
-            _lastSeen[connectionId] = DateTimeOffset.UtcNow;
+                KinnaMetrics.ConnectionAdded(_hub, KinnaTransports.Of(connectionId));
         }
 
         public KinnaConnectionInfo? Remove(string connectionId)
         {
-            _lastSeen.TryRemove(connectionId, out _);
+            KinnaConnectionKey key;
+            var removedFromUserIndex = false;
 
-            // 查表与摘除是一步，谁拿到 key 谁负责后续清理
-            if (!_connectionLookup.TryRemove(connectionId, out var key))
-                return null;
-
-            if (_userConnections.TryGetValue((key.SubjectId, key.UserId), out var byUser)
-                && byUser.TryRemove(connectionId, out _))
+            lock (_structureLock)
             {
-                KinnaMetrics.ConnectionRemoved(_hub);
+                _lastSeen.TryRemove(connectionId, out _);
+
+                // 查表与摘除是一步，谁拿到 key 谁负责后续清理
+                if (!_connectionLookup.TryRemove(connectionId, out key))
+                    return null;
+
+                var userKey = (key.SubjectId, key.UserId);
+                if (_userConnections.TryGetValue(userKey, out var byUser) && byUser.TryRemove(connectionId, out _))
+                {
+                    removedFromUserIndex = true;
+
+                    // 桶空了就一起摘掉。空桶留着的话，每个注册过的用户都会永久占一本空字典，
+                    // 百万用户就是几百 MB。Add 走同一把锁，不会出现「刚写进去就被摘掉」。
+                    if (byUser.IsEmpty)
+                        _userConnections.TryRemove(userKey, out _);
+                }
+
+                var clientKey = (key.AppId, key.SubjectId, key.UserId);
+                if (_clientConnections.TryGetValue(clientKey, out var byClient)
+                    && byClient.TryRemove(connectionId, out _)
+                    && byClient.IsEmpty)
+                {
+                    _clientConnections.TryRemove(clientKey, out _);
+                }
             }
 
-            if (_clientConnections.TryGetValue((key.AppId, key.SubjectId, key.UserId), out var byClient))
-            {
-                byClient.TryRemove(connectionId, out _);
-            }
+            if (removedFromUserIndex)
+                KinnaMetrics.ConnectionRemoved(_hub, KinnaTransports.Of(connectionId));
 
             return new KinnaConnectionInfo(connectionId, key.AppId, key.SubjectId, key.UserId);
         }
@@ -103,8 +133,15 @@ namespace Viv.Kinna.Connections
 
         public void Touch(string connectionId)
         {
-            if (_connectionLookup.ContainsKey(connectionId))
-                _lastSeen[connectionId] = DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.UtcNow;
+
+            // 用 TryUpdate 循环而不是「ContainsKey 后赋值」：后者中间被并发 Remove 时
+            // 会把一条已经没有身份的连接重新写回心跳表，快照计数虚高到下一轮清扫
+            while (_lastSeen.TryGetValue(connectionId, out var current))
+            {
+                if (_lastSeen.TryUpdate(connectionId, now, current))
+                    return;
+            }
         }
 
         /// <summary>测试用：把上次心跳拨到过去，让清扫能立刻判过期。</summary>
@@ -139,6 +176,9 @@ namespace Viv.Kinna.Connections
             return removed;
         }
 
+        /// <summary>索引里还剩几本桶，排障和测试用。空桶应当被回收，这个数不会随连接数长期增长。</summary>
+        public int BucketCount => _userConnections.Count + _clientConnections.Count;
+
         public KinnaConnectionPoolSnapshot GetSnapshot()
         {
             var count = 0;
@@ -158,10 +198,13 @@ namespace Viv.Kinna.Connections
 
         public void Clear()
         {
-            _userConnections.Clear();
-            _clientConnections.Clear();
-            _connectionLookup.Clear();
-            _lastSeen.Clear();
+            lock (_structureLock)
+            {
+                _userConnections.Clear();
+                _clientConnections.Clear();
+                _connectionLookup.Clear();
+                _lastSeen.Clear();
+            }
         }
     }
 }

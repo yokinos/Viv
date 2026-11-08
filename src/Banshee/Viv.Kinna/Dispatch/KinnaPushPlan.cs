@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Viv.Contracts.Models;
+using Viv.Kinna.Contracts;
 
 namespace Viv.Kinna.Dispatch
 {
@@ -13,14 +14,24 @@ namespace Viv.Kinna.Dispatch
         Group = 1
     }
 
-    /// <summary>推送目标。用户目标用租户加用户查连接，组目标直接用组名。</summary>
-    public readonly record struct KinnaPushTarget(KinnaTargetKind Kind, long SubjectId, long UserId, string? GroupName)
+    /// <summary>
+    /// 推送目标。用户目标用租户加用户查连接表；组目标带上租户和业务群 Id，
+    /// 组名由投递流程用 <see cref="IKinnaKeys.GroupName"/> 生成，业务不参与拼装。
+    /// </summary>
+    public readonly record struct KinnaPushTarget(KinnaTargetKind Kind, long SubjectId, long UserId, long GroupId)
     {
         public static KinnaPushTarget ToUser(long subjectId, long userId)
-            => new(KinnaTargetKind.User, subjectId, userId, null);
+            => new(KinnaTargetKind.User, subjectId, userId, 0);
 
-        public static KinnaPushTarget ToGroup(string groupName)
-            => new(KinnaTargetKind.Group, 0, 0, groupName);
+        /// <summary>
+        /// 投本机某个群组。
+        ///
+        /// 这里只收业务群 Id、不收现成的组名字符串：组名带租户前缀，业务自己拼一旦漏了租户，
+        /// 跨租户串组不会报错，只会把消息发给不该看的人。前缀也只有 <see cref="IKinnaKeys"/>
+        /// 知道，拼错了同样静默。
+        /// </summary>
+        public static KinnaPushTarget ToGroup(long subjectId, long groupId)
+            => new(KinnaTargetKind.Group, subjectId, 0, groupId);
     }
 
     /// <summary>业务产出的推送计划。Kind 只当指标标签用，框架不解析。</summary>

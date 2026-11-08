@@ -17,5 +17,15 @@ namespace Viv.Kinna.Connections
         Task AddToGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default);
 
         Task RemoveFromGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 软踢并断开一条连接：先把 <paramref name="method"/> 那一帧送出去，再让传输层真正关掉它。
+        ///
+        /// 和 <see cref="SendToConnectionAsync"/> 的差别在最后一步。SignalR 没有服务端硬断的 API，
+        /// 只能发帧、指望客户端自己 stop；原生 WebSocket 的 socket 在服务端手里，帧发完就断。
+        /// 只发帧不断开的话，客户端不配合（冻结、忽略未知帧）就会一直留在
+        /// 「连接表里没有它、推送永远到不了、它自己还以为连着」的黑洞状态。
+        /// </summary>
+        Task TerminateConnectionAsync(string connectionId, string method, object?[] args, CancellationToken cancellationToken = default);
     }
 }

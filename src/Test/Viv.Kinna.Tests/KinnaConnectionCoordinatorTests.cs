@@ -204,9 +204,10 @@ namespace Viv.Kinna.Tests
             var coordinator = Create(pool, new RecordingKinnaClientSender(), delivery: delivery);
             await coordinator.RegisterAsync("c1", Identity());
 
-            var watermark = await coordinator.AckAsync("c1", [11, 12]);
+            var result = await coordinator.AckAsync("c1", [11, 12]);
 
-            Assert.Equal(12, watermark);
+            Assert.Equal(KinnaAckStatus.Accepted, result.Status);
+            Assert.Equal(12, result.Watermark);
             var ack = Assert.Single(delivery.Acks);
             Assert.Equal(SubjectId, ack.SubjectId);
             Assert.Equal(UserId, ack.UserId);
@@ -228,7 +229,8 @@ namespace Viv.Kinna.Tests
             await coordinator.AckAsync("c1", [11]);
             var second = await coordinator.AckAsync("c1", [12]);
 
-            Assert.Equal(0, second);
+            // 下限流要有明确的状态，不能和「未知连接」「落库失败」都回一个 0 混在一起
+            Assert.Equal(KinnaAckStatus.Throttled, second.Status);
             Assert.Single(delivery.Acks);
         }
 
@@ -257,10 +259,52 @@ namespace Viv.Kinna.Tests
             var delivery = new StubKinnaDeliveryStore<TestHub>();
             var coordinator = Create(new KinnaConnectionPool(), new RecordingKinnaClientSender(), delivery: delivery);
 
-            var watermark = await coordinator.AckAsync("ghost", [11]);
+            var result = await coordinator.AckAsync("ghost", [11]);
 
-            Assert.Equal(0, watermark);
+            Assert.Equal(KinnaAckStatus.UnknownConnection, result.Status);
             Assert.Empty(delivery.Acks);
+        }
+
+        [Fact]
+        public async Task AckAsync_落库失败返回Failed且不外抛()
+        {
+            var pool = new KinnaConnectionPool();
+            var delivery = new StubKinnaDeliveryStore<TestHub>
+            {
+                ThrowOnAck = new InvalidOperationException("store down")
+            };
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), delivery: delivery);
+            await coordinator.RegisterAsync("c1", Identity());
+
+            var result = await coordinator.AckAsync("c1", [11]);
+
+            // 抛出去在 SignalR 里只是一次调用异常，客户端拿不到「该重报」这个信号
+            Assert.Equal(KinnaAckStatus.Failed, result.Status);
+        }
+
+        [Fact]
+        public async Task ResyncAsync_被限流时不查存储也不要求补拉()
+        {
+            var pool = new KinnaConnectionPool();
+            var delivery = new StubKinnaDeliveryStore<TestHub>
+            {
+                Watermark = 20,
+                ThrowOnGet = new InvalidOperationException("被限流时不该读存储")
+            };
+            var session = new StubKinnaSession<TestHub>(pool, options: new KinnaOptions { UplinkPermitLimit = 1 });
+            using var limiter = new KinnaUplinkLimiter<TestHub>(session);
+
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), delivery: delivery, limiter: limiter);
+            await coordinator.RegisterAsync("c1", Identity());
+
+            // 用掉唯一的名额，Resync 就应该被挡在查存储之前
+            await coordinator.PingAsync("c1");
+            var result = await coordinator.ResyncAsync("c1", lastMessageId: 10);
+
+            Assert.True(result.Throttled);
+
+            // 不能给补拉信号：那样客户端会立刻去打 HTTP，把压力从长连接搬到数据库
+            Assert.False(result.NeedBackfill);
         }
 
         [Fact]
@@ -413,6 +457,95 @@ namespace Viv.Kinna.Tests
 
             Assert.Equal(2, sender.Calls.Count);
             Assert.Single(pool.GetConnections(2));
+        }
+
+        [Fact]
+        public async Task RegisterAsync_群查询失败时连接照常建立()
+        {
+            // 群服务抖一下不该让人连不上 IM：单聊和按人推送都还正常，只是这次没进组。
+            // 之前这里会让 RegisterAsync 直接抛，等于把 IM 的可用性挂在群服务上。
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var groups = new StubKinnaGroupSource<TestHub> { ThrowOnGet = new InvalidOperationException("db down") };
+            var logger = new RecordingLogger();
+            var session = new StubKinnaSession<TestHub>(pool, sender, new KinnaKeys("kinna"), new KinnaOptions());
+            var coordinator = new KinnaConnectionCoordinator<TestHub>(session, logger, groups);
+
+            var connected = await coordinator.RegisterAsync("c1", Identity());
+
+            Assert.NotNull(connected);
+            Assert.Equal(new[] { "c1" }, pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Empty(sender.Added);
+            Assert.Contains(logger.Warnings, message => message.Contains("不加组"));
+        }
+
+        [Fact]
+        public async Task RegisterAsync_群查询被取消时不吞异常()
+        {
+            // 连接已经中止就别再继续加组：这时候吞掉取消信号会让调用方以为握手成功了
+            var session = new StubKinnaSession<TestHub>(
+                new KinnaConnectionPool(),
+                new RecordingKinnaClientSender(),
+                new KinnaKeys("kinna"),
+                new KinnaOptions());
+
+            var groups = new StubKinnaGroupSource<TestHub> { ThrowOnGet = new OperationCanceledException() };
+            var coordinator = new KinnaConnectionCoordinator<TestHub>(session, new RecordingLogger(), groups);
+
+            using var cts = new CancellationTokenSource();
+            await cts.CancelAsync();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => coordinator.RegisterAsync("c1", Identity(), cts.Token));
+        }
+
+        [Fact]
+        public async Task PingAsync_连接不在表里时明确回报失效()
+        {
+            // 以前无论有没有连接都回 now + ttl，客户端拿到假保证，
+            // 实际上这条连接已经收不到任何推送了 —— 「连着但不来消息」最难查的一种
+            var pool = new KinnaConnectionPool();
+            var presence = new StubKinnaPresenceSink<TestHub>();
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), presence: presence, entryTtlSeconds: 30);
+            await coordinator.RegisterAsync("c1", Identity());
+            await coordinator.UnregisterAsync("c1");
+
+            var pong = await coordinator.PingAsync("c1");
+
+            Assert.False(pong.Alive);
+            Assert.Equal(pong.ServerTime, pong.LeaseExpiresAt);
+            Assert.Empty(presence.RenewedUsers);
+        }
+
+        [Fact]
+        public async Task PingAsync_正常连接回报续期后的租约()
+        {
+            var pool = new KinnaConnectionPool();
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), entryTtlSeconds: 30);
+            await coordinator.RegisterAsync("c1", Identity());
+
+            var pong = await coordinator.PingAsync("c1");
+
+            Assert.True(pong.Alive);
+            Assert.Equal(TimeSpan.FromSeconds(30), pong.LeaseExpiresAt - pong.ServerTime);
+        }
+
+        [Fact]
+        public async Task UnregisterAsync_顺手摘掉上行限流窗口()
+        {
+            // 窗口按连接建，不摘的话每来一次重连就多一个，进程跑久了只增不减
+            var pool = new KinnaConnectionPool();
+            var session = new StubKinnaSession<TestHub>(pool, options: new KinnaOptions { UplinkPermitLimit = 5 });
+            using var limiter = new KinnaUplinkLimiter<TestHub>(session);
+
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), limiter: limiter);
+            await coordinator.RegisterAsync("c1", Identity());
+            await coordinator.PingAsync("c1");
+            Assert.Equal(1, limiter.TrackedConnections);
+
+            await coordinator.UnregisterAsync("c1");
+
+            Assert.Equal(0, limiter.TrackedConnections);
         }
     }
 }

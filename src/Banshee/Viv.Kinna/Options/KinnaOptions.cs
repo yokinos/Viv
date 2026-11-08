@@ -59,6 +59,33 @@ namespace Viv.Kinna.Options
         public bool SingleConnectionPerApp { get; set; } = true;
 
         /// <summary>
+        /// 原生 WebSocket 的挂载路径。空串表示不启用，只跑 SignalR。
+        ///
+        /// 挂在网关后面时要落在 <c>/ws</c> 前缀下，网关只对这个前缀从 query string 取
+        /// access_token（<c>/hubs/*</c> 的 SignalR 走自己的约定）。
+        /// </summary>
+        public string WebSocketPath { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 单条原生连接待发队列的帧数上限。填满说明客户端跟不上，直接断开让客户端重连补拉，
+        /// 继续排队只会把服务端内存吃掉。
+        /// </summary>
+        public int WebSocketQueueCapacity { get; set; } = 512;
+
+        /// <summary>
+        /// 上行单帧的字节上限。超了直接拒帧。上行只有 Ping/Ack/Resync 三种指令，
+        /// 正常不会超过几百字节，给到 32KB 是留余量。
+        /// </summary>
+        public int WebSocketMaxMessageBytes { get; set; } = 32 * 1024;
+
+        /// <summary>
+        /// Kestrel 主动发 WebSocket ping 帧的间隔。0 表示用宿主默认值。
+        /// 这个 ping 是协议层控制帧，与业务的心跳不同：它负责发现 TCP 半开，
+        /// 业务心跳负责续租。
+        /// </summary>
+        public int WebSocketKeepAliveSeconds { get; set; } = 30;
+
+        /// <summary>
         /// 浅拷贝一份。DI 里注册的是「共享配置」单例，每个 Hub 必须在这份副本上做自己的覆盖，
         /// 否则后注册的 Hub 会把先注册的 HubPath / Prefix 改掉，两个 Hub 还指向同一个对象。
         /// 属性全是值类型和 string，浅拷贝等同于深拷贝；以后加引用类型字段要改成显式复制。

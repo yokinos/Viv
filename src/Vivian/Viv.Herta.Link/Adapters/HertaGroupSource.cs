@@ -17,7 +17,13 @@ namespace Viv.Herta.Link.Adapters
             _groupService = groupService;
         }
 
-        public Task<List<long>> GetUserGroupIdsAsync(long subjectId, long userId)
-            => _groupService.GetUserGroupIdsAsync(subjectId, userId);
+        public async Task<List<long>> GetUserGroupIdsAsync(long subjectId, long userId, CancellationToken cancellationToken = default)
+        {
+            // GroupService 的仓储链路还没接 CancellationToken，这里至少在查库前响应一次取消：
+            // 连接已经中止的话没必要再打一次数据库
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return await _groupService.GetUserGroupIdsAsync(subjectId, userId).ConfigureAwait(false);
+        }
     }
 }

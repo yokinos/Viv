@@ -58,15 +58,20 @@ namespace Viv.Kinna.Dispatch
             {
                 if (plan.Target.Kind == KinnaTargetKind.Group)
                 {
-                    if (string.IsNullOrEmpty(plan.Target.GroupName))
+                    if (plan.Target.SubjectId <= 0 || plan.Target.GroupId <= 0)
                     {
-                        _logger.Warning($"[{_session.Hub}] 群推送缺少组名，已丢弃: kind={plan.Kind}");
+                        _logger.Warning(
+                            $"[{_session.Hub}] 群推送缺少租户或群 Id，已丢弃: kind={plan.Kind} " +
+                            $"subject={plan.Target.SubjectId} group={plan.Target.GroupId}");
                         KinnaMetrics.RecordDispatch(_session.Hub, plan.Kind, "dropped");
                         return KinnaPushOutcome.Dropped;
                     }
 
+                    // 组名只在这里生成：业务只给租户和群 Id，拼错了不会静默发错人
+                    var groupName = _session.Keys.GroupName(plan.Target.SubjectId, plan.Target.GroupId);
+
                     await _session.Sender
-                        .SendToGroupAsync(plan.Target.GroupName!, plan.Method, plan.Payload, cancellationToken)
+                        .SendToGroupAsync(groupName, plan.Method, plan.Payload, cancellationToken)
                         .ConfigureAwait(false);
 
                     KinnaMetrics.RecordDispatch(_session.Hub, plan.Kind, "ok");

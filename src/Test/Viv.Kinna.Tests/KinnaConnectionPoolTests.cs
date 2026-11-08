@@ -157,5 +157,48 @@ namespace Viv.Kinna.Tests
 
             Assert.Equal(new[] { "c2" }, pool.GetConnectionIds(1, 2));
         }
+
+        [Fact]
+        public void Remove摘掉最后一条时_空桶跟着回收()
+        {
+            // 空桶不回收的话，每个注册过的用户都会永久占一本空字典：
+            // 百万用户就是几百 MB，而且看不出来，因为连接数早就归零了
+            var pool = new KinnaConnectionPool();
+            pool.Add("c1", appId: 3, subjectId: 1, userId: 2);
+            Assert.Equal(2, pool.BucketCount);
+
+            pool.Remove("c1");
+
+            Assert.Equal(0, pool.BucketCount);
+        }
+
+        [Fact]
+        public void Remove同一用户的两条连接_只摘掉空了的那本桶()
+        {
+            var pool = new KinnaConnectionPool();
+            pool.Add("c1", appId: 3, subjectId: 1, userId: 2);
+            pool.Add("c2", appId: 3, subjectId: 1, userId: 2);
+
+            pool.Remove("c1");
+
+            // 按人那本还剩 c2，不能一起摘掉；按客户端那本也还剩 c2
+            Assert.Equal(new[] { "c2" }, pool.GetConnectionIds(1, 2));
+            Assert.Equal(2, pool.BucketCount);
+        }
+
+        [Fact]
+        public void 并发登记和摘除_不丢连接也不留残桶()
+        {
+            var pool = new KinnaConnectionPool();
+
+            Parallel.For(0, 200, i => pool.Add($"c{i}", appId: 3, subjectId: 1, userId: 2));
+            Assert.Equal(200, pool.GetConnectionIds(1, 2).Count);
+
+            Parallel.For(0, 200, i => pool.Remove($"c{i}"));
+
+            Assert.Empty(pool.GetConnectionIds(1, 2));
+            Assert.Equal(0, pool.BucketCount);
+            Assert.Equal(0, pool.GetSnapshot().Connections);
+        }
     }
 }

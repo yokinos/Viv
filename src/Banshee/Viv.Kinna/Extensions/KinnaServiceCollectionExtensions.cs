@@ -8,6 +8,8 @@ using Viv.Kinna.Contracts;
 using Viv.Kinna.Dispatch;
 using Viv.Kinna.Health;
 using Viv.Kinna.Options;
+using Viv.Kinna.Ports;
+using Viv.Kinna.WebSockets;
 
 namespace Viv.Kinna.Extensions
 {
@@ -25,13 +27,30 @@ namespace Viv.Kinna.Extensions
             // 幂等；EnableDetailedErrors 是进程级选项，由 AddViv 按 KinnaOption 配一次
             services.AddSignalR();
 
+            // 配置只组装一次：会话、连接表、发送器三个单例共用，
+            // 否则 configure 回调会被执行三遍
+            services.TryAddSingleton<KinnaHubSetup<THub>>(sp =>
+                new KinnaHubSetup<THub>(BuildOptions(sp, typeof(THub).Name, configure)));
+
+            // 准入默认只校验身份完整性。业务注册自己的实现即可覆盖（后注册的生效），
+            // 两套传输共用同一个端口，不会出现换客户端就绕过限制的情况
+            services.TryAddScoped<IKinnaAdmission<THub>, KinnaIdentityAdmission<THub>>();
+
+            // 原生 WebSocket 的连接表与组表。没配 WebSocketPath 时也会建出来，
+            // 只是没人往里登记，发送器分流时全部落到 SignalR 那一侧
+            services.TryAddSingleton<KinnaWebSocketRegistry<THub>>(sp =>
+                new KinnaWebSocketRegistry<THub>(
+                    sp.GetRequiredService<KinnaHubSetup<THub>>().Options.WebSocketQueueCapacity));
+
             services.TryAddSingleton<IKinnaSession<THub>>(sp =>
             {
-                var options = BuildOptions(sp, typeof(THub).Name, configure);
+                var options = sp.GetRequiredService<KinnaHubSetup<THub>>().Options;
 
                 return new KinnaSession<THub>(
                     new KinnaConnectionPool(typeof(THub).Name),
-                    new KinnaClientSender<THub>(sp.GetRequiredService<IHubContext<THub>>()),
+                    new CompositeKinnaClientSender<THub>(
+                        sp.GetRequiredService<KinnaWebSocketRegistry<THub>>(),
+                        new KinnaClientSender<THub>(sp.GetRequiredService<IHubContext<THub>>())),
                     new KinnaKeys(options.Prefix),
                     options);
             });

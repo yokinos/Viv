@@ -22,8 +22,8 @@ namespace Viv.Kinna.Tests
         private static KinnaPushPlan UserPlan(string method = "M", long subjectId = SubjectId, long userId = UserId)
             => new("user", method, "payload", KinnaPushTarget.ToUser(subjectId, userId));
 
-        private static KinnaPushPlan GroupPlan(string groupName = "g1", string method = "M")
-            => new("group", method, "payload", KinnaPushTarget.ToGroup(groupName));
+        private static KinnaPushPlan GroupPlan(long groupId = 5, long subjectId = SubjectId, string method = "M")
+            => new("group", method, "payload", KinnaPushTarget.ToGroup(subjectId, groupId));
 
         [Fact]
         public async Task 单聊目标_查到连接就发()
@@ -57,24 +57,26 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
-        public async Task 群目标_直接发组()
+        public async Task 群目标_组名由租户和群Id生成()
         {
             var sender = new RecordingKinnaClientSender();
-            var pusher = new FakeKinnaPusher<string> { OnPlan = (_, _) => GroupPlan("kinna:11:group:5") };
+            var pusher = new FakeKinnaPusher<string> { OnPlan = (_, _) => GroupPlan(groupId: 5) };
 
             var outcome = await Create(pusher, sender, new StubKinnaConnectionPool()).DispatchAsync("evt", null);
 
             Assert.Equal(KinnaPushOutcome.Success, outcome);
             var call = Assert.Single(sender.Calls);
             Assert.Equal("Group", call.TargetKind);
+
+            // 业务只给租户和群 Id，组名由 IKinnaKeys 拼——前缀和租户都在里面，跨租户串不了组
             Assert.Equal("kinna:11:group:5", call.TargetId);
         }
 
         [Fact]
-        public async Task 群目标_缺组名_丢弃()
+        public async Task 群目标_缺租户或群Id_丢弃()
         {
             var sender = new RecordingKinnaClientSender();
-            var pusher = new FakeKinnaPusher<string> { OnPlan = (_, _) => GroupPlan(string.Empty) };
+            var pusher = new FakeKinnaPusher<string> { OnPlan = (_, _) => GroupPlan(groupId: 0) };
 
             var outcome = await Create(pusher, sender, new StubKinnaConnectionPool()).DispatchAsync("evt", null);
 

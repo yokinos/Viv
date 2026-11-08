@@ -49,7 +49,7 @@ namespace Viv.Herta.Link.Dispatch
                     "group",
                     KinnaClientMethods.ReceiveMessage,
                     payload,
-                    KinnaPushTarget.ToGroup(_session.Keys.GroupName(subjectId, evt.TargetId)),
+                    KinnaPushTarget.ToGroup(subjectId, evt.TargetId),
                     evt.FromUserId)
                 : new KinnaPushPlan(
                     "user",

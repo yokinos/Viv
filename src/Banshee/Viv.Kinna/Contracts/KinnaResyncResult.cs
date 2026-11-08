@@ -19,8 +19,16 @@ namespace Viv.Kinna.Contracts
 
         /// <summary>
         /// true 表示客户端可能缺消息，应该走 HTTP 增量拉取。
+        /// 被限流时（<see cref="Throttled"/>）一定为 false——限流期间让客户端去补拉，
+        /// 只是把长连接的压力搬到数据库上。
         /// </summary>
         public bool NeedBackfill { get; init; }
+
+        /// <summary>
+        /// true 表示这次请求被上行配额挡下，服务端什么都没查。客户端应当退避重试，
+        /// 不要把 <see cref="NeedBackfill"/> 当成 false 去理解（那会以为已经对齐）。
+        /// </summary>
+        public bool Throttled { get; init; }
 
         public DateTimeOffset ServerTime { get; init; }
     }

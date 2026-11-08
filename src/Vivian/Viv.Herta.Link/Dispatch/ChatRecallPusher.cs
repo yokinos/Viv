@@ -35,7 +35,7 @@ namespace Viv.Herta.Link.Dispatch
                     "group",
                     KinnaClientMethods.MessageRecalled,
                     payload,
-                    KinnaPushTarget.ToGroup(_session.Keys.GroupName(subjectId, evt.TargetId)))
+                    KinnaPushTarget.ToGroup(subjectId, evt.TargetId))
                 : new KinnaPushPlan(
                     "user",
                     KinnaClientMethods.MessageRecalled,

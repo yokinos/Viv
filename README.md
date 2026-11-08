@@ -385,9 +385,31 @@ builder.Services.AddKinnaPusher<ChatHub, SendMessageEvent, ChatMessagePusher>();
 app.MapKinnaHub<ChatHub>("/chat");
 ```
 
-- **Ack / Resync**：客户端确认已收到的消息，重连时拿水位判断是否补拉；存储走 `IKinnaDeliveryStore<THub>` 端口，业务侧决定落库还是落缓存
+- **Ack / Resync**：客户端确认已收到的消息，重连时拿水位判断是否补拉；存储走 `IKinnaDeliveryStore<THub>` 端口，业务侧决定落库还是落缓存。`Ack` 回 `KinnaAckResult`（`Accepted` / `Throttled` / `UnknownConnection` / `Failed`），客户端据此决定要不要重报
 - **单客户端单连接**：按 AppId 判，新连接登记时摘掉同租户同用户的旧连接（本副本内）
-- **健康检查 / 上行限流**：`Ping`/`Ack` 按连接限流，被挡的 Ping 回 Pong 但不续租
+- **健康检查 / 上行限流**：`Ping`/`Ack`/`Resync` 按连接限流，被挡的 Ping 回 Pong 但不续租，被挡的 Resync 回 `Throttled` 且不要求补拉
+
+#### 原生 WebSocket（小程序 / 嵌入式设备）
+
+SignalR 客户端依赖 `XMLHttpRequest`、`fetch`、`EventSource` 和 `window`，微信小程序这类运行时引不进来。
+Kinna 在同一进程里再挂一个原生端点，和 Hub 共用连接表、组表与投递器：
+
+```csharp
+builder.Services.AddKinna<ChatHub>(options => options.WebSocketPath = "/ws/chat");
+// ...
+app.MapKinnaHub<ChatHub>("/chat");        // PC
+app.MapKinnaWebSocket<ChatHub>();         // 小程序
+```
+
+- **上行**：`{"type":"ping"}`、`{"type":"ack","ids":[1,2]}`、`{"type":"resync","lastMessageId":100}`，不认识的指令忽略
+- **下行**：`{"method":"ReceiveMessage","args":[{...}]}`，方法名与 `KinnaClientMethods` 一致
+- **分流**：`IKinnaClientSender` 按连接归属选传输（查表而不是看 Id 前缀），业务代码不需要知道客户端用哪种
+- **准入**：`IKinnaIdentityResolver<THub>` 与 `IKinnaAdmission<THub>` 两套传输共用同一份实现，换客户端不能换判定
+- **慢客户端**：单连接有界队列（`WebSocketQueueCapacity`，默认 512），满了直接断开（`kinna.ws.closed{reason=queue_full}`），客户端重连后走 Resync
+- **失效连接**：`Ping` 回 `alive:false`（表示服务端已不认这条连接）后服务端主动发关闭帧断开，客户端据此重连重新登记；关闭帧和下行帧走同一个写者排队，不会出现「只断线、不说明原因」
+- **指标**：`kinna.connections` 带 `transport` 标签区分两套传输；`kinna.ws.rejected{reason}` 记 Upgrade 前的拒绝，`kinna.ws.closed{reason}` 记关闭原因（`client` / `queue_full` / `frame_too_large` / `send_failed` / `expired` / `terminated` / `shutdown`）
+- **两套共存**：PC 走 SignalR、小程序走原生 WS，只要两者 AppId 不同就不会触发「单客户端单连接」互踢；
+  同一用户从两端上线会各收一份推送。`WebSocketPath` 留空即不启用，只跑 SignalR 的部署不受影响。
 
 ### 可观测性
 

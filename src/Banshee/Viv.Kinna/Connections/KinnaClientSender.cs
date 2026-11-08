@@ -28,5 +28,12 @@ namespace Viv.Kinna.Connections
 
         public Task RemoveFromGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default)
             => _hub.Groups.RemoveFromGroupAsync(connectionId, groupName, cancellationToken);
+
+        /// <summary>
+        /// SignalR 没有「服务端主动断开某条连接」的 API（HubLifetimeManager 只管发消息），
+        /// 所以这里退化成软踢：帧发出去，剩下的交给客户端自己 stop。
+        /// </summary>
+        public Task TerminateConnectionAsync(string connectionId, string method, object?[] args, CancellationToken cancellationToken = default)
+            => SendToConnectionAsync(connectionId, method, args, cancellationToken);
     }
 }

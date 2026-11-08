@@ -49,6 +49,26 @@ namespace Viv.Kinna.Tests
             {
                 Assert.True(limiter.TryAcquire("c1"));
             }
+
+            // 不限流就不该建窗口：建了也只是白占内存
+            Assert.Equal(0, limiter.TrackedConnections);
+        }
+
+        [Fact]
+        public void Release_摘掉窗口并重新开始计数()
+        {
+            // 框架的 PartitionedRateLimiter 没有淘汰 API，连接 Id 每次重连都是新的，
+            // 不释放的话每条历史连接都永久占一格
+            using var limiter = Create(permitLimit: 1);
+
+            Assert.True(limiter.TryAcquire("c1"));
+            Assert.False(limiter.TryAcquire("c1"));
+            Assert.Equal(1, limiter.TrackedConnections);
+
+            limiter.Release("c1");
+
+            Assert.Equal(0, limiter.TrackedConnections);
+            Assert.True(limiter.TryAcquire("c1"));
         }
     }
 }

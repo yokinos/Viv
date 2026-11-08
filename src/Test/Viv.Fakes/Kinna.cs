@@ -57,6 +57,15 @@ public sealed class RecordingKinnaClientSender : IKinnaClientSender
         Removed.Add((connectionId, groupName));
         return Task.CompletedTask;
     }
+
+    /// <summary>软踢 + 断开。和普通发送记在同一个列表里，调用方断言方式不变。</summary>
+    public Task TerminateConnectionAsync(string connectionId, string method, object?[] args, CancellationToken cancellationToken = default)
+    {
+        if (ThrowOnSend != null) throw ThrowOnSend;
+
+        Calls.Add(new SenderCall("Client", connectionId, method, args));
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>可预设返回值的连接表替身，记录最近一次查询参数。参数顺序是 AppId、SubjectId、UserId。</summary>
@@ -150,14 +159,20 @@ public sealed class StubKinnaGroupSource<THub> : IKinnaGroupSource<THub> where T
 {
     public List<long> GroupIds { get; set; } = new();
 
+    /// <summary>设了就抛，用于测群服务故障时连接是否照常建立</summary>
+    public Exception? ThrowOnGet { get; set; }
+
     public long? LastSubjectId { get; private set; }
 
     public long? LastUserId { get; private set; }
 
-    public Task<List<long>> GetUserGroupIdsAsync(long subjectId, long userId)
+    public Task<List<long>> GetUserGroupIdsAsync(long subjectId, long userId, CancellationToken cancellationToken = default)
     {
         LastSubjectId = subjectId;
         LastUserId = userId;
+
+        if (ThrowOnGet != null) throw ThrowOnGet;
+
         return Task.FromResult(GroupIds);
     }
 }
@@ -173,8 +188,16 @@ public sealed class StubKinnaDeliveryStore<THub> : IKinnaDeliveryStore<THub> whe
 
     public List<(long SubjectId, long UserId, long[] MessageIds)> Acks { get; } = new();
 
+    /// <summary>设了就抛，用于测落库失败时的降级</summary>
+    public Exception? ThrowOnAck { get; set; }
+
+    /// <summary>设了就抛，用于测 Resync 读失败</summary>
+    public Exception? ThrowOnGet { get; set; }
+
     public Task<long> AckAsync(long subjectId, long userId, IReadOnlyList<long> messageIds, CancellationToken cancellationToken = default)
     {
+        if (ThrowOnAck != null) throw ThrowOnAck;
+
         Acks.Add((subjectId, userId, [.. messageIds]));
 
         foreach (var id in messageIds.Where(x => !MessageIds.Contains(x)))
@@ -193,7 +216,11 @@ public sealed class StubKinnaDeliveryStore<THub> : IKinnaDeliveryStore<THub> whe
     }
 
     public Task<KinnaDeliveryState> GetDeliveredAsync(long subjectId, long userId, CancellationToken cancellationToken = default)
-        => Task.FromResult(new KinnaDeliveryState(Watermark, [.. MessageIds]));
+    {
+        if (ThrowOnGet != null) throw ThrowOnGet;
+
+        return Task.FromResult(new KinnaDeliveryState(Watermark, [.. MessageIds]));
+    }
 }
 
 /// <summary>在线态端口替身：三个动作都记在案。</summary>

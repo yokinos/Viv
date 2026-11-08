@@ -25,5 +25,21 @@ namespace Viv.Kinna.Contracts
         /// 软踢，客户端收到后自己 stop
         /// </summary>
         public const string ForceDisconnect = "ForceDisconnect";
+
+        /// <summary>
+        /// 心跳应答，载荷 <see cref="KinnaPong"/>。
+        /// SignalR 里 Ping 是方法返回值，裸 WebSocket 没有 RPC 语义，得显式回一帧。
+        /// </summary>
+        public const string Pong = "Pong";
+
+        /// <summary>
+        /// 投递确认的结果，载荷 <see cref="KinnaAckResult"/>（状态 + 水位）。仅裸 WebSocket 用。
+        /// </summary>
+        public const string Ack = "Ack";
+
+        /// <summary>
+        /// 重连对齐的结果，载荷 <see cref="KinnaResyncResult"/>。仅裸 WebSocket 用。
+        /// </summary>
+        public const string Resync = "Resync";
     }
 }
