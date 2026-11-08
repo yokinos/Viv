@@ -401,13 +401,18 @@ app.MapKinnaHub<ChatHub>("/chat");        // PC
 app.MapKinnaWebSocket<ChatHub>();         // 小程序
 ```
 
+- **子协议**：客户端可声明 `kinna.v1`（`Sec-WebSocket-Protocol`），服务端回同名；不声明按 v1 处理（老客户端不传这个头），声明了但一个都不认识直接 `400`（`kinna.ws.rejected{reason=subprotocol}`）—— 版本要在 101 之前谈定，否则以后改上行帧格式只能靠「兼容到没人敢动」
 - **上行**：`{"type":"ping"}`、`{"type":"ack","ids":[1,2]}`、`{"type":"resync","lastMessageId":100}`，不认识的指令忽略
+- **并发**：`ping` 走旁路（读循环不排队，最多 4 个在途，超了丢弃本次），`ack` / `resync` 进有界队列（`SerialQueueCapacity`，64）由单读者按序处理 —— 读循环绝不等指令跑完。以前 Ack 卡在存储上会把后面的帧一起堵住，客户端收不到 Pong 就以为掉线；重连风暴反过来把存储压得更死，越忙越断
+- **挂载**：`MapKinnaWebSocket<THub>(configure: e => e.RequireRateLimiting("ws"))` 能给终结点挂宿主策略 —— 限流、授权、OpenAPI 标签都读 endpoint 元数据，没有这个入口这层壳就是策略黑区
 - **下行**：`{"method":"ReceiveMessage","args":[{...}]}`，方法名与 `KinnaClientMethods` 一致
 - **分流**：`IKinnaClientSender` 按连接归属选传输（查表而不是看 Id 前缀），业务代码不需要知道客户端用哪种
 - **准入**：`IKinnaIdentityResolver<THub>` 与 `IKinnaAdmission<THub>` 两套传输共用同一份实现，换客户端不能换判定
 - **慢客户端**：单连接有界队列（`WebSocketQueueCapacity`，默认 512），满了直接断开（`kinna.ws.closed{reason=queue_full}`），客户端重连后走 Resync
 - **失效连接**：`Ping` 回 `alive:false`（表示服务端已不认这条连接）后服务端主动发关闭帧断开，客户端据此重连重新登记；关闭帧和下行帧走同一个写者排队，不会出现「只断线、不说明原因」
-- **指标**：`kinna.connections` 带 `transport` 标签区分两套传输；`kinna.ws.rejected{reason}` 记 Upgrade 前的拒绝，`kinna.ws.closed{reason}` 记关闭原因（`client` / `queue_full` / `frame_too_large` / `send_failed` / `expired` / `terminated` / `shutdown`）
+- **停机**：`ApplicationStopping` 给本机每条连接补一个 `1012 Service Restart` 再断（最多等 200ms 让帧写出去），客户端据此退避重连；不补的话只能拿到 `1006`，会被当成网络故障立刻重连，滚动发布期间整个机群一起撞上来
+- **时限**：`WebSocketCloseTimeout`（5s，等关闭帧写出去的上限）、`WebSocketTerminateGrace`（1s，软踢后排空的宽限）、`WebSocketShutdownGrace`（200ms，停机补 1012 的等待）。后两个必须短于第一个，否则先到的宽限会把还在等的关闭帧判成失败（`close_timeout` 虚高）
+- **指标**：`kinna.connections` 带 `transport` 标签区分两套传输；`kinna.ws.rejected{reason}` 记 Upgrade 前的拒绝，`kinna.ws.closed{reason}` 记关闭原因（`client` / `queue_full` / `frame_too_large` / `send_failed` / `close_timeout` / `expired` / `terminated` / `shutdown`）；`kinna.ack.failed` / `kinna.resync.failed` 记上行被下游存储拖垮的次数（都不拆连接，降级成「重报」/「要求补拉」）
 - **两套共存**：PC 走 SignalR、小程序走原生 WS，只要两者 AppId 不同就不会触发「单客户端单连接」互踢；
   同一用户从两端上线会各收一份推送。`WebSocketPath` 留空即不启用，只跑 SignalR 的部署不受影响。
 

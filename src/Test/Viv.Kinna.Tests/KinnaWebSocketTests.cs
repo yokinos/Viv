@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using System.Text;
+using Microsoft.Extensions.Time.Testing;
 using Viv.Contracts.Models;
 using Viv.Fakes;
 using Viv.Kinna.Connections;
@@ -31,9 +32,25 @@ namespace Viv.Kinna.Tests
         /// <summary>Abort 有没有被调到 —— 硬断的原生连接靠它断言</summary>
         public bool Aborted { get; private set; }
 
+        /// <summary>写出去的关闭帧状态码，没发过就是 null</summary>
+        public WebSocketCloseStatus? SentCloseStatus { get; private set; }
+
+        /// <summary>收尾动作的先后顺序（close / abort），用来锁「先发帧再硬断」</summary>
+        public IReadOnlyList<string> Calls
+        {
+            get { lock (_sent) return [.. _calls]; }
+        }
+
+        private readonly List<string> _calls = new();
+
         public override void Abort()
         {
             Aborted = true;
+
+            lock (_sent)
+            {
+                _calls.Add("abort");
+            }
         }
 
         public override void Dispose()
@@ -41,10 +58,30 @@ namespace Viv.Kinna.Tests
         }
 
         public override Task CloseAsync(WebSocketCloseStatus closeStatus, string? statusDescription,
-            CancellationToken cancellationToken) => Task.CompletedTask;
+            CancellationToken cancellationToken)
+        {
+            SentCloseStatus = closeStatus;
+
+            lock (_sent)
+            {
+                _calls.Add("close");
+            }
+
+            return Task.CompletedTask;
+        }
 
         public override Task CloseOutputAsync(WebSocketCloseStatus closeStatus, string? statusDescription,
-            CancellationToken cancellationToken) => Task.CompletedTask;
+            CancellationToken cancellationToken)
+        {
+            SentCloseStatus = closeStatus;
+
+            lock (_sent)
+            {
+                _calls.Add("close");
+            }
+
+            return Task.CompletedTask;
+        }
 
         public override Task<WebSocketReceiveResult> ReceiveAsync(ArraySegment<byte> buffer,
             CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -189,6 +226,29 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
+        public async Task CloseOutputAsync_关闭帧等不到写出时到点返回false而不是一直挂住()
+        {
+            // 写循环有可能先死（请求中止会取消它），队列里的关闭指令就再没人消费。
+            // 没有超时兜底的话，调用方的 await 会挂到进程结束 —— 连着 socket 和请求作用域一起泄漏
+            var time = new FakeTimeProvider();
+            var registry = new KinnaWebSocketRegistry<TestHub>(8, time);
+            var socket = new BlockingWebSocket();
+            registry.Bind("ws:1", socket, CancellationToken.None);
+
+            // 先把写循环卡在第一次 SendAsync 里，让后面的关闭指令排在它后面永远发不出去
+            Assert.True(registry.Send("ws:1", "ReceiveMessage", [1]));
+            await socket.FirstSendStarted;
+
+            var closing = registry.CloseOutputAsync("ws:1", WebSocketCloseStatus.NormalClosure, "bye");
+
+            // 时钟推过上限，返回 false 表示这一帧没发出去，调用方应当直接硬断
+            time.Advance(TimeSpan.FromSeconds(6));
+
+            Assert.False(await closing.WaitAsync(TimeSpan.FromSeconds(5)));
+            socket.Release();
+        }
+
+        [Fact]
         public void Unbind_把连接从所有组里摘干净()
         {
             var registry = new KinnaWebSocketRegistry<TestHub>(64);
@@ -204,6 +264,25 @@ namespace Viv.Kinna.Tests
             Assert.Empty(registry.GetGroupMembers("g1"));
             Assert.Empty(registry.GetGroupMembers("g2"));
             Assert.Equal(0, registry.Count);
+        }
+
+        [Fact]
+        public void AbortAll_先发1012关闭帧再硬断()
+        {
+            // 直接 Abort 客户端只看到 1006，会当成断网立刻重连；滚动发布时整个机群一起重连，
+            // 撞上的还是正在停的副本。1012 Service Restart 让客户端知道该退避
+            var registry = new KinnaWebSocketRegistry<TestHub>(64);
+            var socket = new RecordingWebSocket();
+            registry.Bind("ws:1", socket, CancellationToken.None);
+
+            registry.AbortAll();
+
+            Assert.Equal(0, registry.Count);
+            Assert.True(socket.Aborted);
+            Assert.Equal((WebSocketCloseStatus)1012, socket.SentCloseStatus);
+
+            // 顺序也要对：先 Abort 的话这一帧根本写不出去
+            Assert.Equal(["close", "abort"], socket.Calls);
         }
 
         [Fact]

@@ -43,8 +43,17 @@ namespace Viv.Kinna.Extensions
             // 原生 WebSocket 的连接表与组表。没配 WebSocketPath 时也会建出来，
             // 只是没人往里登记，发送器分流时全部落到 SignalR 那一侧
             services.TryAddSingleton<KinnaWebSocketRegistry<THub>>(sp =>
-                new KinnaWebSocketRegistry<THub>(
-                    sp.GetRequiredService<KinnaHubSetup<THub>>().Options.WebSocketQueueCapacity));
+            {
+                var options = sp.GetRequiredService<KinnaHubSetup<THub>>().Options;
+
+                return new KinnaWebSocketRegistry<THub>(
+                    options.WebSocketQueueCapacity,
+                    new KinnaWebSocketTimeouts(
+                        options.WebSocketCloseTimeout,
+                        options.WebSocketTerminateGrace,
+                        options.WebSocketShutdownGrace),
+                    sp.GetService<TimeProvider>());
+            });
 
             services.TryAddSingleton<IKinnaSession<THub>>(sp =>
             {

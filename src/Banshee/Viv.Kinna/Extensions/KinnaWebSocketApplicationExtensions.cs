@@ -25,7 +25,16 @@ namespace Viv.Kinna.Extensions
         /// </summary>
         /// <param name="app">宿主</param>
         /// <param name="pattern">覆盖配置里的路径，一般不用传</param>
-        public static WebApplication MapKinnaWebSocket<THub>(this WebApplication app, string? pattern = null)
+        /// <param name="configure">
+        /// 给终结点挂策略：<c>RequireAuthorization()</c>、<c>RequireRateLimiting("ws")</c>、
+        /// <c>WithTags</c> 之类都要有 endpoint 元数据才生效。身份与准入仍然在
+        /// <c>IKinnaIdentityResolver</c> / <c>IKinnaAdmission</c> 里判，
+        /// 这里补的是宿主级的横切策略。
+        /// </param>
+        public static WebApplication MapKinnaWebSocket<THub>(
+            this WebApplication app,
+            string? pattern = null,
+            Action<IEndpointConventionBuilder>? configure = null)
             where THub : Hub
         {
             var session = app.Services.GetRequiredService<IKinnaSession<THub>>();
@@ -40,22 +49,34 @@ namespace Viv.Kinna.Extensions
             // WebApplication 把 IApplicationBuilder.Properties 实现成显式的，这里要转一下
             var properties = ((IApplicationBuilder)app).Properties;
 
-            if (!properties.ContainsKey(WebSocketsEnabledKey))
+            var keepAlive = TimeSpan.FromSeconds(
+                options.WebSocketKeepAliveSeconds > 0 ? options.WebSocketKeepAliveSeconds : 30);
+
+            if (properties.TryGetValue(WebSocketsEnabledKey, out var applied))
+            {
+                // UseWebSockets 是进程级的，第二次调用不会覆盖间隔。与其静默沿用第一个 Hub 的值，
+                // 不如启动就报错——「我明明配了 60 秒」这类问题不该留到线上才发现
+                if (applied is TimeSpan existing && existing != keepAlive)
+                {
+                    throw new InvalidOperationException(
+                        $"WebSocket 的 KeepAliveInterval 是进程级配置，多 Hub 只能有一个值：已生效 {existing}，本次 {keepAlive}");
+                }
+            }
+            else
             {
                 // 协议层 ping 用来发现 TCP 半开：客户端断电、拔网线时不会有关闭帧，
                 // 只有 ping 失败才能让 Kestrel 把连接判死。业务心跳负责续租，两件事互不替代。
-                app.UseWebSockets(new WebSocketOptions
-                {
-                    KeepAliveInterval = TimeSpan.FromSeconds(
-                        options.WebSocketKeepAliveSeconds > 0 ? options.WebSocketKeepAliveSeconds : 30)
-                });
-
-                properties[WebSocketsEnabledKey] = true;
+                app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = keepAlive });
+                properties[WebSocketsEnabledKey] = keepAlive;
             }
 
             // 这里注册中间件晚于 MapControllers 也没关系：终结点由框架在管道末尾统一执行，
             // 只要 UseWebSockets 排在它前面就生效。
-            app.Map(path, (RequestDelegate)(context => KinnaWebSocketEndpoint<THub>.HandleAsync(context)));
+            var endpoint = app.Map(
+                path,
+                (RequestDelegate)(context => KinnaWebSocketEndpoint<THub>.HandleAsync(context)));
+
+            configure?.Invoke(endpoint);
 
             // 停机时主动断掉本机的原生连接。不接这一步的话，滚动发布时客户端只能等
             // Kestrel 的连接关闭超时（默认 5 秒，反代后面可能更久）才重连到新副本——

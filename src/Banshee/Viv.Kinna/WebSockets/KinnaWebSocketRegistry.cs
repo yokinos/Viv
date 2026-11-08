@@ -27,8 +27,13 @@ namespace Viv.Kinna.WebSockets
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
-        /// <summary>软踢帧发出去之后，最多等这么久就让位给硬断。</summary>
-        private static readonly TimeSpan DefaultTerminateGrace = TimeSpan.FromSeconds(1);
+        /// <summary>
+        /// 1012 Service Restart。RFC 6455 有这个码，但 <see cref="WebSocketCloseStatus"/> 没有对应成员，
+        /// 只能强转（框架只拒绝 0-999 / 1006 / 1015，1012 是合法值）。
+        /// 用它而不是 <c>Abort</c>：1012 告诉客户端「服务端在发布」，可以退避后重连；
+        /// 1006 会被当成网络故障，客户端会立刻重连，撞上还在停的副本。
+        /// </summary>
+        private const WebSocketCloseStatus ServiceRestart = (WebSocketCloseStatus)1012;
 
         /// <summary>模块名，只用于指标标签</summary>
         private static readonly string HubName = typeof(THub).Name;
@@ -46,10 +51,22 @@ namespace Viv.Kinna.WebSockets
         private readonly object _structureLock = new();
 
         private readonly int _queueCapacity;
+        private readonly TimeProvider _time;
+        private readonly KinnaWebSocketTimeouts _timeouts;
 
-        public KinnaWebSocketRegistry(int queueCapacity)
+        public KinnaWebSocketRegistry(int queueCapacity, TimeProvider? timeProvider = null)
+            : this(queueCapacity, KinnaWebSocketTimeouts.Default, timeProvider)
+        {
+        }
+
+        public KinnaWebSocketRegistry(
+            int queueCapacity,
+            KinnaWebSocketTimeouts timeouts,
+            TimeProvider? timeProvider = null)
         {
             _queueCapacity = queueCapacity > 0 ? queueCapacity : 512;
+            _timeouts = Normalize(timeouts);
+            _time = timeProvider ?? TimeProvider.System;
         }
 
         /// <summary>
@@ -67,7 +84,8 @@ namespace Viv.Kinna.WebSockets
         /// </summary>
         internal void Bind(string connectionId, WebSocket socket, CancellationToken requestAborted)
         {
-            var connection = new KinnaWebSocketConnection(connectionId, HubName, socket, _queueCapacity, requestAborted);
+            var connection = new KinnaWebSocketConnection(
+                connectionId, HubName, socket, _queueCapacity, requestAborted, _time, _timeouts);
 
             if (!_connections.TryAdd(connectionId, connection))
             {
@@ -115,8 +133,10 @@ namespace Viv.Kinna.WebSockets
             connection.TryEnqueue(Encode(method, args));
 
             // 软踢帧之后再排一个关闭指令：写循环排空后自己发关闭帧退出，
-            // 客户端拿到的是一次正常关闭，而不是被 Abort 掐断的「异常断开」
-            _ = connection.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "disconnected");
+            // 客户端拿到的是一次正常关闭，而不是被 Abort 掐断的「异常断开」。
+            // 只入队不等——等它写出去是 FinishAsync 宽限的事，这里再等一遍，
+            // 因为宽限比 CloseTimeout 短，等的那次必然超时，指标上就多一条 close_timeout
+            connection.EnqueueClose(WebSocketCloseStatus.NormalClosure, "disconnected");
 
             // 摘不到说明另一个线程已经收拾过这条连接（读循环退出、队列满），别再断一次
             if (!_connections.TryRemove(connectionId, out var removed))
@@ -131,7 +151,7 @@ namespace Viv.Kinna.WebSockets
 
             KinnaMetrics.RecordWebSocketClosed(HubName, KinnaWebSocketCloseReasons.Terminated);
 
-            _ = removed.FinishAsync(grace ?? DefaultTerminateGrace);
+            _ = removed.FinishAsync(grace ?? _timeouts.TerminateGrace);
             return true;
         }
 
@@ -241,12 +261,45 @@ namespace Viv.Kinna.WebSockets
         internal IReadOnlyList<string> GetGroupMembers(string groupName)
             => _groups.TryGetValue(groupName, out var members) ? [.. members.Keys] : [];
 
-        /// <summary>停机用：断掉本进程所有原生连接</summary>
+        /// <summary>
+        /// 停机用：给本进程每条原生连接补一个 1012 关闭帧，再摘表硬断。
+        ///
+        /// 直接 Abort 的话客户端只看到 1006，会当成网络故障立刻重连——滚动发布时整机群的
+        /// 客户端同时重连，撞上的还是正在停的副本。1012 明确告诉它是「服务重启」。
+        /// 等待有上限（<see cref="KinnaWebSocketTimeouts.ShutdownGrace"/>）：这是同步回调，不能久等。
+        /// </summary>
         public void AbortAll()
         {
+            var closing = new List<Task>();
+
             foreach (var connectionId in _connections.Keys)
             {
                 KinnaMetrics.RecordWebSocketClosed(HubName, KinnaWebSocketCloseReasons.Shutdown);
+
+                if (!_connections.TryGetValue(connectionId, out var connection))
+                {
+                    continue;
+                }
+
+                // 连接已断或队列已满时这条入队是空操作，写循环早就结束了，下面的等待会立即返回
+                connection.EnqueueClose(ServiceRestart, "server restart");
+                closing.Add(connection.SenderCompletion);
+            }
+
+            try
+            {
+                // 写循环排空 = 关闭帧已写出。阻塞这几百毫秒是刻意的：ApplicationStopping 是
+                // 同步回调，不在这儿等，后面的 Kestrel 收尾会直接把 socket 掐掉，帧就丢了
+                Task.WhenAll(closing).Wait(_timeouts.ShutdownGrace);
+            }
+            catch (AggregateException)
+            {
+                // 写循环的异常不外抛（见 RunSenderAsync），这里只是兜一层，别让停机流程跟着炸
+            }
+
+            // 关闭帧发完（或等够）再摘表：Unbind 会 abort socket，顺序反了就写不出去
+            foreach (var connectionId in _connections.Keys)
+            {
                 Unbind(connectionId);
             }
         }
@@ -298,5 +351,24 @@ namespace Viv.Kinna.WebSockets
 
         private static byte[] Encode(string method, object?[] args)
             => JsonSerializer.SerializeToUtf8Bytes(new KinnaServerEnvelope(method, args), JsonOptions);
+
+        /// <summary>
+        /// 非正的时限没有意义（<c>WaitAsync</c> 会直接抛），一律回落到默认值。
+        /// 配置里写 0 想表达「不等」的场景不存在——不等就不该发这一帧。
+        /// </summary>
+        private static KinnaWebSocketTimeouts Normalize(KinnaWebSocketTimeouts? timeouts)
+        {
+            var fallback = KinnaWebSocketTimeouts.Default;
+
+            return timeouts is null
+                ? fallback
+                : new KinnaWebSocketTimeouts(
+                    Positive(timeouts.CloseFrame, fallback.CloseFrame),
+                    Positive(timeouts.TerminateGrace, fallback.TerminateGrace),
+                    Positive(timeouts.ShutdownGrace, fallback.ShutdownGrace));
+        }
+
+        private static TimeSpan Positive(TimeSpan value, TimeSpan fallback)
+            => value > TimeSpan.Zero ? value : fallback;
     }
 }

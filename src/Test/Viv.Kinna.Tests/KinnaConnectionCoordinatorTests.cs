@@ -397,6 +397,28 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
+        public async Task ResyncAsync_读存储失败_降级成要求补拉而不是抛出去()
+        {
+            // 抛出去的后果：SignalR 里是一次调用异常，原生 WebSocket 里读循环没有 catch-all，
+            // Kestrel 只会在 101 之后 abort —— 客户端看到的是毫无解释的断线
+            var pool = new KinnaConnectionPool();
+            var delivery = new StubKinnaDeliveryStore<TestHub>
+            {
+                ThrowOnGet = new InvalidOperationException("db down")
+            };
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), delivery: delivery);
+            await coordinator.RegisterAsync("c1", Identity());
+
+            var result = await coordinator.ResyncAsync("c1", lastMessageId: 99);
+
+            // 读不到水位就当作「可能缺消息」：增量拉取幂等，多拉一次比漏消息便宜
+            Assert.True(result.NeedBackfill);
+            Assert.False(result.Throttled);
+            Assert.Null(result.LastDeliveredMessageId);
+            Assert.Empty(result.DeliveredMessageIds);
+        }
+
+        [Fact]
         public async Task KickAsync_先移出连接表再下发软踢()
         {
             var pool = new KinnaConnectionPool();

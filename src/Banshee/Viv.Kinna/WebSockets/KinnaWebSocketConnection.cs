@@ -42,6 +42,8 @@ namespace Viv.Kinna.WebSockets
         private readonly WebSocket _socket;
         private readonly Channel<OutboundFrame> _outbound;
         private readonly CancellationTokenSource _lifetime;
+        private readonly TimeProvider _time;
+        private readonly TimeSpan _closeTimeout;
         private Task _sender = Task.CompletedTask;
         private int _aborted;
         private int _disposed;
@@ -51,11 +53,15 @@ namespace Viv.Kinna.WebSockets
             string hub,
             WebSocket socket,
             int queueCapacity,
-            CancellationToken requestAborted)
+            CancellationToken requestAborted,
+            TimeProvider? timeProvider = null,
+            KinnaWebSocketTimeouts? timeouts = null)
         {
             ConnectionId = connectionId;
             _hub = hub;
             _socket = socket;
+            _time = timeProvider ?? TimeProvider.System;
+            _closeTimeout = (timeouts ?? KinnaWebSocketTimeouts.Default).CloseFrame;
             _lifetime = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
 
             _outbound = Channel.CreateBounded<OutboundFrame>(new BoundedChannelOptions(queueCapacity)
@@ -79,6 +85,12 @@ namespace Viv.Kinna.WebSockets
         private bool CanWriteClose => Volatile.Read(ref _aborted) == 0
                                       && _socket.State is WebSocketState.Open or WebSocketState.CloseReceived;
 
+        private bool TryEnqueueClose(
+            WebSocketCloseStatus status,
+            string? description,
+            TaskCompletionSource<bool>? completion)
+            => CanWriteClose && _outbound.Writer.TryWrite(OutboundFrame.Close(status, description, completion));
+
         /// <summary>
         /// 启动写循环。任务由连接自己保管：断开时要等它排空，才不至于把最后几帧丢掉。
         /// </summary>
@@ -90,20 +102,50 @@ namespace Viv.Kinna.WebSockets
         internal bool TryEnqueue(byte[] frame) => IsOpen && _outbound.Writer.TryWrite(OutboundFrame.Text(frame));
 
         /// <summary>
-        /// 排空在途帧之后发一个关闭帧。返回的任务在关闭帧真正写出后完成，
-        /// 结果为 false 表示关闭指令根本没排上队（队列满、连接已关或已经发过关闭帧）——
-        /// 这种情况调用方只能硬断，再等一个发不出去的帧没有意义。
+        /// 写循环的完成状态：队列排空或被取消后完成。停机时要靠它有界等待关闭帧真正写出去。
         /// </summary>
-        internal Task<bool> CloseOutputAsync(WebSocketCloseStatus status, string? description)
+        internal Task SenderCompletion => _sender;
+
+        /// <summary>
+        /// 只把关闭帧排进队列，不等它写出去。
+        ///
+        /// 软踢（<c>KinnaWebSocketRegistry.Terminate</c>）和停机（<c>AbortAll</c>）用这条：
+        /// 那边自己已经有宽限兜底，再 <c>await</c> 一遍只会让「被踢」在指标上多记一条
+        /// <c>close_timeout</c>——宽限（<see cref="KinnaWebSocketTimeouts.TerminateGrace"/> /
+        /// <see cref="KinnaWebSocketTimeouts.ShutdownGrace"/>）比 <see cref="KinnaWebSocketTimeouts.CloseFrame"/> 短，
+        /// 等的那个必然超时。
+        /// </summary>
+        internal bool EnqueueClose(WebSocketCloseStatus status, string? description)
+            => TryEnqueueClose(status, description, null);
+
+        /// <summary>
+        /// 排空在途帧之后发一个关闭帧。返回的任务在关闭帧真正写出后完成，
+        /// 结果为 false 表示这一帧没发出去（队列满、连接已关、已经发过关闭帧，或等待超时）——
+        /// 这种情况调用方只能硬断，再等一个发不出去的帧没有意义。
+        ///
+        /// 等待有上限：写循环未必还活着（请求中止会先取消它，见 <see cref="RunSenderAsync"/>），
+        /// 那种情况下队列里的关闭指令永远不会被处理，调用方就卡死在一条已经没救的连接上，
+        /// 连着 socket 和请求作用域一起泄漏到进程结束。
+        /// </summary>
+        internal async Task<bool> CloseOutputAsync(WebSocketCloseStatus status, string? description)
         {
             var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            if (!CanWriteClose || !_outbound.Writer.TryWrite(OutboundFrame.Close(status, description, completion)))
+            if (!TryEnqueueClose(status, description, completion))
             {
-                completion.TrySetResult(false);
+                return false;
             }
 
-            return completion.Task;
+            try
+            {
+                return await completion.Task.WaitAsync(_closeTimeout, _time).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                // 关闭帧还留在队列里：写循环要是后来活了，它仍会写出去，这条只代表「没等到」
+                KinnaMetrics.RecordWebSocketClosed(_hub, KinnaWebSocketCloseReasons.CloseTimeout);
+                return false;
+            }
         }
 
         /// <summary>
@@ -138,9 +180,10 @@ namespace Viv.Kinna.WebSockets
                             item.Closed?.TrySetResult(true);
                         }
                         catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException
-                                                       or OperationCanceledException)
+                                                       or OperationCanceledException or ArgumentException)
                         {
-                            // 对端已经走了：关闭帧发不出去不算错误，连接本来就要销毁
+                            // 对端已经走了：关闭帧发不出去不算错误，连接本来就要销毁。
+                            // ArgumentException 是状态码/描述不被接受（描述超过 123 字节），同样不该炸掉写循环
                             item.Closed?.TrySetResult(false);
                         }
 
@@ -175,8 +218,9 @@ namespace Viv.Kinna.WebSockets
         {
             _outbound.Writer.TryComplete();
 
-            // 写循环退出即说明队列排空；客户端卡住时不能无限等，到点由 Abort 取消写循环
-            await Task.WhenAny(_sender, Task.Delay(grace)).ConfigureAwait(false);
+            // 写循环退出即说明队列排空；客户端卡住时不能无限等，到点由 Abort 取消写循环。
+            // 定时走 TimeProvider：这条路径上的宽限期是要被测的，真等 1 秒的用例没有意义
+            await Task.WhenAny(_sender, Task.Delay(grace, _time)).ConfigureAwait(false);
 
             Abort();
             Dispose();

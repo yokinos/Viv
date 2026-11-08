@@ -234,11 +234,32 @@ namespace Viv.Kinna.Connections
             }
 
             var info = _session.Pool.TryGet(connectionId);
-            var state = info == null
-                ? KinnaDeliveryState.Empty
-                : await _delivery
-                    .GetDeliveredAsync(info.Value.SubjectId, info.Value.UserId, cancellationToken)
-                    .ConfigureAwait(false);
+            var state = KinnaDeliveryState.Empty;
+
+            if (info != null)
+            {
+                try
+                {
+                    state = await _delivery
+                        .GetDeliveredAsync(info.Value.SubjectId, info.Value.UserId, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // 和 Ack 同一个理由：抛出去在原生端点那条路上没有 catch-all，101 之后只能 abort，
+                    // 客户端看到的是「毫无解释的断线」。读不到水位就退化成空状态 —— 下面会算出
+                    // NeedBackfill = true，增量拉取是幂等的，多拉一次比漏消息便宜。
+                    KinnaMetrics.RecordResyncFailed(_session.Hub);
+                    _logger.Warning(
+                        $"[{_session.Hub}] 读取投递水位失败，按需要补拉处理: connection={connectionId} {ex.Message}");
+
+                    state = KinnaDeliveryState.Empty;
+                }
+            }
 
             // 服务端记录的水位比客户端持有的还大，说明客户端可能漏了；没有水位就按「需要补拉」处理，
             // 增量拉取是幂等的，多拉一次比漏消息便宜

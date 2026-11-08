@@ -194,9 +194,17 @@ public sealed class StubKinnaDeliveryStore<THub> : IKinnaDeliveryStore<THub> whe
     /// <summary>设了就抛，用于测 Resync 读失败</summary>
     public Exception? ThrowOnGet { get; set; }
 
-    public Task<long> AckAsync(long subjectId, long userId, IReadOnlyList<long> messageIds, CancellationToken cancellationToken = default)
+    /// <summary>设了就等它完成才返回，用于测队头阻塞（慢 Ack 会不会拖住心跳）</summary>
+    public Task? AckGate { get; set; }
+
+    public async Task<long> AckAsync(long subjectId, long userId, IReadOnlyList<long> messageIds, CancellationToken cancellationToken = default)
     {
         if (ThrowOnAck != null) throw ThrowOnAck;
+
+        if (AckGate != null)
+        {
+            await AckGate.ConfigureAwait(false);
+        }
 
         Acks.Add((subjectId, userId, [.. messageIds]));
 
@@ -212,7 +220,7 @@ public sealed class StubKinnaDeliveryStore<THub> : IKinnaDeliveryStore<THub> whe
         if (MessageIds.Count > MaxMessageIds)
             MessageIds.Clear();
 
-        return Task.FromResult(Watermark ?? 0);
+        return Watermark ?? 0;
     }
 
     public Task<KinnaDeliveryState> GetDeliveredAsync(long subjectId, long userId, CancellationToken cancellationToken = default)

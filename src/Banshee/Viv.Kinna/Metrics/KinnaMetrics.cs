@@ -36,6 +36,9 @@ namespace Viv.Kinna.Metrics
         /// <summary>投递确认落库失败的次数。客户端收到 Failed 会重报</summary>
         private static readonly Counter<long> AckFailedCounter = Meter.CreateCounter<long>("kinna.ack.failed");
 
+        /// <summary>重连对齐读取水位失败的次数。降级成「要求补拉」，连接不拆</summary>
+        private static readonly Counter<long> ResyncFailedCounter = Meter.CreateCounter<long>("kinna.resync.failed");
+
         public static void ConnectionAdded(string hub, string transport) =>
             ConnectionCounter.Add(1, HubTag(hub), TransportTag(transport));
 
@@ -56,6 +59,8 @@ namespace Viv.Kinna.Metrics
         public static void RecordGroupSubscriptionFailed(string hub) => GroupSubscriptionFailedCounter.Add(1, HubTag(hub));
 
         public static void RecordAckFailed(string hub) => AckFailedCounter.Add(1, HubTag(hub));
+
+        public static void RecordResyncFailed(string hub) => ResyncFailedCounter.Add(1, HubTag(hub));
 
         public static void RecordWebSocketRejected(string hub, string reason) =>
             WebSocketRejectedCounter.Add(1, HubTag(hub), new KeyValuePair<string, object?>("reason", reason));
@@ -85,6 +90,9 @@ namespace Viv.Kinna.Metrics
 
         /// <summary>登记失败（身份缺字段）</summary>
         public const string RegisterFailed = "register_failed";
+
+        /// <summary>声明了子协议但一个都不认识（多半是客户端版本比服务端新）</summary>
+        public const string SubProtocol = "subprotocol";
     }
 
     /// <summary>原生连接关闭的原因。值进指标标签，别随手改。</summary>
@@ -107,6 +115,9 @@ namespace Viv.Kinna.Metrics
 
         /// <summary>服务端主动软踢后关闭</summary>
         public const string Terminated = "terminated";
+
+        /// <summary>关闭帧在超时内没写出去（写循环已死或客户端根本不读）</summary>
+        public const string CloseTimeout = "close_timeout";
 
         /// <summary>进程停机</summary>
         public const string Shutdown = "shutdown";

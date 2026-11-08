@@ -1,6 +1,6 @@
 namespace Viv.Kinna.Options
 {
-    /// <summary>长连接层的配置。时间都用秒，新增项给默认值，不配也能启动。</summary>
+    /// <summary>长连接层的配置。时间粒度到秒的用 int（配合配置中心的写法），需要亚秒精度的用 TimeSpan。新增项给默认值，不配也能启动。</summary>
     public sealed class KinnaOptions
     {
         /// <summary>
@@ -82,8 +82,28 @@ namespace Viv.Kinna.Options
         /// Kestrel 主动发 WebSocket ping 帧的间隔。0 表示用宿主默认值。
         /// 这个 ping 是协议层控制帧，与业务的心跳不同：它负责发现 TCP 半开，
         /// 业务心跳负责续租。
+        ///
+        /// `UseWebSockets` 是进程级的，多 Hub 时只能有一个值：第二个 Hub 配了不同的值会在启动时直接报错，
+        /// 不静默取第一个。
         /// </summary>
         public int WebSocketKeepAliveSeconds { get; set; } = 30;
+
+        /// <summary>
+        /// 等关闭帧真正写出去的上限。超了说明写循环已死或客户端根本不读，调用方直接硬断。
+        /// 只有在「关闭是这次收尾的主因」时才等它，软踢/停机走各自的宽限。
+        /// </summary>
+        public TimeSpan WebSocketCloseTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+        /// <summary>
+        /// 软踢之后等写循环排空的宽限，到点硬断。必须短于 <see cref="WebSocketCloseTimeout"/>。
+        /// </summary>
+        public TimeSpan WebSocketTerminateGrace { get; set; } = TimeSpan.FromSeconds(1);
+
+        /// <summary>
+        /// 停机时给每条连接补发 1012 关闭帧的等待上限。停机是同步回调，给得比软踢更短：
+        /// 目标是「让客户端知道原因」，不是「保证送达」。
+        /// </summary>
+        public TimeSpan WebSocketShutdownGrace { get; set; } = TimeSpan.FromMilliseconds(200);
 
         /// <summary>
         /// 浅拷贝一份。DI 里注册的是「共享配置」单例，每个 Hub 必须在这份副本上做自己的覆盖，
