@@ -121,5 +121,8 @@ namespace Viv.Kinna.Metrics
 
         /// <summary>进程停机</summary>
         public const string Shutdown = "shutdown";
+
+        /// <summary>停机时连 1012 都塞不进队列（慢客户端），只能硬断</summary>
+        public const string ShutdownUnsent = "shutdown_unsent";
     }
 }

@@ -47,14 +47,20 @@ namespace Viv.Herta.Link.Hubs
                 return;
             }
 
-            var connected = await _coordinator.RegisterAsync(Context.ConnectionId, identity!);
+            // 握手帧在加组之前由回调发出：加组一完成群推送就可能到达，
+            // 等 RegisterAsync 返回再发，客户端会先收到业务帧再收到 Connected
+            var connected = await _coordinator.RegisterAsync(
+                Context.ConnectionId,
+                identity!,
+                Context.ConnectionAborted,
+                frame => Clients.Caller.SendAsync(KinnaClientMethods.Connected, frame));
+
             if (connected == null)
             {
                 Context.Abort();
                 return;
             }
 
-            await Clients.Caller.SendAsync(KinnaClientMethods.Connected, connected);
             await base.OnConnectedAsync();
         }
 

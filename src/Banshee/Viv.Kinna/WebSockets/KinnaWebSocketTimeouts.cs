@@ -17,6 +17,6 @@ namespace Viv.Kinna.WebSockets
         public static KinnaWebSocketTimeouts Default { get; } = new(
             TimeSpan.FromSeconds(5),
             TimeSpan.FromSeconds(1),
-            TimeSpan.FromMilliseconds(200));
+            TimeSpan.FromMilliseconds(500));
     }
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
 using Microsoft.Extensions.Time.Testing;
@@ -264,6 +265,74 @@ namespace Viv.Kinna.Tests
             Assert.Empty(registry.GetGroupMembers("g1"));
             Assert.Empty(registry.GetGroupMembers("g2"));
             Assert.Equal(0, registry.Count);
+        }
+
+        [Fact]
+        public async Task 关闭帧之后的回帧只丢弃不硬断连接()
+        {
+            // 端点收到对端 Close 后会排空串行队列，里面跑完的 Ack 回帧正是在这个窗口到达。
+            // 以前它会入队失败 → Unbind → Abort，把还没被客户端读走的关闭帧掐成 1006
+            var registry = new KinnaWebSocketRegistry<TestHub>(8);
+            var socket = new RecordingWebSocket();
+            registry.Bind("ws:1", socket, CancellationToken.None);
+
+            Assert.True(await registry.CloseOutputAsync("ws:1", WebSocketCloseStatus.NormalClosure, "bye"));
+
+            Assert.False(registry.Send("ws:1", KinnaClientMethods.Ack, [1]));
+            Assert.False(socket.Aborted);
+            Assert.Equal(WebSocketCloseStatus.NormalClosure, socket.SentCloseStatus);
+        }
+
+        [Fact]
+        public async Task 请求中止后关闭帧立即放弃而不是等满超时()
+        {
+            // 写循环的 _lifetime 连着 requestAborted：客户端刷新时它已经退出，
+            // 队列里的关闭指令再没人消费。以前要白等满 WebSocketCloseTimeout 才返回
+            var time = new FakeTimeProvider();
+            var registry = new KinnaWebSocketRegistry<TestHub>(8, time);
+
+            using var aborted = new CancellationTokenSource();
+            aborted.Cancel();
+
+            var socket = new RecordingWebSocket();
+            registry.Bind("ws:1", socket, aborted.Token);
+
+            // 不推时钟：正确实现应立即返回 false，而不是等超时分支
+            var closing = registry.CloseOutputAsync(
+                "ws:1", WebSocketCloseStatus.EndpointUnavailable, "connection aborted");
+
+            Assert.True(closing.IsCompleted);
+            Assert.False(await closing);
+            Assert.Null(socket.SentCloseStatus);
+        }
+
+        [Fact]
+        public async Task 停机时队列满的连接不拖住AbortAll()
+        {
+            // 队列满时 EnqueueClose 塞不进去，写循环还在慢慢发、SenderCompletion 不会完成。
+            // 把它算进等待，每次停机都要白等满宽限，而且它自己也收不到 1012
+            var timeouts = new KinnaWebSocketTimeouts(
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromMilliseconds(80));
+
+            var registry = new KinnaWebSocketRegistry<TestHub>(1, timeouts);
+            var socket = new BlockingWebSocket();
+            registry.Bind("ws:1", socket, CancellationToken.None);
+
+            Assert.True(registry.Send("ws:1", "A", [1]));
+            await socket.FirstSendStarted;
+            Assert.True(registry.Send("ws:1", "B", [2]));
+
+            var stopwatch = Stopwatch.StartNew();
+            registry.AbortAll();
+            stopwatch.Stop();
+
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(60));
+            Assert.Null(socket.SentCloseStatus);
+            Assert.True(socket.Aborted);
+
+            socket.Release();
         }
 
         [Fact]

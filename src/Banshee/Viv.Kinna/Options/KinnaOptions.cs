@@ -61,8 +61,10 @@ namespace Viv.Kinna.Options
         /// <summary>
         /// 原生 WebSocket 的挂载路径。空串表示不启用，只跑 SignalR。
         ///
-        /// 挂在网关后面时要落在 <c>/ws</c> 前缀下，网关只对这个前缀从 query string 取
-        /// access_token（<c>/hubs/*</c> 的 SignalR 走自己的约定）。
+        /// 这里配的是**下游**路径，不要带网关的 <c>/ws</c> 前缀：网关把
+        /// <c>/ws/{短名}/**</c> 改写成 <c>/**</c>，客户端连 <c>/ws/hertalink/chat-ws</c>，
+        /// 到达本进程的就是 <c>/chat-ws</c>。网关只在 <c>/ws</c> 前缀下从 query string 取
+        /// access_token（SignalR 的 <c>/hubs/*</c> 走自己的约定）。
         /// </summary>
         public string WebSocketPath { get; set; } = string.Empty;
 
@@ -102,8 +104,11 @@ namespace Viv.Kinna.Options
         /// <summary>
         /// 停机时给每条连接补发 1012 关闭帧的等待上限。停机是同步回调，给得比软踢更短：
         /// 目标是「让客户端知道原因」，不是「保证送达」。
+        ///
+        /// 200ms 在冷启动/线程池有压力时连一帧都写不完，实测会偶发拿不到 1012，
+        /// 所以给到 500ms；仍远短于 <see cref="WebSocketCloseTimeout"/>。
         /// </summary>
-        public TimeSpan WebSocketShutdownGrace { get; set; } = TimeSpan.FromMilliseconds(200);
+        public TimeSpan WebSocketShutdownGrace { get; set; } = TimeSpan.FromMilliseconds(500);
 
         /// <summary>
         /// 浅拷贝一份。DI 里注册的是「共享配置」单例，每个 Hub 必须在这份副本上做自己的覆盖，

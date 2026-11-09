@@ -15,7 +15,20 @@ namespace Viv.Kinna.Connections
         /// <summary>
         /// 登记连接并加入所属群组。身份缺 AppId/SubjectId/UserId 时返回 null。
         /// </summary>
-        Task<KinnaConnected?> RegisterAsync(string connectionId, VivContextContent identity, CancellationToken cancellationToken = default);
+        /// <param name="connectionId">连接 Id</param>
+        /// <param name="identity">已验签的身份</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <param name="onRegistered">
+        /// 登记成功、但**尚未加组**时的回调，用来发握手帧（Connected）。
+        /// 加组一完成，群推送就可能到达这条连接；等本方法返回再发握手帧，
+        /// 客户端会先收到业务帧再收到 Connected。SignalR 传 <c>Clients.Caller.SendAsync</c>，
+        /// 原生端点传 <c>registry.Send</c>。
+        /// </param>
+        Task<KinnaConnected?> RegisterAsync(
+            string connectionId,
+            VivContextContent identity,
+            CancellationToken cancellationToken = default,
+            Func<KinnaConnected, Task>? onRegistered = null);
 
         Task UnregisterAsync(string connectionId, CancellationToken cancellationToken = default);
 

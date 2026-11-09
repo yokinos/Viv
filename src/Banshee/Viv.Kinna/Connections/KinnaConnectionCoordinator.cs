@@ -44,7 +44,8 @@ namespace Viv.Kinna.Connections
         public async Task<KinnaConnected?> RegisterAsync(
             string connectionId,
             VivContextContent identity,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            Func<KinnaConnected, Task>? onRegistered = null)
         {
             if (identity.SubjectId <= 0 || identity.UserId <= 0)
                 return null;
@@ -64,6 +65,19 @@ namespace Viv.Kinna.Connections
             _session.Pool.Add(connectionId, identity.AppId, identity.SubjectId, identity.UserId);
             await _presence.OnlineAsync(identity.SubjectId, identity.UserId).ConfigureAwait(false);
 
+            var connected = new KinnaConnected
+            {
+                ConnectionId = connectionId,
+                ServerTime = _time.GetUtcNow()
+            };
+
+            // 握手帧必须在加组之前发出去：加组一完成，群推送就可能到达这条连接，
+            // 晚发的 Connected 会排在业务帧后面，客户端拿到的第一帧就不是握手回执了
+            if (onRegistered != null)
+            {
+                await onRegistered(connected).ConfigureAwait(false);
+            }
+
             // 组是本进程的，所以只有持有这条连接的副本需要加组
             if (_groups != null)
             {
@@ -74,11 +88,7 @@ namespace Viv.Kinna.Connections
                 _logger.Debug($"未注册 IKinnaGroupSource<{_session.Hub}>，本实例不投递群消息");
             }
 
-            return new KinnaConnected
-            {
-                ConnectionId = connectionId,
-                ServerTime = _time.GetUtcNow()
-            };
+            return connected;
         }
 
         /// <summary>

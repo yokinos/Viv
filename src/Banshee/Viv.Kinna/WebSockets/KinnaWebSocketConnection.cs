@@ -34,7 +34,7 @@ namespace Viv.Kinna.WebSockets
             internal static OutboundFrame Close(
                 WebSocketCloseStatus status,
                 string? description,
-                TaskCompletionSource<bool> completion)
+                TaskCompletionSource<bool>? completion)
                 => new(null, status, description, completion);
         }
 
@@ -46,6 +46,7 @@ namespace Viv.Kinna.WebSockets
         private readonly TimeSpan _closeTimeout;
         private Task _sender = Task.CompletedTask;
         private int _aborted;
+        private int _closing;
         private int _disposed;
 
         internal KinnaWebSocketConnection(
@@ -78,18 +79,57 @@ namespace Viv.Kinna.WebSockets
         internal bool IsOpen => Volatile.Read(ref _aborted) == 0 && _socket.State == WebSocketState.Open;
 
         /// <summary>
+        /// 是否已进入关闭流程（关闭帧已入队）。之后的数据帧不再接受：
+        /// 收到对端 Close 后协议本身也不允许再发数据帧。
+        /// </summary>
+        internal bool IsClosing => Volatile.Read(ref _closing) != 0;
+
+        /// <summary>
+        /// 标记进入关闭流程。收到对端 Close、判定失效、帧过大时由端点调用：
+        /// 让串行队列里跑完的回帧走「静默丢弃」，而不是「入队失败 → Unbind → Abort」——
+        /// 后者会抢在客户端读到关闭帧之前把握手掐成 1006。
+        /// </summary>
+        internal void MarkClosing() => Interlocked.Exchange(ref _closing, 1);
+
+        /// <summary>
         /// 还能不能写关闭帧。比 <see cref="IsOpen"/> 宽一档：客户端先发了关闭帧时
         /// 状态是 <c>CloseReceived</c>，此时我们要回的那一帧仍然是合法的最后一次写；
         /// 但已经 <c>CloseSent</c> 就不能再发，会直接抛。
+        ///
+        /// 还要看写循环是否还活着：requestAborted 一取消，<c>_lifetime</c> 就取消、写循环退出，
+        /// 队列里的关闭指令再没人消费。这时入队只能等满 CloseFrame 超时——
+        /// 客户端刷新、断网是最高频的断开路径，每条都白等 5 秒没有意义。
         /// </summary>
-        private bool CanWriteClose => Volatile.Read(ref _aborted) == 0
-                                      && _socket.State is WebSocketState.Open or WebSocketState.CloseReceived;
+        private bool CanWriteClose
+        {
+            get
+            {
+                if (Volatile.Read(ref _aborted) != 0 || Volatile.Read(ref _disposed) != 0)
+                {
+                    return false;
+                }
+
+                return !_lifetime.IsCancellationRequested
+                       && _socket.State is WebSocketState.Open or WebSocketState.CloseReceived;
+            }
+        }
 
         private bool TryEnqueueClose(
             WebSocketCloseStatus status,
             string? description,
             TaskCompletionSource<bool>? completion)
-            => CanWriteClose && _outbound.Writer.TryWrite(OutboundFrame.Close(status, description, completion));
+        {
+            if (!CanWriteClose || !_outbound.Writer.TryWrite(OutboundFrame.Close(status, description, completion)))
+            {
+                return false;
+            }
+
+            // 入队成功就进入关闭流程：关闭帧是这条连接上的最后一次写，之后的数据帧一律丢弃。
+            // 这个标记同时挡住「排空串行队列时跑完的 Ack 回帧」——它们入不了队，
+            // 若不挡住，Registry.Enqueue 会把失败当成慢客户端，Unbind→Abort 掉正在握手的连接
+            MarkClosing();
+            return true;
+        }
 
         /// <summary>
         /// 启动写循环。任务由连接自己保管：断开时要等它排空，才不至于把最后几帧丢掉。
@@ -97,9 +137,10 @@ namespace Viv.Kinna.WebSockets
         internal void Start() => _sender = RunSenderAsync();
 
         /// <summary>
-        /// 入队一帧，返回 false 表示队列已满（调用方应当断开这条连接）
+        /// 入队一帧，返回 false 表示队列已满或已进入关闭流程（调用方应当区分对待）
         /// </summary>
-        internal bool TryEnqueue(byte[] frame) => IsOpen && _outbound.Writer.TryWrite(OutboundFrame.Text(frame));
+        internal bool TryEnqueue(byte[] frame)
+            => IsOpen && !IsClosing && _outbound.Writer.TryWrite(OutboundFrame.Text(frame));
 
         /// <summary>
         /// 写循环的完成状态：队列排空或被取消后完成。停机时要靠它有界等待关闭帧真正写出去。
@@ -173,8 +214,10 @@ namespace Viv.Kinna.WebSockets
 
                         try
                         {
+                            // 用 _lifetime 而不是 None：Abort 时要能打断卡在发送上的关闭帧，
+                            // 否则对端不读时写循环永远退不出去，FinishAsync 的宽限也收不回它
                             await _socket
-                                .CloseOutputAsync(item.CloseStatus, item.CloseDescription, CancellationToken.None)
+                                .CloseOutputAsync(item.CloseStatus, item.CloseDescription, _lifetime.Token)
                                 .ConfigureAwait(false);
 
                             item.Closed?.TrySetResult(true);

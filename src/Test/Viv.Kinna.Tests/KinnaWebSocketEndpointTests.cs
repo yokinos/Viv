@@ -226,6 +226,42 @@ namespace Viv.Kinna.Tests
             var close = await client.ReceiveAsync(buffer, CancellationToken.None);
             Assert.Equal(WebSocketMessageType.Close, close.MessageType);
 
+            // 原因要能看出来：失效走 PolicyViolation，不是 finally 兜底的 EndpointUnavailable
+            Assert.Equal(WebSocketCloseStatus.PolicyViolation, client.CloseStatus);
+
+            await app.StopAsync();
+        }
+
+        [Fact]
+        public async Task 握手帧先于群推送()
+        {
+            // 加组一完成，群推送就可能到达这条连接，握手帧必须赶在它前面。
+            // 以前 Connected 要等 RegisterAsync 返回才发，查群慢时客户端第一帧就是业务帧
+            var groups = new GatedGroupSource();
+            await using var app = await StartAsync(services =>
+                services.AddSingleton<IKinnaGroupSource<TestHub>>(groups));
+
+            using var client = new ClientWebSocket();
+            await client.ConnectAsync(WebSocketUri(app), CancellationToken.None);
+
+            // 注册卡在查群：连接已登记、传输层也已 Bind，正好是握手帧该已经发出去的时刻
+            await groups.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            var session = app.Services.GetRequiredService<IKinnaSession<TestHub>>();
+            var connectionId = Assert.Single(session.Pool.GetConnectionIds(SubjectId, UserId));
+
+            await session.Sender.SendToConnectionAsync(
+                connectionId, KinnaClientMethods.ReceiveMessage, [new { text = "early" }]);
+
+            groups.Release.TrySetResult();
+
+            var first = await ReceiveAsync(client);
+            Assert.Contains("\"method\":\"Connected\"", first);
+
+            var second = await ReceiveAsync(client);
+            Assert.Contains("\"method\":\"ReceiveMessage\"", second);
+
+            await client.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
             await app.StopAsync();
         }
 
@@ -435,6 +471,24 @@ namespace Viv.Kinna.Tests
             {
                 Interlocked.Increment(ref _calls);
                 throw new InvalidOperationException("group service down");
+            }
+        }
+
+        /// <summary>查群卡住，用来观察「注册还没完成时推送能不能到」。</summary>
+        private sealed class GatedGroupSource : IKinnaGroupSource<TestHub>
+        {
+            public TaskCompletionSource Entered { get; } =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public TaskCompletionSource Release { get; } =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public async Task<List<long>> GetUserGroupIdsAsync(
+                long subjectId, long userId, CancellationToken cancellationToken = default)
+            {
+                Entered.TrySetResult();
+                await Release.Task.WaitAsync(cancellationToken);
+                return [100];
             }
         }
 

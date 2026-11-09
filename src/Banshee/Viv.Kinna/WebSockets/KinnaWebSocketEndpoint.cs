@@ -129,8 +129,19 @@ namespace Viv.Kinna.WebSockets
                 await using (var scope = scopes.CreateAsyncScope())
                 {
                     var coordinator = scope.ServiceProvider.GetRequiredService<IKinnaConnectionCoordinator<THub>>();
+
+                    // 握手帧由协调器在「加组之前」回调出来：加组一完成群推送就可能到达，
+                    // 等 RegisterAsync 返回再发 Connected，客户端会先收到业务帧再收到握手回执
                     connected = await coordinator
-                        .RegisterAsync(connectionId, identity, http.RequestAborted)
+                        .RegisterAsync(
+                            connectionId,
+                            identity,
+                            http.RequestAborted,
+                            frame =>
+                            {
+                                registry.Send(connectionId, KinnaClientMethods.Connected, [frame]);
+                                return Task.CompletedTask;
+                            })
                         .ConfigureAwait(false);
                 }
 
@@ -145,8 +156,6 @@ namespace Viv.Kinna.WebSockets
 
                     return;
                 }
-
-                registry.Send(connectionId, KinnaClientMethods.Connected, [connected]);
 
                 registered = true;
 
@@ -217,7 +226,9 @@ namespace Viv.Kinna.WebSockets
             {
                 if (string.Equals(protocol, KinnaWebSocketProtocols.V1, StringComparison.OrdinalIgnoreCase))
                 {
-                    return KinnaWebSocketProtocols.V1;
+                    // 回客户端声明的原串，不回常量：子协议 token 大小写敏感，
+                    // 客户端写 Kinna.V1 而我们回 kinna.v1 时，严格实现会拒绝这次握手
+                    return protocol;
                 }
             }
 
@@ -270,13 +281,26 @@ namespace Viv.Kinna.WebSockets
             var buffer = ArrayPool<byte>.Shared.Rent(ReceiveBufferSize);
             using var message = new MemoryStream();
 
+            // 收尾只做一次：客户端关闭、帧过大、判定失效三条路径加上 finally 兜底都会走到这儿。
+            // 重复排空队列无害，重复发关闭帧不是
+            var settled = 0;
+
             try
             {
-                while (!receiveToken.IsCancellationRequested)
+                while (true)
                 {
+                    // 先判「服务端已经不认这条连接」。receiveToken 是链接令牌，expired 一取消
+                    // 循环条件（!receiveToken.IsCancellationRequested）立刻为假 ——
+                    // 以前这个分支走不到，失效连接会从循环里静默退出：不发关闭帧、也不记 expired
                     if (expired.IsCancellationRequested)
                     {
                         await CloseExpiredAsync().ConfigureAwait(false);
+                        return;
+                    }
+
+                    if (receiveToken.IsCancellationRequested)
+                    {
+                        // 只可能是 requestAborted：请求已经在收尾，关闭帧发不出去也没必要发
                         return;
                     }
 
@@ -292,6 +316,11 @@ namespace Viv.Kinna.WebSockets
                         await CloseExpiredAsync().ConfigureAwait(false);
                         return;
                     }
+                    catch (OperationCanceledException)
+                    {
+                        // 请求中止（客户端刷新、反代超时、进程停机）
+                        return;
+                    }
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
@@ -299,9 +328,7 @@ namespace Viv.Kinna.WebSockets
 
                         // 回一个关闭帧再走，客户端才不会当成异常断开。
                         // 走写循环而不是直接写 socket：这里可能还有下行帧在途
-                        await registry
-                            .CloseOutputAsync(connectionId, WebSocketCloseStatus.NormalClosure, null)
-                            .ConfigureAwait(false);
+                        await SettleAsync(WebSocketCloseStatus.NormalClosure, null).ConfigureAwait(false);
 
                         return;
                     }
@@ -317,8 +344,7 @@ namespace Viv.Kinna.WebSockets
                         KinnaMetrics.RecordWebSocketClosed(HubName, KinnaWebSocketCloseReasons.FrameTooLarge);
                         logger.Warning($"原生 WebSocket 上行帧超过 {maxMessageBytes} 字节，断开连接: {connectionId}");
 
-                        await registry
-                            .CloseOutputAsync(connectionId, WebSocketCloseStatus.MessageTooBig, "frame too large")
+                        await SettleAsync(WebSocketCloseStatus.MessageTooBig, "frame too large")
                             .ConfigureAwait(false);
 
                         return;
@@ -367,17 +393,42 @@ namespace Viv.Kinna.WebSockets
                         await CloseExpiredAsync().ConfigureAwait(false);
                         return;
                     }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
                 }
             }
             finally
             {
                 serial.Writer.TryComplete();
 
+                // 正常路径已经在 SettleAsync 里排空过，这里是兜底（读循环被异常打断）。
                 // 队列里可能还有没跑完的指令（客户端确认完就断线）：等它排空再收尾，
                 // 否则那些确认会静默丢掉。派发卡死和以前一样会拖住请求，不额外加时限
                 await serialLoop.ConfigureAwait(false);
 
                 ArrayPool<byte>.Shared.Return(buffer);
+            }
+
+            // 三条失效路径共用的收尾：先标记关闭，再排空串行队列，最后把关闭帧排进写队列。
+            //
+            // 顺序不能反：关闭帧一入队写循环就封队列，之后跑完的 Ack 回帧入不了队，
+            // 以前还会反过来 Unbind→Abort —— 回帧丢了，关闭握手也可能被掐成 1006。
+            // 先 MarkClosing 让这些回帧走「静默丢弃」，Ack 本身仍然落库。
+            async Task SettleAsync(WebSocketCloseStatus status, string? description)
+            {
+                if (Interlocked.Exchange(ref settled, 1) != 0)
+                {
+                    return;
+                }
+
+                registry.MarkClosing(connectionId);
+
+                serial.Writer.TryComplete();
+                await serialLoop.ConfigureAwait(false);
+
+                await registry.CloseOutputAsync(connectionId, status, description).ConfigureAwait(false);
             }
 
             // 收尾：先记指标再发关闭帧。三条失效路径共用，保证只发一次、顺序固定
@@ -386,8 +437,7 @@ namespace Viv.Kinna.WebSockets
                 KinnaMetrics.RecordWebSocketClosed(HubName, KinnaWebSocketCloseReasons.Expired);
                 logger.Warning($"原生 WebSocket 连接已失效，主动断开: {connectionId}");
 
-                await registry
-                    .CloseOutputAsync(connectionId, WebSocketCloseStatus.PolicyViolation, "connection expired")
+                await SettleAsync(WebSocketCloseStatus.PolicyViolation, "connection expired")
                     .ConfigureAwait(false);
             }
 

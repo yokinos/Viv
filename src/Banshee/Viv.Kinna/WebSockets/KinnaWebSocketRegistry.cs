@@ -156,6 +156,19 @@ namespace Viv.Kinna.WebSockets
         }
 
         /// <summary>
+        /// 标记连接进入关闭流程。端点在收到对端 Close / 判定失效 / 帧过大时调用：
+        /// 之后串行队列里跑完的回帧只丢弃，不再走 Unbind→Abort，
+        /// 否则会抢在客户端读到关闭帧之前把握手掐成 1006。
+        /// </summary>
+        internal void MarkClosing(string connectionId)
+        {
+            if (_connections.TryGetValue(connectionId, out var connection))
+            {
+                connection.MarkClosing();
+            }
+        }
+
+        /// <summary>
         /// 发一帧给单条连接。连接不在本进程或队列已满时返回 false。
         /// 队列满会直接断开这条连接——慢客户端继续留着只会吃内存，重连后走 Resync 对齐更便宜。
         /// </summary>
@@ -274,15 +287,21 @@ namespace Viv.Kinna.WebSockets
 
             foreach (var connectionId in _connections.Keys)
             {
-                KinnaMetrics.RecordWebSocketClosed(HubName, KinnaWebSocketCloseReasons.Shutdown);
-
                 if (!_connections.TryGetValue(connectionId, out var connection))
                 {
                     continue;
                 }
 
-                // 连接已断或队列已满时这条入队是空操作，写循环早就结束了，下面的等待会立即返回
-                connection.EnqueueClose(ServiceRestart, "server restart");
+                // 队列满时这一帧根本塞不进去：写循环还在慢慢发，SenderCompletion 不会完成，
+                // 算进等待只会让每次停机都白等满宽限，而且这条连接自己也收不到 1012。
+                // 跳过等待，交给下面的 Unbind 硬断
+                if (!connection.EnqueueClose(ServiceRestart, "server restart"))
+                {
+                    KinnaMetrics.RecordWebSocketClosed(HubName, KinnaWebSocketCloseReasons.ShutdownUnsent);
+                    continue;
+                }
+
+                KinnaMetrics.RecordWebSocketClosed(HubName, KinnaWebSocketCloseReasons.Shutdown);
                 closing.Add(connection.SenderCompletion);
             }
 
@@ -337,6 +356,13 @@ namespace Viv.Kinna.WebSockets
                 return true;
             }
 
+            // 关闭流程已经开始：这一帧注定发不出去（收到过对端 Close，或服务端已排了关闭帧）。
+            // 再走 Unbind→Abort 只会抢掉还没被客户端读走的关闭帧，客户端看到的是 1006 而不是原因
+            if (connection.IsClosing)
+            {
+                return false;
+            }
+
             // 队列满 = 慢客户端被踢。这条路径以前完全静默：连接没了、消息也没了，
             // 线上只能看到「客户端莫名其妙断线」，归因不了。
             // IsOpen 为 false 说明是并发收尾，不算慢客户端，别冤枉它
@@ -355,17 +381,33 @@ namespace Viv.Kinna.WebSockets
         /// <summary>
         /// 非正的时限没有意义（<c>WaitAsync</c> 会直接抛），一律回落到默认值。
         /// 配置里写 0 想表达「不等」的场景不存在——不等就不该发这一帧。
+        ///
+        /// 「宽限必须短于 CloseFrame」这条不变式在这里硬校验，而不是只写在注释里：
+        /// 配反了不会报错，只会在每次关闭时多记一条假的 <c>close_timeout</c>，
+        /// 指标一旦失真，后面就没人看它了。
         /// </summary>
         private static KinnaWebSocketTimeouts Normalize(KinnaWebSocketTimeouts? timeouts)
         {
             var fallback = KinnaWebSocketTimeouts.Default;
 
-            return timeouts is null
-                ? fallback
-                : new KinnaWebSocketTimeouts(
-                    Positive(timeouts.CloseFrame, fallback.CloseFrame),
-                    Positive(timeouts.TerminateGrace, fallback.TerminateGrace),
-                    Positive(timeouts.ShutdownGrace, fallback.ShutdownGrace));
+            if (timeouts is null)
+            {
+                return fallback;
+            }
+
+            var closeFrame = Positive(timeouts.CloseFrame, fallback.CloseFrame);
+            var terminateGrace = Positive(timeouts.TerminateGrace, fallback.TerminateGrace);
+            var shutdownGrace = Positive(timeouts.ShutdownGrace, fallback.ShutdownGrace);
+
+            if (terminateGrace >= closeFrame || shutdownGrace >= closeFrame)
+            {
+                throw new InvalidOperationException(
+                    $"关闭时限配反了：CloseFrame={closeFrame}, TerminateGrace={terminateGrace}, "
+                    + $"ShutdownGrace={shutdownGrace}。后两个必须短于 CloseFrame，"
+                    + "否则先到的宽限会把还在等的关闭帧判成失败（close_timeout 虚高）");
+            }
+
+            return new KinnaWebSocketTimeouts(closeFrame, terminateGrace, shutdownGrace);
         }
 
         private static TimeSpan Positive(TimeSpan value, TimeSpan fallback)
