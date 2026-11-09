@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Viv.Contracts.Models;
 using Viv.Fakes;
+using Viv.Kinna.Connections;
 using Viv.Kinna.Extensions;
 using Viv.Kinna.Ports;
 using Viv.Log;
@@ -100,6 +101,47 @@ namespace Viv.Kinna.Tests
 
             Assert.Equal(System.Net.WebSockets.WebSocketMessageType.Text, result.MessageType);
             Assert.Contains("\"method\":\"Connected\"", text);
+        }
+
+        [Fact]
+        public async Task 两条传输都关掉时启动即告警()
+        {
+            // EnableSignalR=false 且 WebSocketPath 为空：这个 Hub 没有任何接入方式，
+            // 推送全部落空，而宿主从表面上看不出来（服务照常启动、健康检查照常通过）。
+            // 注册期拿不到最终配置（共享配置要到运行时才绑定），告警只能放在会话装配时
+            var silent = await Scenario.WarnAsync(enableSignalR: false, webSocketPath: null);
+            Assert.Contains(silent, x => x.Contains("没有任何传输可接入", StringComparison.Ordinal));
+
+            // 只关 SignalR 但挂了原生端点不算空转，不该报
+            var nativeOnly = await Scenario.WarnAsync(enableSignalR: false, webSocketPath: WebSocketPath);
+            Assert.Empty(nativeOnly);
+
+            var both = await Scenario.WarnAsync(enableSignalR: true, webSocketPath: null);
+            Assert.Empty(both);
+        }
+
+        /// <summary>只装配容器，把「装配时打出来的警告」捞回来</summary>
+        private static class Scenario
+        {
+            internal static async Task<List<string>> WarnAsync(bool enableSignalR, string? webSocketPath)
+            {
+                var logger = new RecordingLogger();
+                var services = new ServiceCollection();
+                services.AddLogging();   // 健康检查注册要 ILogger<T>
+                services.AddSingleton<ILoggerContract>(logger);
+                services.AddKinna<TestHub>(options =>
+                {
+                    options.EnableSignalR = enableSignalR;
+                    options.WebSocketPath = webSocketPath ?? string.Empty;
+                });
+
+                await using var provider = services.BuildServiceProvider();
+
+                // 配置在 KinnaHubSetup 这个单例被解析时才最终成型
+                provider.GetRequiredService<IKinnaSession<TestHub>>();
+
+                return logger.Warnings;
+            }
         }
     }
 }

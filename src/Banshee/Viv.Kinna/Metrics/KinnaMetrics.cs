@@ -45,7 +45,16 @@ namespace Viv.Kinna.Metrics
         /// <summary>广播踢人失败的次数。本机已经踢过，其余副本改由租约过期兜底</summary>
         private static readonly Counter<long> KickBroadcastFailedCounter = Meter.CreateCounter<long>("kinna.kick.broadcast.failed");
 
-        /// <summary>没有可用通道而被丢弃的下行帧。标签 reason 见 <see cref="KinnaSendDropReasons"/></summary>
+        /// <summary>
+        /// 收到但因待处理队列满而丢弃的跨副本踢人指令。非零说明副本在处理上卡住了
+        /// （或者在批量封号），被丢的那些用户要等租约过期才断
+        /// </summary>
+        private static readonly Counter<long> RemoteKickDroppedCounter = Meter.CreateCounter<long>("kinna.kick.remote.dropped");
+
+        /// <summary>
+        /// 没有写出去就被丢弃的下行帧：目标连接不在本机且没有兜底通道，
+        /// 或者在本机但待发队列满了。标签 reason 见 <see cref="KinnaSendDropReasons"/>
+        /// </summary>
         private static readonly Counter<long> OrphanedSendCounter = Meter.CreateCounter<long>("kinna.send.orphaned");
 
         /// <summary>
@@ -86,6 +95,8 @@ namespace Viv.Kinna.Metrics
 
         public static void RecordKickBroadcastFailed(string hub) => KickBroadcastFailedCounter.Add(1, HubTag(hub));
 
+        public static void RecordRemoteKickDropped(string hub) => RemoteKickDroppedCounter.Add(1, HubTag(hub));
+
         /// <summary>
         /// 记一次「没有通道可用而丢弃」的下行帧。<paramref name="count"/> 是一次丢弃的条数：
         /// 群发时按条累加，别在调用侧循环 Add。
@@ -111,11 +122,17 @@ namespace Viv.Kinna.Metrics
         private static KeyValuePair<string, object?> TransportTag(string transport) => new("transport", transport);
     }
 
-    /// <summary>下行帧没有可用通道而丢弃的原因。值进指标标签，别随手改。</summary>
+    /// <summary>下行帧没有写出去就丢了的原因。值进指标标签，别随手改。</summary>
     public static class KinnaSendDropReasons
     {
         /// <summary>目标连接不在本机，且 SignalR 传输被关掉，无处可发</summary>
         public const string SignalRDisabled = "signalr_disabled";
+
+        /// <summary>
+        /// 目标连接在本机、仍算活着，但待发队列满，这一帧挤不进去。
+        /// 软踢帧走这条：客户端只会看到断线，看不到 <c>ForceDisconnect</c> 带的原因
+        /// </summary>
+        public const string WebSocketQueueFull = "websocket_queue_full";
     }
 
     /// <summary>原生连接在建立前被拒的原因。值进指标标签，别随手改，改了历史面板就对不上。</summary>

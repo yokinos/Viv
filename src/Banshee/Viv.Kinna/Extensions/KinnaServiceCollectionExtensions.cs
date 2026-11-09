@@ -10,6 +10,7 @@ using Viv.Kinna.Health;
 using Viv.Kinna.Options;
 using Viv.Kinna.Ports;
 using Viv.Kinna.WebSockets;
+using Viv.Log;
 
 namespace Viv.Kinna.Extensions
 {
@@ -112,6 +113,18 @@ namespace Viv.Kinna.Extensions
                 .Bind(options);
 
             configure?.Invoke(options);
+
+            // 两条传输都关掉时这个 Hub 整体空转：连接表永远为空，清扫器、健康检查、
+            // 踢人订阅全在白跑，而业务方只会看到「推送发出去了但没人收到」。
+            // 注册期拿不到最终配置（共享配置要到运行时才绑定），这里是最早能同时
+            // 看到两个开关的地方；不抛异常，宿主可能就是先关掉再慢慢接
+            if (!options.EnableSignalR && string.IsNullOrWhiteSpace(options.WebSocketPath))
+            {
+                provider.GetService<ILoggerContract>()?.Warning(
+                    $"[kinna:{hubName}] EnableSignalR=false 且 WebSocketPath 为空："
+                    + "这个 Hub 没有任何传输可接入，所有下行推送都会落空");
+            }
+
             return options;
         }
 

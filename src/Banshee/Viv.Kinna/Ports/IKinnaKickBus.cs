@@ -27,7 +27,10 @@ namespace Viv.Kinna.Ports
 
         /// <summary>
         /// 订阅广播，返回的 <see cref="IDisposable"/> 释放即退订。
-        /// 回调可能被并发触发，实现需保证同一时刻只有一个处理在跑，或由订阅方自己串行化。
+        ///
+        /// 实现**必须**保证同一时刻只有一个回调在跑（下发线程上只入队，另起单读者串行处理）：
+        /// 订阅端拿到的是共享的协调器，两条指令并发进来会同时摘同一批连接、
+        /// 软踢帧交错写进待发队列。调用方可以按「回调不并发」来写。
         /// </summary>
         IDisposable Subscribe(Func<KinnaKickCommand, Task> handler);
     }

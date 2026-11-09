@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Net.WebSockets;
 using System.Text;
 using Microsoft.Extensions.Time.Testing;
@@ -6,6 +7,7 @@ using Viv.Contracts.Models;
 using Viv.Fakes;
 using Viv.Kinna.Connections;
 using Viv.Kinna.Contracts;
+using Viv.Kinna.Metrics;
 using Viv.Kinna.Options;
 using Viv.Kinna.Ports;
 using Viv.Kinna.WebSockets;
@@ -174,6 +176,43 @@ namespace Viv.Kinna.Tests
             }
 
             Assert.Fail($"等待超时: {what}");
+        }
+
+        /// <summary>
+        /// 监听本模块的一个 long 计数器。MeterListener 只收「开始监听之后」的测量，
+        /// 所以每条用例都得在触发动作之前建好
+        /// </summary>
+        private static MeterListener ListenLong(
+            string instrumentName,
+            Action<List<KeyValuePair<string, object?>>> onMeasurement)
+        {
+            var listener = new MeterListener();
+
+            listener.InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == KinnaMetrics.MeterName && instrument.Name == instrumentName)
+                {
+                    l.EnableMeasurementEvents(instrument);
+                }
+            };
+
+            listener.SetMeasurementEventCallback<long>((_, _, tags, _) => onMeasurement([.. tags]));
+            listener.Start();
+
+            return listener;
+        }
+
+        private static string Tag(List<KeyValuePair<string, object?>> tags, string key)
+        {
+            foreach (var tag in tags)
+            {
+                if (tag.Key == key)
+                {
+                    return tag.Value?.ToString() ?? string.Empty;
+                }
+            }
+
+            return string.Empty;
         }
 
         [Fact]
@@ -606,6 +645,32 @@ namespace Viv.Kinna.Tests
             Assert.Contains(KinnaClientMethods.ForceDisconnect, frame);
             Assert.False(registry.IsLocal("ws:1"));
             Assert.Empty(registry.GetGroupMembers("g1"));
+        }
+
+        [Fact]
+        public async Task 软踢帧挤不进待发队列时记丢弃指标()
+        {
+            // 队列满就是慢客户端。硬断照旧，但这一帧没出去，客户端只看到一条普通断线、
+            // 看不到「被谁踢的」。这条路径以前完全静默，指标是唯一能看见它的地方
+            var dropped = new List<(string Hub, string Reason)>();
+            using var listener = ListenLong(
+                "kinna.send.orphaned",
+                tags => dropped.Add((Tag(tags, "hub"), Tag(tags, "reason"))));
+
+            var registry = new KinnaWebSocketRegistry<TestHub>(1);
+            var socket = new BlockingWebSocket();
+            registry.Bind("ws:1", socket, CancellationToken.None);
+
+            // 第一帧被写循环取走、卡在 SendAsync 里；第二帧正好占满容量 1
+            Assert.True(registry.Send("ws:1", KinnaClientMethods.ReceiveMessage, [new { n = 1 }]));
+            await socket.FirstSendStarted.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(registry.Send("ws:1", KinnaClientMethods.ReceiveMessage, [new { n = 2 }]));
+
+            registry.Terminate("ws:1", KinnaClientMethods.ForceDisconnect, [], TimeSpan.FromMilliseconds(100));
+
+            Assert.Contains(("TestHub", KinnaSendDropReasons.WebSocketQueueFull), dropped);
+
+            socket.Release();
         }
 
         [Fact]

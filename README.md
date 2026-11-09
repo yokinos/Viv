@@ -387,7 +387,7 @@ app.MapKinnaHub<ChatHub>("/chat");
 
 - **Ack / Resync**：客户端确认已收到的消息，重连时拿水位判断是否补拉；存储走 `IKinnaDeliveryStore<THub>` 端口，业务侧决定落库还是落缓存。`Ack` 回 `KinnaAckResult`（`Accepted` / `Throttled` / `UnknownConnection` / `Failed`），客户端据此决定要不要重报
 - **单客户端单连接**：按 AppId 判，新连接登记时摘掉同租户同用户的旧连接（本副本内）
-- **跨副本踢人**：`KickUserEverywhereAsync` / `KickClientEverywhereAsync` / `KickSubjectEverywhereAsync` 先踢本机、再广播，其余副本收到指令只踢本机连接 —— 封号、强制下线不再受「用户连在哪台机器上」影响。三档粒度靠 `KinnaKickCommand` 的 `UserId` / `AppId` 是否为 0 区分：`UserId=0` 整租户、`AppId=0` 该用户所有客户端（封号）、`AppId>0` 只踢某一端（token 泄露、某端版本有问题要强制重新登录）。广播走 `IKinnaKickBus<THub>` 端口（框架不引 Redis），宿主用 Redis pub/sub 实现（`RedisKinnaKickBus`，频道 `kinna:kick:{Hub}`），没注册端口时退化成只踢本机。**不用业务事件总线**：封号要立刻生效，和业务消息抢同一条队列时积压会把「立即」拖成分钟级；而丢一条的代价只是该用户多连一个租约周期（Ping 拿不到续租会自己断）
+- **跨副本踢人**：`KickUserEverywhereAsync` / `KickClientEverywhereAsync` / `KickSubjectEverywhereAsync` 先踢本机、再广播，其余副本收到指令只踢本机连接 —— 封号、强制下线不再受「用户连在哪台机器上」影响。三档粒度靠 `KinnaKickCommand` 的 `UserId` / `AppId` 是否为 0 区分：`UserId=0` 整租户、`AppId=0` 该用户所有客户端（封号）、`AppId>0` 只踢某一端（token 泄露、某端版本有问题要强制重新登录）。广播走 `IKinnaKickBus<THub>` 端口（框架不引 Redis），宿主用 Redis pub/sub 实现（`RedisKinnaKickBus`，频道 `kinna:kick:{Hub}`），没注册端口时退化成只踢本机。**不用业务事件总线**：封号要立刻生效，和业务消息抢同一条队列时积压会把「立即」拖成分钟级；而丢一条的代价只是该用户多连一个租约周期（Ping 拿不到续租会自己断）。**收到指令是串行处理的**：Redis 的接收线程会并发回调，实现在下发线程上只入队（有界 256，满了丢新的并记 `kinna.kick.remote.dropped`），另起单读者按序交给处理器 —— 两条指令同时跑会同时摘同一批连接、软踢帧交错写进待发队列。**绝不能在下发线程上 `await`**：那是全进程共用的，一个频道堵住，别的 Hub 的订阅也一起收不到消息
 - **健康检查 / 上行限流**：`Ping`/`Ack`/`Resync` 按连接限流，被挡的 Ping 回 Pong 但不续租，被挡的 Resync 回 `Throttled` 且不要求补拉
 
 #### 原生 WebSocket（小程序 / 嵌入式设备）
@@ -406,7 +406,7 @@ app.MapKinnaHub<ChatHub>("/chat");        // PC
 app.MapKinnaWebSocket<ChatHub>();         // 小程序
 ```
 
-- **只跑原生 WS**：`EnableSignalR = false` 后 `MapKinnaHub` 变成空操作（即使这行没删也不会把 `/hubs/*` 暴露出去），下行不再往 SignalR 那侧发，查不到本机连接的目标直接丢弃并记 `kinna.send.orphaned{reason=signalr_disabled}`。`AddSignalR()` 仍会被调用 —— 它的注册发生在配置绑定之前，无法按开关跳过，但关掉后不再解析 `IHubContext<THub>`，也不会映射端点
+- **只跑原生 WS**：`EnableSignalR = false` 后 `MapKinnaHub` 变成空操作（即使这行没删也不会把 `/hubs/*` 暴露出去），下行不再往 SignalR 那侧发，查不到本机连接的目标直接丢弃并记 `kinna.send.orphaned{reason=signalr_disabled}`。`AddSignalR()` 仍会被调用 —— 它的注册发生在配置绑定之前，无法按开关跳过，但关掉后不再解析 `IHubContext<THub>`，也不会映射端点。**两个开关都关掉**（`EnableSignalR=false` 且 `WebSocketPath` 为空）时这个 Hub 没有任何接入方式，装配会话时会打一条 `Warning` —— 服务照常启动、健康检查照常通过，不主动报就只能等业务方发现「推送发出去没人收」
 - **子协议**：客户端可声明 `kinna.v1`（`Sec-WebSocket-Protocol`），服务端回**客户端声明的原串**（子协议 token 大小写敏感，回常量会让严格客户端拒绝握手）；不声明按 v1 处理（老客户端不传这个头），声明了但一个都不认识直接 `400`（`kinna.ws.rejected{reason=subprotocol}`）—— 版本要在 101 之前谈定，否则以后改上行帧格式只能靠「兼容到没人敢动」
 - **上行**：`{"type":"ping"}`、`{"type":"ack","ids":[1,2]}`、`{"type":"resync","lastMessageId":100}`，不认识的指令忽略
 - **并发**：`ping` 走旁路（读循环不排队，最多 4 个在途，超了丢弃本次），`ack` / `resync` 进有界队列（`SerialQueueCapacity`，64）由单读者按序处理 —— 读循环绝不等指令跑完，也绝不等队列腾位置。队列满时新来的那条直接丢弃并回 `Throttled`（`kinna.ws.inbound.dropped{method}`），读循环继续读。**不能在这里做背压**：一等就是读循环停在原地，排在后面的心跳连读都读不出来，客户端收不到 Pong 判定掉线重连，重连风暴反过来把存储压得更死，越忙越断。丢的是回执不是消息 —— 水位不推进，客户端稍后重报即可
@@ -420,7 +420,7 @@ app.MapKinnaWebSocket<ChatHub>();         // 小程序
 - **握手帧先于一切业务帧**：`Connected` 由 `RegisterAsync` 的 `onRegistered` 回调在**加组之前**发出 —— 加组一完成群推送就可能到达，晚发的握手帧会排在业务帧后面
 - **停机**：`ApplicationStopping` 给本机每条连接补一个 `1012 Service Restart` 再断（最多等 500ms 让帧写出去），客户端据此退避重连；不补的话只能拿到 `1006`，会被当成网络故障立刻重连，滚动发布期间整个机群一起撞上来。慢客户端连 1012 都塞不进队列时直接硬断，不参与等待（`shutdown_unsent`）
 - **时限**：`WebSocketCloseTimeout`（5s，等关闭帧写出去的上限）、`WebSocketTerminateGrace`（1s，软踢后排空的宽限）、`WebSocketShutdownGrace`（500ms，停机补 1012 的等待）。后两个必须短于第一个，配反了启动即报错 —— 否则先到的宽限会把还在等的关闭帧判成失败（`close_timeout` 虚高）
-- **指标**：`kinna.connections` 带 `transport` 标签区分两套传输；`kinna.ws.rejected{reason}` 记 Upgrade 前的拒绝，`kinna.ws.closed{reason}` 记关闭原因（`client` / `queue_full` / `frame_too_large` / `send_failed` / `close_timeout` / `expired` / `terminated` / `shutdown` / `shutdown_unsent`）；`kinna.ws.inbound.dropped{method}` 记有序队列满而被丢弃的上行帧（和 `kinna.uplink.throttled` 的配额限流不是一回事：那个是客户端发太快，这个是服务端排不下）；`kinna.send.orphaned{reason}` 记没有可用通道而丢弃的下行帧；`kinna.ack.failed` / `kinna.resync.failed` 记上行被下游存储拖垮的次数（都不拆连接，降级成「重报」/「要求补拉」）
+- **指标**：`kinna.connections` 带 `transport` 标签区分两套传输；`kinna.ws.rejected{reason}` 记 Upgrade 前的拒绝，`kinna.ws.closed{reason}` 记关闭原因（`client` / `queue_full` / `frame_too_large` / `send_failed` / `close_timeout` / `expired` / `terminated` / `shutdown` / `shutdown_unsent`）；`kinna.ws.inbound.dropped{method}` 记有序队列满而被丢弃的上行帧（和 `kinna.uplink.throttled` 的配额限流不是一回事：那个是客户端发太快，这个是服务端排不下）；`kinna.send.orphaned{reason}` 记没写出去就丢了的下行帧（`signalr_disabled` 没有兜底通道、`websocket_queue_full` 待发队列满，后者专指软踢帧挤不进去 —— 客户端只会看到断线，看不到被踢的原因）；`kinna.kick.remote.dropped` 记收到但排不下的跨副本踢人指令；`kinna.ack.failed` / `kinna.resync.failed` 记上行被下游存储拖垮的次数（都不拆连接，降级成「重报」/「要求补拉」）
 - **两套共存**：PC 走 SignalR、小程序走原生 WS，只要两者 AppId 不同就不会触发「单客户端单连接」互踢；
   同一用户从两端上线会各收一份推送。`WebSocketPath` 留空即不启用原生 WS，只跑 SignalR 的部署不受影响。
 

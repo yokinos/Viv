@@ -133,7 +133,14 @@ namespace Viv.Kinna.WebSockets
                 return false;
             }
 
-            connection.TryEnqueue(Encode(method, args));
+            // 软踢帧没排进去：客户端拿不到 ForceDisconnect，只看到一条普通断线。
+            // 硬断照旧（下面还会排关闭指令），但这条路径以前完全静默 ——
+            // 线上只能看到「踢了但客户端不知道自己为什么被踢」。
+            // 已经在关闭流程里的连接不记：它本来就要断，这一帧丢不丢结果都一样
+            if (!connection.TryEnqueue(Encode(method, args)) && connection.IsOpen)
+            {
+                KinnaMetrics.RecordOrphanedSend(HubName, KinnaSendDropReasons.WebSocketQueueFull);
+            }
 
             // 软踢帧之后再排一个关闭指令：写循环排空后自己发关闭帧退出，
             // 客户端拿到的是一次正常关闭，而不是被 Abort 掐断的「异常断开」。
