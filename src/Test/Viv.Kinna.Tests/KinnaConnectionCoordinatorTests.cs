@@ -25,7 +25,8 @@ namespace Viv.Kinna.Tests
             KinnaUplinkLimiter<TestHub>? limiter = null,
             bool singleConnectionPerApp = true,
             int entryTtlSeconds = 90,
-            TimeProvider? time = null)
+            TimeProvider? time = null,
+            RecordingKinnaKickBus<TestHub>? kickBus = null)
         {
             var session = new StubKinnaSession<TestHub>(
                 pool,
@@ -37,7 +38,8 @@ namespace Viv.Kinna.Tests
                     SingleConnectionPerApp = singleConnectionPerApp
                 });
 
-            return new KinnaConnectionCoordinator<TestHub>(session, new RecordingLogger(), groups, presence, delivery, limiter, time);
+            return new KinnaConnectionCoordinator<TestHub>(
+                session, new RecordingLogger(), groups, presence, delivery, limiter, time, kickBus);
         }
 
         [Fact]
@@ -589,6 +591,128 @@ namespace Viv.Kinna.Tests
 
             Assert.Equal(time.GetUtcNow(), pong.ServerTime);
             Assert.Equal(TimeSpan.FromSeconds(30), pong.LeaseExpiresAt - pong.ServerTime);
+        }
+
+        [Fact]
+        public async Task KickUserEverywhereAsync_先踢本机再广播_顺序不能反()
+        {
+            // 反过来（先广播后踢）在 Redis 慢的时候会让本机用户白多收一会儿消息，
+            // 而「Redis 抖一下就封不了号」是最难解释的失败模式
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var bus = new RecordingKinnaKickBus<TestHub>();
+            var coordinator = Create(pool, sender, kickBus: bus);
+
+            await coordinator.RegisterAsync("c1", Identity());
+            await coordinator.KickUserEverywhereAsync(SubjectId, UserId, "封号");
+
+            // 本机连接已摘表并收到强制下线
+            Assert.Empty(pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Contains(sender.Calls, x => x.Method == KinnaClientMethods.ForceDisconnect && x.TargetId == "c1");
+
+            // 广播了一条带 UserId 的指令，Origin 由通道填
+            var command = Assert.Single(bus.Published);
+            Assert.Equal(SubjectId, command.SubjectId);
+            Assert.Equal(UserId, command.UserId);
+            Assert.Equal("封号", command.Reason);
+            Assert.Equal(bus.InstanceId, command.Origin);
+        }
+
+        [Fact]
+        public async Task KickSubjectEverywhereAsync_广播的User为0表示整租户()
+        {
+            var pool = new KinnaConnectionPool();
+            var bus = new RecordingKinnaKickBus<TestHub>();
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), kickBus: bus);
+
+            await coordinator.RegisterAsync("c1", Identity());
+            await coordinator.KickSubjectEverywhereAsync(SubjectId);
+
+            Assert.Empty(pool.GetConnectionIds(SubjectId, UserId));
+
+            // 0 是「整个租户」的约定，订阅端据此选 KickSubjectAsync。
+            // 这里若换成实际 UserId，另一个副本就只会踢这一个用户
+            var command = Assert.Single(bus.Published);
+            Assert.Equal(0, command.UserId);
+        }
+
+        [Fact]
+        public async Task KickUserEverywhereAsync_广播失败不影响本机踢人也不抛()
+        {
+            // 调用方是封号接口，不该因为 Redis 抖动就报错回滚；
+            // 其余副本靠 90s 租约兜底，最坏多连一会儿
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var bus = new RecordingKinnaKickBus<TestHub> { ThrowOnPublish = new InvalidOperationException("redis down") };
+            var coordinator = Create(pool, sender, kickBus: bus);
+
+            await coordinator.RegisterAsync("c1", Identity());
+
+            await coordinator.KickUserEverywhereAsync(SubjectId, UserId);   // 不抛
+
+            Assert.Empty(pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Contains(sender.Calls, x => x.Method == KinnaClientMethods.ForceDisconnect && x.TargetId == "c1");
+        }
+
+        [Fact]
+        public async Task KickClientEverywhereAsync_只踢指定客户端_另一端照常在线()
+        {
+            // 某一端 token 泄露、某一端版本有问题时要单独踢；
+            // 按 (SubjectId,UserId) 踢会把用户所有端一起断掉
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var bus = new RecordingKinnaKickBus<TestHub>();
+            var coordinator = Create(pool, sender, kickBus: bus);
+
+            const long miniAppId = 4;
+            await coordinator.RegisterAsync("pc", Identity());
+            await coordinator.RegisterAsync(
+                "mini", new VivContextContent { AppId = miniAppId, SubjectId = SubjectId, UserId = UserId });
+
+            await coordinator.KickClientEverywhereAsync(AppId, SubjectId, UserId, "token 泄露");
+
+            Assert.Equal(new[] { "mini" }, pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Contains(sender.Calls, x => x.Method == KinnaClientMethods.ForceDisconnect && x.TargetId == "pc");
+            Assert.DoesNotContain(sender.Calls, x => x.TargetId == "mini");
+
+            // 广播要带上 AppId，否则别的副本会当成「踢所有端」
+            var command = Assert.Single(bus.Published);
+            Assert.Equal(AppId, command.AppId);
+            Assert.Equal(UserId, command.UserId);
+        }
+
+        [Fact]
+        public async Task KickUserEverywhereAsync_覆盖该用户所有客户端()
+        {
+            // 封号的语义是全端：AppId 留 0，两端都得断
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var bus = new RecordingKinnaKickBus<TestHub>();
+            var coordinator = Create(pool, sender, kickBus: bus);
+
+            await coordinator.RegisterAsync("pc", Identity());
+            await coordinator.RegisterAsync(
+                "mini", new VivContextContent { AppId = 4, SubjectId = SubjectId, UserId = UserId });
+
+            await coordinator.KickUserEverywhereAsync(SubjectId, UserId, "封号");
+
+            Assert.Empty(pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Equal(0, Assert.Single(bus.Published).AppId);
+        }
+
+        [Fact]
+        public async Task KickUserEverywhereAsync_没注册广播通道时退化成只踢本机()
+        {
+            // 单副本部署不该被迫接 Redis；没接的时候调用方代码不用改
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var coordinator = Create(pool, sender);
+
+            await coordinator.RegisterAsync("c1", Identity());
+            await coordinator.KickUserEverywhereAsync(SubjectId, UserId);
+
+            Assert.Empty(pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Contains(sender.Calls, x => x.Method == KinnaClientMethods.ForceDisconnect);
         }
     }
 }

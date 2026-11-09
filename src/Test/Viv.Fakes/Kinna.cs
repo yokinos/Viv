@@ -258,3 +258,65 @@ public sealed class StubKinnaPresenceSink<THub> : IKinnaPresenceSink<THub> where
         return Task.CompletedTask;
     }
 }
+
+/// <summary>
+/// 跨副本踢人通道替身。既能记录「发布出去什么」，也能手动投递一条
+/// 「来自别的副本」的指令，用来单独测订阅端，不需要真起 Redis。
+/// </summary>
+public sealed class RecordingKinnaKickBus<THub> : IKinnaKickBus<THub> where THub : Hub
+{
+    private readonly List<Func<KinnaKickCommand, Task>> _handlers = [];
+
+    private readonly TaskCompletionSource<bool> _subscribed =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public string InstanceId { get; set; } = "self";
+
+    /// <summary>本实例发布出去的指令，按顺序</summary>
+    public List<KinnaKickCommand> Published { get; } = [];
+
+    /// <summary>设了就抛，用于测「广播失败不影响本机踢人」</summary>
+    public Exception? ThrowOnPublish { get; set; }
+
+    /// <summary>当前仍有效的订阅数，用来验证 Dispose 真的退订了</summary>
+    public int SubscriberCount => _handlers.Count;
+
+    /// <summary>
+    /// 等订阅登记完成。宿主 <c>StartAsync</c> 返回时 <c>ExecuteAsync</c> 不一定已经跑到订阅那一步
+    /// （.NET 10 里它不再保证同步），测试直接断言订阅数会偶发为 0
+    /// </summary>
+    public Task WhenSubscribedAsync(TimeSpan timeout) => _subscribed.Task.WaitAsync(timeout);
+
+    public Task PublishAsync(KinnaKickCommand command, CancellationToken cancellationToken = default)
+    {
+        if (ThrowOnPublish != null) throw ThrowOnPublish;
+
+        // 真实实现会用自己的实例 Id 补 Origin，替身保持一致，测试才能覆盖「跳过自己」
+        command.Origin ??= InstanceId;
+        Published.Add(command);
+        return Task.CompletedTask;
+    }
+
+    public IDisposable Subscribe(Func<KinnaKickCommand, Task> handler)
+    {
+        _handlers.Add(handler);
+        _subscribed.TrySetResult(true);
+        return new Unsubscriber(_handlers, handler);
+    }
+
+    /// <summary>模拟收到一条广播，所有订阅者依次执行</summary>
+    public async Task DeliverAsync(KinnaKickCommand command)
+    {
+        foreach (var handler in _handlers.ToArray())
+        {
+            await handler(command);
+        }
+    }
+
+    private sealed class Unsubscriber(
+        List<Func<KinnaKickCommand, Task>> handlers,
+        Func<KinnaKickCommand, Task> handler) : IDisposable
+    {
+        public void Dispose() => handlers.Remove(handler);
+    }
+}

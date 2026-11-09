@@ -39,6 +39,12 @@ namespace Viv.Kinna.Metrics
         /// <summary>重连对齐读取水位失败的次数。降级成「要求补拉」，连接不拆</summary>
         private static readonly Counter<long> ResyncFailedCounter = Meter.CreateCounter<long>("kinna.resync.failed");
 
+        /// <summary>本副本执行的跨副本踢人次数。长期为 0 说明广播通道没接上或订阅掉了</summary>
+        private static readonly Counter<long> RemoteKickCounter = Meter.CreateCounter<long>("kinna.kick.remote");
+
+        /// <summary>广播踢人失败的次数。本机已经踢过，其余副本改由租约过期兜底</summary>
+        private static readonly Counter<long> KickBroadcastFailedCounter = Meter.CreateCounter<long>("kinna.kick.broadcast.failed");
+
         public static void ConnectionAdded(string hub, string transport) =>
             ConnectionCounter.Add(1, HubTag(hub), TransportTag(transport));
 
@@ -61,6 +67,10 @@ namespace Viv.Kinna.Metrics
         public static void RecordAckFailed(string hub) => AckFailedCounter.Add(1, HubTag(hub));
 
         public static void RecordResyncFailed(string hub) => ResyncFailedCounter.Add(1, HubTag(hub));
+
+        public static void RecordRemoteKick(string hub) => RemoteKickCounter.Add(1, HubTag(hub));
+
+        public static void RecordKickBroadcastFailed(string hub) => KickBroadcastFailedCounter.Add(1, HubTag(hub));
 
         public static void RecordWebSocketRejected(string hub, string reason) =>
             WebSocketRejectedCounter.Add(1, HubTag(hub), new KeyValuePair<string, object?>("reason", reason));

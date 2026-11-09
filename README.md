@@ -387,6 +387,7 @@ app.MapKinnaHub<ChatHub>("/chat");
 
 - **Ack / Resync**：客户端确认已收到的消息，重连时拿水位判断是否补拉；存储走 `IKinnaDeliveryStore<THub>` 端口，业务侧决定落库还是落缓存。`Ack` 回 `KinnaAckResult`（`Accepted` / `Throttled` / `UnknownConnection` / `Failed`），客户端据此决定要不要重报
 - **单客户端单连接**：按 AppId 判，新连接登记时摘掉同租户同用户的旧连接（本副本内）
+- **跨副本踢人**：`KickUserEverywhereAsync` / `KickClientEverywhereAsync` / `KickSubjectEverywhereAsync` 先踢本机、再广播，其余副本收到指令只踢本机连接 —— 封号、强制下线不再受「用户连在哪台机器上」影响。三档粒度靠 `KinnaKickCommand` 的 `UserId` / `AppId` 是否为 0 区分：`UserId=0` 整租户、`AppId=0` 该用户所有客户端（封号）、`AppId>0` 只踢某一端（token 泄露、某端版本有问题要强制重新登录）。广播走 `IKinnaKickBus<THub>` 端口（框架不引 Redis），宿主用 Redis pub/sub 实现（`RedisKinnaKickBus`，频道 `kinna:kick:{Hub}`），没注册端口时退化成只踢本机。**不用业务事件总线**：封号要立刻生效，和业务消息抢同一条队列时积压会把「立即」拖成分钟级；而丢一条的代价只是该用户多连一个租约周期（Ping 拿不到续租会自己断）
 - **健康检查 / 上行限流**：`Ping`/`Ack`/`Resync` 按连接限流，被挡的 Ping 回 Pong 但不续租，被挡的 Resync 回 `Throttled` 且不要求补拉
 
 #### 原生 WebSocket（小程序 / 嵌入式设备）

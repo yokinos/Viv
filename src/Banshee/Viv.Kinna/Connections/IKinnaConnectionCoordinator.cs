@@ -60,8 +60,64 @@ namespace Viv.Kinna.Connections
         Task KickUserAsync(long subjectId, long userId, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 只踢某个用户在某一个客户端上的连接（其它端不受影响）。
+        ///
+        /// 和 <see cref="KickUserAsync"/> 的区别只在索引：这个走「租户 + 用户 + 客户端」，
+        /// 用于某一端 token 泄露、某一端版本有问题要强制重新登录。
+        /// </summary>
+        Task KickClientAsync(long appId, long subjectId, long userId, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 只踢本副本上该租户的连接，集群范围要另外走广播。
         /// </summary>
         Task KickSubjectAsync(long subjectId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 踢掉某个用户的全部连接，**所有副本**都生效。本机立刻踢，其余副本靠广播。
+        ///
+        /// 覆盖该用户的所有客户端（PC + 小程序 + …）。只想踢某一端用
+        /// <see cref="KickClientEverywhereAsync"/>。
+        ///
+        /// 没注册 <see cref="Ports.IKinnaKickBus{THub}"/> 时退化成只踢本机——
+        /// 封号的调用方不需要判断部署形态。
+        /// </summary>
+        /// <param name="subjectId">租户</param>
+        /// <param name="userId">用户</param>
+        /// <param name="reason">只进日志，便于追溯是谁触发的</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        Task KickUserEverywhereAsync(
+            long subjectId,
+            long userId,
+            string? reason = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 只踢某个用户在某一个客户端上的连接，**所有副本**都生效。
+        ///
+        /// 某一端 token 泄露、某一端版本有问题要强制重新登录时用；
+        /// 同一用户其它客户端照常在线。封号请用 <see cref="KickUserEverywhereAsync"/>。
+        /// </summary>
+        /// <param name="appId">客户端。两端并存时 AppId 必须不同，否则区分不开</param>
+        /// <param name="subjectId">租户</param>
+        /// <param name="userId">用户</param>
+        /// <param name="reason">只进日志</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        Task KickClientEverywhereAsync(
+            long appId,
+            long subjectId,
+            long userId,
+            string? reason = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 踢掉某个租户下的全部连接，**所有副本**都生效。
+        /// </summary>
+        /// <param name="subjectId">租户</param>
+        /// <param name="reason">只进日志</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        Task KickSubjectEverywhereAsync(
+            long subjectId,
+            string? reason = null,
+            CancellationToken cancellationToken = default);
     }
 }

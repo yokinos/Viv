@@ -18,6 +18,7 @@ namespace Viv.Kinna.Connections
         private readonly IKinnaPresenceSink<THub> _presence;
         private readonly IKinnaDeliveryStore<THub> _delivery;
         private readonly KinnaUplinkLimiter<THub>? _limiter;
+        private readonly IKinnaKickBus<THub>? _kickBus;
         private readonly ILoggerContract _logger;
         private readonly TimeSpan _leaseTtl;
         private readonly TimeProvider _time;
@@ -29,7 +30,8 @@ namespace Viv.Kinna.Connections
             IKinnaPresenceSink<THub>? presence = null,
             IKinnaDeliveryStore<THub>? delivery = null,
             KinnaUplinkLimiter<THub>? limiter = null,
-            TimeProvider? timeProvider = null)
+            TimeProvider? timeProvider = null,
+            IKinnaKickBus<THub>? kickBus = null)
         {
             _session = session;
             _logger = logger;
@@ -38,6 +40,7 @@ namespace Viv.Kinna.Connections
             _delivery = delivery ?? NoopKinnaDeliveryStore<THub>.Instance;
             _limiter = limiter;
             _time = timeProvider ?? TimeProvider.System;
+            _kickBus = kickBus;
             _leaseTtl = TimeSpan.FromSeconds(Math.Max(1, session.Options.EntryTtlSeconds));
         }
 
@@ -310,12 +313,102 @@ namespace Viv.Kinna.Connections
             }
         }
 
+        public async Task KickClientAsync(
+            long appId,
+            long subjectId,
+            long userId,
+            CancellationToken cancellationToken = default)
+        {
+            // 走三级索引：只要这一端，另一端的人还得继续收消息
+            var ids = _session.Pool.GetConnectionIds(appId, subjectId, userId);
+            foreach (var id in ids)
+            {
+                await KickAsync(id, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         public async Task KickSubjectAsync(long subjectId, CancellationToken cancellationToken = default)
         {
             var connections = _session.Pool.GetConnections(subjectId);
             foreach (var connection in connections)
             {
                 await KickAsync(connection.ConnectionId, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        public async Task KickUserEverywhereAsync(
+            long subjectId,
+            long userId,
+            string? reason = null,
+            CancellationToken cancellationToken = default)
+        {
+            // 先踢本机：Redis 抖一下就封不了号是最难接受的失败模式
+            await KickUserAsync(subjectId, userId, cancellationToken).ConfigureAwait(false);
+
+            await PublishKickAsync(
+                new KinnaKickCommand { SubjectId = subjectId, UserId = userId, Reason = reason },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task KickClientEverywhereAsync(
+            long appId,
+            long subjectId,
+            long userId,
+            string? reason = null,
+            CancellationToken cancellationToken = default)
+        {
+            await KickClientAsync(appId, subjectId, userId, cancellationToken).ConfigureAwait(false);
+
+            await PublishKickAsync(
+                new KinnaKickCommand
+                {
+                    AppId = appId,
+                    SubjectId = subjectId,
+                    UserId = userId,
+                    Reason = reason
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task KickSubjectEverywhereAsync(
+            long subjectId,
+            string? reason = null,
+            CancellationToken cancellationToken = default)
+        {
+            await KickSubjectAsync(subjectId, cancellationToken).ConfigureAwait(false);
+
+            await PublishKickAsync(
+                new KinnaKickCommand { SubjectId = subjectId, UserId = 0, Reason = reason },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 广播踢人。失败只记日志和指标：本机已经踢完，其余副本的旧连接
+        /// 最多再活一个租约周期（90s）就会被清扫摘掉，不值得把异常抛给调用方。
+        /// </summary>
+        private async Task PublishKickAsync(KinnaKickCommand command, CancellationToken cancellationToken)
+        {
+            if (_kickBus == null)
+            {
+                _logger.Debug($"[{_session.Hub}] 未注册 IKinnaKickBus<{typeof(THub).Name}>，踢人只作用于本副本");
+                return;
+            }
+
+            try
+            {
+                // Origin 由实现按自己的实例 Id 填，避免这里和订阅端各算一份
+                await _kickBus.PublishAsync(command, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                KinnaMetrics.RecordKickBroadcastFailed(_session.Hub);
+                _logger.Warning(
+                    $"[{_session.Hub}] 广播踢人失败，其余副本将靠租约过期回收: " +
+                    $"subject={command.SubjectId} user={command.UserId} {ex.Message}");
             }
         }
     }

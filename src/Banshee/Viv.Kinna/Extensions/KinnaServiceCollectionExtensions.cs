@@ -75,6 +75,9 @@ namespace Viv.Kinna.Extensions
 
             services.AddHostedService<KinnaConnectionLeaseSweeper<THub>>();
 
+            // 跨副本踢人的订阅端。没注册 IKinnaKickBus 时整体空转，单副本部署不受影响
+            services.AddHostedService<KinnaKickSubscriber<THub>>();
+
             // 关掉时检查自己会短路成 Healthy，不必在注册期判 EnableHealthCheck
             services.AddHealthChecks()
                 .AddCheck<KinnaConnectionHealthCheck<THub>>($"kinna:{typeof(THub).Name}");
