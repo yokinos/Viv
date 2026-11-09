@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -12,6 +13,7 @@ using Viv.Fakes;
 using Viv.Kinna.Connections;
 using Viv.Kinna.Contracts;
 using Viv.Kinna.Extensions;
+using Viv.Kinna.Metrics;
 using Viv.Kinna.Options;
 using Viv.Kinna.Ports;
 using Viv.Kinna.WebSockets;
@@ -80,6 +82,41 @@ namespace Viv.Kinna.Tests
 
             Assert.Equal(WebSocketMessageType.Text, result.MessageType);
             return Encoding.UTF8.GetString(buffer, 0, result.Count);
+        }
+
+        /// <summary>
+        /// 收集 <c>kinna.ws.inbound.dropped</c> 的 method 标签。用来锁「标签只来自白名单」——
+        /// 直接用上行帧里的 type 的话，客户端随便塞个字符串就能给这条指标加一条时间序列
+        /// </summary>
+        private static MeterListener ListenInboundDropped(List<string> methods)
+        {
+            var listener = new MeterListener();
+
+            listener.InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == KinnaMetrics.MeterName && instrument.Name == "kinna.ws.inbound.dropped")
+                {
+                    l.EnableMeasurementEvents(instrument);
+                }
+            };
+
+            listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+            {
+                foreach (var tag in tags)
+                {
+                    if (tag.Key == "method")
+                    {
+                        lock (methods)
+                        {
+                            methods.Add(tag.Value?.ToString() ?? string.Empty);
+                        }
+                    }
+                }
+            });
+
+            listener.Start();
+
+            return listener;
         }
 
         [Fact]
@@ -416,6 +453,9 @@ namespace Viv.Kinna.Tests
             await client.ConnectAsync(WebSocketUri(app), CancellationToken.None);
             await ReceiveAsync(client);
 
+            var droppedLabels = new List<string>();
+            using var listener = ListenInboundDropped(droppedLabels);
+
             // 第 1 条被串行派发者取走、卡在存储里；接下来 64 条刚好填满队列；其余的只能被丢弃。
             // 多出来的几条用来制造溢出，具体溢出几条取决于派发者取走的时机，所以只断言「有溢出」
             const int overflow = 8;
@@ -426,6 +466,11 @@ namespace Viv.Kinna.Tests
 
                 await client.SendAsync(payload, WebSocketMessageType.Text, true, CancellationToken.None);
             }
+
+            // 队列已经满了，再来一条客户端自己编的 type：它也会被丢弃，
+            // 但指标标签必须落到 other，不能把这个字符串原样带进时间序列
+            await client.SendAsync("""{"type":"__evil__"}"""u8.ToArray(), WebSocketMessageType.Text, true,
+                CancellationToken.None);
 
             // 队列满之后读循环必须还在跑：这条心跳排在所有 Ack 后面，一路过去不能被堵住
             await client.SendAsync("""{"type":"ping"}"""u8.ToArray(), WebSocketMessageType.Text, true,
@@ -452,6 +497,17 @@ namespace Viv.Kinna.Tests
 
             Assert.True(pong, "队列满之后心跳仍应能被读到并回 Pong");
             Assert.InRange(throttled, 1, overflow + 1);
+
+            string[] labels;
+            lock (droppedLabels)
+            {
+                labels = [.. droppedLabels];
+            }
+
+            Assert.Contains(KinnaInboundDroppedMethods.Other, labels);
+            Assert.All(labels, label => Assert.True(
+                label is KinnaInboundMethods.Ack or KinnaInboundMethods.Resync or KinnaInboundDroppedMethods.Other,
+                $"指标标签混进了客户端可控的取值: {label}"));
 
             // 放行卡住的 Ack：收尾要等串行队列排空，不然关闭帧会一直等在那儿
             gate.SetResult();

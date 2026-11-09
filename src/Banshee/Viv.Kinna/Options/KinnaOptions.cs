@@ -89,6 +89,16 @@ namespace Viv.Kinna.Options
         public int WebSocketQueueCapacity { get; set; } = 512;
 
         /// <summary>
+        /// 单条原生连接的有序指令（Ack / Resync）待处理队列深度。满了就丢弃新来的那条并回一帧
+        /// Throttled，读循环绝不停下等它——停下会让排在后面的心跳一起堵死，客户端判定掉线重连。
+        ///
+        /// 和 <see cref="WebSocketQueueCapacity"/> 是两条方向相反的队列：那个管「发不出去」，
+        /// 这个管「处理不过来」。调大它只是把内存换成更多的排队时间，慢存储下该丢还是要丢，
+        /// 唯一稳妥的做法是让下游别慢。配 0 或负数用默认值 64。
+        /// </summary>
+        public int WebSocketSerialQueueCapacity { get; set; } = 64;
+
+        /// <summary>
         /// 上行单帧的字节上限。超了直接拒帧。上行只有 Ping/Ack/Resync 三种指令，
         /// 正常不会超过几百字节，给到 32KB 是留余量。
         /// </summary>

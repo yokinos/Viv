@@ -46,6 +46,10 @@ namespace Viv.Herta.Link.Adapters
 
         public async Task PublishAsync(KinnaKickCommand command, CancellationToken cancellationToken = default)
         {
+            // IRedisService.PublishAsync 没有取消参数，这里只能做到「已经取消就别发」——
+            // 停机时没必要再为一个命令等一个 RTT
+            cancellationToken.ThrowIfCancellationRequested();
+
             // Origin 由通道填而不是协调器填：协调器不该知道「我是哪个实例」
             command.Origin ??= InstanceId;
 
@@ -102,8 +106,11 @@ namespace Viv.Herta.Link.Adapters
 
                 _queue = Channel.CreateBounded<KinnaKickCommand>(new BoundedChannelOptions(QueueCapacity)
                 {
-                    // 满了丢新的，绝不 Wait：等就是堵住 Redis 的接收线程，
-                    // 那是全进程共用的 —— 一个频道卡住，别的 Hub 的订阅也一起收不到消息
+                    // 这里的组合是刻意的：FullMode 用 Wait，写入一律走 TryWrite。
+                    // Wait 模式下队列满时 TryWrite 确定返回 false，调用方据此记「丢弃」；
+                    // 换成 DropWrite 的话 TryWrite 永远为 true，判不出到底丢没丢。
+                    // 绝不 await WriteAsync —— 等就是堵住 Redis 的接收线程，那是全进程共用的，
+                    // 一个频道卡住，别的 Hub 的订阅也一起收不到消息
                     FullMode = BoundedChannelFullMode.Wait,
                     SingleReader = true,
                     SingleWriter = false,

@@ -179,6 +179,13 @@ namespace Viv.Kinna.WebSockets
         }
 
         /// <summary>
+        /// 这条连接是否已经进入关闭流程。端点用它避免在读写循环已经收过尾之后再关一次：
+        /// 对端不读时关闭帧会等满 CloseFrame，两处都关就是白等两遍、close_timeout 记两条。
+        /// </summary>
+        internal bool IsClosing(string connectionId)
+            => _connections.TryGetValue(connectionId, out var connection) && connection.IsClosing;
+
+        /// <summary>
         /// 发一帧给单条连接。连接不在本进程或队列已满时返回 false。
         /// 队列满会直接断开这条连接——慢客户端继续留着只会吃内存，重连后走 Resync 对齐更便宜。
         /// </summary>

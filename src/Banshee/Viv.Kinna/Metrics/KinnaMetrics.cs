@@ -58,7 +58,13 @@ namespace Viv.Kinna.Metrics
         private static readonly Counter<long> OrphanedSendCounter = Meter.CreateCounter<long>("kinna.send.orphaned");
 
         /// <summary>
-        /// 本条连接的有序指令队列满、上行帧被丢弃的次数，标签 method 是 Ack/Resync。
+        /// 在线态（上线/续租/下线）写入失败的次数，标签 op 是 online/offline/renew。
+        /// 在线态只是展示信息，失败只降级、不影响连接——出现说明背后的存储抖了
+        /// </summary>
+        private static readonly Counter<long> PresenceFailedCounter = Meter.CreateCounter<long>("kinna.presence.failed");
+
+        /// <summary>
+        /// 本条连接的有序指令队列满、上行帧被丢弃的次数，标签 method 是 ack/resync/other。
         /// 和 <see cref="UplinkThrottledCounter"/> 不是一回事：那个是业务配额（每秒 N 次），
         /// 这个是服务端自己排不下——出现就说明存储慢了或者客户端在刷。
         /// </summary>
@@ -81,9 +87,17 @@ namespace Viv.Kinna.Metrics
         public static void RecordUplinkThrottled(string hub, string method) =>
             UplinkThrottledCounter.Add(1, HubTag(hub), new KeyValuePair<string, object?>("method", method));
 
-        /// <summary>记一次「有序队列满、上行帧被丢弃」。<paramref name="method"/> 传原始指令名（ack / resync）</summary>
+        /// <summary>
+        /// 记一次「有序队列满、上行帧被丢弃」。<paramref name="method"/> 必须来自白名单
+        /// （ack / resync / other），不能直接传上行帧里的 type —— 那是客户端可控的字符串，
+        /// 每个新值都是一条新的时间序列
+        /// </summary>
         public static void RecordInboundDropped(string hub, string method) =>
             InboundDroppedCounter.Add(1, HubTag(hub), new KeyValuePair<string, object?>("method", method));
+
+        /// <summary>记一次在线态写入失败。<paramref name="operation"/> 是 online/offline/renew</summary>
+        public static void RecordPresenceFailed(string hub, string operation) =>
+            PresenceFailedCounter.Add(1, HubTag(hub), new KeyValuePair<string, object?>("op", operation));
 
         public static void RecordGroupSubscriptionFailed(string hub) => GroupSubscriptionFailedCounter.Add(1, HubTag(hub));
 
@@ -133,6 +147,16 @@ namespace Viv.Kinna.Metrics
         /// 软踢帧走这条：客户端只会看到断线，看不到 <c>ForceDisconnect</c> 带的原因
         /// </summary>
         public const string WebSocketQueueFull = "websocket_queue_full";
+    }
+
+    /// <summary>
+    /// 有序队列满时丢弃的上行帧，指标标签的取值。只认这三档：Ack / Resync 用协议里的
+    /// 指令名，其余一律折算成 other，免得客户端随便塞个 type 就多出一条时间序列。
+    /// </summary>
+    public static class KinnaInboundDroppedMethods
+    {
+        /// <summary>既不是 ack 也不是 resync 的指令（含客户端瞎编的 type）</summary>
+        public const string Other = "other";
     }
 
     /// <summary>原生连接在建立前被拒的原因。值进指标标签，别随手改，改了历史面板就对不上。</summary>

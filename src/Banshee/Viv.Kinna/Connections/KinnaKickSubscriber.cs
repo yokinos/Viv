@@ -52,7 +52,9 @@ namespace Viv.Kinna.Connections
         {
             if (_bus == null)
             {
-                _logger.Debug($"[{HubName}] 未注册 IKinnaKickBus<{HubName}>，跨副本踢人未启用");
+                // 用 Info 而不是 Debug：这是启动自检的一部分。线上判断「跨副本踢人到底接上了没有」
+                // 以前只能靠 kinna.kick.remote 长期为 0 反推，而 0 也可能是没人踢过
+                _logger.Info($"[{HubName}] 未注册 IKinnaKickBus<{HubName}>，跨副本踢人未启用（踢人只作用于本副本）");
                 return Task.CompletedTask;
             }
 

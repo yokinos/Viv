@@ -24,7 +24,10 @@ namespace Viv.Kinna.Tests
             get { lock (_sent) return [.. _sent]; }
         }
 
-        public override WebSocketState State => WebSocketState.Open;
+        /// <summary>可改的状态：模拟对端先发关闭帧（CloseReceived）这类只在收尾窗口出现的状态</summary>
+        public WebSocketState StateOverride { get; set; } = WebSocketState.Open;
+
+        public override WebSocketState State => StateOverride;
 
         public override WebSocketCloseStatus? CloseStatus => null;
 
@@ -128,6 +131,29 @@ namespace Viv.Kinna.Tests
     }
 
     /// <summary>
+    /// 替身：第一帧卡住，放开后抛。模拟「关闭指令还在队列里、写循环死在前一条数据帧上」——
+    /// 客户端刷新、踢人、停机都可能撞上这个时序
+    /// </summary>
+    internal sealed class FailingBlockingWebSocket : RecordingWebSocket
+    {
+        private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _fail = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task FirstSendStarted => _started.Task;
+
+        public void Fail() => _fail.TrySetResult();
+
+        public override async Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType,
+            bool endOfMessage, CancellationToken cancellationToken)
+        {
+            _started.TrySetResult();
+            await _fail.Task.ConfigureAwait(false);
+
+            throw new WebSocketException("对端已重置");
+        }
+    }
+
+    /// <summary>
     /// 原生 WebSocket 的连接表、组表、发送分流和上行翻译。
     ///
     /// 端到端（真握手、真帧）要起 TestServer，这里不覆盖；发包路径和协议语义都在这一层，
@@ -138,6 +164,9 @@ namespace Viv.Kinna.Tests
         private const long SubjectId = 1;
         private const long UserId = 2;
         private const long AppId = 3;
+
+        /// <summary>只给「指标不能记假 close_timeout」那条用例用的 hub 名：按它过滤，避免并行测试串台</summary>
+        private const string CloseProbeHub = "KinnaCloseProbeHub";
 
         private static VivContextContent Identity()
             => new() { AppId = AppId, SubjectId = SubjectId, UserId = UserId };
@@ -328,6 +357,101 @@ namespace Viv.Kinna.Tests
             Assert.False(registry.Send("ws:1", KinnaClientMethods.Ack, [1]));
             Assert.False(socket.Aborted);
             Assert.Equal(WebSocketCloseStatus.NormalClosure, socket.SentCloseStatus);
+        }
+
+        [Fact]
+        public void 对端已发关闭帧时推送只丢弃不硬断连接()
+        {
+            // 对端先发 Close 之后 socket 状态是 CloseReceived，到 MarkClosing 之间还有一段窗口。
+            // 这期间来的推送入队必然失败（IsOpen 要求 Open），若 IsClosing 只看「关闭帧已入队」，
+            // Registry 会把它当慢客户端走 Unbind→Abort —— 我们那条关闭帧还没写出去，
+            // 客户端拿到的是 1006，不是我们想给它的原因。上一版修过同一类问题，只漏了这几行
+            var registry = new KinnaWebSocketRegistry<TestHub>(8);
+            var socket = new RecordingWebSocket { StateOverride = WebSocketState.CloseReceived };
+            registry.Bind("ws:1", socket, CancellationToken.None);
+
+            Assert.False(registry.Send("ws:1", "ReceiveMessage", [1]));
+            Assert.False(socket.Aborted);
+            Assert.True(registry.IsLocal("ws:1"));
+        }
+
+        [Fact]
+        public async Task 同一条连接只排一条关闭指令()
+        {
+            // 软踢、停机、端点收尾可能同时来排关闭帧。第二条会留在队列里永远没人处理
+            // （写循环写完第一条就 return），等它的调用方白等满 CloseFrame，
+            // 指标上再记一条假的 close_timeout
+            var time = new FakeTimeProvider();
+            var socket = new BlockingWebSocket();
+
+            using var connection = new KinnaWebSocketConnection(
+                "ws:1", nameof(TestHub), socket, 8, CancellationToken.None, time);
+
+            connection.Start();
+            Assert.True(connection.TryEnqueue("""{"method":"x"}"""u8.ToArray()));
+            await socket.FirstSendStarted;
+
+            var first = connection.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "bye");
+            var second = connection.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "bye again");
+
+            // 第二条不该排队：立即失败，调用方（Terminate / AbortAll）据此走硬断
+            Assert.True(second.IsCompleted);
+            Assert.False(await second);
+
+            socket.Release();
+
+            Assert.True(await first.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Single(socket.Calls, call => call == "close");
+        }
+
+        [Fact]
+        public async Task 写循环在关闭指令之前死掉时立即返回false且不记close_timeout()
+        {
+            // 关闭指令排在卡住的数据帧后面，写循环在那帧上抛出去直接退出：指令永远轮不到。
+            // 没人结算它，CloseOutputAsync 就要白等满 CloseFrame，再记一条假的 close_timeout ——
+            // 而那根本不是「超时」，是写循环死了
+            var time = new FakeTimeProvider();
+            var socket = new FailingBlockingWebSocket();
+
+            var reasons = new List<string>();
+            using var listener = ListenLong("kinna.ws.closed", tags =>
+            {
+                // 指标是进程级共享的，用例并行跑时别的类记的 close_timeout 会串进来。
+                // 用一个别的测试不会用的 hub 名，按标签过滤才是确定的
+                if (Tag(tags, "hub") != CloseProbeHub)
+                {
+                    return;
+                }
+
+                lock (reasons)
+                {
+                    reasons.Add(Tag(tags, "reason"));
+                }
+            });
+
+            using var connection = new KinnaWebSocketConnection(
+                "ws:1", CloseProbeHub, socket, 8, CancellationToken.None, time);
+
+            connection.Start();
+            Assert.True(connection.TryEnqueue("""{"method":"x"}"""u8.ToArray()));
+            await socket.FirstSendStarted;
+
+            var closing = connection.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "bye");
+
+            socket.Fail();
+
+            // 不推时钟：正确实现立即返回 false，而不是走超时分支
+            Assert.False(await closing.WaitAsync(TimeSpan.FromSeconds(5)));
+
+            string[] seen;
+            lock (reasons)
+            {
+                seen = [.. reasons];
+            }
+
+            // 真实的关闭原因要留痕，假的那条不能有
+            Assert.Contains(KinnaWebSocketCloseReasons.SendFailed, seen);
+            Assert.DoesNotContain(KinnaWebSocketCloseReasons.CloseTimeout, seen);
         }
 
         [Fact]

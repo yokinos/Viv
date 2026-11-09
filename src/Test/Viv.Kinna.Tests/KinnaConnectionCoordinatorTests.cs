@@ -1,12 +1,24 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Time.Testing;
 using Viv.Contracts.Models;
 using Viv.Fakes;
 using Viv.Kinna.Connections;
 using Viv.Kinna.Contracts;
 using Viv.Kinna.Options;
+using Viv.Kinna.Ports;
 
 namespace Viv.Kinna.Tests
 {
+    /// <summary>替身：在线态写入必抛。用来验证它不是「能不能连上」的裁决方。</summary>
+    internal sealed class ThrowingKinnaPresenceSink<THub> : IKinnaPresenceSink<THub> where THub : Hub
+    {
+        public Task OnlineAsync(long subjectId, long userId) => throw new InvalidOperationException("在线态存储不可用");
+
+        public Task OfflineAsync(long subjectId, long userId) => throw new InvalidOperationException("在线态存储不可用");
+
+        public Task RenewAsync(long subjectId, long userId) => throw new InvalidOperationException("在线态存储不可用");
+    }
+
     /// <summary>登记、续租、加组、踢人。全部走注入，不需要 Hub.Context 夹具。</summary>
     public class KinnaConnectionCoordinatorTests
     {
@@ -20,7 +32,7 @@ namespace Viv.Kinna.Tests
             KinnaConnectionPool pool,
             RecordingKinnaClientSender sender,
             StubKinnaGroupSource<TestHub>? groups = null,
-            StubKinnaPresenceSink<TestHub>? presence = null,
+            IKinnaPresenceSink<TestHub>? presence = null,
             StubKinnaDeliveryStore<TestHub>? delivery = null,
             KinnaUplinkLimiter<TestHub>? limiter = null,
             bool singleConnectionPerApp = true,
@@ -62,6 +74,59 @@ namespace Viv.Kinna.Tests
                 sender.Added.Select(x => x.Group));
 
             Assert.Equal((SubjectId, UserId), Assert.Single(presence.OnlineUsers));
+        }
+
+        [Fact]
+        public async Task 在线态抛异常仍然建得起来连接()
+        {
+            // 在线态是展示信息，Herta 的实现自己吞了异常所以线上没炸；但端口契约以前没写这条，
+            // 换一个会抛的实现就变成「新连接全建不起来」。框架对查群、投递存储、清扫都已经降级，
+            // 唯独在线态把「能不能连上」的裁决权交给了实现
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+
+            var connected = await Create(pool, sender, presence: new ThrowingKinnaPresenceSink<TestHub>())
+                .RegisterAsync("c1", Identity());
+
+            Assert.NotNull(connected);
+            Assert.Equal(new[] { "c1" }, pool.GetConnectionIds(SubjectId, UserId));
+        }
+
+        [Fact]
+        public async Task 在线态抛异常仍然回Pong并续租()
+        {
+            // RenewAsync 直接挡在 Pong 前面：它一抛，所有心跳都拿不到 Pong，
+            // 客户端集体判定掉线重连——比存储慢导致的 brownout 更彻底
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var coordinator = Create(
+                pool, sender, presence: new ThrowingKinnaPresenceSink<TestHub>(), time: new FakeTimeProvider());
+
+            await coordinator.RegisterAsync("c1", Identity());
+
+            var pong = await coordinator.PingAsync("c1");
+
+            Assert.True(pong.Alive);
+            Assert.True(pong.LeaseExpiresAt > pong.ServerTime);
+        }
+
+        [Fact]
+        public async Task 在线态抛异常仍然踢得掉连接()
+        {
+            // OfflineAsync 原来挡在 TerminateConnectionAsync 前面：一抛，旧连接就永远踢不掉，
+            // 而「踢不掉」的表现是连接表已经摘了、客户端还以为连着的黑洞
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var coordinator = Create(pool, sender, presence: new ThrowingKinnaPresenceSink<TestHub>());
+
+            await coordinator.RegisterAsync("c1", Identity());
+
+            await coordinator.KickAsync("c1");
+
+            Assert.Contains(
+                sender.Calls,
+                x => x.Method == KinnaClientMethods.ForceDisconnect && x.TargetId == "c1");
+            Assert.Empty(pool.GetConnectionIds(SubjectId, UserId));
         }
 
         [Fact]

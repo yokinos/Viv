@@ -34,12 +34,14 @@ namespace Viv.Kinna.WebSockets
         private const int MaxInflightPings = 4;
 
         /// <summary>
-        /// 有序指令（Ack / Resync）的待处理队列深度。满了就丢弃新来的那条，读循环绝不停下——
-        /// 停下的代价是心跳跟着堵死，客户端判定掉线重连，重连风暴把存储压得更死。
+        /// 有序指令（Ack / Resync）队列深度的兜底值。正常取
+        /// <see cref="KinnaOptions.WebSocketSerialQueueCapacity"/>，配 0 或负数时才用它。
+        /// 队列满了就丢弃新来的那条，读循环绝不停下——停下的代价是心跳跟着堵死，
+        /// 客户端判定掉线重连，重连风暴把存储压得更死。
         /// 丢的是「回执」不是「消息」：Ack 丢弃时回 Throttled 让客户端稍后重报，水位不推进会重发，
         /// Resync 丢弃时回 Throttled 让客户端退避重试，两者都不碰存储。
         /// </summary>
-        private const int SerialQueueCapacity = 64;
+        private const int DefaultSerialQueueCapacity = 64;
 
         /// <summary>模块名，只用于指标标签</summary>
         private static readonly string HubName = typeof(THub).Name;
@@ -184,8 +186,16 @@ namespace Viv.Kinna.WebSockets
                 // 读循环自己退出时都已经发过关闭帧（客户端关闭、帧过大、连接失效），
                 // 还能走到这儿且 socket 仍开着，说明是被外部打断的。描述按真实原因给，
                 // 别一律写 "register failed" —— 客户端和排障的人会被这四个字带偏。
+                //
+                // IsClosing 那道门不能省：对端不读时 SettleAsync 里的关闭帧会等满 CloseFrame
+                // 才失败，而失败之后 socket.State 仍是 Open（帧压根没写出去）——只看状态就会
+                // 再关一次、再等一遍，单连接 10 秒才收尾，close_timeout 还翻倍。
+                // MarkClosing 是 SettleAsync 第一行做的，所以这里能准确判断「已经收过尾」
+                //
                 // 顺序不能反：Unbind 会 abort socket，之后再写关闭帧已经写不出去了
-                if (!closedByUs && socket.State == WebSocketState.Open)
+                if (!closedByUs
+                    && !registry.IsClosing(connectionId)
+                    && socket.State == WebSocketState.Open)
                 {
                     await registry
                         .CloseOutputAsync(
@@ -276,7 +286,11 @@ namespace Viv.Kinna.WebSockets
             // 顺序由单读者保证。队列满时用 TryWrite 直接失败（这一模式不会挂起调用方），
             // 由调用方回一帧「限流」了事 —— 读循环一旦停下来等，
             // 排队在后面的心跳就发不出去，客户端判定掉线重连，越忙越断
-            var serial = Channel.CreateBounded<KinnaClientMessage>(new BoundedChannelOptions(SerialQueueCapacity)
+            var serialCapacity = options.WebSocketSerialQueueCapacity > 0
+                ? options.WebSocketSerialQueueCapacity
+                : DefaultSerialQueueCapacity;
+
+            var serial = Channel.CreateBounded<KinnaClientMessage>(new BoundedChannelOptions(serialCapacity)
             {
                 FullMode = BoundedChannelFullMode.Wait,
                 SingleReader = true,
@@ -455,7 +469,17 @@ namespace Viv.Kinna.WebSockets
             // 那条 Ack 永远不会重报，水位就卡在这儿（表现是重连后一直在重复补拉）
             void RejectThrottled(KinnaClientMessage dropped)
             {
-                KinnaMetrics.RecordInboundDropped(HubName, dropped.Type ?? "unknown");
+                // 标签值不能直接用上行 JSON 里的 type：那是客户端可控的任意字符串，
+                // 每个新值都是一条新的时间序列。而这条指标恰恰只在「存储慢 + 有人在刷」时上涨，
+                // 最需要它可信的时候被自己撑成一片噪音。白名单三档足够定位问题
+                var method = dropped.Type switch
+                {
+                    KinnaInboundMethods.Ack => KinnaInboundMethods.Ack,
+                    KinnaInboundMethods.Resync => KinnaInboundMethods.Resync,
+                    _ => KinnaInboundDroppedMethods.Other
+                };
+
+                KinnaMetrics.RecordInboundDropped(HubName, method);
 
                 switch (dropped.Type)
                 {

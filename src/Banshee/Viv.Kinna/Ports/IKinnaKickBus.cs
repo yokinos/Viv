@@ -22,6 +22,9 @@ namespace Viv.Kinna.Ports
         /// <summary>
         /// 广播一条指令给所有副本（含本机）。
         /// 实现不应抛异常给调用方之外的路径：本机已经踢过了，广播失败只影响其余副本的时效。
+        ///
+        /// <paramref name="cancellationToken"/> 只保证「还没发就别发」：底层的发布调用
+        /// （如 Redis pub/sub）未必支持取消，发出去之后就不再打断。
         /// </summary>
         Task PublishAsync(KinnaKickCommand command, CancellationToken cancellationToken = default);
 

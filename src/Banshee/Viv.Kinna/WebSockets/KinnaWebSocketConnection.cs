@@ -49,6 +49,12 @@ namespace Viv.Kinna.WebSockets
         private int _closing;
         private int _disposed;
 
+        /// <summary>关闭指令是否已经排过。一条连接只允许一条：写循环发出第一条就退出</summary>
+        private int _closeQueued;
+
+        /// <summary>在等写出去的那条关闭指令。写循环死掉时由它结算，见 <see cref="RunSenderAsync"/></summary>
+        private TaskCompletionSource<bool>? _closeCompletion;
+
         internal KinnaWebSocketConnection(
             string connectionId,
             string hub,
@@ -89,10 +95,19 @@ namespace Viv.Kinna.WebSockets
                                 && _socket.State == WebSocketState.Open;
 
         /// <summary>
-        /// 是否已进入关闭流程（关闭帧已入队）。之后的数据帧不再接受：
-        /// 收到对端 Close 后协议本身也不允许再发数据帧。
+        /// 是否已进入关闭流程。之后的数据帧不再接受：收到对端 Close 后协议本身也不允许再发数据帧。
+        ///
+        /// 除了 <c>_closing</c> 还要看 socket 状态：对端先发关闭帧时状态变成 <c>CloseReceived</c>，
+        /// 到 <see cref="MarkClosing"/> 之间有个窗口。这期间来的推送 <see cref="TryEnqueue"/> 必然失败
+        /// （<see cref="IsOpen"/> 要求 <c>Open</c>），若这里仍判 false，Registry 会把它当慢客户端
+        /// 走 Unbind→Abort —— 关闭帧还没写出去，客户端拿到的是 1006 而不是原因。
+        /// 现有用例一直是先 CloseOutputAsync（已 MarkClosing）再发，正好绕开了这个窗口。
+        ///
+        /// <c>Aborted</c> 刻意不算：socket 已经硬断时表里可能还留着这条连接，
+        /// 那种情况恰恰需要落到 Unbind 去清理，早返回会把它漏在表里。
         /// </summary>
-        internal bool IsClosing => Volatile.Read(ref _closing) != 0;
+        internal bool IsClosing => Volatile.Read(ref _closing) != 0
+                                   || _socket.State is WebSocketState.CloseReceived or WebSocketState.CloseSent;
 
         /// <summary>
         /// 标记进入关闭流程。收到对端 Close、判定失效、帧过大时由端点调用：
@@ -131,10 +146,27 @@ namespace Viv.Kinna.WebSockets
             string? description,
             TaskCompletionSource<bool>? completion)
         {
-            if (!CanWriteClose || !_outbound.Writer.TryWrite(OutboundFrame.Close(status, description, completion)))
+            if (!CanWriteClose)
             {
                 return false;
             }
+
+            // 一条连接只排一条关闭指令。软踢、停机、端点收尾可能同时来排：第二条会留在
+            // 队列里永远没人处理（写循环写完第一条就 return），等它的调用方白等满 CloseFrame
+            // 再记一条假的 close_timeout —— 这条指标失真以后就没人看了
+            if (Interlocked.Exchange(ref _closeQueued, 1) != 0)
+            {
+                return false;
+            }
+
+            if (!_outbound.Writer.TryWrite(OutboundFrame.Close(status, description, completion)))
+            {
+                // 没排进去就不算占用：释放掉，后来的调用方还能再试一次
+                Volatile.Write(ref _closeQueued, 0);
+                return false;
+            }
+
+            Volatile.Write(ref _closeCompletion, completion);
 
             // 入队成功就进入关闭流程：关闭帧是这条连接上的最后一次写，之后的数据帧一律丢弃。
             // 这个标记同时挡住「排空串行队列时跑完的 Ack 回帧」——它们入不了队，
@@ -259,6 +291,16 @@ namespace Viv.Kinna.WebSockets
             catch (ObjectDisposedException)
             {
                 // 已释放，收尾路径里的正常情况，不计失败
+            }
+            finally
+            {
+                // 写循环退出时还没结算的关闭指令：它等不到写出去的那一刻了。
+                // 在这里结算自己那条，CloseOutputAsync 才能立刻返回 false —— 不结算的话
+                // 调用方白等满 CloseFrame，再记一条假的 close_timeout。
+                // 触发路径都很常见：客户端刷新（requestAborted）、踢人/停机（Abort）恰好
+                // 落在前一条数据帧上，异常从上面的 while 直接跳到 catch，关闭指令还留在队列里。
+                // 已经写出过的那条早就 TrySetResult 了，这里再设一次是空操作
+                Volatile.Read(ref _closeCompletion)?.TrySetResult(false);
             }
         }
 

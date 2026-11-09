@@ -66,7 +66,8 @@ namespace Viv.Kinna.Connections
             }
 
             _session.Pool.Add(connectionId, identity.AppId, identity.SubjectId, identity.UserId);
-            await _presence.OnlineAsync(identity.SubjectId, identity.UserId).ConfigureAwait(false);
+            await PresenceSafelyAsync(() => _presence.OnlineAsync(identity.SubjectId, identity.UserId), "online")
+                .ConfigureAwait(false);
 
             var connected = new KinnaConnected
             {
@@ -136,7 +137,8 @@ namespace Viv.Kinna.Connections
             var info = _session.Pool.Remove(connectionId);
             if (info == null) return;
 
-            await _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId).ConfigureAwait(false);
+            await PresenceSafelyAsync(() => _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId), "offline")
+                .ConfigureAwait(false);
         }
 
         /// <summary>同客户端重复登录时先摘旧连接：扣在线态、发软踢，最后让 OnDisconnectedAsync 空转。</summary>
@@ -149,7 +151,8 @@ namespace Viv.Kinna.Connections
 
             _limiter?.Release(connectionId);
 
-            await _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId).ConfigureAwait(false);
+            await PresenceSafelyAsync(() => _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId), "offline")
+                .ConfigureAwait(false);
 
             // 走 Terminate：原生连接发完软踢帧就硬断，否则旧连接会一直挂在那儿收不到消息
             await _session.Sender
@@ -178,7 +181,8 @@ namespace Viv.Kinna.Connections
             }
 
             _session.Pool.Touch(connectionId);
-            await _presence.RenewAsync(info.Value.SubjectId, info.Value.UserId).ConfigureAwait(false);
+            await PresenceSafelyAsync(() => _presence.RenewAsync(info.Value.SubjectId, info.Value.UserId), "renew")
+                .ConfigureAwait(false);
 
             return new KinnaPong
             {
@@ -295,7 +299,8 @@ namespace Viv.Kinna.Connections
             if (info != null)
             {
                 _limiter?.Release(connectionId);
-                await _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId).ConfigureAwait(false);
+                await PresenceSafelyAsync(() => _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId), "offline")
+                    .ConfigureAwait(false);
             }
 
             // 即使表里没有也要断：可能是只在传输层登记过的连接，不硬断就再也回收不了
@@ -409,6 +414,27 @@ namespace Viv.Kinna.Connections
                 _logger.Warning(
                     $"[{_session.Hub}] 广播踢人失败，其余副本将靠租约过期回收: " +
                     $"subject={command.SubjectId} user={command.UserId} {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 在线态是可选的展示信息，不在投递路径上。实现抛异常时只降级，绝不往上抛：
+        /// 在线态存储抖一下不该变成「新连接全建不起来」或「所有心跳拿不到 Pong」——
+        /// 后者比 brownout 更彻底，客户端会同时掉线重连。
+        ///
+        /// 框架对查群、投递存储、清扫都已经是这个态度，唯独在线态以前把异常直接交给调用方，
+        /// 等于把「能不能连上」的裁决权交给了一个展示型依赖。
+        /// </summary>
+        private async Task PresenceSafelyAsync(Func<Task> call, string operation)
+        {
+            try
+            {
+                await call().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                KinnaMetrics.RecordPresenceFailed(_session.Hub, operation);
+                _logger.Warning($"[{_session.Hub}] 在线态 {operation} 失败，本次跳过（不影响连接）: {ex.Message}");
             }
         }
     }
