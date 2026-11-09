@@ -24,7 +24,9 @@ namespace Viv.Kinna.Extensions
         /// <param name="configure">代码里覆盖，多 Hub 时各给各的 HubPath 和 Prefix</param>
         public static IServiceCollection AddKinna<THub>(this IServiceCollection services, Action<KinnaOptions>? configure = null) where THub : Hub
         {
-            // 幂等；EnableDetailedErrors 是进程级选项，由 AddViv 按 KinnaOption 配一次
+            // 幂等；EnableDetailedErrors 是进程级选项，由 AddViv 按 KinnaOption 配一次。
+            // 只跑原生 WS 时这行仍然要留：配置要到运行时绑定才拿得到 EnableSignalR，
+            // 注册期没法跳过。它只注册服务、不开端点，关掉开关后 IHubContext 不会被解析
             services.AddSignalR();
 
             // 时间源全进程一份：连接池、清扫器、健康检查都从这里取。
@@ -41,7 +43,7 @@ namespace Viv.Kinna.Extensions
             services.TryAddScoped<IKinnaAdmission<THub>, KinnaIdentityAdmission<THub>>();
 
             // 原生 WebSocket 的连接表与组表。没配 WebSocketPath 时也会建出来，
-            // 只是没人往里登记，发送器分流时全部落到 SignalR 那一侧
+            // 只是没人往里登记，发送器分流时全部落到 SignalR 那一侧（关掉 SignalR 时直接丢弃）
             services.TryAddSingleton<KinnaWebSocketRegistry<THub>>(sp =>
             {
                 var options = sp.GetRequiredService<KinnaHubSetup<THub>>().Options;
@@ -59,11 +61,18 @@ namespace Viv.Kinna.Extensions
             {
                 var options = sp.GetRequiredService<KinnaHubSetup<THub>>().Options;
 
+                // 关掉 SignalR 时不解析 IHubContext：既省掉一个用不到的依赖，
+                // 也让「只跑原生 WS」的宿主不必为了 Hub 类型能被解析而额外准备什么
+                IKinnaClientSender signalr = options.EnableSignalR
+                    ? new KinnaClientSender<THub>(sp.GetRequiredService<IHubContext<THub>>())
+                    : NoopKinnaClientSender.Instance;
+
                 return new KinnaSession<THub>(
                     new KinnaConnectionPool(typeof(THub).Name, sp.GetService<TimeProvider>()),
                     new CompositeKinnaClientSender<THub>(
                         sp.GetRequiredService<KinnaWebSocketRegistry<THub>>(),
-                        new KinnaClientSender<THub>(sp.GetRequiredService<IHubContext<THub>>())),
+                        signalr,
+                        options.EnableSignalR),
                     new KinnaKeys(options.Prefix),
                     options);
             });
@@ -117,11 +126,22 @@ namespace Viv.Kinna.Extensions
             return services;
         }
 
-        /// <summary>按本 Hub 的 HubPath 映射。</summary>
+        /// <summary>
+        /// 按本 Hub 的 HubPath 映射。
+        ///
+        /// <see cref="KinnaOptions.EnableSignalR"/> 为 false 时直接返回：这样即使宿主没删掉
+        /// 这行调用，也不会把 <c>/hubs/*</c> 暴露出去。配置说话，不靠调用方记得清理。
+        /// </summary>
         public static WebApplication MapKinnaHub<THub>(this WebApplication app, string? pattern = null)
             where THub : Hub
         {
             var session = app.Services.GetRequiredService<IKinnaSession<THub>>();
+
+            if (!session.Options.EnableSignalR)
+            {
+                return app;
+            }
+
             app.MapHub<THub>(pattern ?? session.Options.HubPath);
             return app;
         }

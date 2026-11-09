@@ -76,7 +76,17 @@ namespace Viv.Kinna.WebSockets
 
         internal string ConnectionId { get; }
 
-        internal bool IsOpen => Volatile.Read(ref _aborted) == 0 && _socket.State == WebSocketState.Open;
+        /// <summary>
+        /// 还能不能往这条连接上写。
+        ///
+        /// 除 <c>_aborted</c> 和 socket 状态外还要看写循环是否还活着：<c>SendAsync</c> 抛
+        /// <c>WebSocketException</c>（对端 RST）时写循环直接退出，而 <c>_aborted</c> 没置位、
+        /// <c>socket.State</c> 往往还是 <c>Open</c>。这种连接入队只会永远没人消费：
+        /// 数据帧白占内存，关闭帧要等满 <see cref="KinnaWebSocketTimeouts.CloseFrame"/> 才判失败。
+        /// </summary>
+        internal bool IsOpen => Volatile.Read(ref _aborted) == 0
+                                && !Volatile.Read(ref _sender).IsCompleted
+                                && _socket.State == WebSocketState.Open;
 
         /// <summary>
         /// 是否已进入关闭流程（关闭帧已入队）。之后的数据帧不再接受：
@@ -99,6 +109,7 @@ namespace Viv.Kinna.WebSockets
         /// 还要看写循环是否还活着：requestAborted 一取消，<c>_lifetime</c> 就取消、写循环退出，
         /// 队列里的关闭指令再没人消费。这时入队只能等满 CloseFrame 超时——
         /// 客户端刷新、断网是最高频的断开路径，每条都白等 5 秒没有意义。
+        /// 写循环因发送异常退出（<see cref="IsOpen"/> 里那条）同理，那条路径上一版漏掉了。
         /// </summary>
         private bool CanWriteClose
         {
@@ -110,6 +121,7 @@ namespace Viv.Kinna.WebSockets
                 }
 
                 return !_lifetime.IsCancellationRequested
+                       && !Volatile.Read(ref _sender).IsCompleted
                        && _socket.State is WebSocketState.Open or WebSocketState.CloseReceived;
             }
         }

@@ -396,16 +396,20 @@ SignalR 客户端依赖 `XMLHttpRequest`、`fetch`、`EventSource` 和 `window`�
 Kinna 在同一进程里再挂一个原生端点，和 Hub 共用连接表、组表与投递器：
 
 ```csharp
-// 配的是下游路径，不带网关的 /ws 前缀：网关把 /ws/{短名}/** 改写成 /**
-builder.Services.AddKinna<ChatHub>(options => options.WebSocketPath = "/chat-ws");
+builder.Services.AddKinna<ChatHub>(options =>
+{
+    options.WebSocketPath = "/chat-ws";   // 配的是下游路径，不带网关的 /ws 前缀（网关把 /ws/{短名}/** 改写成 /**）
+    options.EnableSignalR = true;         // PC 走 Hub；只服务小程序/嵌入式设备时置 false
+});
 // ...
 app.MapKinnaHub<ChatHub>("/chat");        // PC
 app.MapKinnaWebSocket<ChatHub>();         // 小程序
 ```
 
+- **只跑原生 WS**：`EnableSignalR = false` 后 `MapKinnaHub` 变成空操作（即使这行没删也不会把 `/hubs/*` 暴露出去），下行不再往 SignalR 那侧发，查不到本机连接的目标直接丢弃并记 `kinna.send.orphaned{reason=signalr_disabled}`。`AddSignalR()` 仍会被调用 —— 它的注册发生在配置绑定之前，无法按开关跳过，但关掉后不再解析 `IHubContext<THub>`，也不会映射端点
 - **子协议**：客户端可声明 `kinna.v1`（`Sec-WebSocket-Protocol`），服务端回**客户端声明的原串**（子协议 token 大小写敏感，回常量会让严格客户端拒绝握手）；不声明按 v1 处理（老客户端不传这个头），声明了但一个都不认识直接 `400`（`kinna.ws.rejected{reason=subprotocol}`）—— 版本要在 101 之前谈定，否则以后改上行帧格式只能靠「兼容到没人敢动」
 - **上行**：`{"type":"ping"}`、`{"type":"ack","ids":[1,2]}`、`{"type":"resync","lastMessageId":100}`，不认识的指令忽略
-- **并发**：`ping` 走旁路（读循环不排队，最多 4 个在途，超了丢弃本次），`ack` / `resync` 进有界队列（`SerialQueueCapacity`，64）由单读者按序处理 —— 读循环绝不等指令跑完。以前 Ack 卡在存储上会把后面的帧一起堵住，客户端收不到 Pong 就以为掉线；重连风暴反过来把存储压得更死，越忙越断
+- **并发**：`ping` 走旁路（读循环不排队，最多 4 个在途，超了丢弃本次），`ack` / `resync` 进有界队列（`SerialQueueCapacity`，64）由单读者按序处理 —— 读循环绝不等指令跑完，也绝不等队列腾位置。队列满时新来的那条直接丢弃并回 `Throttled`（`kinna.ws.inbound.dropped{method}`），读循环继续读。**不能在这里做背压**：一等就是读循环停在原地，排在后面的心跳连读都读不出来，客户端收不到 Pong 判定掉线重连，重连风暴反过来把存储压得更死，越忙越断。丢的是回执不是消息 —— 水位不推进，客户端稍后重报即可
 - **挂载**：`MapKinnaWebSocket<THub>(configure: e => e.RequireRateLimiting("ws"))` 能给终结点挂宿主策略 —— 限流、授权、OpenAPI 标签都读 endpoint 元数据，没有这个入口这层壳就是策略黑区
 - **下行**：`{"method":"ReceiveMessage","args":[{...}]}`，方法名与 `KinnaClientMethods` 一致
 - **分流**：`IKinnaClientSender` 按连接归属选传输（查表而不是看 Id 前缀），业务代码不需要知道客户端用哪种
@@ -416,9 +420,9 @@ app.MapKinnaWebSocket<ChatHub>();         // 小程序
 - **握手帧先于一切业务帧**：`Connected` 由 `RegisterAsync` 的 `onRegistered` 回调在**加组之前**发出 —— 加组一完成群推送就可能到达，晚发的握手帧会排在业务帧后面
 - **停机**：`ApplicationStopping` 给本机每条连接补一个 `1012 Service Restart` 再断（最多等 500ms 让帧写出去），客户端据此退避重连；不补的话只能拿到 `1006`，会被当成网络故障立刻重连，滚动发布期间整个机群一起撞上来。慢客户端连 1012 都塞不进队列时直接硬断，不参与等待（`shutdown_unsent`）
 - **时限**：`WebSocketCloseTimeout`（5s，等关闭帧写出去的上限）、`WebSocketTerminateGrace`（1s，软踢后排空的宽限）、`WebSocketShutdownGrace`（500ms，停机补 1012 的等待）。后两个必须短于第一个，配反了启动即报错 —— 否则先到的宽限会把还在等的关闭帧判成失败（`close_timeout` 虚高）
-- **指标**：`kinna.connections` 带 `transport` 标签区分两套传输；`kinna.ws.rejected{reason}` 记 Upgrade 前的拒绝，`kinna.ws.closed{reason}` 记关闭原因（`client` / `queue_full` / `frame_too_large` / `send_failed` / `close_timeout` / `expired` / `terminated` / `shutdown` / `shutdown_unsent`）；`kinna.ack.failed` / `kinna.resync.failed` 记上行被下游存储拖垮的次数（都不拆连接，降级成「重报」/「要求补拉」）
+- **指标**：`kinna.connections` 带 `transport` 标签区分两套传输；`kinna.ws.rejected{reason}` 记 Upgrade 前的拒绝，`kinna.ws.closed{reason}` 记关闭原因（`client` / `queue_full` / `frame_too_large` / `send_failed` / `close_timeout` / `expired` / `terminated` / `shutdown` / `shutdown_unsent`）；`kinna.ws.inbound.dropped{method}` 记有序队列满而被丢弃的上行帧（和 `kinna.uplink.throttled` 的配额限流不是一回事：那个是客户端发太快，这个是服务端排不下）；`kinna.send.orphaned{reason}` 记没有可用通道而丢弃的下行帧；`kinna.ack.failed` / `kinna.resync.failed` 记上行被下游存储拖垮的次数（都不拆连接，降级成「重报」/「要求补拉」）
 - **两套共存**：PC 走 SignalR、小程序走原生 WS，只要两者 AppId 不同就不会触发「单客户端单连接」互踢；
-  同一用户从两端上线会各收一份推送。`WebSocketPath` 留空即不启用，只跑 SignalR 的部署不受影响。
+  同一用户从两端上线会各收一份推送。`WebSocketPath` 留空即不启用原生 WS，只跑 SignalR 的部署不受影响。
 
 ### 可观测性
 

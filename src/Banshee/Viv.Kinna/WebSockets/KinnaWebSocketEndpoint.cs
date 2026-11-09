@@ -34,8 +34,10 @@ namespace Viv.Kinna.WebSockets
         private const int MaxInflightPings = 4;
 
         /// <summary>
-        /// 有序指令（Ack / Resync）的待处理队列深度。满了读循环就停下来等，
-        /// 把压力交回 TCP 窗口——比在服务端堆帧好，比让客户端「连上了但什么都发不出去」也好。
+        /// 有序指令（Ack / Resync）的待处理队列深度。满了就丢弃新来的那条，读循环绝不停下——
+        /// 停下的代价是心跳跟着堵死，客户端判定掉线重连，重连风暴把存储压得更死。
+        /// 丢的是「回执」不是「消息」：Ack 丢弃时回 Throttled 让客户端稍后重报，水位不推进会重发，
+        /// Resync 丢弃时回 Throttled 让客户端退避重试，两者都不碰存储。
         /// </summary>
         private const int SerialQueueCapacity = 64;
 
@@ -67,6 +69,10 @@ namespace Viv.Kinna.WebSockets
             var registry = services.GetRequiredService<KinnaWebSocketRegistry<THub>>();
             var session = services.GetRequiredService<IKinnaSession<THub>>();
             var scopes = services.GetRequiredService<IServiceScopeFactory>();
+
+            // 限流回帧里的 ServerTime 要走同一个时间源：测试推进 FakeTimeProvider 时，
+            // 客户端看到的服务端时间不该是真实的墙上时间
+            var time = services.GetService<TimeProvider>() ?? TimeProvider.System;
 
             var identity = await resolver.ResolveAsync(http).ConfigureAwait(false);
 
@@ -161,7 +167,7 @@ namespace Viv.Kinna.WebSockets
 
                 try
                 {
-                    await ReadLoopAsync(http, socket, connectionId, registry, scopes, session.Options, logger)
+                    await ReadLoopAsync(http, socket, connectionId, registry, scopes, session.Options, time, logger)
                         .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
@@ -248,6 +254,7 @@ namespace Viv.Kinna.WebSockets
             KinnaWebSocketRegistry<THub> registry,
             IServiceScopeFactory scopes,
             KinnaOptions options,
+            TimeProvider time,
             ILoggerContract logger)
         {
             var requestAborted = http.RequestAborted;
@@ -266,8 +273,9 @@ namespace Viv.Kinna.WebSockets
             var inflightPings = 0;
 
             // 有序指令走这条队列。读循环不再 await 它们，只负责尽快把帧读出来；
-            // 顺序由单读者保证。队列满时 WriteAsync 会等，读循环自然停下——这就是背压，
-            // 比无限堆内存好，也比让客户端以为连接正常却什么都收不到好
+            // 顺序由单读者保证。队列满时用 TryWrite 直接失败（这一模式不会挂起调用方），
+            // 由调用方回一帧「限流」了事 —— 读循环一旦停下来等，
+            // 排队在后面的心跳就发不出去，客户端判定掉线重连，越忙越断
             var serial = Channel.CreateBounded<KinnaClientMessage>(new BoundedChannelOptions(SerialQueueCapacity)
             {
                 FullMode = BoundedChannelFullMode.Wait,
@@ -333,9 +341,15 @@ namespace Viv.Kinna.WebSockets
                         return;
                     }
 
-                    // 上行只有 JSON 文本；二进制帧没人会发，收到就当它不存在
-                    if (result.MessageType != WebSocketMessageType.Text || result.Count == 0)
+                    // 上行只有 JSON 文本；二进制帧没人会发，收到就当它不存在。
+                    // 但它可能夹在分片中间：这时必须把已经拼的半截文本丢掉，
+                    // 否则下一条消息会粘上残留（`{"type":"pi` + `{"type":"ping"}`），
+                    // 解析不出来被当成脏帧忽略——表现为「客户端发什么都没反应」，极难查。
+                    // 空帧不能在这里拦：空帧作为分片的结束帧是合法的，要让它走完收尾流程，
+                    // 否则同样会留下残留（上一版就是这里 continue 掉的）
+                    if (result.MessageType != WebSocketMessageType.Text)
                     {
+                        message.SetLength(0);
                         continue;
                     }
 
@@ -384,18 +398,13 @@ namespace Viv.Kinna.WebSockets
                         continue;
                     }
 
-                    try
+                    // 队列满就丢这一帧，让客户端知道该重试什么。以前这里是 await WriteAsync：
+                    // 一条慢 Ack 把队列塞满之后，读循环就停在原地等，后面的心跳连读都读不出来，
+                    // 客户端收不到 Pong 判定掉线重连——重连风暴反过来把存储压得更死。
+                    // 丢的是回执不是消息：水位不推进，客户端稍后重报即可，不会丢消息
+                    if (!serial.Writer.TryWrite(parsed))
                     {
-                        await serial.Writer.WriteAsync(parsed, receiveToken).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (expired.IsCancellationRequested)
-                    {
-                        await CloseExpiredAsync().ConfigureAwait(false);
-                        return;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        return;
+                        RejectThrottled(parsed);
                     }
                 }
             }
@@ -439,6 +448,46 @@ namespace Viv.Kinna.WebSockets
 
                 await SettleAsync(WebSocketCloseStatus.PolicyViolation, "connection expired")
                     .ConfigureAwait(false);
+            }
+
+            // 队列满时的回执：不查存储、只编码一帧，代价可以忽略。
+            // 不能静默丢 —— 客户端收不到回帧，就以为服务端已经收下，
+            // 那条 Ack 永远不会重报，水位就卡在这儿（表现是重连后一直在重复补拉）
+            void RejectThrottled(KinnaClientMessage dropped)
+            {
+                KinnaMetrics.RecordInboundDropped(HubName, dropped.Type ?? "unknown");
+
+                switch (dropped.Type)
+                {
+                    case KinnaInboundMethods.Ack:
+                        registry.Send(
+                            connectionId,
+                            KinnaClientMethods.Ack,
+                            [new KinnaAckResult { Status = KinnaAckStatus.Throttled }]);
+                        break;
+
+                    case KinnaInboundMethods.Resync:
+                        registry.Send(
+                            connectionId,
+                            KinnaClientMethods.Resync,
+                            [
+                                new KinnaResyncResult
+                                {
+                                    Throttled = true,
+
+                                    // 被限流时一定为 false：这时候让客户端去补拉，
+                                    // 只是把长连接的压力原样搬到数据库上
+                                    NeedBackfill = false,
+                                    ServerTime = time.GetUtcNow()
+                                }
+                            ]);
+                        break;
+
+                    default:
+
+                        // 心跳走旁路，不会到这儿；其余未识别的指令本来就没有回帧语义
+                        break;
+                }
             }
 
             // 判定失效后只负责通知读循环，关闭由读循环统一做：

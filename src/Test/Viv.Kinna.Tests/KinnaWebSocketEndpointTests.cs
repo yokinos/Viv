@@ -12,6 +12,7 @@ using Viv.Fakes;
 using Viv.Kinna.Connections;
 using Viv.Kinna.Contracts;
 using Viv.Kinna.Extensions;
+using Viv.Kinna.Options;
 using Viv.Kinna.Ports;
 using Viv.Kinna.WebSockets;
 using Viv.Log;
@@ -41,14 +42,20 @@ namespace Viv.Kinna.Tests
                 });
         }
 
-        private static async Task<WebApplication> StartAsync(Action<IServiceCollection>? configureServices = null)
+        private static async Task<WebApplication> StartAsync(
+            Action<IServiceCollection>? configureServices = null,
+            Action<KinnaOptions>? configureKinna = null)
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
 
             builder.Services.AddSingleton<ILoggerContract, RecordingLogger>();
             builder.Services.AddSingleton<IKinnaIdentityResolver<TestHub>, FixedIdentityResolver>();
-            builder.Services.AddKinna<TestHub>(options => options.WebSocketPath = "/ws/chat");
+            builder.Services.AddKinna<TestHub>(options =>
+            {
+                options.WebSocketPath = "/ws/chat";
+                configureKinna?.Invoke(options);
+            });
             configureServices?.Invoke(builder.Services);
 
             var app = builder.Build();
@@ -61,10 +68,15 @@ namespace Viv.Kinna.Tests
         private static Uri WebSocketUri(WebApplication app)
             => new(app.Urls.First().Replace("http://", "ws://", StringComparison.Ordinal) + "/ws/chat");
 
-        private static async Task<string> ReceiveAsync(ClientWebSocket client)
+        /// <summary>
+        /// 读一帧文本。默认带超时：期望有回帧但没有时，宁可失败也不要挂死整个测试运行
+        /// </summary>
+        private static async Task<string> ReceiveAsync(ClientWebSocket client, TimeSpan? timeout = null)
         {
+            using var cancel = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(10));
+
             var buffer = new byte[8 * 1024];
-            var result = await client.ReceiveAsync(buffer, CancellationToken.None);
+            var result = await client.ReceiveAsync(buffer, cancel.Token);
 
             Assert.Equal(WebSocketMessageType.Text, result.MessageType);
             return Encoding.UTF8.GetString(buffer, 0, result.Count);
@@ -107,6 +119,83 @@ namespace Viv.Kinna.Tests
                 CancellationToken.None);
 
             // 紧接着发 ping：如果服务端因为那条脏指令断了连接，这里会拿不到 Pong，而是直接关闭
+            await client.SendAsync("""{"type":"ping"}"""u8.ToArray(), WebSocketMessageType.Text, true,
+                CancellationToken.None);
+
+            var pong = await ReceiveAsync(client);
+            Assert.Contains("\"method\":\"Pong\"", pong);
+
+            await client.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+            await app.StopAsync();
+        }
+
+        [Fact]
+        public async Task 分片消息拼齐后正常解析()
+        {
+            await using var app = await StartAsync();
+
+            using var client = new ClientWebSocket();
+            await client.ConnectAsync(WebSocketUri(app), CancellationToken.None);
+            await ReceiveAsync(client);
+
+            await client.SendAsync("""{"type":"pi"""u8.ToArray(), WebSocketMessageType.Text, false,
+                CancellationToken.None);
+            await client.SendAsync("""ng"}"""u8.ToArray(), WebSocketMessageType.Text, true,
+                CancellationToken.None);
+
+            var pong = await ReceiveAsync(client);
+            Assert.Contains("\"method\":\"Pong\"", pong);
+
+            await client.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+            await app.StopAsync();
+        }
+
+        [Fact]
+        public async Task 分片中间夹二进制帧不会污染下一条消息()
+        {
+            // 二进制帧没人会发，但夹在分片中间时不能只丢掉它：已拼的半截文本留在缓冲里，
+            // 会和下一条消息粘成 `{"type":"pi{"type":"ping"}`，解析失败被当脏帧忽略，
+            // 表现是「客户端发什么都没反应」。
+            // 注：ClientWebSocket 实际不会真把二进制帧插进分片中间（走这条路径时它自己会
+            // 把上一段收尾），所以这条在旧实现下也能过；留它是为了钉住「二进制帧不进缓冲」
+            // 这条不变式，别让以后有人把 SetLength(0) 顺手删掉
+            await using var app = await StartAsync();
+
+            using var client = new ClientWebSocket();
+            await client.ConnectAsync(WebSocketUri(app), CancellationToken.None);
+            await ReceiveAsync(client);
+
+            await client.SendAsync("""{"type":"pi"""u8.ToArray(), WebSocketMessageType.Text, false,
+                CancellationToken.None);
+            await client.SendAsync(new byte[] { 1, 2 }, WebSocketMessageType.Binary, true,
+                CancellationToken.None);
+
+            await client.SendAsync("""{"type":"ping"}"""u8.ToArray(), WebSocketMessageType.Text, true,
+                CancellationToken.None);
+
+            var pong = await ReceiveAsync(client);
+            Assert.Contains("\"method\":\"Pong\"", pong);
+
+            await client.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+            await app.StopAsync();
+        }
+
+        [Fact]
+        public async Task 分片以空文本帧收尾时不会污染下一条消息()
+        {
+            // 空帧作为分片的结束帧是合法的。上一版见到 Count==0 直接 continue，
+            // 半截文本留在缓冲里，下一条消息同样被拼坏
+            await using var app = await StartAsync();
+
+            using var client = new ClientWebSocket();
+            await client.ConnectAsync(WebSocketUri(app), CancellationToken.None);
+            await ReceiveAsync(client);
+
+            await client.SendAsync("""{"type":"pi"""u8.ToArray(), WebSocketMessageType.Text, false,
+                CancellationToken.None);
+            await client.SendAsync(Array.Empty<byte>(), WebSocketMessageType.Text, true,
+                CancellationToken.None);
+
             await client.SendAsync("""{"type":"ping"}"""u8.ToArray(), WebSocketMessageType.Text, true,
                 CancellationToken.None);
 
@@ -303,6 +392,69 @@ namespace Viv.Kinna.Tests
 
             var ack = await ReceiveAsync(client).WaitAsync(TimeSpan.FromSeconds(3));
             Assert.Contains("\"method\":\"Ack\"", ack);
+
+            await client.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+            await app.StopAsync();
+        }
+
+        [Fact]
+        public async Task 有序队列满时丢弃并回限流_读循环不被堵住()
+        {
+            // 队列满了以后以前是 await WriteAsync：读循环停在原地，排在后面的心跳连读都读不出来，
+            // 客户端收不到 Pong 判定掉线重连，重连风暴把存储压得更死。
+            // 现在改成丢弃 + 回一帧 Throttled：读循环永不阻塞，客户端也知道该重报。
+            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var store = new StubKinnaDeliveryStore<TestHub> { AckGate = gate.Task };
+
+            // 关掉上行配额，这样收到的每一条 Throttled 都只可能来自「队列满」这条路径，
+            // 不会和配额限流混在一起（两者的载荷一样，看指标才分得开）
+            await using var app = await StartAsync(
+                services => services.AddSingleton<IKinnaDeliveryStore<TestHub>>(store),
+                options => options.UplinkPermitLimit = 0);
+
+            using var client = new ClientWebSocket();
+            await client.ConnectAsync(WebSocketUri(app), CancellationToken.None);
+            await ReceiveAsync(client);
+
+            // 第 1 条被串行派发者取走、卡在存储里；接下来 64 条刚好填满队列；其余的只能被丢弃。
+            // 多出来的几条用来制造溢出，具体溢出几条取决于派发者取走的时机，所以只断言「有溢出」
+            const int overflow = 8;
+            for (var i = 0; i < 1 + 64 + overflow; i++)
+            {
+                // u8 只能贴常量：插值串得自己编码
+                var payload = Encoding.UTF8.GetBytes($$"""{"type":"ack","ids":[{{i}}]}""");
+
+                await client.SendAsync(payload, WebSocketMessageType.Text, true, CancellationToken.None);
+            }
+
+            // 队列满之后读循环必须还在跑：这条心跳排在所有 Ack 后面，一路过去不能被堵住
+            await client.SendAsync("""{"type":"ping"}"""u8.ToArray(), WebSocketMessageType.Text, true,
+                CancellationToken.None);
+
+            // 回帧顺序不保证（心跳走旁路），一路读到 Pong 为止，顺路数丢掉的那些回了几帧限流
+            var throttled = 0;
+            var pong = false;
+
+            for (var i = 0; i < overflow + 4 && !pong; i++)
+            {
+                var frame = await ReceiveAsync(client, TimeSpan.FromSeconds(3));
+
+                if (frame.Contains("\"method\":\"Pong\"", StringComparison.Ordinal))
+                {
+                    pong = true;
+                }
+                else if (frame.Contains("\"method\":\"Ack\"", StringComparison.Ordinal)
+                         && frame.Contains($"\"status\":{(int)KinnaAckStatus.Throttled}", StringComparison.Ordinal))
+                {
+                    throttled++;
+                }
+            }
+
+            Assert.True(pong, "队列满之后心跳仍应能被读到并回 Pong");
+            Assert.InRange(throttled, 1, overflow + 1);
+
+            // 放行卡住的 Ack：收尾要等串行队列排空，不然关闭帧会一直等在那儿
+            gate.SetResult();
 
             await client.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
             await app.StopAsync();

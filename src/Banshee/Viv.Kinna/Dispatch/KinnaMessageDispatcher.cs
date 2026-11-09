@@ -100,6 +100,13 @@ namespace Viv.Kinna.Dispatch
                 KinnaMetrics.RecordDispatch(_session.Hub, plan.Kind, "ok");
                 return KinnaPushOutcome.Success;
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 主机停机 / 请求取消不是「推送失败」。记成 failed 会让消费者去重投，
+                // 而实际是没人再收这条消息了——停机期间刷一片 failed 指标还会淹掉真故障。
+                // 原样抛出去，交给消费者自己的取消处理
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.Error($"[{_session.Hub}] 推送失败: kind={plan.Kind} method={plan.Method}", ex);

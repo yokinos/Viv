@@ -87,13 +87,16 @@ namespace Viv.Kinna.WebSockets
             var connection = new KinnaWebSocketConnection(
                 connectionId, HubName, socket, _queueCapacity, requestAborted, _time, _timeouts);
 
+            // 先拉起写循环再进表：IsOpen 会看写循环是否活着，如果连接先进了表，
+            // 并发进来的推送会看到「写循环没起」把它当成死连接，走 Unbind 直接踢掉
+            connection.Start();
+
             if (!_connections.TryAdd(connectionId, connection))
             {
+                connection.Abort();
                 connection.Dispose();
                 throw new InvalidOperationException($"原生 WebSocket 连接 Id 重复: {connectionId}");
             }
-
-            connection.Start();
         }
 
         /// <summary>

@@ -137,6 +137,49 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
+        public async Task 停机取消时不算推送失败_原样抛出()
+        {
+            // 主机停机时令牌被取消，SendAsync 抛 OCE。记成 failed 会让消费者去重投，
+            // 而实际是没人再收这条消息；停机期间刷一片 failed 还会淹掉真故障
+            using var cts = new CancellationTokenSource();
+            await cts.CancelAsync();
+
+            var sender = new RecordingKinnaClientSender
+            {
+                ThrowOnSend = new OperationCanceledException(cts.Token)
+            };
+
+            var pool = new StubKinnaConnectionPool { ConnectionIds = ["c1"] };
+            var logger = new RecordingLogger();
+            var pusher = new FakeKinnaPusher<string> { OnPlan = (_, _) => UserPlan() };
+
+            await Assert.ThrowsAsync<OperationCanceledException>(
+                () => Create(pusher, sender, pool, logger).DispatchAsync("evt", null, cts.Token));
+
+            Assert.Empty(logger.Errors);
+        }
+
+        [Fact]
+        public async Task 令牌没取消时的取消异常仍算失败()
+        {
+            // 判别条件只看令牌：下游自己抛的 OCE（比如存储层超时）不是停机，
+            // 照旧记 failed 让消费者重投
+            var sender = new RecordingKinnaClientSender
+            {
+                ThrowOnSend = new OperationCanceledException("下游超时")
+            };
+
+            var pool = new StubKinnaConnectionPool { ConnectionIds = ["c1"] };
+            var logger = new RecordingLogger();
+            var pusher = new FakeKinnaPusher<string> { OnPlan = (_, _) => UserPlan() };
+
+            var outcome = await Create(pusher, sender, pool, logger).DispatchAsync("evt", null);
+
+            Assert.Equal(KinnaPushOutcome.Failed, outcome);
+            Assert.Single(logger.Errors);
+        }
+
+        [Fact]
         public async Task 署名不是调用者_照常投递并留审计()
         {
             // 代发是正常场景：不拦，只留一条 Info

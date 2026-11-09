@@ -45,6 +45,16 @@ namespace Viv.Kinna.Metrics
         /// <summary>广播踢人失败的次数。本机已经踢过，其余副本改由租约过期兜底</summary>
         private static readonly Counter<long> KickBroadcastFailedCounter = Meter.CreateCounter<long>("kinna.kick.broadcast.failed");
 
+        /// <summary>没有可用通道而被丢弃的下行帧。标签 reason 见 <see cref="KinnaSendDropReasons"/></summary>
+        private static readonly Counter<long> OrphanedSendCounter = Meter.CreateCounter<long>("kinna.send.orphaned");
+
+        /// <summary>
+        /// 本条连接的有序指令队列满、上行帧被丢弃的次数，标签 method 是 Ack/Resync。
+        /// 和 <see cref="UplinkThrottledCounter"/> 不是一回事：那个是业务配额（每秒 N 次），
+        /// 这个是服务端自己排不下——出现就说明存储慢了或者客户端在刷。
+        /// </summary>
+        private static readonly Counter<long> InboundDroppedCounter = Meter.CreateCounter<long>("kinna.ws.inbound.dropped");
+
         public static void ConnectionAdded(string hub, string transport) =>
             ConnectionCounter.Add(1, HubTag(hub), TransportTag(transport));
 
@@ -62,6 +72,10 @@ namespace Viv.Kinna.Metrics
         public static void RecordUplinkThrottled(string hub, string method) =>
             UplinkThrottledCounter.Add(1, HubTag(hub), new KeyValuePair<string, object?>("method", method));
 
+        /// <summary>记一次「有序队列满、上行帧被丢弃」。<paramref name="method"/> 传原始指令名（ack / resync）</summary>
+        public static void RecordInboundDropped(string hub, string method) =>
+            InboundDroppedCounter.Add(1, HubTag(hub), new KeyValuePair<string, object?>("method", method));
+
         public static void RecordGroupSubscriptionFailed(string hub) => GroupSubscriptionFailedCounter.Add(1, HubTag(hub));
 
         public static void RecordAckFailed(string hub) => AckFailedCounter.Add(1, HubTag(hub));
@@ -72,6 +86,20 @@ namespace Viv.Kinna.Metrics
 
         public static void RecordKickBroadcastFailed(string hub) => KickBroadcastFailedCounter.Add(1, HubTag(hub));
 
+        /// <summary>
+        /// 记一次「没有通道可用而丢弃」的下行帧。<paramref name="count"/> 是一次丢弃的条数：
+        /// 群发时按条累加，别在调用侧循环 Add。
+        /// </summary>
+        public static void RecordOrphanedSend(string hub, string reason, int count = 1)
+        {
+            if (count <= 0)
+            {
+                return;
+            }
+
+            OrphanedSendCounter.Add(count, HubTag(hub), new KeyValuePair<string, object?>("reason", reason));
+        }
+
         public static void RecordWebSocketRejected(string hub, string reason) =>
             WebSocketRejectedCounter.Add(1, HubTag(hub), new KeyValuePair<string, object?>("reason", reason));
 
@@ -81,6 +109,13 @@ namespace Viv.Kinna.Metrics
         private static KeyValuePair<string, object?> HubTag(string hub) => new("hub", hub);
 
         private static KeyValuePair<string, object?> TransportTag(string transport) => new("transport", transport);
+    }
+
+    /// <summary>下行帧没有可用通道而丢弃的原因。值进指标标签，别随手改。</summary>
+    public static class KinnaSendDropReasons
+    {
+        /// <summary>目标连接不在本机，且 SignalR 传输被关掉，无处可发</summary>
+        public const string SignalRDisabled = "signalr_disabled";
     }
 
     /// <summary>原生连接在建立前被拒的原因。值进指标标签，别随手改，改了历史面板就对不上。</summary>

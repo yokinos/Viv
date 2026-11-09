@@ -117,6 +117,14 @@ namespace Viv.Kinna.Tests
         }
     }
 
+    /// <summary>替身：写就抛，模拟对端 RST 把写循环打死。</summary>
+    internal sealed class ThrowingWebSocket : RecordingWebSocket
+    {
+        public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType,
+            bool endOfMessage, CancellationToken cancellationToken)
+            => throw new WebSocketException("对端已重置");
+    }
+
     /// <summary>
     /// 原生 WebSocket 的连接表、组表、发送分流和上行翻译。
     ///
@@ -307,6 +315,35 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
+        public async Task 写循环因发送异常退出后关闭帧也立即放弃()
+        {
+            // 对端 RST 会让 SendAsync 抛 WebSocketException，写循环直接退出：
+            // 这时 _aborted 没置位、socket.State 往往还是 Open。只看这两样的存活判定
+            // 会认为连接还能写，关闭帧入队后没人消费 —— 每条都要白等满 CloseFrame。
+            // 请求中止那条路径上一版修过，异常退出这条是同源漏网
+            var time = new FakeTimeProvider();
+            var socket = new ThrowingWebSocket();
+
+            using var connection = new KinnaWebSocketConnection(
+                "ws:1", nameof(TestHub), socket, 8, CancellationToken.None, time);
+
+            connection.Start();
+            Assert.True(connection.TryEnqueue("""{"method":"x"}"""u8.ToArray()));
+
+            // 写循环退出即这个任务完成。下面不推时钟：正确实现应立即返回，而不是等超时分支
+            await connection.SenderCompletion.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.False(connection.IsOpen);
+            Assert.False(connection.TryEnqueue("""{"method":"y"}"""u8.ToArray()));
+
+            var closing = connection.CloseOutputAsync(WebSocketCloseStatus.EndpointUnavailable, "gone");
+
+            Assert.True(closing.IsCompleted);
+            Assert.False(await closing);
+            Assert.Null(socket.SentCloseStatus);
+        }
+
+        [Fact]
         public async Task 停机时队列满的连接不拖住AbortAll()
         {
             // 队列满时 EnqueueClose 塞不进去，写循环还在慢慢发、SenderCompletion 不会完成。
@@ -424,6 +461,49 @@ namespace Viv.Kinna.Tests
 
             await WaitUntilAsync(() => socket.Sent.Count == 1, "原生连接收到组消息");
             Assert.Equal("Group", Assert.Single(signalr.Calls).TargetKind);
+        }
+
+        [Fact]
+        public async Task 关闭SignalR时下行不再调用SignalR发送器()
+        {
+            var registry = new KinnaWebSocketRegistry<TestHub>(64);
+            var socket = new RecordingWebSocket();
+            registry.Bind("ws:1", socket, CancellationToken.None);
+            registry.AddToGroup("ws:1", "g1");
+
+            var signalr = new RecordingKinnaClientSender();
+            var sender = new CompositeKinnaClientSender<TestHub>(registry, signalr, signalrEnabled: false);
+
+            // 非本机目标：没有 SignalR 可兜底，只能丢弃，但不该抛
+            await sender.SendToConnectionAsync("sig:1", "ReceiveMessage", [1]);
+            await sender.SendToConnectionsAsync(["ws:1", "sig:1"], "ReceiveMessage", new { text = "hi" });
+            await sender.SendToGroupAsync("g1", "ReceiveMessage", 1);
+            await sender.AddToGroupAsync("sig:1", "g1");
+            await sender.RemoveFromGroupAsync("sig:1", "g1");
+            await sender.TerminateConnectionAsync("sig:1", KinnaClientMethods.ForceDisconnect, []);
+
+            Assert.Empty(signalr.Calls);
+            Assert.Empty(signalr.Added);
+            Assert.Empty(signalr.Removed);
+
+            // 本机原生连接不受影响：单发 1 帧 + 群发 1 帧
+            await WaitUntilAsync(() => socket.Sent.Count == 2, "原生连接收到单发与群发");
+        }
+
+        [Fact]
+        public async Task 关闭SignalR时踢人仍能断开本机原生连接()
+        {
+            var registry = new KinnaWebSocketRegistry<TestHub>(64);
+            var socket = new RecordingWebSocket();
+            registry.Bind("ws:1", socket, CancellationToken.None);
+
+            var signalr = new RecordingKinnaClientSender();
+            var sender = new CompositeKinnaClientSender<TestHub>(registry, signalr, signalrEnabled: false);
+
+            await sender.TerminateConnectionAsync("ws:1", KinnaClientMethods.ForceDisconnect, []);
+
+            await WaitUntilAsync(() => socket.Aborted, "原生连接被硬断");
+            Assert.Empty(signalr.Calls);
         }
 
         [Fact]

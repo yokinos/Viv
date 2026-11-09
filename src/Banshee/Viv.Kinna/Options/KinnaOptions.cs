@@ -52,6 +52,20 @@ namespace Viv.Kinna.Options
         public bool EnableHealthCheck { get; set; } = true;
 
         /// <summary>
+        /// 是否启用 SignalR 传输，默认开。关掉之后 <c>MapKinnaHub</c> 变成空操作，
+        /// 下行只走原生 WebSocket，连接表里查不到的目标直接丢弃（没有 SignalR 兜底）。
+        ///
+        /// 只服务引不进 SignalR 客户端的场景（小程序、嵌入式设备）时关掉，可以省掉
+        /// 每次群发往 SignalR 那侧的空调用，也不会因为漏删 <c>MapKinnaHub</c> 就把
+        /// <c>/hubs/*</c> 暴露出去。
+        ///
+        /// 注意 <c>AddSignalR()</c> 仍然会被调用：它的注册发生在配置绑定之前，
+        /// 无法按这个开关跳过。但关掉时不再解析 <c>IHubContext&lt;THub&gt;</c>，
+        /// 也没有任何端点映射，不会产生对外暴露面。
+        /// </summary>
+        public bool EnableSignalR { get; set; } = true;
+
+        /// <summary>
         /// 同一个客户端（租户 + 用户 + AppId）只保留一条连接。新连接进来时踢掉旧的，
         /// 避免重装、重连在连接表里留下幽灵连接。只在本副本内生效——旧连接在别的副本上
         /// 时需要广播踢人，暂不支持。配 false 关闭。

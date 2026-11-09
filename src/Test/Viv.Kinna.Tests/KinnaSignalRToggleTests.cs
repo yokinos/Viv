@@ -1,0 +1,105 @@
+using System.Net;
+using System.Net.Http;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
+using Viv.Contracts.Models;
+using Viv.Fakes;
+using Viv.Kinna.Extensions;
+using Viv.Kinna.Ports;
+using Viv.Log;
+
+namespace Viv.Kinna.Tests
+{
+    /// <summary>
+    /// <see cref="Options.KinnaOptions.EnableSignalR"/> 的行为：关掉之后 SignalR 端点不该被映射，
+    /// 但原生 WebSocket 那条链要照常工作。真起 Kestrel 验证，因为「端点有没有映射」只能从外面看。
+    /// </summary>
+    public class KinnaSignalRToggleTests
+    {
+        private const string HubPath = "/chat";
+        private const string WebSocketPath = "/chat-ws";
+
+        private sealed class FixedIdentityResolver : IKinnaIdentityResolver<TestHub>
+        {
+            public Task<VivContextContent?> ResolveAsync(HttpContext context)
+                => Task.FromResult<VivContextContent?>(new VivContextContent
+                {
+                    AppId = 3,
+                    SubjectId = 1,
+                    UserId = 2
+                });
+        }
+
+        private static async Task<WebApplication> StartAsync(bool enableSignalR)
+        {
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.UseUrls("http://127.0.0.1:0");
+
+            builder.Services.AddSingleton<ILoggerContract, RecordingLogger>();
+            builder.Services.AddSingleton<IKinnaIdentityResolver<TestHub>, FixedIdentityResolver>();
+            builder.Services.AddKinna<TestHub>(options =>
+            {
+                options.HubPath = HubPath;
+                options.WebSocketPath = WebSocketPath;
+                options.EnableSignalR = enableSignalR;
+            });
+
+            var app = builder.Build();
+            app.MapKinnaHub<TestHub>();
+            app.MapKinnaWebSocket<TestHub>();
+
+            await app.StartAsync();
+            return app;
+        }
+
+        private static HttpClient Client(WebApplication app) => new() { BaseAddress = new Uri(app.Urls.First()) };
+
+        private static Task<HttpResponseMessage> NegotiateAsync(HttpClient client)
+            => client.PostAsync(
+                $"{HubPath}/negotiate?negotiateVersion=1",
+                new StringContent(string.Empty));
+
+        [Fact]
+        public async Task 默认开启SignalR时hub端点存在()
+        {
+            await using var app = await StartAsync(enableSignalR: true);
+
+            using var client = Client(app);
+            using var response = await NegotiateAsync(client);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task 关闭SignalR时hub端点不映射()
+        {
+            await using var app = await StartAsync(enableSignalR: false);
+
+            using var client = Client(app);
+            using var response = await NegotiateAsync(client);
+
+            // 即使宿主没删 MapKinnaHub 调用，也不该有端点
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task 关闭SignalR时原生WebSocket照常握手()
+        {
+            await using var app = await StartAsync(enableSignalR: false);
+
+            using var client = new System.Net.WebSockets.ClientWebSocket();
+            var uri = new Uri(app.Urls.First().Replace("http://", "ws://", StringComparison.Ordinal) + WebSocketPath);
+            await client.ConnectAsync(uri, CancellationToken.None);
+
+            var buffer = new byte[4096];
+            var result = await client.ReceiveAsync(buffer, CancellationToken.None);
+            var text = System.Text.Encoding.UTF8.GetString(buffer, 0, result.Count);
+
+            Assert.Equal(System.Net.WebSockets.WebSocketMessageType.Text, result.MessageType);
+            Assert.Contains("\"method\":\"Connected\"", text);
+        }
+    }
+}
