@@ -2,6 +2,7 @@
 using System;
 using System.Data;
 using Viv.Contracts.Interface;
+using Viv.Contracts.Models;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
@@ -48,6 +49,12 @@ namespace Viv.Momo.Core
         /// 不能改成把访问器当常量捕获，那样取到的是建模型那一刻的值，之后冻在缓存计划里
         /// </summary>
         public long CurrentTenantId => _tenantAccessor?.Current?.SubjectId ?? 0;
+
+        /// <summary>
+        /// 当前是不是平台主体（运营侧）。平台要跨租户看数据，租户过滤器对它不生效。
+        /// 和 CurrentTenantId 一样经上下文实例读，保证 EF 按每次查询重新求值、不冻进缓存计划。
+        /// </summary>
+        public bool IsPlatformTenant => CurrentTenantId == VivSubject.PlatformId;
 
         /// <summary>
         /// 模型缓存键：实体扫描配置不同 → 模型就不同。

@@ -109,6 +109,18 @@ public class DataFilterTests
     }
 
     [Fact]
+    public void 租户过滤_平台主体跨租户放行()
+    {
+        var filter = CompileFilter<TenantUserEntity>(BuildModel(TenantAccessor(VivSubject.PlatformId)), typeof(TenantUserEntity), TenantFilterName);
+
+        // 平台是唯一一个不按 TenantId 隔的域：租户的行和 TenantId = 0 的公共行都看得见。
+        // 这条短路不能删 —— 平台一旦有了自己的 SubjectId，没有它就会被锁进自己那一格。
+        Assert.True(filter(new TenantUserEntity { TenantId = 7 }));
+        Assert.True(filter(new TenantUserEntity { TenantId = 9 }));
+        Assert.True(filter(new TenantUserEntity { TenantId = 0 }));
+    }
+
+    [Fact]
     public void 关掉一个过滤器不影响另一个()
     {
         var model = BuildModel(TenantAccessor(7));

@@ -70,7 +70,8 @@ namespace Viv.Apex.Core.Module.Login
                 return FuncResult<LoginOutput>.Failed("当前组织授权已过期");
             }
 
-            var validateUser = await ValidateUserAsync(request.UserType, request.UserName, request.Password);
+            // 主体就是本次 SubjectCode 解析出的机构：同一手机号在别的机构另有账号，不能串
+            var validateUser = await ValidateUserAsync(request.UserType, request.UserName, request.Password, tenant.Id);
             if (!validateUser.IsSuccess)
             {
                 return FuncResult<LoginOutput>.Failed(validateUser.Message);

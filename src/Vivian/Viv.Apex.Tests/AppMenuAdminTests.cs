@@ -346,7 +346,7 @@ namespace Viv.Apex.Tests
             public Task<bool> UpdateUserAsync(AtUser user) => throw new NotSupportedException();
             public Task<bool> DeleteUserAsync(long userId) => throw new NotSupportedException();
             public Task<bool> SoftDeleteUserAsync(long userId) => throw new NotSupportedException();
-            public Task<AtUser?> GetUserByPhoneAsync(string phone, EmUserType userType) => throw new NotSupportedException();
+            public Task<AtUser?> GetUserByPhoneAsync(string phone, EmUserType userType, long subjectId) => throw new NotSupportedException();
             public Task<PagedList<AtUser>> GetUserPagedListAsync(IApiPagedRequest request) => throw new NotSupportedException();
             public Task<UserBucket?> GetUserBucketAsync(long userId) => throw new NotSupportedException();
             public Task<List<AtUserRole>> GetUserRolesAsync(long userId) => throw new NotSupportedException();

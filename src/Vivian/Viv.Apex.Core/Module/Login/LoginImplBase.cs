@@ -6,6 +6,7 @@ using Viv.Apex.Core.Entity.Dto.Account;
 using Viv.Apex.Core.Entity.Vo.Account;
 using Viv.Apex.Core.IRepository;
 using Viv.Contracts.Interface;
+using Viv.Contracts.Models;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
@@ -63,6 +64,7 @@ namespace Viv.Apex.Core.Module.Login
             var newAccessToken = _tokenService.GenerateToken(new Contracts.Models.TokenPayload
             {
                 AppId = clientAppId,
+                SubjectId = ResolveSubjectId(user),
                 UserId = user.Id,
                 UserName = user.Name
             });
@@ -94,6 +96,25 @@ namespace Viv.Apex.Core.Module.Login
                 Phone = user.Phone,
                 UserId = user.Id,
             };
+        }
+
+        /// <summary>
+        /// token 里的数据域，也就是网关透传给下游的 <c>x-viv-subjectId</c>。
+        ///
+        /// 不能留 0：Kinna 准入要求 <c>SubjectId &gt; 0</c>（KinnaIdentityAdmission 会判「身份不完整」），
+        /// TenantDataFilter 又会把 0 拼成 <c>TenantId == 0</c>，两条路都不是「平台」的语义。
+        /// 平台账号统一取 <see cref="VivSubject.PlatformId"/>，其余按用户类型取对应的主体 Id。
+        /// </summary>
+        protected static long ResolveSubjectId(AtUser user)
+        {
+            // 平台账号：固定主体，不依赖任何归属链上的行
+            if (user.UserType == EmUserType.Master)
+            {
+                return VivSubject.PlatformId;
+            }
+
+            // 其余按用户类型取归属链上的那一层（OrgId / CompanyId / TenantId）
+            return AtUser.SubjectIdOf(user);
         }
 
         /// <summary>
@@ -132,9 +153,16 @@ namespace Viv.Apex.Core.Module.Login
             return await ValidateUserAsync(user);
         }
 
-        public virtual async Task<FuncResult<AtUser>> ValidateUserAsync(EmUserType userType, string userName, string password)
+        /// <summary>
+        /// 按「手机号 + 用户类型 + 主体」校验口令。
+        /// 手机号只在<b>主体内</b>唯一：一个人可以在两家公司、多个机构任职，各有一条账号，
+        /// 所以必须把本次登录选定的主体（由 <c>SubjectCode</c> 解析而来）一起传下去，
+        /// 否则会捞到另一个主体的账号，或者因为同号多行直接抛异常。
+        /// 平台账号不挂归属链，传 0。
+        /// </summary>
+        public virtual async Task<FuncResult<AtUser>> ValidateUserAsync(EmUserType userType, string userName, string password, long subjectId)
         {
-            var user = await _userRepository.GetUserByPhoneAsync(userName, userType);
+            var user = await _userRepository.GetUserByPhoneAsync(userName, userType, subjectId);
             if (user is null)
             {
                 return FuncResult<AtUser>.Failed("账号或者密码错误");

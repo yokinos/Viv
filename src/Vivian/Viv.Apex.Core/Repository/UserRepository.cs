@@ -69,9 +69,18 @@ namespace Viv.Apex.Core.Repository
             return bucket?.User;
         }
 
-        public async Task<AtUser?> GetUserByPhoneAsync(string phone, EmUserType userType)
+        public async Task<AtUser?> GetUserByPhoneAsync(string phone, EmUserType userType, long subjectId)
         {
-            return await _dbContext.SingleOrDefaultAsync<AtUser>(x => x.Phone == phone && x.UserType == userType && !x.IsDeleted);
+            var candidates = await _dbContext.FindListAsync<AtUser>(x => x.Phone == phone && x.UserType == userType && !x.IsDeleted);
+            if (subjectId <= 0)
+            {
+                return candidates.Count == 1 ? candidates[0] : null;
+            }
+
+            var matches = candidates.Where(x => AtUser.SubjectIdOf(x) == subjectId).ToList();
+
+            // 同一主体下同手机号命中多条，是数据本身串了；同样不做兜底选择
+            return matches.Count == 1 ? matches[0] : null;
         }
 
         public async Task<PagedList<AtUser>> GetUserPagedListAsync(IApiPagedRequest request)

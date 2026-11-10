@@ -40,18 +40,18 @@ namespace Viv.Apex.Core.Module.Login
 
             var clientAppId = validateApp.Data.Id;
 
-            var tenant = await _companyRepository.GetCompanyAsync(request.SubjectCode);
-            if (tenant is null)
+            var company = await _companyRepository.GetCompanyAsync(request.SubjectCode);
+            if (company is null)
             {
                 return FuncResult<LoginOutput>.Failed("集团不存在");
             }
 
-            if (tenant.Status != EmStatus.Enabled)
+            if (company.Status != EmStatus.Enabled)
             {
                 return FuncResult<LoginOutput>.Failed("集团状态异常");
             }
 
-            var companyApps = await _companyRepository.GetCompanyAppsAsync(tenant.Id);
+            var companyApps = await _companyRepository.GetCompanyAppsAsync(company.Id);
             if (companyApps.IsNullOrEmpty())
             {
                 return FuncResult<LoginOutput>.Failed("客户端授权异常");
@@ -68,7 +68,8 @@ namespace Viv.Apex.Core.Module.Login
                 return FuncResult<LoginOutput>.Failed("当前组织授权已过期");
             }
 
-            var validateUser = await ValidateUserAsync(request.UserType, request.UserName, request.Password);
+            // 主体就是本次 SubjectCode 解析出的公司：同一手机号在别家公司另有账号，不能串
+            var validateUser = await ValidateUserAsync(request.UserType, request.UserName, request.Password, company.Id);
             if (!validateUser.IsSuccess)
             {
                 return FuncResult<LoginOutput>.Failed(validateUser.Message);

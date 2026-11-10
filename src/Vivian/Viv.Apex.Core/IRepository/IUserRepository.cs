@@ -37,9 +37,11 @@ namespace Viv.Apex.Core.IRepository
         Task<AtUser?> GetUserAsync(long userId);
 
         /// <summary>
-        /// 根据手机号 + 用户类型获取用户
+        /// 根据手机号 + 用户类型 + 主体获取用户。
+        /// 手机号只在主体内唯一（一个人可以在多家公司、多个机构任职，各一条账号），
+        /// 所以必须带主体才能定位；平台账号不挂归属链，<paramref name="subjectId"/> 传 0。
         /// </summary>
-        Task<AtUser?> GetUserByPhoneAsync(string phone, EmUserType userType);
+        Task<AtUser?> GetUserByPhoneAsync(string phone, EmUserType userType, long subjectId);
 
         /// <summary>
         /// 分页查询用户

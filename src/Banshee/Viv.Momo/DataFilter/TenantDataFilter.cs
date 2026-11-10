@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using Viv.Contracts.Interface;
+using Viv.Contracts.Models;
 using Viv.Momo.Core;
 using Viv.Momo.Dialect;
 using Viv.Momo.Enums;
@@ -33,17 +34,20 @@ namespace Viv.Momo.DataFilter
                 DataFilterExpression.Disabled(context, typeof(TenantDataFilter)),
                 Expression.OrElse(
                     DataFilterExpression.Member(context, nameof(EFAppContext.HasNoTenantContext)),
-                    Expression.Equal(
-                        Expression.PropertyOrField(e, nameof(ITenant.TenantId)),
-                        DataFilterExpression.Member(context, nameof(EFAppContext.CurrentTenantId)))));
+                    Expression.OrElse(
+                        DataFilterExpression.Member(context, nameof(EFAppContext.IsPlatformTenant)),
+                        Expression.Equal(
+                            Expression.PropertyOrField(e, nameof(ITenant.TenantId)),
+                            DataFilterExpression.Member(context, nameof(EFAppContext.CurrentTenantId))))));
 
             return Expression.Lambda(body, e);
         }
 
         public string BuildSqlCondition(long tenantId, ISqlDialect dialect, IDictionary<string, object> parameters)
         {
-            // 与 EF 那条同一语义：没有租户就不加条件，不凭空拼一个 TenantId = 0 进去
-            if (tenantId <= 0) return string.Empty;
+            // 与 EF 那条同一语义：没有租户就不加条件，不凭空拼一个 TenantId = 0 进去；
+            // 平台主体跨租户，同样不加条件（对应 EF 路径的 IsPlatformTenant）
+            if (tenantId <= 0 || tenantId == VivSubject.PlatformId) return string.Empty;
 
             parameters[nameof(ITenant.TenantId)] = tenantId;
             return $" AND {dialect.QuoteIdentifier(nameof(ITenant.TenantId))} = @{nameof(ITenant.TenantId)}";

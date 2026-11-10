@@ -40,8 +40,7 @@ namespace Viv.Apex.Core.Module.Login
             }
 
             var clientAppId = validateApp.Data.Id;
-
-            var validateUser = await ValidateUserAsync(request.UserType, request.UserName, request.Password);
+            var validateUser = await ValidateUserAsync(request.UserType, request.UserName, request.Password, 0);
             if (!validateUser.IsSuccess)
             {
                 return FuncResult<LoginOutput>.Failed(validateUser.Message);
