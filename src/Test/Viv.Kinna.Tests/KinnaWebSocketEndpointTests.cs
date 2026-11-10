@@ -44,6 +44,27 @@ namespace Viv.Kinna.Tests
                 });
         }
 
+        /// <summary>身份拿得到但主体是 0：默认准入会先拦（403），放宽准入后才走到协调器那层校验。</summary>
+        private sealed class ZeroSubjectIdentityResolver : IKinnaIdentityResolver<TestHub>
+        {
+            public Task<VivContextContent?> ResolveAsync(HttpContext context)
+                => Task.FromResult<VivContextContent?>(new VivContextContent
+                {
+                    AppId = AppId,
+                    SubjectId = 0,
+                    UserId = UserId
+                });
+        }
+
+        /// <summary>全放行。用来把请求推到「注册被拒」那条分支上（协调器自己会判身份不完整）。</summary>
+        private sealed class AllowAllAdmission : IKinnaAdmission<TestHub>
+        {
+            public Task<KinnaAdmissionResult> CheckAsync(
+                VivContextContent? identity,
+                CancellationToken cancellationToken = default)
+                => Task.FromResult(KinnaAdmissionResult.Allow());
+        }
+
         private static async Task<WebApplication> StartAsync(
             Action<IServiceCollection>? configureServices = null,
             Action<KinnaOptions>? configureKinna = null)
@@ -319,6 +340,39 @@ namespace Viv.Kinna.Tests
 
             Assert.Equal(0, registry.Count);
             Assert.Empty(session.Pool.GetConnections(SubjectId));
+        }
+
+        [Fact]
+        public async Task 注册被拒时发关闭帧并从传输表摘干净()
+        {
+            // 准入放宽、协调器仍判身份不完整（SubjectId = 0）→ RegisterAsync 返回 null。
+            // 这条分支以前没有任何用例：原来那条「注册抛异常」的用例其实一直在无超时的
+            // Receive 上空等（宿主停机 abort 才算「通过」），等于没测。
+            // 这里盯两件事：客户端拿到的是 1008 + 原因（不是被 Abort 掐成 1006），
+            // 以及端点 finally 有没有把连接从传输表里摘掉（不留僵尸连接）
+            await using var app = await StartAsync(services =>
+            {
+                services.AddSingleton<IKinnaIdentityResolver<TestHub>, ZeroSubjectIdentityResolver>();
+                services.AddSingleton<IKinnaAdmission<TestHub>, AllowAllAdmission>();
+            });
+
+            var registry = app.Services.GetRequiredService<KinnaWebSocketRegistry<TestHub>>();
+
+            using var client = new ClientWebSocket();
+            await client.ConnectAsync(WebSocketUri(app), CancellationToken.None);
+
+            // 握手能成（准入放行），注册立刻被拒：客户端读到的第一帧就是关闭帧
+            var buffer = new byte[64];
+            var close = await client.ReceiveAsync(buffer, CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(WebSocketMessageType.Close, close.MessageType);
+            Assert.Equal(WebSocketCloseStatus.PolicyViolation, client.CloseStatus);
+            Assert.Equal("denied", client.CloseStatusDescription);
+
+            // 关闭帧发出去时 Unbind 已经做完：传输表里不能留一条 socket 已死的连接
+            await WaitUntilAsync(() => registry.Count == 0, "注册被拒后传输表摘干净");
+            Assert.Equal(0, registry.Count);
         }
 
         [Fact]

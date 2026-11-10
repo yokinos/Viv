@@ -138,6 +138,50 @@ namespace Viv.Kinna.WebSockets
             // 能走到 finally 的兜底分支，说明连接是被外部打断的（请求中止、注册抛异常）
             var registered = false;
 
+            // 发关闭帧并等对端回一帧 Close 完成握手（有上限）。
+            //
+            // 只发不等不行：紧跟着的 Unbind→Abort 会发 RST，把对端还没读走的关闭帧一起冲掉，
+            // 客户端只看到 1006 / "without completing the close handshake"，拿不到
+            // 「denied」「register failed」这些原因。读循环自己收尾的那几条路径在
+            // CloseExpiredAsync 里做同一件事，这里是读循环没跑起来（注册被拒）或
+            // 被外部打断时的那一条。对端不配合就按上限收尾，不等死。
+            async Task CloseAndWaitAsync(WebSocketCloseStatus status, string description)
+            {
+                // 帧压根没写出去时再等一个不会来的回帧没有意义
+                if (!await registry.CloseOutputAsync(connectionId, status, description).ConfigureAwait(false))
+                {
+                    return;
+                }
+
+                var scratch = new byte[64];
+                Task<ValueWebSocketReceiveResult>? reply = null;
+
+                try
+                {
+                    reply = socket.ReceiveAsync(scratch.AsMemory(), http.RequestAborted).AsTask();
+                    await reply.WaitAsync(CloseHandshakeGrace, time).ConfigureAwait(false);
+                }
+                catch (TimeoutException) { }
+                catch (OperationCanceledException) { }
+                catch (WebSocketException) { }
+                catch (ObjectDisposedException) { }
+                finally
+                {
+                    // 超时或异常时这次读可能仍挂在 socket 上，它的异常得有人观测
+                    if (reply is { IsCompleted: false } pending)
+                    {
+                        _ = pending.ContinueWith(
+                            static t =>
+                            {
+                                if (t.IsFaulted) _ = t.Exception;
+                            },
+                            CancellationToken.None,
+                            TaskContinuationOptions.ExecuteSynchronously,
+                            TaskScheduler.Default);
+                    }
+                }
+            }
+
             try
             {
                 KinnaConnected? connected;
@@ -166,9 +210,7 @@ namespace Viv.Kinna.WebSockets
                     closedByUs = true;
                     KinnaMetrics.RecordWebSocketRejected(HubName, KinnaWebSocketRejectReasons.RegisterFailed);
 
-                    await registry
-                        .CloseOutputAsync(connectionId, WebSocketCloseStatus.PolicyViolation, "denied")
-                        .ConfigureAwait(false);
+                    await CloseAndWaitAsync(WebSocketCloseStatus.PolicyViolation, "denied").ConfigureAwait(false);
 
                     return;
                 }
@@ -205,12 +247,9 @@ namespace Viv.Kinna.WebSockets
                     && !registry.IsClosing(connectionId)
                     && socket.State == WebSocketState.Open)
                 {
-                    await registry
-                        .CloseOutputAsync(
-                            connectionId,
-                            WebSocketCloseStatus.EndpointUnavailable,
-                            registered ? "connection aborted" : "register failed")
-                        .ConfigureAwait(false);
+                    await CloseAndWaitAsync(
+                        WebSocketCloseStatus.EndpointUnavailable,
+                        registered ? "connection aborted" : "register failed").ConfigureAwait(false);
                 }
 
                 // 先摘传输再注销身份：反过来的话，中间进来的推送还会往一条已经关掉的 socket 上写
@@ -459,7 +498,28 @@ namespace Viv.Kinna.WebSockets
                 // 否则那些确认会静默丢掉。派发卡死和以前一样会拖住请求，不额外加时限
                 await serialLoop.ConfigureAwait(false);
 
-                ArrayPool<byte>.Shared.Return(buffer);
+                // 失效路径在对端没于 CloseHandshakeGrace 内回 Close 时会带着一次挂起的读退出
+                // （见 CloseExpiredAsync），那次读写的正是这块租来的数组。这时直接归还，
+                // 数组会被别的连接租走，两边同时往同一块内存里收帧，消息就串了。
+                // 没读在途（绝大多数路径）就立刻还；有就等它结束再还，别让它跨连接复用
+                if (pendingReceive is { IsCompleted: false } abandoned)
+                {
+                    _ = abandoned.ContinueWith(
+                        static (completed, rented) =>
+                        {
+                            // 异常另有观察者（CloseExpiredAsync 收尾时挂的那条），这里只管归还
+                            if (completed.IsFaulted) _ = completed.Exception;
+                            ArrayPool<byte>.Shared.Return((byte[])rented!);
+                        },
+                        buffer,
+                        CancellationToken.None,
+                        TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+                }
+                else
+                {
+                    ArrayPool<byte>.Shared.Return(buffer);
+                }
             }
 
             // 三条失效路径共用的收尾：先标记关闭，再排空串行队列，最后把关闭帧排进写队列。
