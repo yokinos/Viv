@@ -103,8 +103,8 @@ namespace Viv.Kinna.WebSockets
                 }
             }
 
-            // 子协议在 101 之前谈定：客户端要的是 kinna.v2 而服务端只会 v1 时，这里直接 400，
-            // 比让它连上之后按错的格式发帧、被当成脏帧悄悄丢掉好排查
+            // 子协议在 101 之前谈定：客户端声明的是本服务端不认识的版本（比如将来的 kinna.v2）时，
+            // 这里直接 400 —— 比让它连上之后按错格式发帧、被当成脏帧悄悄丢掉好排查
             var requestedProtocols = http.WebSockets.WebSocketRequestedProtocols;
             var protocol = NegotiateSubProtocol(requestedProtocols);
 
@@ -233,8 +233,9 @@ namespace Viv.Kinna.WebSockets
         }
 
         /// <summary>
-        /// 协商子协议。客户端一个都没声明时返回 null —— 老客户端（小程序早期版本）不传这个头，
-        /// 按 v1 处理，不能用「没声明」去拒绝它们；声明了但一个都不认识也返回 null，由调用方按拒绝处理。
+        /// 协商子协议，只认 <see cref="KinnaWebSocketProtocols.V1"/>（目前也只有这一个版本）。
+        /// 客户端没声明时返回 null：没有版本信息就按 v1 处理（默认值）；
+        /// 声明了但一个都不认识也返回 null，由调用方按拒绝处理。
         /// </summary>
         private static string? NegotiateSubProtocol(IList<string> requested)
         {
@@ -393,7 +394,8 @@ namespace Viv.Kinna.WebSockets
 
                     if (parsed?.Type == null)
                     {
-                        // 不认识就不认，不断连接：以后加指令时老客户端不该因此被踢
+                        // 不认识就不认，不断连接：上行类型是开放集合，多出一条不认识的
+                        // 不代表这条连接有问题
                         logger.Debug($"原生 WebSocket 收到无法解析的帧，已忽略: {connectionId}");
                         continue;
                     }

@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kinna 连接测试台</title>
+<style>
+  :root{
+    --bg:#f5f5f1; --surface:#fff; --surface2:#f4f4ef;
+    --line:#e5e5dd; --line2:#d4d4c9;
+    --text:#1b1b18; --muted:#6c6c63; --dim:#9d9d93;
+    --sr:#2f6fd0; --ws:#1b7f5e; --warn:#a8660c; --danger:#bf3b2c; --ok:#1b7f5e;
+    --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    padding:24px 22px 44px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1320px;margin:0 auto}
+
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  h1{font-size:17px;font-weight:500;margin:0;letter-spacing:.2px}
+  header .sub{color:var(--muted);font-size:12px}
+  header .spacer{flex:1}
+  header .hint{color:var(--dim);font-size:12px}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+  .card-head{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .card-head h2{font-size:13px;font-weight:500;margin:0;position:relative;padding-left:10px}
+  .card-head h2::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:2px;border-radius:1px;background:var(--line2)}
+  #cardSr .card-head h2::before{background:var(--sr)}
+  #cardWs .card-head h2::before{background:var(--ws)}
+  .card-body{padding:14px}
+
+  .config{margin-bottom:14px}
+  .fields{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+  .field{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .field.wide{grid-column:span 2}
+  .field.span4{grid-column:span 4}
+  label{color:var(--muted);font-size:11px;letter-spacing:.3px}
+  input[type=text],input[type=password],input[type=number],select,textarea{
+    background:#fdfdfa;border:1px solid var(--line2);color:var(--text);
+    border-radius:7px;padding:7px 9px;font-size:12px;font-family:inherit;width:100%;outline:none;
+    transition:border-color .12s,box-shadow .12s;
+  }
+  textarea{font-family:var(--mono);resize:vertical;min-height:58px}
+  input:focus,select:focus,textarea:focus{border-color:var(--sr);box-shadow:0 0 0 3px rgba(47,111,208,.12)}
+  input:disabled{background:var(--surface2);color:var(--dim)}
+  input::placeholder{color:var(--dim)}
+
+  .urls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .url{background:var(--surface2);border:1px solid var(--line);border-radius:7px;padding:7px 9px;
+       font-family:var(--mono);font-size:11px;color:var(--muted);
+       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .url b{color:var(--text);font-weight:400}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+  @media (max-width:1000px){.grid{grid-template-columns:1fr}.fields{grid-template-columns:1fr 1fr}}
+
+  .row-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .row-line + .row-line{margin-top:10px}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);
+        border:1px solid var(--line2);border-radius:999px;padding:2px 9px;background:var(--surface2)}
+  .pill i{width:6px;height:6px;border-radius:50%;background:var(--dim);display:block}
+  .pill.live{color:var(--ok);border-color:#b9dfcd;background:#f0f8f4}
+  .pill.live i{background:var(--ok);box-shadow:0 0 0 3px rgba(27,127,94,.13)}
+  .pill.connecting{color:var(--warn);border-color:#ecdcbf;background:#fdf7ec}
+  .pill.connecting i{background:var(--warn)}
+  .pill.error{color:var(--danger);border-color:#eecdc9;background:#fdf3f1}
+  .pill.error i{background:var(--danger)}
+
+  button{
+    background:#fdfdfa;border:1px solid var(--line2);color:var(--text);
+    border-radius:7px;padding:6px 12px;font-size:12px;font-family:inherit;cursor:pointer;
+    transition:border-color .12s,background .12s;
+  }
+  button:hover:not(:disabled){border-color:#b9b9ad;background:#f4f4ef}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{border-color:transparent;background:var(--sr);color:#fff}
+  button.primary:hover:not(:disabled){background:#2a63bb;border-color:transparent}
+  button.ws-primary{border-color:transparent;background:var(--ws);color:#fff}
+  button.ws-primary:hover:not(:disabled){background:#166b4f;border-color:transparent}
+  button.danger{color:#a8342a;border-color:#e6cbc6;background:#fdf5f4}
+  button.danger:hover:not(:disabled){background:#fbeae7;border-color:#d9b3ac}
+  button.sm{padding:4px 9px;font-size:11px}
+  button.link{background:none;border:none;color:var(--muted);padding:2px 6px;font-size:11px}
+  button.link:hover{color:var(--text);background:none}
+
+  .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);
+         border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:12px}
+  .stat{background:var(--surface);padding:8px 11px;display:flex;flex-direction:column;gap:1px}
+  .stat .k{font-size:11px;color:var(--dim)}
+  .stat .v{font-family:var(--mono);font-size:17px;line-height:1.3;color:var(--text);
+           font-variant-numeric:tabular-nums;letter-spacing:-.2px}
+  .stat .v.stale{color:var(--dim)}
+
+  .info{padding-top:11px;border-top:1px solid var(--line);
+        display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px;font-size:11px}
+  .info div{display:flex;gap:6px;min-width:0}
+  .info span:first-child{color:var(--dim);flex:none}
+  .info span:last-child{color:#4a4a42;font-family:var(--mono);font-size:11px;
+                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .ops{margin-top:12px;border-top:1px solid var(--line);padding-top:11px;display:flex;flex-direction:column;gap:9px}
+  .ops .caption{color:var(--dim);font-size:11px}
+
+  .log-card{
+    --surface:#12151a; --surface2:#1c2028; --line:#262b33; --line2:#333944;
+    --text:#e3e7ec; --muted:#8b94a3; --dim:#5f6875;
+    --sr:#8aa6ff; --ws:#3fd8a0; --warn:#ffbe4d; --danger:#ff7d70;
+    background:var(--surface);border-color:#22262d;
+  }
+  .log-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+  .log-head h2{font-size:13px;font-weight:500;margin:0}
+  .filters{display:flex;gap:4px}
+  .filters button{border-radius:6px;padding:3px 9px;font-size:11px;color:var(--muted);
+                  background:none;border:1px solid transparent}
+  .filters button:hover:not(:disabled){background:var(--surface2);border-color:transparent;color:var(--text)}
+  .filters button.on{background:var(--surface2);border-color:var(--line);color:var(--text)}
+  .log-card button.sm{background:var(--surface2);border-color:var(--line2);color:var(--text)}
+  .log-card button.sm:hover:not(:disabled){background:#262b33;border-color:#3d4451}
+  #log{
+    height:288px;overflow-y:auto;padding:8px 6px 10px;
+    font-family:var(--mono);font-size:11.5px;color:var(--text);
+    scrollbar-color:#3a414d transparent;
+  }
+  #log::-webkit-scrollbar{width:10px}
+  #log::-webkit-scrollbar-thumb{background:#333a45;border-radius:5px;border:3px solid #12151a}
+  .row{display:flex;gap:8px;padding:2px 8px;border-radius:5px;align-items:flex-start}
+  .row:hover{background:rgba(255,255,255,.03)}
+  .row .ts{color:var(--dim);flex:none;width:74px;font-variant-numeric:tabular-nums}
+  .badge{flex:none;width:30px;font-size:10px;border-radius:4px;line-height:16px;text-align:center}
+  .badge.sr{background:rgba(138,166,255,.15);color:var(--sr)}
+  .badge.ws{background:rgba(63,216,160,.13);color:var(--ws)}
+  .badge.sys{background:rgba(255,255,255,.07);color:var(--muted)}
+  .dir{flex:none;width:12px;text-align:center}
+  .dir.in{color:var(--ws)}
+  .dir.out{color:var(--sr)}
+  .dir.info{color:var(--dim)}
+  .body{min-width:0;word-break:break-word;color:#c9d0da}
+  .row.err .body{color:#ff9b95}
+  .row.warn .body{color:#ffd08a}
+  .method{color:var(--text);margin-right:7px}
+  .payload{color:var(--muted)}
+  .body details{margin-top:2px}
+  .body summary{cursor:pointer;color:var(--muted);outline:none}
+  .body pre{margin:5px 0 3px;padding:8px 10px;background:#0c0f13;border:1px solid var(--line);
+            border-radius:6px;overflow-x:auto;color:#b9c2d1;font-size:11px;line-height:1.5}
+
+  details.legend{margin-top:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+  details.legend summary{padding:12px 14px;cursor:pointer;font-size:12px;color:var(--muted);outline:none}
+  details.legend .inner{padding:0 14px 14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px;font-size:11.5px}
+  details.legend .inner div{display:flex;gap:8px}
+  details.legend .inner code{color:var(--ws);font-family:var(--mono);flex:none;width:44px}
+  details.legend .inner span{color:var(--muted)}
+
+  .note{margin-top:14px;color:var(--muted);font-size:11.5px;line-height:1.75}
+  .note b{color:var(--text);font-weight:500}
+  .note code{font-family:var(--mono);font-size:11px;color:var(--ws);
+             background:var(--surface2);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Kinna 连接测试台</h1>
+    <span class="sub">SignalR 与原生 WebSocket 并排验证</span>
+    <span class="spacer"></span>
+    <span class="hint">同一身份两端上线会各收一份推送，属预期行为</span>
+  </header>
+
+  <section class="card config">
+    <div class="card-head">
+      <h2>目标</h2>
+      <span style="flex:1"></span>
+      <button class="sm" id="btnCurl">复制 curl</button>
+      <button class="sm" id="btnProbe">探测网关</button>
+    </div>
+    <div class="card-body">
+      <div class="fields">
+        <div class="field">
+          <label>接入方式</label>
+          <select id="mode">
+            <option value="gateway">网关 /ws/{短名}/…</option>
+            <option value="direct">直连服务</option>
+          </select>
+        </div>
+        <div class="field wide">
+          <label id="baseLabel">网关基址</label>
+          <input type="text" id="base" placeholder="http://localhost:5000">
+        </div>
+        <div class="field">
+          <label>服务短名</label>
+          <input type="text" id="short" value="hertalink">
+        </div>
+        <div class="field">
+          <label>Hub 下游路径</label>
+          <input type="text" id="hubPath" value="/chat">
+        </div>
+        <div class="field">
+          <label>WS 下游路径</label>
+          <input type="text" id="wsPath" value="/chat-ws">
+        </div>
+        <div class="field span4">
+          <label>access_token（JWT，可留空）</label>
+          <input type="password" id="token" placeholder="eyJhbGciOi...">
+        </div>
+        <div class="field">
+          <label>子协议</label>
+          <input type="text" id="protocol" value="kinna.v1">
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11.5px;height:31px">
+            <input type="checkbox" id="declProtocol" checked style="width:auto"> 声明子协议
+          </label>
+        </div>
+      </div>
+      <div class="urls">
+        <div class="url">SR → <b id="urlSr"></b></div>
+        <div class="url">WS → <b id="urlWs"></b></div>
+        <div class="url">下游 → <b id="urlDown"></b></div>
+        <div class="url">探测 → <b id="urlProbe"></b></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid">
+
+    <section class="card" id="cardSr">
+      <div class="card-head">
+        <h2>SignalR</h2>
+        <span class="pill" id="pillSr"><i></i><span>未连接</span></span>
+        <span style="flex:1"></span>
+        <button class="primary" id="btnSrConnect">连接</button>
+        <button id="btnSrDisconnect" class="danger" disabled>断开</button>
+      </div>
+      <div class="card-body">
+        <div class="stats">
+          <div class="stat"><span class="k">租约剩余</span><span class="v stale" id="srLease">—</span></div>
+          <div class="stat"><span class="k">收帧</span><span class="v" id="srIn">0</span></div>
+          <div class="stat"><span class="k">发帧</span><span class="v" id="srOut">0</span></div>
+        </div>
+
+        <div class="row-line">
+          <label style="display:flex;align-items:center;gap:5px">
+            <input type="checkbox" id="srAutoReconnect" checked style="width:auto"> 自动重连
+          </label>
+          <label style="display:flex;align-items:center;gap:5px">
+            <input type="checkbox" id="srAutoPing" checked style="width:auto"> 自动心跳
+          </label>
+          <input type="number" id="srPingSec" value="30" min="1" style="width:64px">
+          <span style="color:var(--dim);font-size:11px">秒</span>
+          <span style="flex:1"></span>
+          <label style="display:flex;align-items:center;gap:5px"
+                 title="negotiate 是 POST，WebSocket 是 GET 升级，网关对两者可能不同对待。勾上强制走 WebSockets 并跳过 POST">
+            <input type="checkbox" id="srSkipNegotiate" style="width:auto"> 跳过 negotiate
+          </label>
+        </div>
+
+        <div class="info">
+          <div><span>connectionId</span><span id="srConnId">—</span></div>
+          <div><span>服务端时间</span><span id="srServerTime">—</span></div>
+          <div><span>时钟偏差</span><span id="srSkew">—</span></div>
+          <div><span>最后收帧</span><span id="srLast">—</span></div>
+        </div>
+
+        <div class="ops">
+          <div class="row-line">
+            <button class="sm" data-sr="Ping">Ping</button>
+            <button class="sm" data-sr="Resync">Resync</button>
+            <span class="caption">Ack</span>
+            <input type="text" id="srAckIds" placeholder="1,2,3" style="width:130px">
+            <button class="sm" id="btnSrAck">Ack</button>
+          </div>
+          <div class="row-line">
+            <span class="caption">自定义</span>
+            <input type="text" id="srMethod" placeholder="方法名" style="width:130px">
+            <input type="text" id="srArgs" placeholder="参数 JSON 数组，如 [1,2]" value="[]" style="flex:1">
+            <button class="sm" id="btnSrInvoke">调用</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="cardWs">
+      <div class="card-head">
+        <h2>原生 WebSocket</h2>
+        <span class="pill" id="pillWs"><i></i><span>未连接</span></span>
+        <span style="flex:1"></span>
+        <button class="ws-primary" id="btnWsConnect">连接</button>
+        <button id="btnWsDisconnect" class="danger" disabled>断开</button>
+      </div>
+      <div class="card-body">
+        <div class="stats">
+          <div class="stat"><span class="k">租约剩余</span><span class="v stale" id="wsLease">—</span></div>
+          <div class="stat"><span class="k">收帧</span><span class="v" id="wsIn">0</span></div>
+          <div class="stat"><span class="k">发帧</span><span class="v" id="wsOut">0</span></div>
+        </div>
+
+        <div class="row-line">
+          <label style="display:flex;align-items:center;gap:5px">
+            <input type="checkbox" id="wsAutoReconnect" checked style="width:auto"> 自动重连
+          </label>
+          <label style="display:flex;align-items:center;gap:5px">
+            <input type="checkbox" id="wsAutoPing" checked style="width:auto"> 自动心跳
+          </label>
+          <input type="number" id="wsPingSec" value="30" min="1" style="width:64px">
+          <span style="color:var(--dim);font-size:11px">秒</span>
+        </div>
+
+        <div class="info">
+          <div><span>connectionId</span><span id="wsConnId">—</span></div>
+          <div><span>协商协议</span><span id="wsProto">—</span></div>
+          <div><span>服务端时间</span><span id="wsServerTime">—</span></div>
+          <div><span>最后收帧</span><span id="wsLast">—</span></div>
+        </div>
+
+        <div class="ops">
+          <div class="row-line">
+            <button class="sm" id="btnWsPing">ping</button>
+            <button class="sm" id="btnWsResync">resync</button>
+            <span class="caption">ack</span>
+            <input type="text" id="wsAckIds" placeholder="1,2,3" style="width:130px">
+            <button class="sm" id="btnWsAck">ack</button>
+          </div>
+          <div class="row-line">
+            <span class="caption">原始帧</span>
+            <textarea id="wsRaw" style="flex:1;min-height:52px">{"type":"ping"}</textarea>
+            <button class="sm" id="btnWsSend" style="align-self:stretch">发送</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <section class="card log-card">
+    <div class="log-head">
+      <h2>帧日志</h2>
+      <span class="filters" id="filters">
+        <button data-f="all" class="on">全部</button>
+        <button data-f="sr">SignalR</button>
+        <button data-f="ws">WS</button>
+        <button data-f="err">仅错误</button>
+      </span>
+      <span style="flex:1"></span>
+      <button class="link" id="btnClear">清空</button>
+    </div>
+    <div id="log"></div>
+  </section>
+
+  <details class="legend">
+    <summary>关闭码与拒绝原因对照</summary>
+    <div class="inner">
+      <div><code>1000</code><span>正常关闭：被踢（ForceDisconnect 之后）或客户端主动关</span></div>
+      <div><code>1008</code><span>策略拒绝：准入未通过、连接已失效（超租约）</span></div>
+      <div><code>1009</code><span>帧过大：超过 WebSocketMaxMessageBytes</span></div>
+      <div><code>1012</code><span>服务重启：滚动发布，客户端应退避后重连</span></div>
+      <div><code>403</code><span>握手前拒绝：无身份 / 准入不通过</span></div>
+      <div><code>400</code><span>握手前拒绝：声明的子协议一个都不认识</span></div>
+    </div>
+  </details>
+
+  <p class="note">
+    <b>网关路由</b>：<code>/ws/{短名}/{**}</code> → <code>/{**}</code>，只剥前缀、不改路径，
+    所以 <code>/ws/hertalink/chat-ws</code> 到下游就是 <code>/chat-ws</code>。
+    <code>access_token</code> 也只在这个前缀下被读取——两条传输都靠它拿身份。<br>
+    <b>连不上先点「探测网关」</b>：先 POST 一次 negotiate，把 404（路由没生成）、401（token）、
+    403（准入）、429（限流）和「请求根本没出去」（CORS / 混合内容）分开。
+    SignalR 卡在 <code>Failed to complete negotiation</code> 时，勾「跳过 negotiate」强制走 WebSockets，
+    可以把 POST 那一环排除掉。<br>
+    <b>直连</b>拿不到身份：Link 是匿名模式，浏览器又没法在 WS 升级请求里加 <code>x-viv-*</code> 头，
+    身份为 null 直接 403 —— 只能用于没有网关的本地调试。
+  </p>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- 日志 ----------
+
+  var logBox = $('log');
+  var rowCount = 0;
+  var activeFilter = 'all';
+
+  function stamp() {
+    var d = new Date();
+    return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  }
+
+  function applyFilter(row) {
+    if (activeFilter === 'all') return;
+    if (activeFilter === 'err') { row.hidden = !row.classList.contains('err'); return; }
+    var badge = row.querySelector('.badge');
+    row.hidden = !badge || badge.textContent.toLowerCase() !== activeFilter;
+  }
+
+  function push(row) {
+    var atBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 90;
+    logBox.appendChild(row);
+    applyFilter(row);
+    if (++rowCount > 800) { logBox.removeChild(logBox.firstChild); rowCount--; }
+    if (atBottom) logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function log(src, dir, text, level) {
+    var row = document.createElement('div');
+    row.className = 'row' + (level === 'err' ? ' err' : level === 'warn' ? ' warn' : '');
+
+    var ts = document.createElement('span');
+    ts.className = 'ts';
+    ts.textContent = stamp();
+
+    var badge = document.createElement('span');
+    badge.className = 'badge ' + src.toLowerCase();
+    badge.textContent = src;
+
+    var d = document.createElement('span');
+    d.className = 'dir ' + dir;
+    d.textContent = dir === 'in' ? '↓' : dir === 'out' ? '↑' : '·';
+
+    var body = document.createElement('div');
+    body.className = 'body';
+    body.textContent = text;
+
+    row.append(ts, badge, d, body);
+    push(row);
+    return body;
+  }
+
+  function pretty(value) {
+    try { return JSON.stringify(value, null, 2); }
+    catch (e) { return String(value); }
+  }
+
+  function logFrame(src, dir, method, payload) {
+    var body = log(src, dir, '');
+
+    var m = document.createElement('span');
+    m.className = 'method';
+    m.textContent = method;
+    body.appendChild(m);
+
+    if (payload !== undefined) {
+      var compact;
+      try { compact = typeof payload === 'string' ? payload : JSON.stringify(payload); }
+      catch (e) { compact = String(payload); }
+
+      if (compact.length <= 150) {
+        var span = document.createElement('span');
+        span.className = 'payload';
+        span.textContent = compact;
+        body.appendChild(span);
+      } else {
+        var det = document.createElement('details');
+        var sum = document.createElement('summary');
+        sum.textContent = compact.slice(0, 130) + ' … 共 ' + compact.length + ' 字符';
+        var pre = document.createElement('pre');
+        pre.textContent = pretty(payload);
+        det.append(sum, pre);
+        body.appendChild(det);
+      }
+    }
+  }
+
+  $('filters').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-f]');
+    if (!btn) return;
+    [].forEach.call(this.children, function (b) { b.classList.toggle('on', b === btn); });
+    activeFilter = btn.dataset.f;
+    [].forEach.call(logBox.children, applyFilter);
+  });
+
+  $('btnClear').addEventListener('click', function () {
+    logBox.textContent = '';
+    rowCount = 0;
+  });
+
+  // ---------- 目标地址 ----------
+
+  function normalizePath(v) {
+    v = (v || '').trim();
+    if (!v) return '';
+    if (v.charAt(0) !== '/') v = '/' + v;
+    return v.replace(/\/+$/, '');
+  }
+
+  function baseUrl() {
+    var v = $('base').value.trim().replace(/\/+$/, '');
+    if (v) return v;
+
+    // file:// 打开时 location.origin 是 "file://"，直接拿来拼会得到 file:///ws/...
+    var origin = location.origin;
+    if (origin && /^https?:\/\//.test(origin)) return origin;
+
+    return 'http://localhost:5000';
+  }
+
+  function buildUrls() {
+    var base = baseUrl();
+    var gateway = $('mode').value === 'gateway';
+    var short = $('short').value.trim() || 'hertalink';
+    var hub = normalizePath($('hubPath').value);
+    var wsPath = normalizePath($('wsPath').value);
+    var prefix = gateway ? '/ws/' + short : '';
+
+    return {
+      gateway: gateway,
+      sr: base + prefix + hub,
+      ws: base.replace(/^http/, 'ws') + prefix + wsPath,
+      // 网关只剥前缀、不改写路径（VivGatewayRouteBuilder 的 PathPattern = /{**catch-all}），
+      // 所以下游收到的还是这两个路径
+      down: gateway
+        ? hub + '  ·  ' + wsPath + '   （网关剥掉 ' + prefix + ' 后转发）'
+        : '直连，路径原样不改写',
+      probe: base + prefix + hub + '/negotiate?negotiateVersion=1'
+    };
+  }
+
+  function withToken(url) {
+    var token = $('token').value.trim();
+    if (!token) return url;
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'access_token=' + encodeURIComponent(token);
+  }
+
+  function refreshUrls() {
+    var u = buildUrls();
+    $('urlSr').textContent = u.sr;
+    $('urlWs').textContent = u.ws;
+    $('urlDown').textContent = u.down;
+    $('urlProbe').textContent = u.probe;
+    $('baseLabel').textContent = u.gateway ? '网关基址' : '服务基址';
+    $('short').disabled = !u.gateway;
+  }
+
+  ['mode', 'base', 'short', 'hubPath', 'wsPath'].forEach(function (id) {
+    $(id).addEventListener('input', refreshUrls);
+    $(id).addEventListener('change', refreshUrls);
+  });
+
+  // ---------- 状态 ----------
+
+  function pill(el, text, kind) {
+    var p = $(el);
+    p.className = 'pill' + (kind ? ' ' + kind : '');
+    p.lastElementChild.textContent = text;
+  }
+
+  function setText(id, value) {
+    $(id).textContent = value;
+  }
+
+  function parseIds(raw) {
+    return (raw || '').split(/[\s,]+/).filter(Boolean).map(function (x) { return Number(x); })
+      .filter(function (n) { return Number.isFinite(n); });
+  }
+
+  function fmtTime(value) {
+    if (!value) return '—';
+    var d = new Date(value);
+    return isNaN(d.getTime()) ? String(value) : d.toTimeString().slice(0, 8);
+  }
+
+  function fmtSkew(serverTime) {
+    if (!serverTime) return '—';
+    var delta = new Date(serverTime).getTime() - Date.now();
+    var abs = Math.abs(delta);
+    if (abs < 1000) return Math.round(delta) + ' ms';
+    if (abs < 60000) return (delta / 1000).toFixed(1) + ' s';
+    return (delta / 60000).toFixed(1) + ' min';
+  }
+
+  // 两台传输各维护一份「本地倒计时」状态
+  var clocks = {
+    sr: { lease: null, timer: null, count: { in: 0, out: 0 } },
+    ws: { lease: null, timer: null, count: { in: 0, out: 0 } }
+  };
+
+  function setLease(which, text) {
+    var el = $(which + 'Lease');
+    el.textContent = text;
+    el.classList.toggle('stale', text === '—');
+  }
+
+  function startLeaseClock(which) {
+    var c = clocks[which];
+    if (c.timer) return;
+    c.timer = setInterval(function () {
+      if (!c.lease) { setLease(which, '—'); return; }
+      var left = c.lease - Date.now();
+      if (left <= 0) { setLease(which, '已过期'); return; }
+      setLease(which, Math.ceil(left / 1000) + 's');
+    }, 500);
+  }
+
+  function onPong(which, pong) {
+    if (!pong) return;
+    if (pong.serverTime) setText(which + 'ServerTime', fmtTime(pong.serverTime));
+    if (which === 'sr') setText('srSkew', fmtSkew(pong.serverTime));
+    if (pong.leaseExpiresAt) {
+      clocks[which].lease = new Date(pong.leaseExpiresAt).getTime();
+      startLeaseClock(which);
+    }
+    if (pong.alive === false) {
+      log('SYS', 'info', which.toUpperCase() + ' 收到 Alive=false：服务端已不认这条连接，应当重连', 'warn');
+    }
+  }
+
+  function count(which, dir) {
+    var c = clocks[which].count;
+    c[dir]++;
+    setText(which + (dir === 'in' ? 'In' : 'Out'), String(c[dir]));
+    if (dir === 'in') setText(which + 'Last', stamp());
+  }
+
+  // ---------- 网关探测 ----------
+
+  // negotiate 是 POST，WebSocket 是 GET 升级 —— 网关、限流、CORS 对这两件事的处理可能不一样。
+  // 连不上时先跑这一步，把「没到网关」和「到了但被拒」分开
+  function probe() {
+    var u = buildUrls();
+    var token = $('token').value.trim();
+    var url = u.probe + (token ? '&access_token=' + encodeURIComponent(token) : '');
+
+    log('SYS', 'info', '探测 negotiate（POST，' + (token ? '带 token' : '不带 token') + '）→ ' + u.probe);
+
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      credentials: 'omit'
+    })
+      .then(function (res) {
+        if (res.ok) {
+          log('SYS', 'info', 'HTTP ' + res.status + '：路由与认证都通，可以连接');
+        } else if (res.status === 404) {
+          log('SYS', 'info', 'HTTP 404：网关没有这条路由。查短名是否进了服务发现（VivGateway:ShortNames）', 'err');
+        } else if (res.status === 401) {
+          log('SYS', 'info', 'HTTP 401：token 无效或过期', 'err');
+        } else if (res.status === 403) {
+          log('SYS', 'info', 'HTTP 403：网关或下游拒绝。查 access_token 只在 /ws 前缀下被读、以及下游准入是否放行', 'err');
+        } else if (res.status === 429) {
+          log('SYS', 'info', 'HTTP 429：被网关限流策略挡下（ws 路由挂了 RateLimiterPolicy）', 'err');
+        } else {
+          log('SYS', 'info', 'HTTP ' + res.status + ' ' + (res.statusText || ''), 'warn');
+        }
+        return res.text();
+      })
+      .then(function (text) {
+        if (!text) return;
+        logFrame('SYS', 'in', 'body', text.length > 400 ? text.slice(0, 400) + ' …' : text);
+      })
+      .catch(function (err) {
+        // fetch 抛错拿不到状态码：请求根本没出去，或者响应被浏览器挡了
+        log('SYS', 'info', '探测失败：' + (err && err.message ? err.message : err)
+          + ' → 请求没到达网关。常见三种：CORS 未放行当前 Origin、网关不可达、https 页面调 http 被拦', 'err');
+      });
+  }
+
+  // 浏览器里 fetch 抛 TypeError 时你什么都看不到（CORS 把响应挡住了）。
+  // 这时候唯一能拿到真相的办法是绕开浏览器 —— 给它一条能直接粘出去的命令
+  function copyCurl() {
+    var u = buildUrls();
+    var token = $('token').value.trim();
+    var url = u.probe + (token ? '&access_token=' + token : '');
+    var cmd = 'curl -i -X POST "' + url + '" -H "Content-Type: text/plain;charset=UTF-8"';
+
+    // 日志里打码：这条容易被截图贴到群里，JWT 不该跟着走
+    log('SYS', 'info', 'curl → ' + u.probe + (token ? '&access_token=<token>' : '')
+      + '   （完整命令已复制，地址栏无 CORS 限制）');
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(cmd).then(
+        function () { log('SYS', 'info', '已复制到剪贴板，粘到终端里跑，能看到浏览器看不到的状态码'); },
+        function () { log('SYS', 'info', '复制被拒（需要 https 或 localhost），手动拼一下：' + u.probe, 'warn'); }
+      );
+    } else {
+      log('SYS', 'info', '当前环境没有剪贴板权限，手动拼一下：' + u.probe, 'warn');
+    }
+  }
+
+  // 把 SignalR 那句 "Failed to complete negotiation" 翻译成能动手的方向
+  function explainSignalRError(err) {
+    var msg = (err && err.message) ? err.message : String(err);
+    if (/\b404\b/.test(msg)) return '网关没有这条路由（或下游没有这个路径），先核对短名与下游路径';
+    if (/\b401\b/.test(msg)) return 'token 无效或过期';
+    if (/\b403\b/.test(msg)) return '准入不通过：无身份，或 Apex 校验拒了';
+    if (/\b429\b/.test(msg)) return '被限流挡下，降低频率或看限流配置';
+    if (/Failed to fetch|NetworkError|CORS|TypeError/i.test(msg)) {
+      return '请求没到达服务端：优先怀疑 CORS 与混合内容，先点「探测网关」确认';
+    }
+    return '';
+  }
+
+  // ---------- SignalR ----------
+
+  var sr = { conn: null, timer: null, wantOpen: false };
+
+  if (typeof signalR === 'undefined') {
+    log('SYS', 'info', 'signalR 客户端未加载（CDN 不可达），SignalR 面板不可用', 'err');
+    $('btnSrConnect').disabled = true;
+  }
+
+  function srHandle(name) {
+    return function () {
+      var args = [].slice.call(arguments);
+      count('sr', 'in');
+      logFrame('SR', 'in', name, args.length === 1 ? args[0] : args);
+
+      if (name === 'Connected' && args[0]) {
+        setText('srConnId', args[0].connectionId || '—');
+        setText('srServerTime', fmtTime(args[0].serverTime));
+        setText('srSkew', fmtSkew(args[0].serverTime));
+        if (args[0].resumeHint == null) log('SYS', 'info', 'ResumeHint 为空：服务端不知道水位，需自行走业务 API 对齐');
+      }
+      if (name === 'Pong') onPong('sr', args[0]);
+      if (name === 'ForceDisconnect') log('SYS', 'info', '收到 ForceDisconnect：客户端应主动 stop', 'warn');
+    };
+  }
+
+  function srStartPing() {
+    srStopPing();
+    if (!$('srAutoPing').checked) return;
+    var sec = Math.max(1, Number($('srPingSec').value) || 30);
+    sr.timer = setInterval(function () { srInvoke('Ping'); }, sec * 1000);
+  }
+
+  function srStopPing() {
+    if (sr.timer) { clearInterval(sr.timer); sr.timer = null; }
+  }
+
+  function srConnect() {
+    if (sr.conn) return;
+    if (typeof signalR === 'undefined') return;
+
+    var url = buildUrls().sr;
+    var token = $('token').value.trim();
+    var skipNegotiate = $('srSkipNegotiate').checked;
+
+    sr.wantOpen = true;
+    pill('pillSr', '连接中', 'connecting');
+    log('SYS', 'info', 'SignalR 连接 → ' + url + (skipNegotiate ? '（跳过 negotiate，强制 WebSockets）' : ''));
+
+    var options = { accessTokenFactory: function () { return token; } };
+    if (skipNegotiate) {
+      options.skipNegotiation = true;
+      options.transport = signalR.HttpTransportType.WebSockets;
+    }
+
+    var builder = new signalR.HubConnectionBuilder()
+      .withUrl(url, options)
+      .configureLogging(signalR.LogLevel.Warning);
+
+    if ($('srAutoReconnect').checked) {
+      builder.withAutomaticReconnect([0, 2000, 5000, 10000, 30000]);
+    }
+
+    var conn = builder.build();
+    sr.conn = conn;
+    srSyncButtons();
+
+    ['Connected', 'Pong', 'ForceDisconnect', 'ReceiveMessage', 'MessageRecalled', 'Ack', 'Resync']
+      .forEach(function (name) { conn.on(name, srHandle(name)); });
+
+    conn.onreconnecting(function (err) {
+      pill('pillSr', '重连中', 'connecting');
+      log('SYS', 'info', 'SignalR 重连中：' + (err && err.message ? err.message : ''), 'warn');
+      srStopPing();
+    });
+
+    conn.onreconnected(function () {
+      pill('pillSr', '已连接', 'live');
+      log('SYS', 'info', 'SignalR 已重连');
+      srStartPing();
+    });
+
+    conn.onclose(function (err) {
+      var wasWanted = sr.wantOpen;
+      srStopPing();
+      setText('srConnId', '—');
+      sr.conn = null;
+      srSyncButtons();
+
+      if (!wasWanted) {
+        pill('pillSr', '未连接', '');
+        return;
+      }
+
+      pill('pillSr', '已断开', err ? 'error' : '');
+      if (err) log('SYS', 'info', 'SignalR 连接关闭：' + err.message, 'err');
+      if (!$('srAutoReconnect').checked) {
+        log('SYS', 'info', '未开启自动重连，连接已停止', 'warn');
+      }
+    });
+
+    conn.start()
+      .then(function () {
+        pill('pillSr', '已连接', 'live');
+        var transport = '';
+        try { transport = conn.connection.transport.constructor.name; } catch (e) { transport = ''; }
+        log('SYS', 'info', 'SignalR 握手完成' + (transport ? ' transport=' + transport : ''));
+        srStartPing();
+      })
+      .catch(function (err) {
+        pill('pillSr', '连接失败', 'error');
+        log('SYS', 'info', 'SignalR 连接失败：' + (err && err.message ? err.message : err), 'err');
+
+        var hint = explainSignalRError(err);
+        if (hint) log('SYS', 'info', '↑ ' + hint, 'warn');
+
+        sr.conn = null;
+        sr.wantOpen = false;
+        srSyncButtons();
+        try { conn.stop(); } catch (e) { /* 已经死了 */ }
+      })
+      .finally(srSyncButtons);
+  }
+
+  function srDisconnect() {
+    sr.wantOpen = false;
+    srStopPing();
+    if (!sr.conn) { srSyncButtons(); return; }
+    var conn = sr.conn;
+    conn.stop().finally(function () {
+      sr.conn = null;
+      pill('pillSr', '未连接', '');
+      setText('srConnId', '—');
+      srSyncButtons();
+    });
+    log('SYS', 'info', 'SignalR 主动断开');
+  }
+
+  function srInvoke(method) {
+    var rest = [].slice.call(arguments, 1);
+    if (!sr.conn || sr.conn.state !== signalR.HubConnectionState.Connected) {
+      log('SYS', 'info', 'SignalR 未连接，无法调用 ' + method, 'warn');
+      return Promise.resolve();
+    }
+    count('sr', 'out');
+    log('SR', 'out', method + '(' + rest.map(function (a) { return JSON.stringify(a); }).join(', ') + ')');
+    return sr.conn.invoke.apply(sr.conn, [method].concat(rest))
+      .then(function (result) {
+        if (result !== undefined && result !== null) logFrame('SR', 'in', method + ' →', result);
+      })
+      .catch(function (err) {
+        log('SYS', 'info', method + ' 调用失败：' + (err && err.message ? err.message : err), 'err');
+      });
+  }
+
+  function srSyncButtons() {
+    var live = !!sr.conn;
+    $('btnSrConnect').disabled = live || typeof signalR === 'undefined';
+    $('btnSrDisconnect').disabled = !live;
+  }
+
+  $('btnSrConnect').addEventListener('click', srConnect);
+  $('btnSrDisconnect').addEventListener('click', srDisconnect);
+  $('btnProbe').addEventListener('click', probe);
+  $('btnCurl').addEventListener('click', copyCurl);
+  $('srAutoPing').addEventListener('change', function () {
+    if (this.checked && sr.conn) srStartPing(); else srStopPing();
+  });
+  $('srPingSec').addEventListener('change', function () { if (sr.conn) srStartPing(); });
+
+  [].forEach.call(document.querySelectorAll('[data-sr]'), function (btn) {
+    btn.addEventListener('click', function () { srInvoke(btn.dataset.sr); });
+  });
+
+  $('btnSrAck').addEventListener('click', function () { srInvoke('Ack', parseIds($('srAckIds').value)); });
+
+  $('btnSrInvoke').addEventListener('click', function () {
+    var method = $('srMethod').value.trim();
+    if (!method) return log('SYS', 'info', '先填方法名', 'warn');
+    var args;
+    try { args = JSON.parse($('srArgs').value || '[]'); }
+    catch (e) { return log('SYS', 'info', '参数不是合法 JSON：' + e.message, 'err'); }
+    if (!Array.isArray(args)) return log('SYS', 'info', '参数必须是 JSON 数组', 'err');
+    srInvoke.apply(null, [method].concat(args));
+  });
+
+  // ---------- 原生 WebSocket ----------
+
+  var ws = { sock: null, timer: null, retry: 0, wantOpen: false, retryTimer: null };
+
+  function wsSend(obj, label) {
+    if (!ws.sock || ws.sock.readyState !== WebSocket.OPEN) {
+      log('SYS', 'info', 'WS 未连接，未发送', 'warn');
+      return;
+    }
+    var text = JSON.stringify(obj);
+    ws.sock.send(text);
+    count('ws', 'out');
+    logFrame('WS', 'out', label || (obj && obj.type) || 'frame', obj);
+  }
+
+  function wsStartPing() {
+    wsStopPing();
+    if (!$('wsAutoPing').checked) return;
+    var sec = Math.max(1, Number($('wsPingSec').value) || 30);
+    ws.timer = setInterval(function () { wsSend({ type: 'ping' }); }, sec * 1000);
+  }
+
+  function wsStopPing() {
+    if (ws.timer) { clearInterval(ws.timer); ws.timer = null; }
+  }
+
+  function wsScheduleRetry() {
+    if (!ws.wantOpen || !$('wsAutoReconnect').checked) return;
+    var delay = Math.min(30000, 1000 * Math.pow(2, ws.retry));
+    ws.retry++;
+    log('SYS', 'info', Math.round(delay / 1000) + ' 秒后重连（第 ' + ws.retry + ' 次）');
+    ws.retryTimer = setTimeout(wsConnect, delay);
+  }
+
+  function wsConnect() {
+    if (ws.sock) return;
+
+    var url = withToken(buildUrls().ws);
+    var protocols = [];
+    if ($('declProtocol').checked) {
+      var p = $('protocol').value.trim();
+      if (p) protocols.push(p);
+    }
+
+    ws.wantOpen = true;
+    pill('pillWs', '连接中', 'connecting');
+    log('SYS', 'info', 'WS 连接 → ' + url + (protocols.length ? '  [' + protocols.join(',') + ']' : '  [不声明子协议]'));
+
+    var sock;
+    try { sock = protocols.length ? new WebSocket(url, protocols) : new WebSocket(url); }
+    catch (e) {
+      pill('pillWs', '构造失败', 'error');
+      log('SYS', 'info', 'WebSocket 构造失败：' + e.message, 'err');
+      ws.wantOpen = false;
+      wsSyncButtons();
+      return;
+    }
+
+    ws.sock = sock;
+    wsSyncButtons();
+
+    sock.onopen = function () {
+      ws.retry = 0;
+      pill('pillWs', '已连接', 'live');
+      setText('wsProto', sock.protocol || '(无协商)');
+      log('SYS', 'info', 'WS 已打开，协商协议=' + (sock.protocol || '(无)'));
+
+      // 选了协议但服务端没回显，多半是被中间层剥掉了头
+      if (protocols.length && sock.protocol !== protocols[0]) {
+        log('SYS', 'info', '服务端没有回显 ' + protocols[0] + '，若在网关后面请检查是否透传 Sec-WebSocket-Protocol', 'warn');
+      }
+
+      wsStartPing();
+    };
+
+    sock.onmessage = function (e) {
+      if (typeof e.data !== 'string') {
+        count('ws', 'in');
+        log('WS', 'in', '二进制帧 ' + (e.data.size || e.data.byteLength || 0) + ' 字节（服务端只发文本）', 'warn');
+        return;
+      }
+
+      count('ws', 'in');
+      var parsed;
+      try { parsed = JSON.parse(e.data); }
+      catch (err) { logFrame('WS', 'in', '非 JSON', e.data); return; }
+
+      var method = parsed && parsed.method ? parsed.method : '(无 method)';
+      var args = parsed && parsed.args ? parsed.args : [];
+      logFrame('WS', 'in', method, args.length === 1 ? args[0] : args);
+
+      if (method === 'Connected' && args[0]) {
+        setText('wsConnId', args[0].connectionId || '—');
+        setText('wsServerTime', fmtTime(args[0].serverTime));
+        if (args[0].resumeHint == null) log('SYS', 'info', 'ResumeHint 为空：服务端不知道水位');
+      }
+      if (method === 'Pong') onPong('ws', args[0]);
+      if (method === 'ForceDisconnect') log('SYS', 'info', '收到 ForceDisconnect：客户端应主动关闭', 'warn');
+      if (method === 'Ack') {
+        var ack = args[0] || {};
+        // status: 0 Accepted / 1 Throttled / 2 UnknownConnection / 3 Failed
+        if (ack.status === 1) log('SYS', 'info', 'Ack 被限流：稍后重报即可，不会丢消息', 'warn');
+        if (ack.status === 2) log('SYS', 'info', 'Ack 回 UnknownConnection：服务端已不认这条连接，应重连', 'err');
+        if (ack.status === 3) log('SYS', 'info', 'Ack 落库失败：必须重报', 'err');
+      }
+      if (method === 'Resync' && args[0] && args[0].throttled) {
+        log('SYS', 'info', 'Resync 被限流：退避重试，别把 NeedBackfill=false 当成已对齐', 'warn');
+      }
+    };
+
+    sock.onerror = function () {
+      log('SYS', 'info', 'WS 发生错误（浏览器不提供细节，通常是握手被拒或网络中断）', 'err');
+    };
+
+    sock.onclose = function (e) {
+      wsStopPing();
+      ws.sock = null;
+      setText('wsConnId', '—');
+      setText('wsProto', '—');
+
+      var detail = 'code=' + e.code + ' reason=' + (e.reason || '(空)') + ' clean=' + e.wasClean;
+      var hint = closeHint(e.code);
+
+      if (ws.wantOpen) log('SYS', 'info', 'WS 断开：' + detail + (hint ? '  → ' + hint : ''), 'warn');
+      else log('SYS', 'info', 'WS 已关闭：' + detail);
+
+      pill('pillWs', ws.wantOpen ? '已断开' : '未连接', ws.wantOpen ? 'error' : '');
+      wsSyncButtons();
+      if (ws.wantOpen) wsScheduleRetry();
+    };
+  }
+
+  function closeHint(code) {
+    if (code === 1000) return '正常关闭：被踢或服务端主动关';
+    if (code === 1006) return '异常断开：没走关闭握手。先点「探测网关」分清是网关没路由、还是反代掐了长连接';
+    if (code === 1008) return '策略拒绝：准入不通过或连接已失效';
+    if (code === 1009) return '帧过大';
+    if (code === 1012) return '服务重启，退避后重连';
+    return '';
+  }
+
+  function wsDisconnect() {
+    ws.wantOpen = false;
+    if (ws.retryTimer) { clearTimeout(ws.retryTimer); ws.retryTimer = null; }
+    wsStopPing();
+    if (!ws.sock) { wsSyncButtons(); return; }
+    log('SYS', 'info', 'WS 主动关闭');
+    try { ws.sock.close(1000, 'client close'); } catch (e) { /* 已经死了 */ }
+  }
+
+  function wsSyncButtons() {
+    $('btnWsConnect').disabled = !!ws.sock;
+    $('btnWsDisconnect').disabled = !ws.sock;
+  }
+
+  $('btnWsConnect').addEventListener('click', wsConnect);
+  $('btnWsDisconnect').addEventListener('click', wsDisconnect);
+
+  $('btnWsPing').addEventListener('click', function () { wsSend({ type: 'ping' }); });
+  $('btnWsResync').addEventListener('click', function () { wsSend({ type: 'resync' }); });
+  $('btnWsAck').addEventListener('click', function () { wsSend({ type: 'ack', ids: parseIds($('wsAckIds').value) }); });
+
+  $('btnWsSend').addEventListener('click', function () {
+    var raw = $('wsRaw').value.trim();
+    if (!raw) return;
+    var obj;
+    try { obj = JSON.parse(raw); }
+    catch (e) { return log('SYS', 'info', '原始帧不是合法 JSON：' + e.message, 'err'); }
+    wsSend(obj);
+  });
+
+  $('wsAutoPing').addEventListener('change', function () {
+    if (this.checked && ws.sock) wsStartPing(); else wsStopPing();
+  });
+  $('wsPingSec').addEventListener('change', function () { if (ws.sock) wsStartPing(); });
+
+  window.addEventListener('beforeunload', function () {
+    ws.wantOpen = false;
+    if (ws.sock) { try { ws.sock.close(1000, 'page unload'); } catch (e) { /* ignore */ } }
+  });
+
+  // ---------- 启动 ----------
+
+  // 基址留空时按来源推断，填进文本框，免得下面那两行 URL 看起来凭空冒出来
+  if (!$('base').value.trim()) {
+    var inferBase = location.origin && /^https?:\/\//.test(location.origin)
+      ? location.origin
+      : 'http://localhost:5000';
+    $('base').value = inferBase;
+  }
+
+  refreshUrls();
+  srSyncButtons();
+  wsSyncButtons();
+  log('SYS', 'info', '就绪。先填基址与 token，再分别连接两条传输对比行为');
+})();
+</script>
+</body>
+</html>

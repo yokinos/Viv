@@ -17,7 +17,7 @@ namespace Viv.Kinna.Contracts
     }
 
     /// <summary>
-    /// 上行指令名。不认识的一律忽略，方便以后加指令而不改老客户端。
+    /// 上行指令名。不认识的一律忽略，按开放集合处理。
     /// </summary>
     public static class KinnaInboundMethods
     {
