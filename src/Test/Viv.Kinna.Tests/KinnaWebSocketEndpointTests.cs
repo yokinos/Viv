@@ -289,10 +289,12 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
-        public async Task 注册抛异常时连接从传输表和连接表里都摘干净()
+        public async Task 在线态抛异常只降级_连接照常建立且关闭后摘干净()
         {
-            // RegisterAsync 抛在 Bind 之后、finally 之前时，以前会留下一条 socket 已死、
-            // registry 里还在的僵尸连接，随连接尝试次数线性泄漏
+            // 在线态是展示信息，OnlineAsync 抛异常由 PresenceSafelyAsync 降级、不阻断注册。
+            // 这条用例以前假设「注册抛异常 → 服务端主动关连接」，于是在无超时的 Receive 上
+            // 死等关闭帧：实际第一帧是 Connected，一直空转到宿主停机 abort 才算「通过」，
+            // 单条用例拖满 120 秒，全解决方案并行跑时把别的用例一起拖超时。
             await using var app = await StartAsync(services =>
                 services.AddSingleton<IKinnaPresenceSink<TestHub>, ThrowingPresence>());
 
@@ -302,19 +304,16 @@ namespace Viv.Kinna.Tests
             using var client = new ClientWebSocket();
             await client.ConnectAsync(WebSocketUri(app), CancellationToken.None);
 
-            // 服务端注册失败会主动关连接：客户端这边读到关闭帧或异常都算数
-            await Assert.ThrowsAnyAsync<Exception>(async () =>
-            {
-                var buffer = new byte[256];
-                while (true)
-                {
-                    var result = await client.ReceiveAsync(buffer, CancellationToken.None);
-                    if (result.MessageType == WebSocketMessageType.Close)
-                        throw new InvalidOperationException("服务端关闭了连接");
-                }
-            });
+            // 降级后握手帧照常到，两张表都登记了这条连接
+            var connected = await ReceiveAsync(client, TimeSpan.FromSeconds(5));
+            Assert.Contains("\"method\":\"Connected\"", connected);
+            Assert.Equal(1, registry.Count);
+            Assert.Single(session.Pool.GetConnectionIds(SubjectId, UserId));
 
-            // 关闭帧发出去时 Unbind 已经做完，注销紧跟其后
+            await client.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+
+            // 关闭帧发出去时 Unbind 已经做完，注销紧跟其后；降级路径同样不留僵尸连接
             await WaitUntilAsync(() => registry.Count == 0 && session.Pool.GetConnectionIds(SubjectId, UserId).Count == 0,
                 "连接从两张表里摘干净");
 
@@ -349,7 +348,9 @@ namespace Viv.Kinna.Tests
 
             // 再断。顺序反过来的话，上面那条断言会超时或直接读到关闭帧
             var buffer = new byte[64];
-            var close = await client.ReceiveAsync(buffer, CancellationToken.None);
+            // 同样带上限：关闭帧没到就快速失败，别把整包测试挂到宿主停机才收尾
+            var close = await client.ReceiveAsync(buffer, CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(WebSocketMessageType.Close, close.MessageType);
 
             // 原因要能看出来：失效走 PolicyViolation，不是 finally 兜底的 EndpointUnavailable

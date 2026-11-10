@@ -127,7 +127,8 @@ SignalR 对未知连接是静默丢弃，消息会发丢而不报错。
 关闭顺序是这块最容易被写错的地方，当前实现：
 
 ```
-MarkClosing → 排空有序队列 → 关闭帧入写队列（封队列）→ 写循环发完 → Abort/unbind
+MarkClosing → 排空有序队列 → 关闭帧入写队列（封队列）→ 写循环发完
+            → 等对端回 Close（CloseHandshakeGrace，默认 200ms）→ Abort/unbind
 ```
 
 | 场景 | 关闭码 | 说明 |
@@ -145,6 +146,14 @@ MarkClosing → 排空有序队列 → 关闭帧入写队列（封队列）→ �
 在途的 Ack 回帧只能丢弃（协议上收到 Close 后也不许再发数据帧）。
 不先标记的话，这些回帧入队失败会被当成「慢客户端」，走 `Unbind→Abort`，
 把还没被客户端读走的关闭握手掐成 `1006`。
+
+**为什么发完关闭帧还要等一帧**：`Unbind` 会立刻 `Abort()` 发 RST，内核把对端还没读走的
+关闭帧一起冲掉，客户端只拿到 `1006 / without completing the close handshake`，看不到关闭原因。
+`CloseHandshakeGrace`（默认 200ms）内等一帧对端 Close 完成握手，不配合就按上限照常收尾。
+
+**失效通知不能取消 `ReceiveAsync`**：取消一次 WebSocket 读会把 socket 打成 `Aborted`，
+后面的关闭帧根本写不出去。现在失效只置 `expiredSignal` 叫醒读循环、并用 `expired`
+取消在途指令，socket 的读只跟 `requestAborted`。
 
 **为什么停机要补 1012 而不是直接断**：直接断客户端只拿到 `1006`，
 会当成网络故障**立刻**重连，滚动发布期间整个机群一起撞上来。1012 明确告诉它「服务在重启」。

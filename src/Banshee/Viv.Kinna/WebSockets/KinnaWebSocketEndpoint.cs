@@ -43,6 +43,14 @@ namespace Viv.Kinna.WebSockets
         /// </summary>
         private const int DefaultSerialQueueCapacity = 64;
 
+        /// <summary>
+        /// 服务端主动发关闭帧之后，等对端回一帧 Close 完成握手的上限。
+        /// 直接 Unbind→Abort 会发 RST，内核把对端还没读走的关闭帧一起冲掉，
+        /// 客户端只看到 1006 / "without completing the close handshake"，拿不到关闭原因。
+        /// 本地回环下几十毫秒足够；对端不配合时按上限正常收尾，不无限等。
+        /// </summary>
+        private static readonly TimeSpan CloseHandshakeGrace = TimeSpan.FromMilliseconds(200);
+
         /// <summary>模块名，只用于指标标签</summary>
         private static readonly string HubName = typeof(THub).Name;
 
@@ -273,11 +281,18 @@ namespace Viv.Kinna.WebSockets
                 ? options.WebSocketMaxMessageBytes
                 : 32 * 1024;
 
-            // 旁路心跳和有序列派发只在这一个条件下取消它：判定连接已失效。
-            // 关闭帧仍然由读循环发，一条连接只有一个收尾方，帧的顺序才可控
+            // 旁路心跳和有序列派发只在这一个条件下通知失效；关闭帧仍然由读循环发，
+            // 一条连接只有一个收尾方，帧的顺序才可控。
+            //
+            // 两个令牌必须分开：expired 只用来打断在途指令（dispatchToken），绝不能拿去取消
+            // socket.ReceiveAsync —— .NET 的 WebSocket 取消一次读之后会把整个 socket 打成
+            // Aborted，之后 CloseOutputAsync 再也写不出关闭帧，客户端收到 Pong 后只看到 1006，
+            // 拿不到「connection expired」这个原因。读循环改用 expiredSignal 这个 Task 等失效。
             using var expired = new CancellationTokenSource();
-            using var receiveLifetime = CancellationTokenSource.CreateLinkedTokenSource(requestAborted, expired.Token);
-            var receiveToken = receiveLifetime.Token;
+            var expiredSignal = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var receiveToken = requestAborted;
+            using var dispatchLifetime = CancellationTokenSource.CreateLinkedTokenSource(requestAborted, expired.Token);
+            var dispatchToken = dispatchLifetime.Token;
 
             // 在途心跳数。心跳该是几十秒一次，堆到上限说明客户端在刷或者卡住了，
             // 丢弃比继续建任务好——它下一次心跳还会来
@@ -308,13 +323,17 @@ namespace Viv.Kinna.WebSockets
             // 重复排空队列无害，重复发关闭帧不是
             var settled = 0;
 
+            // 失效信号抢在读前面时，那次读还挂在 socket 上。留着它等客户端的 Close 回帧，
+            // 别在同一条 socket 上再发起第二个读
+            Task<ValueWebSocketReceiveResult>? pendingReceive = null;
+
             try
             {
                 while (true)
                 {
-                    // 先判「服务端已经不认这条连接」。receiveToken 是链接令牌，expired 一取消
-                    // 循环条件（!receiveToken.IsCancellationRequested）立刻为假 ——
-                    // 以前这个分支走不到，失效连接会从循环里静默退出：不发关闭帧、也不记 expired
+                    // 先判「服务端已经不认这条连接」。失效由 WhenAny 唤醒，或在下一轮这里命中标志，
+                    // 两条路都走 CloseExpiredAsync。以前这一步走不到，失效连接会静默退出：
+                    // 不发关闭帧、也不记 expired
                     if (expired.IsCancellationRequested)
                     {
                         await CloseExpiredAsync().ConfigureAwait(false);
@@ -329,15 +348,22 @@ namespace Viv.Kinna.WebSockets
 
                     ValueWebSocketReceiveResult result;
 
-                    try
+                    // 等「读到一帧」和「判定失效」谁先到。不能靠取消 ReceiveAsync 来叫醒读循环：
+                    // 取消一次 WebSocket 读会把 socket 打成 Aborted，随后的关闭帧就再也写不出去。
+                    // 失效先到时那次读还挂在 socket 上，交给 CloseExpiredAsync 复用去等回帧，
+                    // 不在同一条 socket 上再发起第二个读。
+                    var receive = socket.ReceiveAsync(buffer.AsMemory(), receiveToken).AsTask();
+                    var winner = await Task.WhenAny(receive, expiredSignal.Task).ConfigureAwait(false);
+                    if (winner != receive)
                     {
-                        result = await socket.ReceiveAsync(buffer.AsMemory(), receiveToken).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (expired.IsCancellationRequested)
-                    {
-                        // 心跳或串行派发判定服务端已经不认这条连接，关闭帧还没发，这里补上
+                        pendingReceive = receive;
                         await CloseExpiredAsync().ConfigureAwait(false);
                         return;
+                    }
+
+                    try
+                    {
+                        result = await receive.ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
@@ -464,6 +490,34 @@ namespace Viv.Kinna.WebSockets
 
                 await SettleAsync(WebSocketCloseStatus.PolicyViolation, "connection expired")
                     .ConfigureAwait(false);
+
+                // 关闭帧写出后不能立刻摘连接：finally 里的 Unbind→Abort 会发 RST，把对端
+                // 还没读走的关闭帧一起冲掉，客户端只看到 1006、拿不到 1008 这个原因。
+                // 复用挂起的那次读（或补一次读）等对端回 Close 完成握手，有上限不等死。
+                Task<ValueWebSocketReceiveResult>? reply = pendingReceive;
+                if (reply is null)
+                {
+                    var handshakeBuffer = new byte[64];
+                    reply = socket.ReceiveAsync(handshakeBuffer.AsMemory(), requestAborted).AsTask();
+                }
+
+                try
+                {
+                    await reply.WaitAsync(CloseHandshakeGrace, time).ConfigureAwait(false);
+                }
+                catch (TimeoutException) { }
+                catch (OperationCanceledException) { }
+                catch (WebSocketException) { }
+                catch (ObjectDisposedException) { }
+                finally
+                {
+                    // 超时或异常时这次读可能仍挂在 socket 上，它的异常得有人观测
+                    _ = reply.ContinueWith(
+                        static t => _ = t.Exception,
+                        CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+                }
             }
 
             // 队列满时的回执：不查存储、只编码一帧，代价可以忽略。
@@ -520,6 +574,8 @@ namespace Viv.Kinna.WebSockets
             // 两边都关的话会发两次关闭帧，第二帧还会把 socket 状态弄乱
             async Task NotifyExpiredAsync()
             {
+                // 先叫醒读循环去发关闭帧，再取消在途指令；两边都不碰 socket 的读
+                expiredSignal.TrySetResult(true);
                 try
                 {
                     await expired.CancelAsync().ConfigureAwait(false);
@@ -535,11 +591,11 @@ namespace Viv.Kinna.WebSockets
             {
                 try
                 {
-                    while (await serial.Reader.WaitToReadAsync(receiveToken).ConfigureAwait(false))
+                    while (await serial.Reader.WaitToReadAsync(dispatchToken).ConfigureAwait(false))
                     {
                         while (serial.Reader.TryRead(out var queued))
                         {
-                            if (await DispatchOnceAsync(queued, connectionId, registry, scopes, logger, receiveToken)
+                            if (await DispatchOnceAsync(queued, connectionId, registry, scopes, logger, dispatchToken)
                                     .ConfigureAwait(false))
                             {
                                 await NotifyExpiredAsync().ConfigureAwait(false);
