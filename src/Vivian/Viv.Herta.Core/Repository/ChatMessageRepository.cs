@@ -33,7 +33,7 @@ namespace Viv.Herta.Core.Repository
             {
                 var group = new EtGroupChatMessage
                 {
-                    TenantId = entry.TenantId,
+                    RealmId = entry.RealmId,
                     SessionId = entry.SessionId,
                     GroupChatId = entry.GroupId ?? throw new ArgumentException("群聊消息缺少 GroupId", nameof(entry)),
                     UserId = entry.FromUserId,
@@ -51,7 +51,7 @@ namespace Viv.Herta.Core.Repository
 
             var direct = new EtUserChatMessage
             {
-                TenantId = entry.TenantId,
+                RealmId = entry.RealmId,
                 SessionId = entry.SessionId,
                 UserId = entry.FromUserId,
                 ReceiverUserId = entry.ToUserId ?? throw new ArgumentException("单聊消息缺少 ToUserId", nameof(entry)),
@@ -67,28 +67,28 @@ namespace Viv.Herta.Core.Repository
             return direct.Id;
         }
 
-        public async Task<ChatMessageEntry?> GetAsync(long tenantId, long messageId, EmChatReceiverType receiverType)
+        public async Task<ChatMessageEntry?> GetAsync(long realmId, long messageId, EmChatReceiverType receiverType)
         {
             if (receiverType == EmChatReceiverType.Group)
             {
                 var group = await _dbContext.SingleOrDefaultAsync<EtGroupChatMessage>(
-                    x => x.TenantId == tenantId && x.Id == messageId).ConfigureAwait(false);
+                    x => x.RealmId == realmId && x.Id == messageId).ConfigureAwait(false);
 
                 return group == null ? null : MapGroup(group);
             }
 
             var direct = await _dbContext.SingleOrDefaultAsync<EtUserChatMessage>(
-                x => x.TenantId == tenantId && x.Id == messageId).ConfigureAwait(false);
+                x => x.RealmId == realmId && x.Id == messageId).ConfigureAwait(false);
 
             return direct == null ? null : MapDirect(direct);
         }
 
-        public async Task<bool> RecallAsync(long tenantId, long messageId, EmChatReceiverType receiverType, DateTime recalledAt)
+        public async Task<bool> RecallAsync(long realmId, long messageId, EmChatReceiverType receiverType, DateTime recalledAt)
         {
             if (receiverType == EmChatReceiverType.Group)
             {
                 var group = await _dbContext.SingleOrDefaultAsync<EtGroupChatMessage>(
-                    x => x.TenantId == tenantId && x.Id == messageId).ConfigureAwait(false);
+                    x => x.RealmId == realmId && x.Id == messageId).ConfigureAwait(false);
 
                 if (group == null) return false;
 
@@ -99,7 +99,7 @@ namespace Viv.Herta.Core.Repository
             }
 
             var direct = await _dbContext.SingleOrDefaultAsync<EtUserChatMessage>(
-                x => x.TenantId == tenantId && x.Id == messageId).ConfigureAwait(false);
+                x => x.RealmId == realmId && x.Id == messageId).ConfigureAwait(false);
 
             if (direct == null) return false;
 
@@ -110,27 +110,27 @@ namespace Viv.Herta.Core.Repository
         }
 
         public Task<int> CountUnreadAsync(
-            long tenantId, EmChatReceiverType receiverType, long userId, long targetId, long lastReadMessageId)
+            long realmId, EmChatReceiverType receiverType, long userId, long targetId, long lastReadMessageId)
         {
             if (receiverType == EmChatReceiverType.Group)
             {
                 // 群聊里自己发的不算未读
                 return _dbContext.CountAsync<EtGroupChatMessage>(
-                    x => x.TenantId == tenantId
+                    x => x.RealmId == realmId
                          && x.GroupChatId == targetId
                          && x.UserId != userId
                          && x.Id > lastReadMessageId);
             }
 
             return _dbContext.CountAsync<EtUserChatMessage>(
-                x => x.TenantId == tenantId
+                x => x.RealmId == realmId
                      && x.UserId == targetId
                      && x.ReceiverUserId == userId
                      && x.Id > lastReadMessageId);
         }
 
         public async Task<List<ChatMessageEntry>> ListAsync(
-            long tenantId, EmChatReceiverType receiverType, long userId, long targetId,
+            long realmId, EmChatReceiverType receiverType, long userId, long targetId,
             long afterMessageId, long beforeMessageId, int limit)
         {
             var take = Math.Clamp(limit, 1, 200);
@@ -141,7 +141,7 @@ namespace Viv.Herta.Core.Repository
             var isGroup = receiverType == EmChatReceiverType.Group;
 
             var (sql, parameters) = BuildListSql(
-                isGroup, tenantId, userId, targetId, afterMessageId, beforeMessageId, take, descending);
+                isGroup, realmId, userId, targetId, afterMessageId, beforeMessageId, take, descending);
 
             if (isGroup)
             {
@@ -162,7 +162,7 @@ namespace Viv.Herta.Core.Repository
         /// 两张表各一次。原生 SQL 不过全局过滤器，租户与软删条件自己带。
         /// </summary>
         public async Task<ChatUnreadCounts> CountUnreadManyAsync(
-            long tenantId,
+            long realmId,
             long userId,
             IReadOnlyDictionary<long, long> directWatermarks,
             IReadOnlyDictionary<long, long> groupWatermarks)
@@ -183,11 +183,11 @@ namespace Viv.Herta.Core.Repository
                     SELECT m.{Col("UserId")} AS TargetId, COUNT(1) AS Count
                     FROM {dialect.GetTableName<EtUserChatMessage>()} m
                     JOIN {dialect.GetTableName<EtChatSession>()} s
-                      ON s.{Col("TenantId")} = m.{Col("TenantId")}
+                      ON s.{Col("RealmId")} = m.{Col("RealmId")}
                      AND s.{Col("UserId")} = @userId
                      AND s.{Col("ChatSessionType")} = 0
                      AND s.{Col("TargetUserId")} = m.{Col("UserId")}
-                    WHERE m.{Col("TenantId")} = @tenantId
+                    WHERE m.{Col("RealmId")} = @realmId
                       AND m.{Col("ReceiverUserId")} = @userId
                       AND m.{Col("IsDeleted")} = @notDeleted
                       AND m.{Col("Id")} > s.{Col("LastReadMsgId")}
@@ -196,7 +196,7 @@ namespace Viv.Herta.Core.Repository
                     """;
 
                 var rows = await _dbContext
-                    .FindListAsync<UnreadRow>(sql, new { tenantId, userId, notDeleted = false, targets = directWatermarks.Keys })
+                    .FindListAsync<UnreadRow>(sql, new { realmId, userId, notDeleted = false, targets = directWatermarks.Keys })
                     .ConfigureAwait(false);
 
                 foreach (var row in rows) direct[row.TargetId] = row.Count;
@@ -209,10 +209,10 @@ namespace Viv.Herta.Core.Repository
                     SELECT m.{Col("GroupChatId")} AS TargetId, COUNT(1) AS Count
                     FROM {dialect.GetTableName<EtGroupChatMessage>()} m
                     JOIN {dialect.GetTableName<EtGroupChatMember>()} s
-                      ON s.{Col("TenantId")} = m.{Col("TenantId")}
+                      ON s.{Col("RealmId")} = m.{Col("RealmId")}
                      AND s.{Col("UserId")} = @userId
                      AND s.{Col("GroupChatId")} = m.{Col("GroupChatId")}
-                    WHERE m.{Col("TenantId")} = @tenantId
+                    WHERE m.{Col("RealmId")} = @realmId
                       AND m.{Col("UserId")} <> @userId
                       AND m.{Col("IsDeleted")} = @notDeleted
                       AND m.{Col("Id")} > s.{Col("LastReadMsgId")}
@@ -221,7 +221,7 @@ namespace Viv.Herta.Core.Repository
                     """;
 
                 var rows = await _dbContext
-                    .FindListAsync<UnreadRow>(sql, new { tenantId, userId, notDeleted = false, targets = groupWatermarks.Keys })
+                    .FindListAsync<UnreadRow>(sql, new { realmId, userId, notDeleted = false, targets = groupWatermarks.Keys })
                     .ConfigureAwait(false);
 
                 foreach (var row in rows) group[row.TargetId] = row.Count;
@@ -241,7 +241,7 @@ namespace Viv.Herta.Core.Repository
         private static ChatMessageEntry MapGroup(EtGroupChatMessage x) => new()
         {
             Id = x.Id,
-            TenantId = x.TenantId,
+            RealmId = x.RealmId,
             SessionId = x.SessionId,
             ReceiverType = EmChatReceiverType.Group,
             FromUserId = x.UserId,
@@ -257,7 +257,7 @@ namespace Viv.Herta.Core.Repository
         private static ChatMessageEntry MapDirect(EtUserChatMessage x) => new()
         {
             Id = x.Id,
-            TenantId = x.TenantId,
+            RealmId = x.RealmId,
             SessionId = x.SessionId,
             ReceiverType = EmChatReceiverType.User,
             FromUserId = x.UserId,
@@ -275,7 +275,7 @@ namespace Viv.Herta.Core.Repository
         /// 原生 SQL 不过全局过滤器，租户与软删条件必须自己带。
         /// </summary>
         private (string Sql, object Parameters) BuildListSql(
-            bool isGroup, long tenantId, long userId, long targetId,
+            bool isGroup, long realmId, long userId, long targetId,
             long afterMessageId, long beforeMessageId, int take, bool descending)
         {
             var dialect = _dbContext.Dialect;
@@ -297,7 +297,7 @@ namespace Viv.Herta.Core.Repository
 
             var sql = $"""
                 {head} FROM {table} t
-                WHERE t.{Col("TenantId")} = @tenantId
+                WHERE t.{Col("RealmId")} = @realmId
                   AND {scope}
                   AND t.{Col("IsDeleted")} = @notDeleted
                   AND (@afterMessageId = 0 OR t.{Col("Id")} > @afterMessageId)
@@ -308,7 +308,7 @@ namespace Viv.Herta.Core.Repository
 
             return (sql, new
             {
-                tenantId,
+                realmId,
                 userId,
                 targetId,
                 afterMessageId,

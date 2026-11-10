@@ -33,27 +33,27 @@ namespace Viv.Herta.Core.Repository
             _lock = distributedLock;
         }
 
-        public Task<EtChatSession?> FindAsync(long tenantId, long userId, EmChatReceiverType receiverType, long targetId)
+        public Task<EtChatSession?> FindAsync(long realmId, long userId, EmChatReceiverType receiverType, long targetId)
         {
             // 单聊与群聊的定位列不同；条件表达式 EF 不翻译，写成两个分支
             return receiverType == EmChatReceiverType.Group
                 ? _dbContext.SingleOrDefaultAsync<EtChatSession>(
-                    x => x.TenantId == tenantId && x.UserId == userId && x.ChatSessionType == GroupSession && x.GroupChatId == targetId)
+                    x => x.RealmId == realmId && x.UserId == userId && x.ChatSessionType == GroupSession && x.GroupChatId == targetId)
                 : _dbContext.SingleOrDefaultAsync<EtChatSession>(
-                    x => x.TenantId == tenantId && x.UserId == userId && x.ChatSessionType == DirectSession && x.TargetUserId == targetId);
+                    x => x.RealmId == realmId && x.UserId == userId && x.ChatSessionType == DirectSession && x.TargetUserId == targetId);
         }
 
-        public async Task<EtChatSession> GetOrCreateAsync(long tenantId, long userId, EmChatReceiverType receiverType, long targetId)
+        public async Task<EtChatSession> GetOrCreateAsync(long realmId, long userId, EmChatReceiverType receiverType, long targetId)
         {
-            var existing = await FindAsync(tenantId, userId, receiverType, targetId).ConfigureAwait(false);
+            var existing = await FindAsync(realmId, userId, receiverType, targetId).ConfigureAwait(false);
             if (existing != null) return existing;
 
             if (_lock == null)
-                return await InsertAsync(tenantId, userId, receiverType, targetId).ConfigureAwait(false);
+                return await InsertAsync(realmId, userId, receiverType, targetId).ConfigureAwait(false);
 
             // 两个人同时给对方发首条消息时，各自「查不到 → 插入」会插出重复会话行。
             // 用分布锁把这一段夹住；键按定位列拼，同一对用户/同一个群才会互斥。
-            var key = LockKeyMagic.Join("chat:session", tenantId, userId, (long)receiverType, targetId);
+            var key = LockKeyMagic.Join("chat:session", realmId, userId, (long)receiverType, targetId);
 
             try
             {
@@ -61,25 +61,25 @@ namespace Viv.Herta.Core.Repository
                     key,
                     TimeSpan.FromSeconds(5),
                     // 拿到锁再查一次：排在前面的那个请求可能已经建好了
-                    async () => await FindAsync(tenantId, userId, receiverType, targetId).ConfigureAwait(false)
-                                ?? await InsertAsync(tenantId, userId, receiverType, targetId).ConfigureAwait(false),
+                    async () => await FindAsync(realmId, userId, receiverType, targetId).ConfigureAwait(false)
+                                ?? await InsertAsync(realmId, userId, receiverType, targetId).ConfigureAwait(false),
                     // 取不到锁就照旧插：极小概率多一行会话，也比发不出消息强
-                    async () => await InsertAsync(tenantId, userId, receiverType, targetId).ConfigureAwait(false))
+                    async () => await InsertAsync(realmId, userId, receiverType, targetId).ConfigureAwait(false))
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 _logger.Warning($"会话创建取锁失败，退化为直接插入: {ex.Message}");
-                return await InsertAsync(tenantId, userId, receiverType, targetId).ConfigureAwait(false);
+                return await InsertAsync(realmId, userId, receiverType, targetId).ConfigureAwait(false);
             }
         }
 
-        private async Task<EtChatSession> InsertAsync(long tenantId, long userId, EmChatReceiverType receiverType, long targetId)
+        private async Task<EtChatSession> InsertAsync(long realmId, long userId, EmChatReceiverType receiverType, long targetId)
         {
             var isGroup = receiverType == EmChatReceiverType.Group;
             var session = new EtChatSession
             {
-                TenantId = tenantId,
+                RealmId = realmId,
                 UserId = userId,
                 ChatSessionType = isGroup ? GroupSession : DirectSession,
                 TargetUserId = isGroup ? null : targetId,
@@ -98,12 +98,12 @@ namespace Viv.Herta.Core.Repository
                 // 只有取锁失败才会走到这里，属罕见路径。
                 // SQL Server 的唯一冲突不会打断事务，可以接着查；PostgreSQL 会终止整个事务，
                 // 那时下面的查询也会失败，于是把原始异常抛出去 —— 行为退化成「报错」而不是静默重复行。
-                _logger.Warning($"会话插入冲突，尝试复用已有行: tenant={tenantId} user={userId} target={targetId} {ex.Message}");
+                _logger.Warning($"会话插入冲突，尝试复用已有行: tenant={realmId} user={userId} target={targetId} {ex.Message}");
 
                 EtChatSession? existing = null;
                 try
                 {
-                    existing = await FindAsync(tenantId, userId, receiverType, targetId).ConfigureAwait(false);
+                    existing = await FindAsync(realmId, userId, receiverType, targetId).ConfigureAwait(false);
                 }
                 catch
                 {
@@ -115,42 +115,50 @@ namespace Viv.Herta.Core.Repository
             }
         }
 
-        public Task<List<EtChatSession>> FindDirectPairAsync(long tenantId, long userA, long userB)
+        public Task<List<EtChatSession>> FindDirectPairAsync(long realmId, long userA, long userB)
         {
             // A→B 与 B→A 两行一次查回；条件用 OR 写，EF 翻译成一条 SQL
             return _dbContext.FindListAsync<EtChatSession>(x =>
-                x.TenantId == tenantId
+                x.RealmId == realmId
                 && x.ChatSessionType == DirectSession
                 && ((x.UserId == userA && x.TargetUserId == userB)
                     || (x.UserId == userB && x.TargetUserId == userA)));
         }
 
-        public Task<List<EtChatSession>> GetDirectSessionsAsync(long tenantId, long userId)
+        public Task<List<EtChatSession>> GetDirectSessionsAsync(long realmId, long userId)
         {
             return _dbContext.FindListAsync<EtChatSession>(
-                x => x.TenantId == tenantId && x.UserId == userId && x.ChatSessionType == DirectSession);
+                x => x.RealmId == realmId && x.UserId == userId && x.ChatSessionType == DirectSession);
         }
 
         public async Task SetLastReadAsync(
-            long tenantId, long userId, EmChatReceiverType receiverType, long targetId, long lastReadMessageId)
+            long realmId, long userId, EmChatReceiverType receiverType, long targetId, long lastReadMessageId)
         {
-            var session = await FindAsync(tenantId, userId, receiverType, targetId).ConfigureAwait(false);
+            var session = await FindAsync(realmId, userId, receiverType, targetId).ConfigureAwait(false);
             if (session == null || lastReadMessageId <= session.LastReadMsgId) return;
 
             session.LastReadMsgId = lastReadMessageId;
             await _dbContext.UpdateAsync(session).ConfigureAwait(false);
         }
 
-        public async Task TouchAsync(long sessionId, DateTime lastMessageTime)
+        /// <summary>
+        /// 刷新会话行的最后消息时间。
+        /// <para>
+        /// 必须带 realmId：本实体不实现 ITenant，<c>FindAsync</c> 不会再替你补域条件，
+        /// 只按主键读就能读到别的域的会话行，再把时间写回去。
+        /// </para>
+        /// </summary>
+        public async Task TouchAsync(long realmId, long sessionId, DateTime lastMessageTime)
         {
-            var session = await _dbContext.FindAsync<EtChatSession>(sessionId).ConfigureAwait(false);
+            var session = await _dbContext.SingleOrDefaultAsync<EtChatSession>(
+                x => x.RealmId == realmId && x.Id == sessionId).ConfigureAwait(false);
             if (session == null) return;
 
             session.LastMessageTime = lastMessageTime;
             await _dbContext.UpdateAsync(session).ConfigureAwait(false);
         }
 
-        public async Task TouchManyAsync(IReadOnlyList<long> sessionIds, DateTime lastMessageTime)
+        public async Task TouchManyAsync(long realmId, IReadOnlyList<long> sessionIds, DateTime lastMessageTime)
         {
             if (sessionIds.Count == 0) return;
 
@@ -159,11 +167,13 @@ namespace Viv.Herta.Core.Repository
             string Col(string name) => dialect.QuoteIdentifier(name);
             var table = dialect.GetTableName<EtChatSession>();
 
+            // 每条语句都带 RealmId：这些行来自内存列表而不是刚查出的会话，
+            // 传错一个 Id 就会跨域改写别人的会话排序，加一个条件比事后排查便宜
             if (sessionIds.Count == 1)
             {
                 await _dbContext.ExecuteSqlAsync(
-                    $"UPDATE {table} SET {Col("LastMessageTime")} = @At WHERE {Col("Id")} = @Id0",
-                    new { At = lastMessageTime, Id0 = sessionIds[0] }).ConfigureAwait(false);
+                    $"UPDATE {table} SET {Col("LastMessageTime")} = @At WHERE {Col("Id")} = @Id0 AND {Col("RealmId")} = @RealmId",
+                    new { At = lastMessageTime, Id0 = sessionIds[0], RealmId = realmId }).ConfigureAwait(false);
                 return;
             }
 
@@ -171,14 +181,14 @@ namespace Viv.Herta.Core.Repository
             {
                 // 一条消息最多牵两行（单聊双向），写死两个参数比拼 IN 列表省事
                 await _dbContext.ExecuteSqlAsync(
-                    $"UPDATE {table} SET {Col("LastMessageTime")} = @At WHERE {Col("Id")} = @Id0 OR {Col("Id")} = @Id1",
-                    new { At = lastMessageTime, Id0 = sessionIds[0], Id1 = sessionIds[1] }).ConfigureAwait(false);
+                    $"UPDATE {table} SET {Col("LastMessageTime")} = @At WHERE ({Col("Id")} = @Id0 OR {Col("Id")} = @Id1) AND {Col("RealmId")} = @RealmId",
+                    new { At = lastMessageTime, Id0 = sessionIds[0], Id1 = sessionIds[1], RealmId = realmId }).ConfigureAwait(false);
                 return;
             }
 
             foreach (var id in sessionIds)
             {
-                await TouchAsync(id, lastMessageTime).ConfigureAwait(false);
+                await TouchAsync(realmId, id, lastMessageTime).ConfigureAwait(false);
             }
         }
     }

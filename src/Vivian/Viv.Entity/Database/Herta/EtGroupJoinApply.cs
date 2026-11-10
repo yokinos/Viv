@@ -8,12 +8,14 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 用户主动申请加入群申请表
     /// </summary>
-    public class EtGroupJoinApply : EntityBase, ITenant, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
+    public class EtGroupJoinApply : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
-        /// 租户ID
+        /// 聊天域 Id —— IM 自己的隔离键，与 Apex 主体无关，由本模块分配。
+        /// 本实体刻意不实现 ITenant：Momo 的租户盖章与全局过滤器不再作用于它，
+        /// 隔离一律靠查询里的显式条件，漏写一处就是跨域可见，改查询时务必带上。
         /// </summary>
-        public long TenantId { get; set; }
+        public long RealmId { get; set; }
 
         /// <summary>
         /// 目标群ID，关联 EtGroupChat.Id

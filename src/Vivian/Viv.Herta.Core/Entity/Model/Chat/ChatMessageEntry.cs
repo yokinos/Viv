@@ -9,7 +9,7 @@ namespace Viv.Herta.Core.Entity.Model.Chat
     {
         public long Id { get; init; }
 
-        public long TenantId { get; init; }
+        public long RealmId { get; init; }
 
         public long SessionId { get; init; }
 

@@ -1,6 +1,7 @@
 ﻿using Viv.Apex.Proxy.Ports;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
+using Viv.Delusion.Magic;
 using Viv.Delusion.Security;
 using Viv.Engine;
 using Viv.Entity.Database.Herta;
@@ -14,8 +15,6 @@ namespace Viv.Herta.Core.Service
 {
     /// <summary>
     /// IM 账号注册与登录。
-    /// 口令哈希不在这里实现，统一走框架的 <see cref="PasswordHash"/>（PBKDF2-SHA256 + 独立盐 + 固定时间比较）——
-    /// 与 Apex 同源，避免同一套密码学逻辑维护两份。
     /// </summary>
     public class AccountService : IAccountService
     {
@@ -32,21 +31,21 @@ namespace Viv.Herta.Core.Service
 
         public async Task<VivApiResult> RegisterAsync(HertaRegisterRequest request)
         {
-            var subjectId = request.SubjectId.GetValueOrDefault();
+            var ownerSubjectId = request.SubjectId.GetValueOrDefault();
             var appId = request.AppId.GetValueOrDefault();
 
-            var loginCode = request.LoginCode?.Trim();
-            if (string.IsNullOrEmpty(loginCode))
-                return VivApiResult.Failed("登录账号不能为空");
-
-            if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 6)
-                return VivApiResult.Failed("密码至少 6 位");
-
-            var clientCheck = await _clientApps.CheckAsync(subjectId, appId, (int)EmUserType.EndUser);
+            // 授权问的是「这个主体买了这个 App 没」，参数是归属主体 Id，不是域
+            var clientCheck = await _clientApps.CheckAsync(ownerSubjectId, appId, (int)EmUserType.EndUser);
             if (!clientCheck.Allowed)
                 return VivApiResult.Failed(clientCheck.Reason);
 
-            var existing = await _users.GetByLoginCodeAsync(subjectId, loginCode);
+            // 域：同一归属主体复用已有域，没有才新开一个。
+            // 域是隔离键，与主体 Id 分开存 —— 以后调整主体归属不影响历史会话的可见性。
+            var realmId = await ResolveRealmAsync(ownerSubjectId);
+
+            // 账号名按「主体 + 账号」唯一，不按域：一个域里可以有多个主体的账号（跨主体对话），
+            // 各自都叫 alice 是合法的。
+            var existing = await _users.GetByLoginCodeAsync(ownerSubjectId, request.LoginCode);
             if (existing != null)
                 return VivApiResult.Failed("账号已存在");
 
@@ -54,30 +53,42 @@ namespace Viv.Herta.Core.Service
 
             var chatUserId = await _users.AddAsync(new EtChatUser
             {
-                TenantId = subjectId,
-                // 注册接口一律产出 C 端用户。UserType 决定「查哪张授权表」，一旦允许请求指定，
-                // 填 Master 就等于跳过全部授权校验，所以这个字段只能由服务端写。
+                RealmId = realmId,
+                OwnerSubjectId = ownerSubjectId,
                 UserType = EmUserType.EndUser,
-                LoginCode = loginCode,
+                LoginCode = request.LoginCode,
                 Password = hash,
                 Salt = salt,
-                NickName = string.IsNullOrWhiteSpace(request.NickName) ? loginCode : request.NickName.Trim()
+                NickName = string.IsNullOrWhiteSpace(request.NickName) ? request.LoginCode : request.NickName.Trim()
             });
 
             return VivApiResult<HertaRegisterOutput>.Success(new HertaRegisterOutput { ChatUserId = chatUserId });
         }
 
+        /// <summary>
+        /// 归属主体 → 聊天域。该主体已有账号就复用它所在的域，没有才新开一个。
+        /// <para>
+        /// 不直接把主体 Id 当域：域是 IM 的内部概念，两个不同主体可以被放进同一个域来表示
+        /// 「它们互相看得见」，主体 Id 做不到这一点 —— 那正是跨主体对话要的能力。
+        /// </para>
+        /// </summary>
+        private async Task<long> ResolveRealmAsync(long ownerSubjectId)
+        {
+            var peer = await _users.GetByOwnerAsync(ownerSubjectId).ConfigureAwait(false);
+            return peer?.RealmId ?? IdMagic.NextId();
+        }
+
         public async Task<VivApiResult<HertaLoginOutput>> HertaLoginAsync(HertaLoginRequest request)
         {
             // 必填与范围由基类校验保证；0 会一路被下游按「缺少」拒绝，不需要在这里重复判
-            var subjectId = request.SubjectId.GetValueOrDefault();
+            var ownerSubjectId = request.SubjectId.GetValueOrDefault();
             var appId = request.AppId.GetValueOrDefault();
 
             var loginCode = request.LoginCode?.Trim();
             if (string.IsNullOrEmpty(loginCode))
                 return VivApiResult<HertaLoginOutput>.Failed("登录账号不能为空");
 
-            var user = await _users.GetByLoginCodeAsync(subjectId, loginCode);
+            var user = await _users.GetByLoginCodeAsync(ownerSubjectId, loginCode);
 
             // 账号不存在与密码错误返回同一句话，避免探出哪些账号存在
             if (user == null || !PasswordHash.Verify(user.Password, user.Salt, request.Password, out var needsRehash))
@@ -88,9 +99,12 @@ namespace Viv.Herta.Core.Service
                 await UpgradePasswordHashAsync(user, request.Password);
 
             // 归属与类型一律取库里那一行，不看请求：请求里的 SubjectId 只用于定位账号，
-            // token 里的 SubjectId 也来自 user.TenantId。否则改个 Request 就能冒用别人的数据域。
+            // 域取 user.RealmId，主体取 user.OwnerSubjectId。
             // 放在验密码之后：先验明身份，再谈「这个身份买了没买这个 App」，避免未授权探测。
-            var clientCheck = await _clientApps.CheckAsync(user.TenantId, appId, (int)user.UserType);
+            var clientCheck = user.OwnerSubjectId is { } owner
+                ? await _clientApps.CheckAsync(owner, appId, (int)user.UserType)
+                // 无归属主体（纯 C 端账号）：-1 表示只确认应用本身可用，不查任何主体授权表
+                : await _clientApps.CheckAsync(0, appId, -1);
             if (!clientCheck.Allowed)
                 return VivApiResult<HertaLoginOutput>.Failed(clientCheck.Reason);
 
@@ -99,7 +113,9 @@ namespace Viv.Herta.Core.Service
             var token = _tokens.GenerateToken(new TokenPayload
             {
                 AppId = appId,
-                SubjectId = user.TenantId,
+                // 聊天链路的 SubjectId 承载 RealmId：下游 ChatService / Kinna 准入把它当域用。
+                // 主体 Id 只留在库里，不进 token —— 一旦进了，下游就会拿它当隔离键。
+                SubjectId = user.RealmId,
                 UserId = user.Id,
                 UserName = user.NickName ?? loginCode
             });

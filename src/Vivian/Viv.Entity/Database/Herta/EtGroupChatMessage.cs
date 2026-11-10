@@ -8,12 +8,12 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 群聊天消息表
     /// </summary>
-    public class EtGroupChatMessage : EntityBase, ITenant, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
+    public class EtGroupChatMessage : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
-        /// 租户ID
+        /// 聊天域 Id
         /// </summary>
-        public long TenantId { get; set; }
+        public long RealmId { get; set; }
 
         /// <summary>
         /// 群ID，关联 EtGroupChat.Id

@@ -6,17 +6,17 @@ namespace Viv.Herta.Core.IService
     public interface IPresenceStore
     {
         /// <summary>连接建立：计数 +1 并设置租约</summary>
-        Task OnlineAsync(long tenantId, long userId);
+        Task OnlineAsync(long realmId, long userId);
 
         /// <summary>连接断开：计数 -1，减到 0 删除键</summary>
-        Task OfflineAsync(long tenantId, long userId);
+        Task OfflineAsync(long realmId, long userId);
 
         /// <summary>心跳续期</summary>
-        Task RenewAsync(long tenantId, long userId);
+        Task RenewAsync(long realmId, long userId);
 
         /// <summary>null = 查询失败，状态未知</summary>
-        Task<bool?> IsOnlineAsync(long tenantId, long userId);
+        Task<bool?> IsOnlineAsync(long realmId, long userId);
 
-        Task<Dictionary<long, bool?>> IsOnlineAsync(long tenantId, IReadOnlyList<long> userIds);
+        Task<Dictionary<long, bool?>> IsOnlineAsync(long realmId, IReadOnlyList<long> userIds);
     }
 }

@@ -22,13 +22,13 @@ namespace Viv.Herta.Core.Repository
             return group.Id;
         }
 
-        public Task<EtGroupChat?> GetAsync(long tenantId, long groupId)
-            => _dbContext.SingleOrDefaultAsync<EtGroupChat>(x => x.TenantId == tenantId && x.Id == groupId);
+        public Task<EtGroupChat?> GetAsync(long realmId, long groupId)
+            => _dbContext.SingleOrDefaultAsync<EtGroupChat>(x => x.RealmId == realmId && x.Id == groupId);
 
-        public async Task TouchLastMessageAsync(long tenantId, long groupId, DateTime lastMessageAt)
+        public async Task TouchLastMessageAsync(long realmId, long groupId, DateTime lastMessageAt)
         {
             var group = await _dbContext.SingleOrDefaultAsync<EtGroupChat>(
-                x => x.TenantId == tenantId && x.Id == groupId).ConfigureAwait(false);
+                x => x.RealmId == realmId && x.Id == groupId).ConfigureAwait(false);
 
             if (group == null) return;
 
@@ -36,12 +36,12 @@ namespace Viv.Herta.Core.Repository
             await _dbContext.UpdateAsync(group).ConfigureAwait(false);
         }
 
-        public Task<List<EtGroupChat>> GetListAsync(long tenantId, List<long> groupIds)
+        public Task<List<EtGroupChat>> GetListAsync(long realmId, List<long> groupIds)
         {
             if (groupIds.Count == 0)
                 return Task.FromResult(new List<EtGroupChat>());
 
-            return _dbContext.FindListAsync<EtGroupChat>(x => x.TenantId == tenantId && groupIds.Contains(x.Id));
+            return _dbContext.FindListAsync<EtGroupChat>(x => x.RealmId == realmId && groupIds.Contains(x.Id));
         }
     }
 }

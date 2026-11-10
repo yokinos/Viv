@@ -7,12 +7,12 @@ namespace Viv.Entity.Database.Herta
     /// <summary>
     /// 聊天黑名单表
     /// </summary>
-    public class EtChatBlack : EntityBase, ITenant, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
+    public class EtChatBlack : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
-        /// 租户ID
+        /// 聊天域 Id
         /// </summary>
-        public long TenantId { get; set; }
+        public long RealmId { get; set; }
 
         /// <summary>
         /// 操作人

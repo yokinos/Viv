@@ -10,10 +10,10 @@ namespace Viv.Herta.Core.IRepository
         /// <summary>建群，返回群Id</summary>
         Task<long> AddAsync(EtGroupChat group);
 
-        Task<EtGroupChat?> GetAsync(long tenantId, long groupId);
+        Task<EtGroupChat?> GetAsync(long realmId, long groupId);
 
-        Task TouchLastMessageAsync(long tenantId, long groupId, DateTime lastMessageAt);
+        Task TouchLastMessageAsync(long realmId, long groupId, DateTime lastMessageAt);
 
-        Task<List<EtGroupChat>> GetListAsync(long tenantId, List<long> groupIds);
+        Task<List<EtGroupChat>> GetListAsync(long realmId, List<long> groupIds);
     }
 }

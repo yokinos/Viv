@@ -10,9 +10,9 @@ namespace Viv.Herta.Core.IRepository
         /// 把水位推到 <paramref name="messageId"/>（只进不退），返回落库后的水位。
         /// 行不存在时插入。
         /// </summary>
-        Task<long> MergeAsync(long tenantId, long userId, long messageId);
+        Task<long> MergeAsync(long realmId, long userId, long messageId);
 
         /// <summary>读当前水位，没有记录返回 null</summary>
-        Task<long?> GetAsync(long tenantId, long userId);
+        Task<long?> GetAsync(long realmId, long userId);
     }
 }

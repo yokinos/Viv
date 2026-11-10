@@ -18,7 +18,7 @@ namespace Viv.Herta.Tests
     /// <summary>消费者 + 投递器一整条链：事件进来 → 身份校验 → 寻址 → 推给谁。</summary>
     public class SendMessageConsumerTests
     {
-        private const long TenantId = 1;
+        private const long RealmId = 1;
 
         /// <summary>信封里的登录用户，也是唯一合法的发送者</summary>
         private const long FromUserId = 2;
@@ -41,7 +41,7 @@ namespace Viv.Herta.Tests
             return new NanaEnvelope<SendMessageEvent>
             {
                 MessageId = 123,
-                Context = noContext ? null : new VivContextContent { AppId = 7, SubjectId = TenantId, UserId = FromUserId },
+                Context = noContext ? null : new VivContextContent { AppId = 7, SubjectId = RealmId, UserId = FromUserId },
                 Content = evt
             };
         }
@@ -111,14 +111,14 @@ namespace Viv.Herta.Tests
         }
 
         [Fact]
-        public async Task 事件指定租户时覆盖信封租户()
+        public async Task 事件指定域时覆盖信封域()
         {
-            // 模拟其他租户的用户发消息：租户取事件体，连接表和消息体都用它
+            // 模拟其他域的用户发消息：域取事件体，连接表和消息体都用它
             var sender = new RecordingKinnaClientSender();
             var pool = new StubKinnaConnectionPool { ConnectionIds = ["c1"] };
             var (consumer, _) = CreateConsumer(sender, pool);
             var envelope = CreateEnvelope(EmChatReceiverType.User, 5);
-            envelope.Content!.TenantId = 99;
+            envelope.Content!.RealmId = 99;
 
             var result = await consumer.ReceiveMessageAsync(envelope);
 
@@ -148,7 +148,7 @@ namespace Viv.Herta.Tests
             Assert.Equal(1, msg.V);
             // 推送用落库行 Id，客户端要拿它和拉取结果对上
             Assert.Equal(PersistedMessageId, msg.MessageId);
-            Assert.Equal(TenantId, msg.TenantId);
+            Assert.Equal(RealmId, msg.TenantId);
             Assert.Equal(7L, msg.AppId);
             Assert.Equal(FromUserId, msg.FromUserId);
             // 群聊的接收方是群，ToUserId 留 0
@@ -185,7 +185,7 @@ namespace Viv.Herta.Tests
             var result = await consumer.ReceiveMessageAsync(CreateEnvelope(EmChatReceiverType.User, 5));
 
             Assert.True(result.IsSuccess);
-            Assert.Equal(TenantId, pool.LastSubjectId);
+            Assert.Equal(RealmId, pool.LastSubjectId);
             Assert.Equal(5L, pool.LastUserId);
 
             var call = Assert.Single(sender.Calls);

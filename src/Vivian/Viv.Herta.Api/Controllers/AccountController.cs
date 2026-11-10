@@ -27,7 +27,7 @@ namespace Viv.Herta.Api.Controllers
         }
 
         [AllowAnonymous]
-        [HttpPost("hertaLogin")]
+        [HttpPost("login")]
         public async Task<VivApiResult<HertaLoginOutput>> HertaLoginAsync(HertaLoginRequest request)
         {
             return await _accountService.HertaLoginAsync(request);

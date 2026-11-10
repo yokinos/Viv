@@ -196,21 +196,21 @@ namespace Viv.Herta.Tests
 
             var evt = Assert.IsType<SendMessageEvent>(Assert.Single(sut.Outbox.Enqueued));
             Assert.Equal(999, evt.FromUserId);
-            Assert.Equal(SubjectId, evt.TenantId);
+            Assert.Equal(SubjectId, evt.RealmId);
         }
 
         [Fact]
-        public async Task SendMessage_租户永远来自登录身份()
+        public async Task SendMessage_域永远来自登录身份()
         {
-            // HTTP 侧没有 TenantId 这个概念，跨租户只能走事件
+            // HTTP 侧没有域这个概念，跨域只能走事件
             var sut = Create();
             var request = CreateRequest();
             request.FromUserId = 999;
 
             await sut.Service.SendMessageAsync(request);
 
-            Assert.Equal(SubjectId, Assert.Single(sut.Messages.Appended).TenantId);
-            Assert.Equal(SubjectId, Assert.IsType<SendMessageEvent>(Assert.Single(sut.Outbox.Enqueued)).TenantId);
+            Assert.Equal(SubjectId, Assert.Single(sut.Messages.Appended).RealmId);
+            Assert.Equal(SubjectId, Assert.IsType<SendMessageEvent>(Assert.Single(sut.Outbox.Enqueued)).RealmId);
         }
 
         [Fact]

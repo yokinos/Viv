@@ -28,10 +28,10 @@ namespace Viv.EventContracts.Herta
         public long FromUserId { get; set; }
 
         /// <summary>
-        /// 消息所属租户。大于 0 时以它为准，用于模拟其他租户或系统代发；
-        /// 0 表示用信封上下文里的租户。
+        /// 消息所属聊天域。大于 0 时以它为准，用于模拟其他域或系统代发；
+        /// 0 表示用信封上下文里的域 —— 聊天链路的信封 SubjectId 承载的就是 RealmId。
         /// </summary>
-        public long TenantId { get; set; }
+        public long RealmId { get; set; }
 
         /// <summary>
         /// 接收方的Id

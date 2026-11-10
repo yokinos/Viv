@@ -9,12 +9,12 @@ namespace Viv.Entity.Database.Herta
     /// 客户端重连时用 Resync 拿它和本地比对，决定要不要补拉。
     /// 一行一个用户是为了让 Ack 只更新一行，不必按消息逐条记。
     /// </summary>
-    public class EtChatDelivery : EntityBase, ITenant, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
+    public class EtChatDelivery : EntityBase, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
-        /// 租户ID
+        /// 聊天域 Id
         /// </summary>
-        public long TenantId { get; set; }
+        public long RealmId { get; set; }
 
         /// <summary>
         /// 用户ID（接收方）

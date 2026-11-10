@@ -24,9 +24,9 @@ namespace Viv.Herta.Core.Service
             _logger = logger;
         }
 
-        public async Task OnlineAsync(long tenantId, long userId)
+        public async Task OnlineAsync(long realmId, long userId)
         {
-            var key = BuildKey(tenantId, userId);
+            var key = BuildKey(realmId, userId);
 
             try
             {
@@ -40,9 +40,9 @@ namespace Viv.Herta.Core.Service
             }
         }
 
-        public async Task OfflineAsync(long tenantId, long userId)
+        public async Task OfflineAsync(long realmId, long userId)
         {
-            var key = BuildKey(tenantId, userId);
+            var key = BuildKey(realmId, userId);
 
             try
             {
@@ -57,9 +57,9 @@ namespace Viv.Herta.Core.Service
             }
         }
 
-        public async Task RenewAsync(long tenantId, long userId)
+        public async Task RenewAsync(long realmId, long userId)
         {
-            var key = BuildKey(tenantId, userId);
+            var key = BuildKey(realmId, userId);
 
             try
             {
@@ -76,9 +76,9 @@ namespace Viv.Herta.Core.Service
             }
         }
 
-        public async Task<bool?> IsOnlineAsync(long tenantId, long userId)
+        public async Task<bool?> IsOnlineAsync(long realmId, long userId)
         {
-            var key = BuildKey(tenantId, userId);
+            var key = BuildKey(realmId, userId);
 
             try
             {
@@ -94,7 +94,7 @@ namespace Viv.Herta.Core.Service
             }
         }
 
-        public async Task<Dictionary<long, bool?>> IsOnlineAsync(long tenantId, IReadOnlyList<long> userIds)
+        public async Task<Dictionary<long, bool?>> IsOnlineAsync(long realmId, IReadOnlyList<long> userIds)
         {
             var ids = userIds.Distinct().ToList();
             var result = new Dictionary<long, bool?>(ids.Count);
@@ -104,7 +104,7 @@ namespace Viv.Herta.Core.Service
             {
                 // 一条 MGET 查完：逐用户 EXISTS + GET 是 2N 次往返
                 var values = await _redis
-                    .GetManyAsync([.. ids.Select(x => BuildKey(tenantId, x))])
+                    .GetManyAsync([.. ids.Select(x => BuildKey(realmId, x))])
                     .ConfigureAwait(false);
 
                 for (var i = 0; i < ids.Count; i++)
@@ -116,7 +116,7 @@ namespace Viv.Herta.Core.Service
             catch (Exception ex)
             {
                 // 一个查询失败就整批给 null（不知道），调用方按未知处理
-                _logger.Warning($"在线态批量查询失败: tenant={tenantId} {ex.Message}");
+                _logger.Warning($"在线态批量查询失败: tenant={realmId} {ex.Message}");
                 foreach (var id in ids)
                 {
                     result[id] = null;
@@ -126,6 +126,6 @@ namespace Viv.Herta.Core.Service
             return result;
         }
 
-        private static string BuildKey(long tenantId, long userId) => $"{KeyPrefix}:{tenantId}:{userId}";
+        private static string BuildKey(long realmId, long userId) => $"{KeyPrefix}:{realmId}:{userId}";
     }
 }

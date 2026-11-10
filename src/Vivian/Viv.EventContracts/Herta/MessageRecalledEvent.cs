@@ -5,7 +5,8 @@ namespace Viv.EventContracts.Herta
 {
     public class MessageRecalledEvent : NanaEvent
     {
-        public long TenantId { get; set; }
+        /// <summary>消息所属聊天域。与 SendMessageEvent 同义：信封 SubjectId 在聊天链路上承载 RealmId。</summary>
+        public long RealmId { get; set; }
 
         public EmChatReceiverType ReceiverType { get; set; }
 

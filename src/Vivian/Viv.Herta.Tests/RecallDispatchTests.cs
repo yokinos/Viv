@@ -13,7 +13,7 @@ namespace Viv.Herta.Tests
 {
     public class RecallDispatchTests
     {
-        private const long TenantId = 1;
+        private const long RealmId = 1;
         private const long TargetId = 5;
         private const long MessageId = 77;
 
@@ -28,7 +28,7 @@ namespace Viv.Herta.Tests
 
         private static MessageRecalledEvent CreateEvent(EmChatReceiverType receiverType) => new()
         {
-            TenantId = TenantId,
+            RealmId = RealmId,
             ReceiverType = receiverType,
             TargetId = TargetId,
             MessageId = MessageId,
@@ -42,7 +42,7 @@ namespace Viv.Herta.Tests
             var pool = new StubKinnaConnectionPool { ConnectionIds = ["c1"] };
 
             var outcome = await Create(sender, pool).DispatchAsync(
-                CreateEvent(EmChatReceiverType.User), new KinnaPushContext(7, TenantId, 2, null));
+                CreateEvent(EmChatReceiverType.User), new KinnaPushContext(7, RealmId, 2, null));
 
             Assert.Equal(KinnaPushOutcome.Success, outcome);
             var call = Assert.Single(sender.Calls);
@@ -72,7 +72,7 @@ namespace Viv.Herta.Tests
         {
             var sender = new RecordingKinnaClientSender();
             var evt = CreateEvent(EmChatReceiverType.User);
-            evt.TenantId = 0;
+            evt.RealmId = 0;
 
             var outcome = await Create(sender, new StubKinnaConnectionPool()).DispatchAsync(evt, null);
 

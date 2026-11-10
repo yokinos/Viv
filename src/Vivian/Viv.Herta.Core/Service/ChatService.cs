@@ -71,10 +71,12 @@ namespace Viv.Herta.Core.Service
 
             // 发送者：请求体给了 FromUserId 就按被署名人发（模拟发送能力），没给用登录身份。
             // 谁有资格代发由调用方自己判定 —— 我们不认识它的角色体系，也不该在这里猜。
-            // 租户不从请求里取，永远是登录身份的租户；跨租户代发只走事件（见 §26）
+            // 域不从请求里取，永远是登录身份所在的域；跨域代发只走事件（见 §26）。
+            // 聊天链路的 token 把 RealmId 放在 SubjectId 里，所以这里直接读它，
+            // 不要换成 OwnerSubjectId —— 那是归属主体，不是隔离键。
             var fromUserId = request.FromUserId > 0 ? request.FromUserId : _context.UserId;
-            var tenantId = _context.SubjectId;
-            if (fromUserId <= 0 || tenantId <= 0)
+            var realmId = _context.SubjectId;
+            if (fromUserId <= 0 || realmId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
             // 对端 Id 必须合法：TargetId = 0 会建出 TargetUserId = 0 的会话，
@@ -87,7 +89,7 @@ namespace Viv.Herta.Core.Service
 
             // 群消息必须校验成员：不然谁都能往任意群Id发消息，扇出给全体成员。
             // 排在建会话之前，非成员不产生任何写入
-            if (isGroup && !await _groupMembers.IsMemberAsync(tenantId, request.TargetId, fromUserId))
+            if (isGroup && !await _groupMembers.IsMemberAsync(realmId, request.TargetId, fromUserId))
                 return VivApiResult.Failed("不在该群");
 
             // 单聊的两个会话行一次查回，省掉第二次「查不到再建」的往返
@@ -96,23 +98,23 @@ namespace Viv.Herta.Core.Service
 
             if (isGroup)
             {
-                senderSession = await _sessions.GetOrCreateAsync(tenantId, fromUserId, request.ReceiverType, request.TargetId);
+                senderSession = await _sessions.GetOrCreateAsync(realmId, fromUserId, request.ReceiverType, request.TargetId);
             }
             else
             {
-                var pair = await _sessions.FindDirectPairAsync(tenantId, fromUserId, request.TargetId);
+                var pair = await _sessions.FindDirectPairAsync(realmId, fromUserId, request.TargetId);
 
                 senderSession = pair.FirstOrDefault(x => x.UserId == fromUserId)
-                    ?? await _sessions.GetOrCreateAsync(tenantId, fromUserId, EmChatReceiverType.User, request.TargetId);
+                    ?? await _sessions.GetOrCreateAsync(realmId, fromUserId, EmChatReceiverType.User, request.TargetId);
 
                 // 接收方也要有一行，否则它在自己的会话列表里看不到这条会话
                 receiverSession = pair.FirstOrDefault(x => x.UserId == request.TargetId)
-                    ?? await _sessions.GetOrCreateAsync(tenantId, request.TargetId, EmChatReceiverType.User, fromUserId);
+                    ?? await _sessions.GetOrCreateAsync(realmId, request.TargetId, EmChatReceiverType.User, fromUserId);
             }
 
             var messageId = await _messages.AppendAsync(new ChatMessageEntry
             {
-                TenantId = tenantId,
+                RealmId = realmId,
                 SessionId = senderSession.Id,
                 ReceiverType = request.ReceiverType,
                 FromUserId = fromUserId,
@@ -125,13 +127,14 @@ namespace Viv.Herta.Core.Service
 
             // 两行的最后消息时间合成一条 UPDATE；逐行 Touch 每行都要先按主键查一次
             await _sessions.TouchManyAsync(
+                realmId,
                 receiverSession == null ? [senderSession.Id] : [senderSession.Id, receiverSession.Id],
                 sentAt.UtcDateTime);
 
             if (isGroup)
             {
                 // 群聊的最后消息时间是群级属性，所有成员共用一行
-                await _groups.TouchLastMessageAsync(tenantId, request.TargetId, sentAt.UtcDateTime);
+                await _groups.TouchLastMessageAsync(realmId, request.TargetId, sentAt.UtcDateTime);
             }
 
             await _outbox.EnqueueAsync(new SendMessageEvent(
@@ -139,8 +142,8 @@ namespace Viv.Herta.Core.Service
             {
                 MessageId = messageId,
                 SentAt = sentAt,
-                // 普通发送时事件体的租户与信封一致；模拟其他租户的生产者自己填
-                TenantId = tenantId
+                // 普通发送时事件体的域与信封一致；模拟其他域的生产者自己填
+                RealmId = realmId
             });
 
             return VivApiResult<SendMessageOutput>.Success(new SendMessageOutput
@@ -155,8 +158,8 @@ namespace Viv.Herta.Core.Service
         public virtual async Task<VivApiResult> PullMessagesAsync(PullMessagesRequest request)
         {
             var userId = _context.UserId;
-            var tenantId = _context.SubjectId;
-            if (userId <= 0 || tenantId <= 0)
+            var realmId = _context.SubjectId;
+            if (userId <= 0 || realmId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
             if (request.TargetId <= 0)
@@ -165,12 +168,12 @@ namespace Viv.Herta.Core.Service
             // 群消息必须校验成员，否则知道 GroupId 就能拉全群历史。
             // 与发送路径同一道门，只是这里查的是读权限
             if (request.ReceiverType == EmChatReceiverType.Group
-                && !await _groupMembers.IsMemberAsync(tenantId, request.TargetId, userId))
+                && !await _groupMembers.IsMemberAsync(realmId, request.TargetId, userId))
                 return VivApiResult.Failed("不在该群");
 
             // 按对端取，不经 session：接收方可能还没有自己的会话行
             var entries = await _messages.ListAsync(
-                tenantId, request.ReceiverType, userId, request.TargetId,
+                realmId, request.ReceiverType, userId, request.TargetId,
                 request.AfterMessageId, request.BeforeMessageId, request.Limit);
 
             // 字段映射由 Mapperly 在编译期生成，SentAt/RecallAt 走 UtcTime 的 UTC 标注
@@ -183,13 +186,13 @@ namespace Viv.Herta.Core.Service
         public virtual async Task<VivApiResult> ListSessionsAsync(int pageIndex, int pageSize)
         {
             var userId = _context.UserId;
-            var tenantId = _context.SubjectId;
-            if (userId <= 0 || tenantId <= 0)
+            var realmId = _context.SubjectId;
+            if (userId <= 0 || realmId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
-            var directs = await _sessions.GetDirectSessionsAsync(tenantId, userId);
-            var memberships = await _groupMembers.GetMembershipsAsync(tenantId, userId);
-            var groups = await _groups.GetListAsync(tenantId, memberships.Select(x => x.GroupChatId).Distinct().ToList());
+            var directs = await _sessions.GetDirectSessionsAsync(realmId, userId);
+            var memberships = await _groupMembers.GetMembershipsAsync(realmId, userId);
+            var groups = await _groups.GetListAsync(realmId, memberships.Select(x => x.GroupChatId).Distinct().ToList());
 
             var items = new List<ChatSessionItemOutput>();
 
@@ -245,7 +248,7 @@ namespace Viv.Herta.Core.Service
                 .ToDictionary(x => x.TargetId, x => x.LastReadMsgId);
 
             var unread = await _messages
-                .CountUnreadManyAsync(tenantId, userId, directWatermarks, groupWatermarks)
+                .CountUnreadManyAsync(realmId, userId, directWatermarks, groupWatermarks)
                 .ConfigureAwait(false);
 
             foreach (var item in page)
@@ -263,18 +266,18 @@ namespace Viv.Herta.Core.Service
         public virtual async Task<VivApiResult> MarkReadAsync(MarkReadRequest request)
         {
             var userId = _context.UserId;
-            var tenantId = _context.SubjectId;
-            if (userId <= 0 || tenantId <= 0)
+            var realmId = _context.SubjectId;
+            if (userId <= 0 || realmId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
             if (request.ReceiverType == EmChatReceiverType.Group)
             {
-                await _groupMembers.SetLastReadAsync(tenantId, request.TargetId, userId, request.LastReadMessageId);
+                await _groupMembers.SetLastReadAsync(realmId, request.TargetId, userId, request.LastReadMessageId);
             }
             else
             {
                 await _sessions.SetLastReadAsync(
-                    tenantId, userId, EmChatReceiverType.User, request.TargetId, request.LastReadMessageId);
+                    realmId, userId, EmChatReceiverType.User, request.TargetId, request.LastReadMessageId);
             }
 
             return VivApiResult.Success();
@@ -284,8 +287,8 @@ namespace Viv.Herta.Core.Service
         public virtual async Task<VivApiResult> CreateGroupAsync(CreateGroupRequest request)
         {
             var userId = _context.UserId;
-            var tenantId = _context.SubjectId;
-            if (userId <= 0 || tenantId <= 0)
+            var realmId = _context.SubjectId;
+            if (userId <= 0 || realmId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
             var name = request.Name?.Trim();
@@ -304,7 +307,7 @@ namespace Viv.Herta.Core.Service
             var now = DateTime.UtcNow;
             var groupId = await _groups.AddAsync(new EtGroupChat
             {
-                TenantId = tenantId,
+                RealmId = realmId,
                 Name = name,
                 AvatarUrl = request.AvatarUrl,
                 OwnerUserId = userId,
@@ -314,11 +317,11 @@ namespace Viv.Herta.Core.Service
 
             var rows = new List<EtGroupChatMember>
             {
-                new() { TenantId = tenantId, GroupChatId = groupId, UserId = userId, MemberRole = GroupOwnerRole, JoinAt = now }
+                new() { RealmId = realmId, GroupChatId = groupId, UserId = userId, MemberRole = GroupOwnerRole, JoinAt = now }
             };
             rows.AddRange(members.Select(x => new EtGroupChatMember
             {
-                TenantId = tenantId,
+                RealmId = realmId,
                 GroupChatId = groupId,
                 UserId = x,
                 MemberRole = GroupMemberRole,
@@ -328,13 +331,13 @@ namespace Viv.Herta.Core.Service
             await _groupMembers.AddMembersAsync(rows);
 
             // 群主自己的会话行，让这个群出现在自己的会话列表里
-            await _sessions.GetOrCreateAsync(tenantId, userId, EmChatReceiverType.Group, groupId);
+            await _sessions.GetOrCreateAsync(realmId, userId, EmChatReceiverType.Group, groupId);
 
             // 建群也要发成员变更：否则已在线的新成员不会进 SignalR 组，得等重连才收得到群消息。
             // 群主一起带上，多端场景下他的其他设备也要进组
             await _outbox.EnqueueAsync(new MembershipChangedEvent
             {
-                TenantId = tenantId,
+                RealmId = realmId,
                 GroupId = groupId,
                 UserIds = rows.Select(x => x.UserId).ToList(),
                 ChangeType = MembershipChangeType.Joined
@@ -347,15 +350,15 @@ namespace Viv.Herta.Core.Service
         public virtual async Task<VivApiResult> AddGroupMembersAsync(AddGroupMembersRequest request)
         {
             var userId = _context.UserId;
-            var tenantId = _context.SubjectId;
-            if (userId <= 0 || tenantId <= 0)
+            var realmId = _context.SubjectId;
+            if (userId <= 0 || realmId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
-            var group = await _groups.GetAsync(tenantId, request.GroupId);
+            var group = await _groups.GetAsync(realmId, request.GroupId);
             if (group == null)
                 return VivApiResult.Failed("群不存在");
 
-            var @operator = await _groupMembers.GetMemberAsync(tenantId, request.GroupId, userId);
+            var @operator = await _groupMembers.GetMemberAsync(realmId, request.GroupId, userId);
             if (@operator == null)
                 return VivApiResult.Failed("不在该群");
 
@@ -372,7 +375,7 @@ namespace Viv.Herta.Core.Service
             if (userIds.Count == 0)
                 return VivApiResult.Failed("没有要加入的成员");
 
-            var existing = await _groupMembers.GetGroupMembersAsync(tenantId, request.GroupId);
+            var existing = await _groupMembers.GetGroupMembersAsync(realmId, request.GroupId);
             var existingIds = existing.Select(x => x.UserId).ToHashSet();
             var toAdd = userIds.Where(x => !existingIds.Contains(x)).ToList();
 
@@ -385,7 +388,7 @@ namespace Viv.Herta.Core.Service
             var now = DateTime.UtcNow;
             await _groupMembers.AddMembersAsync(toAdd.Select(x => new EtGroupChatMember
             {
-                TenantId = tenantId,
+                RealmId = realmId,
                 GroupChatId = request.GroupId,
                 UserId = x,
                 MemberRole = GroupMemberRole,
@@ -394,7 +397,7 @@ namespace Viv.Herta.Core.Service
 
             await _outbox.EnqueueAsync(new MembershipChangedEvent
             {
-                TenantId = tenantId,
+                RealmId = realmId,
                 GroupId = request.GroupId,
                 UserIds = toAdd,
                 ChangeType = MembershipChangeType.Joined
@@ -407,15 +410,15 @@ namespace Viv.Herta.Core.Service
         public virtual async Task<VivApiResult> RemoveGroupMembersAsync(RemoveGroupMembersRequest request)
         {
             var userId = _context.UserId;
-            var tenantId = _context.SubjectId;
-            if (userId <= 0 || tenantId <= 0)
+            var realmId = _context.SubjectId;
+            if (userId <= 0 || realmId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
-            var group = await _groups.GetAsync(tenantId, request.GroupId);
+            var group = await _groups.GetAsync(realmId, request.GroupId);
             if (group == null)
                 return VivApiResult.Failed("群不存在");
 
-            var @operator = await _groupMembers.GetMemberAsync(tenantId, request.GroupId, userId);
+            var @operator = await _groupMembers.GetMemberAsync(realmId, request.GroupId, userId);
             if (@operator == null)
                 return VivApiResult.Failed("不在该群");
 
@@ -435,7 +438,7 @@ namespace Viv.Herta.Core.Service
             var removed = new List<long>();
             foreach (var target in targets)
             {
-                if (await _groupMembers.RemoveMemberAsync(tenantId, request.GroupId, target, now))
+                if (await _groupMembers.RemoveMemberAsync(realmId, request.GroupId, target, now))
                     removed.Add(target);
             }
 
@@ -444,7 +447,7 @@ namespace Viv.Herta.Core.Service
 
             await _outbox.EnqueueAsync(new MembershipChangedEvent
             {
-                TenantId = tenantId,
+                RealmId = realmId,
                 GroupId = request.GroupId,
                 UserIds = removed,
                 ChangeType = MembershipChangeType.Left
@@ -456,15 +459,15 @@ namespace Viv.Herta.Core.Service
         public virtual async Task<VivApiResult> ListGroupMembersAsync(long groupId)
         {
             var userId = _context.UserId;
-            var tenantId = _context.SubjectId;
-            if (userId <= 0 || tenantId <= 0)
+            var realmId = _context.SubjectId;
+            if (userId <= 0 || realmId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
-            var @operator = await _groupMembers.GetMemberAsync(tenantId, groupId, userId);
+            var @operator = await _groupMembers.GetMemberAsync(realmId, groupId, userId);
             if (@operator == null)
                 return VivApiResult.Failed("不在该群");
 
-            var members = await _groupMembers.GetGroupMembersAsync(tenantId, groupId);
+            var members = await _groupMembers.GetGroupMembersAsync(realmId, groupId);
 
             var items = members.Select(x => new GroupMemberItemOutput
             {
@@ -481,11 +484,11 @@ namespace Viv.Herta.Core.Service
         public virtual async Task<VivApiResult> RecallMessageAsync(RecallMessageRequest request)
         {
             var userId = _context.UserId;
-            var tenantId = _context.SubjectId;
-            if (userId <= 0 || tenantId <= 0)
+            var realmId = _context.SubjectId;
+            if (userId <= 0 || realmId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
-            var entry = await _messages.GetAsync(tenantId, request.MessageId, request.ReceiverType);
+            var entry = await _messages.GetAsync(realmId, request.MessageId, request.ReceiverType);
             if (entry == null)
                 return VivApiResult.Failed("消息不存在");
 
@@ -505,11 +508,11 @@ namespace Viv.Herta.Core.Service
             if (now - sentAt > RecallWindow)
                 return VivApiResult.Failed("超过撤回时限");
 
-            await _messages.RecallAsync(tenantId, request.MessageId, request.ReceiverType, now.UtcDateTime);
+            await _messages.RecallAsync(realmId, request.MessageId, request.ReceiverType, now.UtcDateTime);
 
             await _outbox.EnqueueAsync(new MessageRecalledEvent
             {
-                TenantId = tenantId,
+                RealmId = realmId,
                 ReceiverType = request.ReceiverType,
                 TargetId = request.TargetId,
                 MessageId = request.MessageId,
@@ -521,15 +524,15 @@ namespace Viv.Herta.Core.Service
 
         public virtual async Task<VivApiResult> GetPresenceAsync(IReadOnlyList<long> userIds)
         {
-            var tenantId = _context.SubjectId;
-            if (tenantId <= 0)
+            var realmId = _context.SubjectId;
+            if (realmId <= 0)
                 return VivApiResult.Failed("缺少登录身份");
 
             var targets = userIds.Where(x => x > 0).Distinct().ToList();
             if (targets.Count == 0)
                 return VivApiResult<List<PresenceItemOutput>>.Success(new List<PresenceItemOutput>());
 
-            var states = await _presence.IsOnlineAsync(tenantId, targets);
+            var states = await _presence.IsOnlineAsync(realmId, targets);
 
             var items = targets
                 .Select(x => new PresenceItemOutput { UserId = x, Online = states.TryGetValue(x, out var online) ? online : null })

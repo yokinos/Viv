@@ -14,7 +14,10 @@ namespace Viv.Herta.Tests
         private const long SubjectId = 1;
         private const long AppId = 7;
 
-        private static (AccountService Service, StubApexAppService ClientApps, StubChatUserRepository Users) Create()
+        /// <summary>刻意与 SubjectId 不同：「签名用的是主体还是域」必须能被断言看出来。</summary>
+        private const long RealmId = 500;
+
+        private static (AccountService Service, StubApexAppService ClientApps, StubChatUserRepository Users, StubTokenService Tokens) Create()
         {
             var users = new StubChatUserRepository();
 
@@ -25,7 +28,8 @@ namespace Viv.Herta.Tests
             users.Users.Add(new EtChatUser
             {
                 Id = 100,
-                TenantId = SubjectId,
+                RealmId = RealmId,
+                OwnerSubjectId = SubjectId,
                 UserType = EmUserType.EndUser,
                 LoginCode = "alice",
                 Password = hash,
@@ -34,8 +38,9 @@ namespace Viv.Herta.Tests
             });
 
             var clientApps = new StubApexAppService();
-            var service = new AccountService(users, new StubTokenService(), clientApps);
-            return (service, clientApps, users);
+            var tokens = new StubTokenService();
+            var service = new AccountService(users, tokens, clientApps);
+            return (service, clientApps, users, tokens);
         }
 
         private static HertaLoginRequest LoginRequest() => new()
@@ -49,7 +54,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task HertaLogin_Apex不认识这个AppId_拒绝且不签发token()
         {
-            var (service, _, _) = Create();
+            var (service, _, _, _) = Create();
 
             var result = await service.HertaLoginAsync(LoginRequest());
 
@@ -60,7 +65,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task HertaLogin_AppId有效_正常签发()
         {
-            var (service, clientApps, _) = Create();
+            var (service, clientApps, _, _) = Create();
             clientApps.Allowed.Add(AppId);
 
             var result = await service.HertaLoginAsync(LoginRequest());
@@ -74,7 +79,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task HertaLogin_低强度旧口令_登录后自动升级()
         {
-            var (service, clientApps, users) = Create();
+            var (service, clientApps, users, _) = Create();
             clientApps.AllowAll = true;
 
             // 造一条「算法正确但迭代次数偏低」的口令串：将来把默认迭代调高后，存量口令就是这个形态
@@ -94,7 +99,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task HertaLogin_归属与类型取自库里那一行()
         {
-            var (service, clientApps, users) = Create();
+            var (service, clientApps, users, _) = Create();
             clientApps.AllowAll = true;
             users.Users[0].UserType = EmUserType.CompanyUser;
 
@@ -106,9 +111,26 @@ namespace Viv.Herta.Tests
         }
 
         [Fact]
+        public async Task HertaLogin_token里的SubjectId装的是域不是主体()
+        {
+            var (service, clientApps, _, tokens) = Create();
+            clientApps.AllowAll = true;
+
+            await service.HertaLoginAsync(LoginRequest());
+
+            // 下游（ChatService / Kinna 准入）把 token 的 SubjectId 当隔离键用。
+            // 这里装了主体 Id 的话，聊天就退回「按主体隔离」，跨主体对话无从谈起。
+            Assert.Equal(RealmId, tokens.LastPayload!.SubjectId);
+            Assert.NotEqual(SubjectId, tokens.LastPayload.SubjectId);
+
+            // 授权校验必须反过来用主体 Id —— 它问的是「这个主体买了这个 App 没」
+            Assert.Equal(SubjectId, clientApps.LastSubjectId);
+        }
+
+        [Fact]
         public async Task HertaLogin_主体未开通该应用_拒绝且不签发token()
         {
-            var (service, clientApps, _) = Create();
+            var (service, clientApps, _, _) = Create();
             clientApps.Allowed.Add(AppId);
             clientApps.AllowedSubjectId = SubjectId + 1;
 
@@ -121,7 +143,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task 注册_一律落C端用户()
         {
-            var (service, clientApps, users) = Create();
+            var (service, clientApps, users, _) = Create();
             clientApps.AllowAll = true;
 
             var result = await service.RegisterAsync(new HertaRegisterRequest
@@ -139,7 +161,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task 注册_主体未开通该应用_拒绝且不落库()
         {
-            var (service, clientApps, users) = Create();
+            var (service, clientApps, users, _) = Create();
             clientApps.Allowed.Add(AppId);
             clientApps.AllowedSubjectId = SubjectId + 1;
 
@@ -159,7 +181,7 @@ namespace Viv.Herta.Tests
         [Fact]
         public async Task 注册_按C端用户查租户授权表()
         {
-            var (service, clientApps, _) = Create();
+            var (service, clientApps, _, _) = Create();
             clientApps.AllowAll = true;
 
             await service.RegisterAsync(new HertaRegisterRequest

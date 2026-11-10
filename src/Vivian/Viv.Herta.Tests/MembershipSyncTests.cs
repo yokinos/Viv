@@ -9,7 +9,7 @@ namespace Viv.Herta.Tests
 {
     public class MembershipSyncTests
     {
-        private const long TenantId = 1;
+        private const long RealmId = 1;
         private const long GroupId = 50;
         private const long UserId = 2;
 
@@ -23,11 +23,11 @@ namespace Viv.Herta.Tests
         {
             var pool = new KinnaConnectionPool();
             var sender = new RecordingKinnaClientSender();
-            pool.Add("c1", appId: 3, subjectId: TenantId, userId: UserId);
+            pool.Add("c1", appId: 3, subjectId: RealmId, userId: UserId);
 
             await Create(pool, sender).ApplyAsync(new MembershipChangedEvent
             {
-                TenantId = TenantId,
+                RealmId = RealmId,
                 GroupId = GroupId,
                 UserIds = [UserId],
                 ChangeType = MembershipChangeType.Joined
@@ -43,11 +43,11 @@ namespace Viv.Herta.Tests
         {
             var pool = new KinnaConnectionPool();
             var sender = new RecordingKinnaClientSender();
-            pool.Add("c1", appId: 3, subjectId: TenantId, userId: UserId);
+            pool.Add("c1", appId: 3, subjectId: RealmId, userId: UserId);
 
             await Create(pool, sender).ApplyAsync(new MembershipChangedEvent
             {
-                TenantId = TenantId,
+                RealmId = RealmId,
                 GroupId = GroupId,
                 UserIds = [UserId],
                 ChangeType = MembershipChangeType.Left
@@ -66,7 +66,7 @@ namespace Viv.Herta.Tests
 
             await Create(pool, sender).ApplyAsync(new MembershipChangedEvent
             {
-                TenantId = TenantId,
+                RealmId = RealmId,
                 GroupId = GroupId,
                 UserIds = [UserId],
                 ChangeType = MembershipChangeType.Joined

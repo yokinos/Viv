@@ -16,8 +16,11 @@ public sealed class StubChatUserRepository : IChatUserRepository
 
     public long NextChatUserId { get; set; } = 700;
 
-    public Task<EtChatUser?> GetByLoginCodeAsync(long tenantId, string loginCode)
-        => Task.FromResult(Users.FirstOrDefault(x => x.TenantId == tenantId && x.LoginCode == loginCode));
+    public Task<EtChatUser?> GetByLoginCodeAsync(long ownerSubjectId, string loginCode)
+        => Task.FromResult(Users.FirstOrDefault(x => x.OwnerSubjectId == ownerSubjectId && x.LoginCode == loginCode));
+
+    public Task<EtChatUser?> GetByOwnerAsync(long ownerSubjectId)
+        => Task.FromResult(Users.FirstOrDefault(x => x.OwnerSubjectId == ownerSubjectId));
 
     public Task<long> AddAsync(EtChatUser user)
     {
@@ -103,7 +106,7 @@ public sealed class StubChatSessionRepository : IChatSessionRepository
     /// <summary>合并更新：一次调用带多行 Id</summary>
     public List<(List<long> SessionIds, DateTime At)> TouchedMany { get; } = new();
 
-    public Task TouchManyAsync(IReadOnlyList<long> sessionIds, DateTime lastMessageTime)
+    public Task TouchManyAsync(long realmId, IReadOnlyList<long> sessionIds, DateTime lastMessageTime)
     {
         TouchedMany.Add(([.. sessionIds], lastMessageTime));
         return Task.CompletedTask;
@@ -117,7 +120,7 @@ public sealed class StubChatSessionRepository : IChatSessionRepository
         return Task.CompletedTask;
     }
 
-    public Task TouchAsync(long sessionId, DateTime lastMessageTime)
+    public Task TouchAsync(long realmId, long sessionId, DateTime lastMessageTime)
     {
         Touched.Add((sessionId, lastMessageTime));
         return Task.CompletedTask;

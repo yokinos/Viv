@@ -17,15 +17,15 @@ namespace Viv.Herta.Core.Repository
         {
         }
 
-        public async Task<long> MergeAsync(long tenantId, long userId, long messageId)
+        public async Task<long> MergeAsync(long realmId, long userId, long messageId)
         {
-            var row = await FindAsync(tenantId, userId).ConfigureAwait(false);
+            var row = await FindAsync(realmId, userId).ConfigureAwait(false);
 
             if (row is null)
             {
                 var created = new EtChatDelivery
                 {
-                    TenantId = tenantId,
+                    RealmId = realmId,
                     UserId = userId,
                     LastDeliveredMessageId = messageId
                 };
@@ -38,8 +38,8 @@ namespace Viv.Herta.Core.Repository
                 catch (Exception ex)
                 {
                     // 并发首条：另一条连接刚插进去，回查后按更新走，别把 Ack 扔掉
-                    _logger.Warning($"投递水位插入冲突，改为更新: tenant={tenantId} user={userId} {ex.Message}");
-                    row = await FindAsync(tenantId, userId).ConfigureAwait(false);
+                    _logger.Warning($"投递水位插入冲突，改为更新: tenant={realmId} user={userId} {ex.Message}");
+                    row = await FindAsync(realmId, userId).ConfigureAwait(false);
                     if (row is null) throw;
                 }
             }
@@ -52,13 +52,13 @@ namespace Viv.Herta.Core.Repository
             return messageId;
         }
 
-        public async Task<long?> GetAsync(long tenantId, long userId)
+        public async Task<long?> GetAsync(long realmId, long userId)
         {
-            var row = await FindAsync(tenantId, userId).ConfigureAwait(false);
+            var row = await FindAsync(realmId, userId).ConfigureAwait(false);
             return row is null ? null : row.LastDeliveredMessageId;
         }
 
-        private Task<EtChatDelivery?> FindAsync(long tenantId, long userId)
-            => _dbContext.SingleOrDefaultAsync<EtChatDelivery>(x => x.TenantId == tenantId && x.UserId == userId);
+        private Task<EtChatDelivery?> FindAsync(long realmId, long userId)
+            => _dbContext.SingleOrDefaultAsync<EtChatDelivery>(x => x.RealmId == realmId && x.UserId == userId);
     }
 }

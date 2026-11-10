@@ -21,8 +21,8 @@ namespace Viv.Herta.Link.Dispatch
 
         public KinnaPushPlan? Plan(SendMessageEvent evt, KinnaPushContext? context)
         {
-            // 事件体指定了租户就以它为准（代发/模拟），否则用信封的
-            var subjectId = evt.TenantId > 0 ? evt.TenantId : context?.SubjectId ?? 0;
+            // 事件体指定了域就以它为准（代发/模拟），否则用信封的
+            var subjectId = evt.RealmId > 0 ? evt.RealmId : context?.SubjectId ?? 0;
             if (subjectId <= 0 || evt.TargetId <= 0)
                 return null;
 

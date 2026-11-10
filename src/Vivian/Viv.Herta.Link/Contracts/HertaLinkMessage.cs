@@ -12,6 +12,10 @@ namespace Viv.Herta.Link.Contracts
         /// <summary>会话内自增序号。本期恒 null：它要在落库时分配 </summary>
         public long? Seq { get; init; }
 
+        /// <summary>
+        /// 消息所属聊天域。字段名保留下发协议里的 TenantId —— 老客户端按这个名字读，
+        /// 改名等于破协议；它装的始终是 RealmId。
+        /// </summary>
         public long TenantId { get; init; }
 
         public long? AppId { get; init; }

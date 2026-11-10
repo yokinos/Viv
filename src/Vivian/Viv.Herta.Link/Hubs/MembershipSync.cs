@@ -20,16 +20,16 @@ namespace Viv.Herta.Link.Hubs
 
         public async Task ApplyAsync(MembershipChangedEvent evt, CancellationToken cancellationToken = default)
         {
-            if (evt.TenantId <= 0 || evt.GroupId <= 0 || evt.UserIds.Count == 0)
+            if (evt.RealmId <= 0 || evt.GroupId <= 0 || evt.UserIds.Count == 0)
                 return;
 
-            var groupName = _session.Keys.GroupName(evt.TenantId, evt.GroupId);
+            var groupName = _session.Keys.GroupName(evt.RealmId, evt.GroupId);
             var changed = 0;
 
             foreach (var userId in evt.UserIds)
             {
                 // 只处理本进程持有的连接，其他副本各管自己的
-                var connectionIds = _session.Pool.GetConnectionIds(evt.TenantId, userId);
+                var connectionIds = _session.Pool.GetConnectionIds(evt.RealmId, userId);
                 foreach (var connectionId in connectionIds)
                 {
                     if (evt.ChangeType == MembershipChangeType.Joined)
