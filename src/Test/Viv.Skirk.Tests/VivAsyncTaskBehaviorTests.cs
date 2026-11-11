@@ -365,7 +365,7 @@ public class VivAsyncTaskBehaviorTests
         public Task<bool> ReleaseExpiredLeasesAsync(DateTime now, DateTime expireAt, CancellationToken cancellationToken = default)
             => Task.FromResult(false);
 
-        public Task<bool> MarkCanceledAsync(long id, DateTime now, DateTime expireAt, CancellationToken cancellationToken = default)
+        public Task<bool> MarkCanceledAsync(long id, string leaseOwner, DateTime now, DateTime expireAt, CancellationToken cancellationToken = default)
             => Task.FromResult(true);
 
         public Task<bool> ReportProgressAsync(long id, int progress, int? totalCount, int? doneCount, string? message, CancellationToken cancellationToken = default)

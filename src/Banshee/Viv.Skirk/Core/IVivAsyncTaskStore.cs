@@ -60,7 +60,15 @@ namespace Viv.Skirk.Core
             DateTime? expireAt,
             CancellationToken cancellationToken = default);
 
-        Task<bool> MarkCanceledAsync(long id, DateTime now, DateTime expireAt, CancellationToken cancellationToken = default);
+        /// <summary>
+        /// 标记取消。只对仍由 <paramref name="leaseOwner"/> 持有的行生效。
+        ///
+        /// 执行方是「轮询到 CancelRequested → 中断本地执行 → 写回 Canceled」，中间隔着一次网络往返：
+        /// 租约可能正好在这个窗口里过期并被别的副本接手。不带租约条件的话，旧副本会把新持有者
+        /// 正在跑的行改成 Canceled 并清掉它的租约，新副本执行完之后 <see cref="CompleteAsync"/> 必然写不回去，
+        /// 副作用已经发生而结果永久丢失。返回 false 表示这次写回没落到自己持有过的行上。
+        /// </summary>
+        Task<bool> MarkCanceledAsync(long id, string leaseOwner, DateTime now, DateTime expireAt, CancellationToken cancellationToken = default);
 
         Task<bool> ReportProgressAsync(long id, int progress, int? totalCount, int? doneCount, string? message, CancellationToken cancellationToken = default);
 

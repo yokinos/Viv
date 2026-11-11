@@ -120,12 +120,28 @@ public class VivAsyncTaskSqlTests
     }
 
     [Fact]
-    public void 续租与完成_都带租约持有者条件()
+    public void 续租完成失败归还与取消_都带租约持有者条件()
     {
         Assert.Contains("LeaseOwner", VivAsyncTaskSql.RenewLease(Sql).Replace("[LeaseOwner]", "LeaseOwner"));
         Assert.Contains("@LeaseOwner", VivAsyncTaskSql.RenewLease(Sql));
         Assert.Contains("@LeaseOwner", VivAsyncTaskSql.Complete(Sql));
         Assert.Contains("@LeaseOwner", VivAsyncTaskSql.Fail(Sql));
+        Assert.Contains("@LeaseOwner", VivAsyncTaskSql.Release(Sql));
+        Assert.Contains("@LeaseOwner", VivAsyncTaskSql.MarkCanceled(Sql));
+    }
+
+    [Fact]
+    public void 取消写回_只改自己持有的行()
+    {
+        // 执行方是「轮询到 CancelRequested → 中断 → 写回 Canceled」，中间隔着一次往返。
+        // 只按 Id 更新的话，租约在这个窗口里过期并被别的副本接手时，旧副本会把新持有者
+        // 正在跑的行改成 Canceled、顺手清掉它的租约 —— 新副本跑完 Complete 必然写不回去，结果永久丢失。
+        var sql = VivAsyncTaskSql.MarkCanceled(Sql);
+
+        Assert.Contains("WHERE [Id] = @Id AND [LeaseOwner] = @LeaseOwner", sql);
+
+        var pg = VivAsyncTaskSql.MarkCanceled(Pg);
+        Assert.Contains("AND lease_owner = @LeaseOwner", pg);
     }
 
     [Fact]

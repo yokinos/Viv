@@ -245,10 +245,10 @@ namespace Viv.Skirk.Core
                 },
                 cancellationToken);
 
-        public Task<bool> MarkCanceledAsync(long id, DateTime now, DateTime expireAt, CancellationToken cancellationToken = default)
+        public Task<bool> MarkCanceledAsync(long id, string leaseOwner, DateTime now, DateTime expireAt, CancellationToken cancellationToken = default)
             => _db.ExecuteSqlAsync(
                 VivAsyncTaskSql.MarkCanceled(Dialect),
-                new { Id = id, Now = now, ExpireAt = expireAt, Canceled = (int)VivAsyncTaskStatus.Canceled },
+                new { Id = id, LeaseOwner = leaseOwner, Now = now, ExpireAt = expireAt, Canceled = (int)VivAsyncTaskStatus.Canceled },
                 cancellationToken);
 
         public Task<bool> ReportProgressAsync(long id, int progress, int? totalCount, int? doneCount, string? message, CancellationToken cancellationToken = default)

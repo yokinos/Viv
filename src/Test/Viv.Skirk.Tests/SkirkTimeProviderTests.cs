@@ -338,7 +338,7 @@ public class SkirkTimeProviderTests
         public Task<bool> ReleaseExpiredLeasesAsync(DateTime now, DateTime expireAt, CancellationToken cancellationToken = default)
             => Task.FromResult(false);
 
-        public Task<bool> MarkCanceledAsync(long id, DateTime now, DateTime expireAt, CancellationToken cancellationToken = default)
+        public Task<bool> MarkCanceledAsync(long id, string leaseOwner, DateTime now, DateTime expireAt, CancellationToken cancellationToken = default)
             => Task.FromResult(true);
     }
 }

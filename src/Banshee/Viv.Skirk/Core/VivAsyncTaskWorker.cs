@@ -202,8 +202,13 @@ namespace Viv.Skirk.Core
             catch (OperationCanceledException) when (context.CanceledByUser)
             {
                 var now = UtcNow;
-                await store.MarkCanceledAsync(task.Id, now, now.AddDays(Math.Max(1, _option.RetentionDays)), CancellationToken.None)
+                var wrote = await store.MarkCanceledAsync(
+                    task.Id, _leaseOwner, now, now.AddDays(Math.Max(1, _option.RetentionDays)), CancellationToken.None)
                     .ConfigureAwait(false);
+                if (!wrote)
+                {
+                    _logger.Warning("Skirk 任务 {0} 取消时租约已不属于本副本，Canceled 未写回", task.Id);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

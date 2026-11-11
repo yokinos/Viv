@@ -320,6 +320,10 @@ namespace Viv.Skirk.Core
         public static string IsCancelRequested(ISqlDialect d)
             => $"SELECT {C(d, "CancelRequested")} FROM {T(d)} WHERE {C(d, "Id")} = @Id";
 
+        /// <summary>
+        /// 取消写回。与 <see cref="Complete"/> / <see cref="Fail"/> / <see cref="Release"/> 一致带租约乐观锁：
+        /// 轮询到取消标记到写回之间，租约可能已经过期并被别的副本接手，只按 Id 更新会盖掉新持有者。
+        /// </summary>
         public static string MarkCanceled(ISqlDialect d)
             => $"""
                 UPDATE {T(d)} SET
@@ -328,7 +332,7 @@ namespace Viv.Skirk.Core
                     {C(d, "LeaseOwner")} = NULL,
                     {C(d, "FinishedAt")} = @Now,
                     {C(d, "ExpireAt")} = @ExpireAt
-                WHERE {C(d, "Id")} = @Id
+                WHERE {C(d, "Id")} = @Id AND {C(d, "LeaseOwner")} = @LeaseOwner
                 """;
 
         /// <summary>清理：删除保留期已过的终态任务</summary>
