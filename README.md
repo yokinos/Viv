@@ -67,6 +67,9 @@
 - PostgreSQL 16+ 或 SQL Server 2022+
 - Redis 7.x、RabbitMQ 3.x（不用的子系统可以不配，对应节点写 null）
 
+依赖中间件可以用 [docker/docker-compose.yml](docker/docker-compose.yml) 一键拉起（Seq / Redis / SQL Server / RabbitMQ / EMQX / Caddy）。
+**它只管中间件，不含业务服务** —— API / Worker / Gateway 一律由 Aspire 编排启动，职责见 [docker/README.md](docker/README.md)。
+
 ### 构建与启动
 
 ```bash
@@ -221,9 +224,9 @@ Viv/
 │   │   ├── Viv.Apex.Proxy/                   # 业务侧 gRPC 代理层（Ports + Contracts）
 │   │   ├── Viv.Generators/、Viv.Meta/        # 应用源生成器与宿主
 │   │   ├── Viv.Apex.Core|Api|Worker/         # Apex 领域
-│   │   ├── Viv.DeepRed.Core|Entity|Api|Worker/
+│   │   ├── Viv.DeepRed.Core|Entity|Api|Worker/ # 预留骨架（暂无代码）
 │   │   ├── Viv.Herta.Core|Api|Link/          # Herta（Link = SignalR）
-│   │   ├── Viv.Ouroboros.Core|Api|Worker/
+│   │   ├── Viv.Ouroboros.Core|Api|Worker/    # Ouroboros 领域（Agent 编排）
 │   │   ├── Viv.Coser.Api/                    # Coser（TickerQ）
 │   │   ├── Viv.Toolbox/                      # 控制台工具箱（VivAppBuilder 实例）
 │   │   └── Viv.Aspire/

@@ -1,3 +1,6 @@
+# 本地依赖中间件。业务服务（API / Worker / Gateway）不在这里，由 Aspire AppHost 编排：
+#   dotnet run --project src/Vivian/Viv.Aspire/Viv.Aspire.AppHost
+# compose up 之后没有业务端口在监听是设计如此。生产部署另有一套，不用本文件。详见 docker/README.md
 services:
   seq:
     image: datalust/seq:latest

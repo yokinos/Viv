@@ -1,3 +1,8 @@
+# 外网域名入口。只挂管理界面，不参与业务路由 ——
+# 业务反向代理在 Viv.Aspire.Gateway（YARP，/{短名}/api/**），和这里无关。
+# viv_pgadmin 不在 docker-compose.yml 里，是宿主机上单独起的容器（见 docker/README.md）；
+# 容器不存在时 Caddy 照常启动，只是访问该域名 502。
+
 pgadmin.katoumegumi.net {
   reverse_proxy viv_pgadmin:80
 }
