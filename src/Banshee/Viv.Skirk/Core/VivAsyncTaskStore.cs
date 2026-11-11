@@ -206,6 +206,20 @@ namespace Viv.Skirk.Core
                 },
                 cancellationToken);
 
+        /// <summary>归还（不是失败）：不消耗重试次数、不退避，交给别的副本立刻接</summary>
+        public Task<bool> ReleaseAsync(long id, string leaseOwner, DateTime now, CancellationToken cancellationToken = default)
+            => _db.ExecuteSqlAsync(
+                VivAsyncTaskSql.Release(Dialect),
+                new
+                {
+                    Id = id,
+                    LeaseOwner = leaseOwner,
+                    Now = now,
+                    Pending = (int)VivAsyncTaskStatus.Pending,
+                    Running = (int)VivAsyncTaskStatus.Running,
+                },
+                cancellationToken);
+
         /// <summary>失败：<paramref name="status"/> 为 Pending 时是"排队重试"，Failed 时是"终态失败"</summary>
         public Task<bool> FailAsync(
             long id,

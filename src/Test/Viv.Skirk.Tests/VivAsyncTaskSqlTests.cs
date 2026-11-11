@@ -43,6 +43,33 @@ public class VivAsyncTaskSqlTests
     }
 
     [Fact]
+    public void 归还语句_Attempt减一且只改自己持有的运行中行()
+    {
+        // 归还 ≠ 失败：认领时 Attempt 已 +1，这里必须还给人家，否则一次发布烧一轮重试
+        var sql = VivAsyncTaskSql.Release(Sql);
+
+        Assert.Contains("UPDATE [VivAsyncTask] SET", sql);
+        Assert.Contains("[Attempt] = CASE WHEN [Attempt] > 0 THEN [Attempt] - 1 ELSE 0 END", sql);
+        Assert.Contains("[Status] = @Pending", sql);
+        Assert.Contains("[LeaseUntil] = NULL", sql);
+        Assert.Contains("[LeaseOwner] = NULL", sql);
+
+        // 只还自己那条：别人已经接手的话，改回 Pending 会把两条执行叠在一起
+        Assert.Contains("AND [LeaseOwner] = @LeaseOwner AND [Status] = @Running", sql);
+    }
+
+    [Fact]
+    public void 归还语句_Postgres用snake_case()
+    {
+        var sql = VivAsyncTaskSql.Release(Pg);
+
+        Assert.Contains("UPDATE viv_async_task SET", sql);
+        Assert.Contains("attempt = CASE WHEN attempt > 0 THEN attempt - 1 ELSE 0 END", sql);
+        Assert.Contains("status = @Pending", sql);
+        Assert.Contains("lease_owner = @LeaseOwner", sql);
+    }
+
+    [Fact]
     public void 唯一幂等键索引_带过滤条件()
     {
         var pgIndex = VivAsyncTaskSql.CreateTable(Pg)[1];

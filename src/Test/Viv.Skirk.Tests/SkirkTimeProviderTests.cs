@@ -312,6 +312,9 @@ public class SkirkTimeProviderTests
             return Task.FromResult(true);
         }
 
+        public Task<bool> ReleaseAsync(long id, string leaseOwner, DateTime now, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
         public Task<bool> CompleteAsync(long id, string leaseOwner, string? resultJson, DateTime now, DateTime expireAt, CancellationToken cancellationToken = default)
             => Task.FromResult(true);
 

@@ -133,20 +133,19 @@ namespace Viv.Skirk.Core
 
             if (claimed.Count == 0) return;
 
+            // 刻意不接 stoppingToken：停机时在途任务要跑完（各自的 TaskTimeout 兜底），
+            // 接上就成了「发布一次，正在跑的任务全被掐掉」——那正是要修的毛病。
+            // 停机只影响「还认不认领新批次」，由调用方的 while 条件控制
             await Parallel.ForEachAsync(
                 claimed,
-                new ParallelOptions
-                {
-                    MaxDegreeOfParallelism = Math.Max(1, _option.MaxParallelism),
-                    CancellationToken = cancellationToken,
-                },
-                (task, ct) => new ValueTask(ExecuteOneAsync(task, ct))).ConfigureAwait(false);
+                new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, _option.MaxParallelism) },
+                (task, _) => new ValueTask(ExecuteOneAsync(task))).ConfigureAwait(false);
         }
 
         internal Task RunOneAsync(VivAsyncTask task, CancellationToken cancellationToken)
             => ExecuteOneAsync(task, cancellationToken);
 
-        private async Task ExecuteOneAsync(VivAsyncTask task, CancellationToken cancellationToken)
+        private async Task ExecuteOneAsync(VivAsyncTask task, CancellationToken cancellationToken = default)
         {
             using var scope = _scopeFactory.CreateScope();
             var provider = scope.ServiceProvider;
@@ -206,9 +205,20 @@ namespace Viv.Skirk.Core
                 await store.MarkCanceledAsync(task.Id, now, now.AddDays(Math.Max(1, _option.RetentionDays)), CancellationToken.None)
                     .ConfigureAwait(false);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // 外部叫停（调用方取消 / 进程正在收尾）：这次并没有跑失败，不该算一次重试。
+                // 以前这里和超时共用一条 FailOrRetry，Attempt 在认领时已经 +1，
+                // 重试次数小的任务发布一次就被推到 Failed —— 发布变成「烧任务」
+                await ReleaseAsync(task, store).ConfigureAwait(false);
+            }
             catch (OperationCanceledException)
             {
-                await FailOrRetryAsync(task, store, "执行超时或被停止", CancellationToken.None).ConfigureAwait(false);
+                // 只剩执行超时
+                await FailOrRetryAsync(
+                    task, store,
+                    $"执行超时（{Math.Max(1, _option.TaskTimeoutMinutes)} 分钟）",
+                    CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -277,6 +287,34 @@ namespace Viv.Skirk.Core
                 // 续不上就停掉本地执行。否则租约过期后别的副本会把同一条再跑一遍。
                 _logger.Warning("Skirk 任务 {0} 心跳异常：{1}", task.Id, ex.Message);
                 taskCts.Cancel();
+            }
+        }
+
+        /// <summary>
+        /// 把没跑完的任务还回队列：状态回 Pending、清租约、<c>Attempt - 1</c>（认领时加的那次还回去）、
+        /// <c>NextAttemptAt = now</c>（不退避，别的副本可以立刻接）。
+        ///
+        /// 与 <see cref="FailOrRetryAsync"/> 的区别就是「这次到底有没有失败」：
+        /// 停机打断不是失败，按失败记账会让一次发布吃掉一整轮重试。
+        /// </summary>
+        private async Task ReleaseAsync(VivAsyncTask task, IVivAsyncTaskStore store)
+        {
+            try
+            {
+                if (await store.ReleaseAsync(task.Id, _leaseOwner, UtcNow, CancellationToken.None).ConfigureAwait(false))
+                {
+                    _logger.Info("Skirk 任务 {0}（{1}）被叫停，已还回队列且不计入重试", task.Id, task.TaskType);
+                }
+                else
+                {
+                    // 租约已经不是本副本的了：别人接手，别去动那一行
+                    _logger.Warning("Skirk 任务 {0} 归还时租约已不属于本副本，保持原状", task.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                // 归还失败不是致命：租约到期后 ReleaseExpiredLeasesAsync 还会兜一次
+                _logger.Warning("Skirk 任务 {0} 归还失败：{1}", task.Id, ex.Message);
             }
         }
 

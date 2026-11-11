@@ -41,6 +41,15 @@ namespace Viv.Skirk.Core
             DateTime expireAt,
             CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// 把没跑完的任务还回队列：状态回 Pending、清租约、<c>Attempt - 1</c>、<c>NextAttemptAt = now</c>。
+        ///
+        /// 与 <see cref="FailAsync"/> 的区别是「这次到底有没有失败」：被外部叫停不是失败，
+        /// 按失败记账会让一次发布吃掉一整轮重试（认领时 Attempt 已经 +1）。
+        /// 只对仍由 <paramref name="leaseOwner"/> 持有的行生效。
+        /// </summary>
+        Task<bool> ReleaseAsync(long id, string leaseOwner, DateTime now, CancellationToken cancellationToken = default);
+
         Task<bool> FailAsync(
             long id,
             string leaseOwner,

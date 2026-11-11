@@ -293,6 +293,23 @@ namespace Viv.Skirk.Core
                 WHERE {C(d, "Id")} = @Id AND {C(d, "LeaseOwner")} = @LeaseOwner
                 """;
 
+        /// <summary>
+        /// 归还（不是失败）：把认领时加的 Attempt 还回去、不退避、立刻可被重新认领。
+        ///
+        /// <c>Status = @Running</c> 是防「别人已经接手了，又被本副本改回 Pending」；
+        /// <c>CASE WHEN</c> 是防 Attempt 被减成负数（历史数据的 Attempt 可能本来就是 0）。
+        /// </summary>
+        public static string Release(ISqlDialect d)
+            => $"""
+                UPDATE {T(d)} SET
+                    {C(d, "Status")} = @Pending,
+                    {C(d, "LeaseUntil")} = NULL,
+                    {C(d, "LeaseOwner")} = NULL,
+                    {C(d, "Attempt")} = CASE WHEN {C(d, "Attempt")} > 0 THEN {C(d, "Attempt")} - 1 ELSE 0 END,
+                    {C(d, "NextAttemptAt")} = @Now
+                WHERE {C(d, "Id")} = @Id AND {C(d, "LeaseOwner")} = @LeaseOwner AND {C(d, "Status")} = @Running
+                """;
+
         public static string ReportProgress(ISqlDialect d)
             => $"""
                 UPDATE {T(d)} SET {C(d, "Progress")} = @Progress, {C(d, "TotalCount")} = @TotalCount, {C(d, "DoneCount")} = @DoneCount, {C(d, "ProgressMessage")} = @ProgressMessage
