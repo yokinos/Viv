@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    全仓统一的编译属性。
+
+    导入时机：SDK 会在每个项目文件「之前」自动导入本文件，所以 csproj 里写同名属性
+    会覆盖这里的值 —— netstandard2.0 的两个源生成器项目（Viv.Forge / Viv.Generators）
+    正是靠这一点保留自己的 TargetFramework，不需要在这里排除。
+
+    ⚠️ 升 .NET 版本只改下面这一行。新增项目不要在自己文件里再写 <TargetFramework>。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

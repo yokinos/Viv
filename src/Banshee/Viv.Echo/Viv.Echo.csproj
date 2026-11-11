@@ -1,9 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <!-- 框架级 gRPC 能力宿主（服务端拦截器 + AddVivGrpcServer/AddVivGrpcKestrel/AddVivGrpcClient）：依赖 ASP.NET Core 共享框架 -->

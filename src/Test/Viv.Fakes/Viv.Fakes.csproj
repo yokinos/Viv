@@ -1,9 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <!-- 本程序集是测试脚手架，不是测试项目。带 Microsoft.NET.Test.Sdk 会让
          dotnet test 把它当测试宿主去跑，报「没有可用测试」。 -->

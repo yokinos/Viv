@@ -1,8 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-Viv.DeepRed.Worker-8c0a54d4-2fc1-4392-a538-f5d69bf8dbdd</UserSecretsId>
   </PropertyGroup>
