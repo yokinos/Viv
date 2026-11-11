@@ -29,6 +29,7 @@ using Viv.Redis;
 using Viv.Redis.DbAllocator;
 using Viv.Sandrone.Impl;
 using Viv.Skirk;
+using Wolverine.EntityFrameworkCore;
 
 namespace Viv.Engine
 {
@@ -179,7 +180,14 @@ namespace Viv.Engine
             var nanaOpt = options.NanaOption;
             var connectionString = nanaOpt.SagaConnectionString!;
 
-            services.AddDbContext<VivSagaDbContext>(dbOpt =>
+            // 必须是 AddDbContextWithWolverineIntegration，不能用普通 AddDbContext：
+            // 只有它会把「这个 DbContext 里的实体」登记给 Wolverine 的 EF saga store。
+            // 用 AddDbContext 时 Wolverine 认不出 EF 提供者，saga 会静默退回内存实现 ——
+            // 流转一切正常、进程一重启状态全没，而且不报警（内存 saga 本来就是合法默认值）。
+            //
+            // 顺序：先注册 DbContext、再 UseWolverine（AddVivWolverine 里），这是 Wolverine 文档的顺序，
+            // 现在的调用链（RegisterNana → RegisterSagaDbContext → AddVivWolverine）正好满足。
+            services.AddDbContextWithWolverineIntegration<VivSagaDbContext>(dbOpt =>
             {
                 switch (nanaOpt.SagaDatabaseSource)
                 {
@@ -192,7 +200,14 @@ namespace Viv.Engine
                     default:
                         throw new NotSupportedException($"Saga 不支持该数据库类型：{nanaOpt.SagaDatabaseSource}");
                 }
-            }, contextLifetime: ServiceLifetime.Scoped);
+            });
+
+            // 建表交给启动钩子：每个 saga 类一张表、表结构跟着类走，没法手写 DDL。
+            // 没有这一步，第一条 saga 消息进来会以「Invalid object name 'Saga_Xxx'」的形式落进死信。
+            services.AddHostedService(sp => new VivSagaTableInitializer(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                nanaOpt,
+                sp.GetRequiredService<ILoggerContract>()));
         }
 
         #endregion
