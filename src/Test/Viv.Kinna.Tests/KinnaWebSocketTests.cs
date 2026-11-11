@@ -41,7 +41,7 @@ namespace Viv.Kinna.Tests
         /// <summary>写出去的关闭帧状态码，没发过就是 null</summary>
         public WebSocketCloseStatus? SentCloseStatus { get; private set; }
 
-        /// <summary>收尾动作的先后顺序（close / abort），用来锁「先发帧再硬断」</summary>
+        /// <summary>收尾动作的先后顺序（close / abort），用来锁「发帧之前不能先硬断」</summary>
         public IReadOnlyList<string> Calls
         {
             get { lock (_sent) return [.. _calls]; }
@@ -536,7 +536,7 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
-        public void AbortAll_先发1012关闭帧再硬断()
+        public void AbortAll_先发1012关闭帧再放手不硬断()
         {
             // 直接 Abort 客户端只看到 1006，会当成断网立刻重连；滚动发布时整个机群一起重连，
             // 撞上的还是正在停的副本。1012 Service Restart 让客户端知道该退避
@@ -547,11 +547,11 @@ namespace Viv.Kinna.Tests
             registry.AbortAll();
 
             Assert.Equal(0, registry.Count);
-            Assert.True(socket.Aborted);
             Assert.Equal((WebSocketCloseStatus)1012, socket.SentCloseStatus);
 
-            // 顺序也要对：先 Abort 的话这一帧根本写不出去
-            Assert.Equal(["close", "abort"], socket.Calls);
+            // 走完帧就 Abort 是把帧白发了：Abort 是 RST，对端还没读走的那一帧会被冲掉，
+            // 客户端照样只看到 1006。硬断留给「帧没写出去」那种情况
+            Assert.False(socket.Aborted);
         }
 
         [Fact]

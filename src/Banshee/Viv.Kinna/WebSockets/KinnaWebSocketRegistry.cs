@@ -292,15 +292,21 @@ namespace Viv.Kinna.WebSockets
             => _groups.TryGetValue(groupName, out var members) ? [.. members.Keys] : [];
 
         /// <summary>
-        /// 停机用：给本进程每条原生连接补一个 1012 关闭帧，再摘表硬断。
+        /// 停机用：给本进程每条原生连接补一个 1012 关闭帧，摘表，然后**放手**。
         ///
         /// 直接 Abort 的话客户端只看到 1006，会当成网络故障立刻重连——滚动发布时整机群的
         /// 客户端同时重连，撞上的还是正在停的副本。1012 明确告诉它是「服务重启」。
+        ///
+        /// 帧写出去之后不能立刻 Abort：Abort 发的是 RST，会把对端还没读走的那一帧冲掉，
+        /// 客户端看到的还是 1006（实测错因就是 WSAECONNRESET）。所以写成功的连接交给
+        /// <see cref="KinnaWebSocketConnection.Abandon"/> 让请求线程正常收尾，只有「帧压根
+        /// 没写出去」的连接才硬断。
+        ///
         /// 等待有上限（<see cref="KinnaWebSocketTimeouts.ShutdownGrace"/>）：这是同步回调，不能久等。
         /// </summary>
         public void AbortAll()
         {
-            var closing = new List<Task>();
+            var closing = new List<KinnaWebSocketConnection>();
 
             foreach (var connectionId in _connections.Keys)
             {
@@ -309,9 +315,9 @@ namespace Viv.Kinna.WebSockets
                     continue;
                 }
 
-                // 队列满时这一帧根本塞不进去：写循环还在慢慢发，SenderCompletion 不会完成，
+                // 队列满时这一帧根本塞不进去：写循环还在慢慢发，关闭指令不会完成，
                 // 算进等待只会让每次停机都白等满宽限，而且这条连接自己也收不到 1012。
-                // 跳过等待，交给下面的 Unbind 硬断
+                // 跳过等待，交给下面的硬断
                 if (!connection.EnqueueClose(ServiceRestart, "server restart"))
                 {
                     KinnaMetrics.RecordWebSocketClosed(HubName, KinnaWebSocketCloseReasons.ShutdownUnsent);
@@ -319,24 +325,48 @@ namespace Viv.Kinna.WebSockets
                 }
 
                 KinnaMetrics.RecordWebSocketClosed(HubName, KinnaWebSocketCloseReasons.Shutdown);
-                closing.Add(connection.SenderCompletion);
+                closing.Add(connection);
             }
 
             try
             {
-                // 写循环排空 = 关闭帧已写出。阻塞这几百毫秒是刻意的：ApplicationStopping 是
-                // 同步回调，不在这儿等，后面的 Kestrel 收尾会直接把 socket 掐掉，帧就丢了
-                Task.WhenAll(closing).Wait(_timeouts.ShutdownGrace);
+                // 关闭帧写出 = 帧已经在线上。阻塞这几百毫秒是刻意的：ApplicationStopping 是
+                // 同步回调，不在这儿等，后面的 Kestrel 收尾会直接把 socket 掐掉，帧就丢了。
+                //
+                // 等 CloseOutcome 而不是 SenderCompletion：后者在「写循环异常退出」时也会完成，
+                // 那种情况帧并没有出去，需要走下面的硬断
+                Task.WhenAll(closing.ConvertAll(static connection => connection.CloseOutcome))
+                    .Wait(_timeouts.ShutdownGrace);
             }
             catch (AggregateException)
             {
                 // 写循环的异常不外抛（见 RunSenderAsync），这里只是兜一层，别让停机流程跟着炸
             }
 
-            // 关闭帧发完（或等够）再摘表：Unbind 会 abort socket，顺序反了就写不出去
+            // 摘表要在帧写完之后：Abandon / Abort 都会让这条连接再也写不出去
             foreach (var connectionId in _connections.Keys)
             {
-                Unbind(connectionId);
+                if (!_connections.TryRemove(connectionId, out var connection))
+                {
+                    continue;
+                }
+
+                lock (_structureLock)
+                {
+                    DetachGroups(connectionId);
+                }
+
+                if (connection.CloseWritten)
+                {
+                    // 帧在线上：留着 socket 让对端把帧读走再握手结束，硬断会把帧冲掉。
+                    // 宽限用 TerminateGrace（「给了关闭指令之后最多再等多久才硬断」），
+                    // 对端不回 Close 时到点收走，别让一条不配合的连接拖住整次停机
+                    connection.Abandon(_timeouts.TerminateGrace);
+                    continue;
+                }
+
+                connection.Abort();
+                connection.Dispose();
             }
         }
 

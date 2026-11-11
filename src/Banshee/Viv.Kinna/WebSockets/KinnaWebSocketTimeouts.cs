@@ -9,6 +9,14 @@ namespace Viv.Kinna.WebSockets
     /// 后者必须更短——否则先到的宽限会把还在等的关闭帧判成失败，指标上就多一条假的
     /// <c>close_timeout</c>。
     /// </summary>
+    /// <param name="CloseFrame">等一帧（数据帧/关闭帧）真正写出去的绝对上限</param>
+    /// <param name="TerminateGrace">
+    /// 关闭指令已经发出去之后，最多再等多久才硬断。软踢用它等队列排空；
+    /// 停机用它等对端把 1012 读走并回 Close——两处都是「帧已经在线上，别再拖了」
+    /// </param>
+    /// <param name="ShutdownGrace">
+    /// 停机时等关闭帧写出去的上限。比 <paramref name="CloseFrame"/> 更短：这是同步回调，不能久等
+    /// </param>
     public sealed record KinnaWebSocketTimeouts(
         TimeSpan CloseFrame,
         TimeSpan TerminateGrace,

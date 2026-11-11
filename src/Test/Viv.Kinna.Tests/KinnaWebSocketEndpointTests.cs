@@ -106,6 +106,27 @@ namespace Viv.Kinna.Tests
         }
 
         /// <summary>
+        /// 像真实客户端那样读一帧：读到关闭帧就把自己的关闭帧回过去，完成握手。
+        ///
+        /// <see cref="ClientWebSocket"/> 收到 Close 之后**不会**自动回帧，得显式调一次
+        /// CloseOutputAsync（线上的客户端都会这么做：读完关掉连接）。不回的话服务端读循环
+        /// 等不到对端的 Close，只能等兜底定时器硬断——停机因此要多等一整个宽限。
+        /// </summary>
+        private static async Task<WebSocketReceiveResult> ReceiveAndCompleteHandshakeAsync(
+            ClientWebSocket client,
+            byte[] buffer)
+        {
+            var result = await client.ReceiveAsync(buffer, CancellationToken.None);
+
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                await client.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// 收集 <c>kinna.ws.inbound.dropped</c> 的 method 标签。用来锁「标签只来自白名单」——
         /// 直接用上行帧里的 type 的话，客户端随便塞个字符串就能给这条指标加一条时间序列
         /// </summary>
@@ -687,10 +708,18 @@ namespace Viv.Kinna.Tests
 
             using var client = new ClientWebSocket();
             await client.ConnectAsync(WebSocketUri(app), CancellationToken.None);
+
+            // 握手回执先收掉，后面那次读只等关闭帧
             await ReceiveAsync(client);
 
             var registry = app.Services.GetRequiredService<KinnaWebSocketRegistry<TestHub>>();
             Assert.Equal(1, registry.Count);
+
+            // 读必须先挂上，再停。真实客户端在长连接稳态一直是在读的，帧一落地就有人接手；
+            // 反过来（停完再读）等于要求服务端把关闭帧压在缓冲里等自己 Abort 的 RST——
+            // TCP 不保证这件事，实测客户端拿到的是 WSAECONNRESET，关闭帧连带被冲掉
+            var buffer = new byte[256];
+            var pending = ReceiveAndCompleteHandshakeAsync(client, buffer);
 
             await app.StopAsync();
 
@@ -700,10 +729,17 @@ namespace Viv.Kinna.Tests
 
             // 客户端看到的是 1012（Service Restart），不是硬断的 1006：前者可以退避重连，
             // 后者会被当成网络故障——滚动发布时整机群同时重连，撞上的还是正在停的副本
-            var buffer = new byte[256];
-            var received = await client
-                .ReceiveAsync(buffer, CancellationToken.None)
-                .WaitAsync(TimeSpan.FromSeconds(5));
+            WebSocketReceiveResult received;
+
+            try
+            {
+                received = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (WebSocketException ex)
+            {
+                Assert.Fail($"客户端没等到关闭帧，只拿到硬断（{ex.Message}）：服务端在把 1012 发出去之前就 Abort 了");
+                throw;
+            }
 
             Assert.Equal(WebSocketMessageType.Close, received.MessageType);
             Assert.Equal((WebSocketCloseStatus)1012, client.CloseStatus);

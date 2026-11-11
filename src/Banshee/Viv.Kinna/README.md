@@ -139,7 +139,7 @@ MarkClosing → 排空有序队列 → 关闭帧入写队列（封队列）→ �
 | 服务端已不认这条连接 | 1008 `connection expired` | 回完 `alive:false` 的 Pong 再断 |
 | 上行帧超限 | 1009 `MessageTooBig` | 默认 32KB |
 | 待发队列满（慢客户端） | 直接断 | 记 `queue_full`，客户端重连走 Resync |
-| 停机 | **1012 Service Restart** | 最多等 500ms 让帧写出去，客户端据此**退避**重连 |
+| 停机 | **1012 Service Restart** | 最多等 500ms 让帧写出去，之后**不 Abort**：留 socket 让对端把帧读走。对端不回 Close 时按 `TerminateGrace`（1s）兜底硬断 |
 | 外部打断（请求中止/异常） | 1001 `EndpointUnavailable` | 描述按真实原因给，不一律写 `register failed` |
 
 **为什么先标记 closing 再排关闭帧**：关闭帧一入队，写循环就封队列，
@@ -157,6 +157,11 @@ MarkClosing → 排空有序队列 → 关闭帧入写队列（封队列）→ �
 
 **为什么停机要补 1012 而不是直接断**：直接断客户端只拿到 `1006`，
 会当成网络故障**立刻**重连，滚动发布期间整个机群一起撞上来。1012 明确告诉它「服务在重启」。
+
+停机和别的关闭路径不一样：帧写出去之后**不能再 `Abort`**。上面那条 `Unbind → Abort` 的 RST
+会把这帧一起冲掉（表现和没补帧一模一样：`WSAECONNRESET` / `without completing the close
+handshake`），所以停机只摘表、不碰 socket，让读循环等对端 Close 后由 Kestrel 走 FIN 收尾；
+对端不读也不回时按 `TerminateGrace` 定时硬断，别让一条连接拖住整次停机。
 
 ---
 
@@ -565,8 +570,10 @@ services.AddKinnaPusher<ChatHub, SendMessageEvent, ChatMessagePusher>();
 - 两个 Hub 的 `Prefix` 撞了 —— 不报错，只会串组
 
 **「重启后消息延迟」**
-客户端重连前拿到的关闭码如果是 `1006` 而不是 `1012`，说明停机补帧没赶上。确认
-`WebSocketShutdownGrace` 没有被配得太短（200ms 在冷启动时连一帧都写不完，实测偶发拿不到 1012）。
+客户端重连前拿到的关闭码如果是 `1006` 而不是 `1012`，说明停机补帧没赶上（硬断把帧冲掉了）。
+`WebSocketShutdownGrace` 配太短（200ms 在冷启动时连一帧都写不完，实测偶发拿不到 1012）是一个原因；
+另一处是 `AbortAll` 里帧写完之后又 `Abort` —— RST 会把还没被客户端读走的帧丢掉，
+停机路径必须走 `Abandon`（不 Abort），别再改回 `Unbind`。
 
 **「Ack 一直不前进」**
 看 `kinna.ws.inbound.dropped`：服务端排不下（存储慢）时客户端会一直收到 `Throttled`。

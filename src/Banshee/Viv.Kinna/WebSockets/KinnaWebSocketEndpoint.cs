@@ -412,7 +412,13 @@ namespace Viv.Kinna.WebSockets
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        KinnaMetrics.RecordWebSocketClosed(HubName, KinnaWebSocketCloseReasons.ClientClosed);
+                        // 表里还有它 = 这一次确实是客户端先关的。被踢（Terminate）、停机（AbortAll）
+                        // 都已经先把它摘表并记过原因了，这里再记一条 client_closed 会把停机/踢人
+                        // 的计数翻倍，看板上就成了「每次发布都有一半是客户端主动关」
+                        if (registry.IsLocal(connectionId))
+                        {
+                            KinnaMetrics.RecordWebSocketClosed(HubName, KinnaWebSocketCloseReasons.ClientClosed);
+                        }
 
                         // 回一个关闭帧再走，客户端才不会当成异常断开。
                         // 走写循环而不是直接写 socket：这里可能还有下行帧在途
