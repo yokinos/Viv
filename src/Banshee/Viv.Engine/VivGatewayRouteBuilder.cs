@@ -11,6 +11,7 @@ namespace Viv.Engine
     ///   /{short}/api/{**catch-all}         -> /api/{**catch-all}          （标准 API，匹配替换）
     ///   /docs/{short}/scalar/{**catch-all} -> /scalar/{**catch-all}       （Scalar 文档经网关透出）
     ///   /docs/{short}/openapi/{**catch-all}-> /openapi/{**catch-all}      （OpenAPI 文档）
+    ///   /docs/{short}/{segment}            -> /{segment}/                 （正好到段末尾：显式补回尾斜杠）
     ///   /ws/{short}/{**catch-all}          -> /{**catch-all}              （SignalR / WebSocket 透传）
     ///
     /// 路由不带 AuthorizationPolicy —— 网关不强制鉴权，只解析透传上下文头，由下游服务自行鉴权。
@@ -36,7 +37,7 @@ namespace Viv.Engine
         {
             var services = AspireServiceDiscovery.Load(_shortNames);
             var clusters = new List<ClusterConfig>(services.Count);
-            var routes = new List<RouteConfig>(services.Count * 4);
+            var routes = new List<RouteConfig>(services.Count * 6);
 
             foreach (var service in services)
             {
@@ -103,6 +104,28 @@ namespace Viv.Engine
 
         private static void AddDocsRoute(List<RouteConfig> routes, string clusterId, string shortName, string segment)
         {
+            // ① 正好到这一段末尾的请求（/docs/{short}/scalar 与 /docs/{short}/scalar/ 都算 ——
+            //    ASP.NET 路由对末尾斜杠不敏感，所以一条模板就盖住两种写法）。
+            //
+            //    必须显式改写成「带尾斜杠」的 /scalar/：catch-all 为空时 YARP 求值会把尾斜杠吃掉
+            //    （/scalar/ → /scalar），下游 Scalar 收到无尾斜杠的地址会 302 到**相对路径** scalar/，
+            //    浏览器再基于 /docs/apex/scalar/ 解析相对地址，就叠成了 /docs/apex/scalar/scalar/。
+            //
+            //    这里用 PathSet 而不是 PathPattern：PathPattern 是路由模板，求值时末尾斜杠会被规范化掉，
+            //    等于又回到同一个坑；PathSet 是直接赋字符串，斜杠原样保留。
+            routes.Add(new RouteConfig
+            {
+                RouteId = $"{shortName}-docs-{segment}-root",
+                ClusterId = clusterId,
+                Match = new RouteMatch { Path = $"/docs/{shortName}/{segment}" },
+                RateLimiterPolicy = VivStartGatewayExtensions.CustomRateLimiterPolicyName,
+                Transforms =
+                [
+                    new Dictionary<string, string> { ["PathSet"] = $"/{segment}/" }
+                ]
+            });
+
+            // ② 该段下面的其余路径。这条带 catch-all，具体性低于 ①，只在有后续段时命中。
             routes.Add(new RouteConfig
             {
                 RouteId = $"{shortName}-docs-{segment}",
