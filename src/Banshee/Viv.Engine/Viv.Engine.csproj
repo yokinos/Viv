@@ -47,6 +47,14 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <!-- 三个页面共用一份样式与渲染脚本，由 ApiStartedMiddleware 读取后注入模板。
+	       改这两份文件不需要重启：中间件按文件修改时间判断是否重读。 -->
+	  <None Update="Web\app.css">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	  <None Update="Web\app.js">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
 	  <None Update="Web\notfound.html">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </None>

@@ -1,0 +1,739 @@
+/* ============================================================
+   Viv 服务页面共享样式
+
+   由 ApiStartedMiddleware 读取后内联进三个页面：
+     welcome.html（普通服务）/ gateway.html（网关）/ notfound.html（404）
+   页面特有的规则（.error-* / .service-*）放在各自 HTML 的 <style> 里，
+   并在其中覆盖自己的响应式断点。
+
+   改配色、卡片、导航、按钮 —— 只改这一份。
+   ============================================================ */
+
+/* ===== 全局重置 & 变量 ===== */
+:root {
+    --yellow: #d9ff00;
+    --yellow-glow: rgba(217, 255, 0, 0.25);
+    --bg-dark: #0b0b12;
+    --bg-card: rgba(255, 255, 255, 0.04);
+    --border-card: rgba(255, 255, 255, 0.07);
+    --text-white: #f0f0f0;
+    --text-muted: rgba(255, 255, 255, 0.5);
+    --radius-card: 28px;
+    --shadow-card: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, 'Microsoft YaHei', Arial, sans-serif;
+}
+
+html, body {
+    min-width: 320px;
+    overflow-x: hidden;
+    background: var(--bg-dark);
+    color: var(--text-white);
+}
+
+button {
+    font: inherit;
+    border: none;
+    cursor: pointer;
+}
+
+/* ===== 顶部导航 ===== */
+.top-header {
+    position: relative;
+    z-index: 20;
+    width: 100%;
+    height: 72px;
+    padding: 0 130px;
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    background: rgba(11, 11, 18, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.logo-group {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+}
+
+.logo-box {
+    width: 60px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--yellow);
+    color: #000;
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    border-radius: 10px;
+    transition: transform 0.3s ease;
+}
+
+    .logo-box:hover {
+        transform: scale(1.04);
+    }
+
+.logo-text {
+    color: #fff;
+    font-size: 19px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    white-space: nowrap;
+    opacity: 0.7;
+}
+
+    .logo-text span {
+        font-weight: 300;
+        opacity: 0.5;
+    }
+
+.nav-single {
+    flex: 0 0 auto;
+    margin-right: auto;
+}
+
+.nav-item {
+    position: relative;
+    display: inline-block;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+    .nav-item:hover {
+        color: #fff;
+    }
+
+    .nav-item::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: -10px;
+        width: 100%;
+        height: 2.5px;
+        background: var(--yellow);
+        border-radius: 4px;
+        opacity: 0.6;
+    }
+
+/* ===== 主区域 ===== */
+.main-wrap {
+    position: relative;
+    min-height: calc(100vh - 72px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+    overflow: hidden;
+    background: radial-gradient(ellipse 80% 60% at 50% 30%, rgba(217, 255, 0, 0.06) 0%, transparent 70%), radial-gradient(ellipse 60% 50% at 20% 80%, rgba(217, 255, 0, 0.04) 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 80% 20%, rgba(217, 255, 0, 0.03) 0%, transparent 50%), var(--bg-dark);
+}
+
+.orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    opacity: 0.5;
+    animation: orbFloat 12s ease-in-out infinite alternate;
+}
+
+.orb--1 {
+    width: 400px;
+    height: 400px;
+    top: -100px;
+    right: -100px;
+    background: rgba(217, 255, 0, 0.10);
+    animation-delay: 0s;
+}
+
+.orb--2 {
+    width: 300px;
+    height: 300px;
+    bottom: -60px;
+    left: -60px;
+    background: rgba(100, 120, 255, 0.08);
+    animation-delay: -4s;
+}
+
+.orb--3 {
+    width: 200px;
+    height: 200px;
+    top: 40%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(217, 255, 0, 0.05);
+    animation-delay: -8s;
+    filter: blur(100px);
+}
+
+@keyframes orbFloat {
+    0% {
+        transform: translate(0, 0) scale(1);
+    }
+
+    33% {
+        transform: translate(30px, -30px) scale(1.1);
+    }
+
+    66% {
+        transform: translate(-20px, 20px) scale(0.9);
+    }
+
+    100% {
+        transform: translate(10px, -10px) scale(1.05);
+    }
+}
+
+.particles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.particle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: var(--yellow);
+    border-radius: 50%;
+    opacity: 0.15;
+    animation: particleDrift 18s linear infinite;
+}
+
+    .particle:nth-child(1) {
+        left: 10%;
+        top: 20%;
+        animation-duration: 22s;
+        animation-delay: 0s;
+        width: 6px;
+        height: 6px;
+    }
+
+    .particle:nth-child(2) {
+        left: 85%;
+        top: 15%;
+        animation-duration: 26s;
+        animation-delay: -3s;
+        width: 3px;
+        height: 3px;
+    }
+
+    .particle:nth-child(3) {
+        left: 20%;
+        top: 80%;
+        animation-duration: 20s;
+        animation-delay: -6s;
+        width: 5px;
+        height: 5px;
+    }
+
+    .particle:nth-child(4) {
+        left: 70%;
+        top: 70%;
+        animation-duration: 24s;
+        animation-delay: -9s;
+        width: 4px;
+        height: 4px;
+    }
+
+    .particle:nth-child(5) {
+        left: 50%;
+        top: 10%;
+        animation-duration: 28s;
+        animation-delay: -12s;
+        width: 3px;
+        height: 3px;
+    }
+
+    .particle:nth-child(6) {
+        left: 40%;
+        top: 90%;
+        animation-duration: 20s;
+        animation-delay: -5s;
+        width: 5px;
+        height: 5px;
+    }
+
+@keyframes particleDrift {
+    0% {
+        transform: translate(0, 0) scale(1);
+        opacity: 0.08;
+    }
+
+    25% {
+        transform: translate(60px, -80px) scale(1.4);
+        opacity: 0.25;
+    }
+
+    50% {
+        transform: translate(-40px, 60px) scale(0.8);
+        opacity: 0.10;
+    }
+
+    75% {
+        transform: translate(80px, 40px) scale(1.2);
+        opacity: 0.20;
+    }
+
+    100% {
+        transform: translate(0, 0) scale(1);
+        opacity: 0.08;
+    }
+}
+
+.welcome-card {
+    position: relative;
+    z-index: 10;
+    max-width: 640px;
+    width: 100%;
+    padding: 56px 52px 48px;
+    background: var(--bg-card);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    text-align: center;
+    animation: cardEntry 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+    transform: translateY(30px) scale(0.97);
+}
+
+@keyframes cardEntry {
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.card-badge {
+    display: inline-block;
+    padding: 4px 18px;
+    border-radius: 999px;
+    background: rgba(217, 255, 0, 0.10);
+    border: 1px solid rgba(217, 255, 0, 0.12);
+    color: var(--yellow);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+}
+
+.card-icon {
+    font-size: 56px;
+    line-height: 1;
+    margin-bottom: 16px;
+    display: block;
+    filter: drop-shadow(0 8px 24px rgba(217, 255, 0, 0.15));
+}
+
+.card-title {
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #fff 40%, rgba(255, 255, 255, 0.5));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.2;
+    margin-bottom: 8px;
+}
+
+.card-sub {
+    font-size: 17px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    letter-spacing: 0.2px;
+}
+
+    .card-sub strong {
+        color: var(--yellow);
+        font-weight: 500;
+        -webkit-text-fill-color: var(--yellow);
+    }
+
+.status-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 32px;
+    padding: 10px 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* 状态点默认是「尚未检测」的中性灰：颜色由 app.js 探测完健康接口后加 is-ok / is-bad 决定。
+   页面一打开就显示绿色，等于在陈述一个还没验证过的事实。 */
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.35);
+    transition: background 0.35s ease, box-shadow 0.35s ease;
+}
+
+.status-dot.is-ok {
+    background: #4ade80;
+    box-shadow: 0 0 16px rgba(74, 222, 128, 0.35);
+    animation: pulseDot 2s ease-in-out infinite;
+}
+
+.status-dot.is-bad {
+    background: #f87171;
+    box-shadow: 0 0 16px rgba(248, 113, 113, 0.35);
+}
+
+@keyframes pulseDot {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.5;
+        transform: scale(0.8);
+    }
+}
+
+.status-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 0.3px;
+}
+
+    .status-label span {
+        color: #4ade80;
+        font-weight: 600;
+    }
+
+.card-meta {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+}
+
+.meta-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+    .meta-item .label {
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: rgba(255, 255, 255, 0.25);
+    }
+
+    .meta-item .value {
+        font-size: 15px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+        .meta-item .value .highlight {
+            color: var(--yellow);
+        }
+
+.card-actions {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn-primary {
+    padding: 14px 44px;
+    border-radius: 999px;
+    background: var(--yellow);
+    color: #000;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    box-shadow: 0 0 0 0 var(--yellow-glow);
+    /* 404 页把它用在 <a> 上，这里统一去掉下划线；对 <button> 无副作用 */
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+    .btn-primary:hover {
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 16px 48px -12px var(--yellow-glow);
+        background: #e6ff2a;
+    }
+
+    .btn-primary:active {
+        transform: scale(0.95);
+    }
+
+.btn-ghost {
+    padding: 14px 32px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 15px;
+    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.3s ease;
+}
+
+.btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.12);
+    transform: translateY(-2px);
+}
+
+/* 健康检查按钮的三种结果状态，由 app.js 贴类名（不再在 JS 里写 inline style） */
+.btn-primary.is-ok,
+.btn-ghost.is-ok {
+    color: #4ade80;
+    border-color: rgba(74, 222, 128, 0.25);
+    background: rgba(74, 222, 128, 0.06);
+}
+
+.btn-primary.is-bad,
+.btn-ghost.is-bad {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.25);
+    background: rgba(248, 113, 113, 0.06);
+}
+
+.btn-primary.is-busy,
+.btn-ghost.is-busy {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 900px) {
+    .top-header {
+        padding: 0 40px;
+        gap: 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .top-header {
+        height: 64px;
+        padding: 0 20px;
+        gap: 12px;
+        background: rgba(11, 11, 18, 0.92);
+    }
+
+    .logo-box {
+        width: 50px;
+        height: 32px;
+        font-size: 18px;
+        border-radius: 8px;
+    }
+
+    .logo-text {
+        font-size: 15px;
+        letter-spacing: 0.8px;
+    }
+
+        .logo-text span {
+            display: none;
+        }
+
+    .nav-single {
+        display: none;
+    }
+
+    .main-wrap {
+        min-height: calc(100vh - 64px);
+        padding: 30px 16px;
+    }
+
+    .welcome-card {
+        padding: 36px 24px 32px;
+        border-radius: 20px;
+    }
+
+    .card-title {
+        font-size: 30px;
+    }
+
+    .card-sub {
+        font-size: 15px;
+    }
+
+    .card-icon {
+        font-size: 44px;
+    }
+
+    .card-meta {
+        gap: 24px;
+    }
+
+    .btn-primary {
+        padding: 12px 32px;
+        font-size: 14px;
+    }
+
+    .btn-ghost {
+        padding: 12px 24px;
+        font-size: 14px;
+    }
+
+    .orb--1 {
+        width: 250px;
+        height: 250px;
+        top: -60px;
+        right: -60px;
+    }
+
+    .orb--2 {
+        width: 200px;
+        height: 200px;
+        bottom: -40px;
+        left: -40px;
+    }
+}
+
+@media (max-width: 430px) {
+    .top-header {
+        height: 58px;
+        padding: 0 14px;
+        gap: 8px;
+    }
+
+    .logo-box {
+        width: 42px;
+        height: 28px;
+        font-size: 15px;
+    }
+
+    .logo-text {
+        font-size: 13px;
+        letter-spacing: 0.4px;
+    }
+
+    .welcome-card {
+        padding: 28px 18px 26px;
+        border-radius: 16px;
+    }
+
+    .card-title {
+        font-size: 24px;
+    }
+
+    .card-sub {
+        font-size: 13px;
+        margin-bottom: 20px;
+    }
+
+    .card-icon {
+        font-size: 36px;
+        margin-bottom: 10px;
+    }
+
+    .card-badge {
+        font-size: 10px;
+        padding: 3px 14px;
+        margin-bottom: 16px;
+    }
+
+    .status-row {
+        padding: 6px 16px;
+        gap: 8px;
+        margin-bottom: 24px;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+    }
+
+    .status-label {
+        font-size: 12px;
+    }
+
+    .card-meta {
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .meta-item .value {
+        font-size: 13px;
+    }
+
+    .btn-primary {
+        padding: 10px 26px;
+        font-size: 13px;
+        width: 100%;
+    }
+
+    .btn-ghost {
+        padding: 10px 20px;
+        font-size: 13px;
+        width: 100%;
+    }
+
+    .card-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .orb--1 {
+        width: 180px;
+        height: 180px;
+    }
+
+    .orb--2 {
+        width: 140px;
+        height: 140px;
+    }
+}
+
+
+/* ===== 无障碍：跟随系统的「减少动态效果」 =====
+   光斑、粒子、脉冲点是这页的氛围来源。系统开了「减少动态」时全部停住，
+   只留静态渐变背景 —— 画面一样成立，只是不动。 */
+@media (prefers-reduced-motion: reduce) {
+    .orb,
+    .particle,
+    .status-dot {
+        animation: none;
+    }
+
+    .welcome-card {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+
+    * {
+        transition-duration: 0.01ms !important;
+    }
+}
