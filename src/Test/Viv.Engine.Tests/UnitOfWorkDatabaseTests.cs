@@ -1,4 +1,4 @@
-using Testcontainers.PostgreSql;
+﻿using Testcontainers.PostgreSql;
 using Viv.Engine.UnitOfWork;
 using Viv.Fakes;
 using Viv.Momo.Core;
@@ -10,26 +10,18 @@ using Viv.Delusion.Magic;
 namespace Viv.Engine.Tests;
 
 /// <summary>
-/// 显式开启才会跑：环境变量 VIV_CONTAINER_TESTS 为 1 或 true 时才拉起 Testcontainers，否则跳过。
-/// 与 Viv.Momo.Tests 同名特性同一条约定，两处判据要保持一致。
+/// 容器集成测试的开关特性。判据与跳过文案都在 <see cref="Viv.Fakes.ContainerTests"/>，
+/// 这里只是 xUnit 的薄壳（特性必须继承 <c>FactAttribute</c>，而 Viv.Fakes 不带 xunit）。
 /// </summary>
 internal sealed class DockerFactAttribute : FactAttribute
 {
     public DockerFactAttribute()
     {
-        if (!DockerEnvironment.IsEnabled)
+        if (!Viv.Fakes.ContainerTests.IsEnabled)
         {
-            Skip = "容器集成测试未开启，跳过。要跑请设环境变量 VIV_CONTAINER_TESTS=1，并确保本机 Docker 可用。";
+            Skip = Viv.Fakes.ContainerTests.SkipReason;
         }
     }
-}
-
-internal static class DockerEnvironment
-{
-    internal static bool IsEnabled { get; } = Detect();
-
-    private static bool Detect()
-        => Environment.GetEnvironmentVariable("VIV_CONTAINER_TESTS") is "1" or "true" or "TRUE";
 }
 
 public sealed class EnginePostgresFixture : IAsyncLifetime
@@ -41,7 +33,7 @@ public sealed class EnginePostgresFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        if (!DockerEnvironment.IsEnabled) return;
+        if (!Viv.Fakes.ContainerTests.IsEnabled) return;
 
         Container = new PostgreSqlBuilder()
             .WithImage("postgres:16-alpine")

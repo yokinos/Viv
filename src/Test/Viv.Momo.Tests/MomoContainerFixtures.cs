@@ -1,4 +1,4 @@
-using Testcontainers.MsSql;
+﻿using Testcontainers.MsSql;
 using Testcontainers.PostgreSql;
 using Viv.Delusion.Magic;
 using Viv.Fakes;
@@ -18,7 +18,7 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        if (!DockerEnvironment.IsEnabled) return;
+        if (!Viv.Fakes.ContainerTests.IsEnabled) return;
 
         Container = new PostgreSqlBuilder()
             .WithImage("postgres:16-alpine")
@@ -45,7 +45,7 @@ public sealed class SqlServerContainerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        if (!DockerEnvironment.IsEnabled) return;
+        if (!Viv.Fakes.ContainerTests.IsEnabled) return;
 
         Container = new MsSqlBuilder()
             .WithPassword("Viv_Sql_77!")
