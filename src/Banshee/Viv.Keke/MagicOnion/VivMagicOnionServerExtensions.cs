@@ -15,10 +15,15 @@ namespace Viv.Keke.MagicOnion
     /// <para>迁移期服务端用 <c>Protocol = Both</c>：gRPC 与 MagicOnion 同时映射，
     /// 客户端逐条服务切换时不会因为“服务端只开了一边”而整条链路失败。</para>
     ///
-    /// <para>用法（宿主是 Apex.Api 这种同时对外提供 RPC 的服务）：
+    /// <para>正常情况下无需手工调用：<c>VivOptions.KekeOption.GrpcOption.Protocol</c> 含 MagicOnion 时，
+    /// DI 半段由 <c>KekeRegister</c> 装（<see cref="AddVivMagicOnionServer"/>），端点映射半段由
+    /// <c>RunVivApi</c> 在 <c>Build()</c> 之后自动补（<see cref="MapVivMagicOnionServices"/>）。
+    /// 之所以劈成两半，是因为映射必须有 <c>IEndpointRouteBuilder</c>，DI 阶段拿不到。</para>
+    ///
+    /// <para>自建管道（不走 <c>AddVivApi</c>/<c>RunVivApi</c>）时才需要自己调：
     /// <code>
-    /// builder.Services.AddVivMagicOnionServer();          // AddVivApi 之后
-    /// builder.RunVivApi(app =&gt; { app.MapVivMagicOnionServices(); });
+    /// builder.Services.AddVivMagicOnionServer();
+    /// app.MapVivMagicOnionServices();
     /// </code>
     /// </para>
     /// </summary>

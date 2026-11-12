@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Viv.Delusion;
 using Viv.Keke.Grpc;
 using Viv.Keke.Http;
+using Viv.Keke.MagicOnion;
 
 namespace Viv.Keke
 {
@@ -18,6 +19,11 @@ namespace Viv.Keke
             if (options.GrpcOption != null)
             {
                 services.AddTransient<VivGrpcInterceptor>();
+            }
+
+            if (options.GrpcOption?.ServesMagicOnion == true)
+            {
+                services.AddVivMagicOnionServer();
             }
         }
     }

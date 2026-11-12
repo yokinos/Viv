@@ -16,6 +16,7 @@ using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Keke;
 using Viv.Keke.Grpc;
+using Viv.Keke.MagicOnion;
 using Viv.Engine.Filter;
 using Viv.Engine.LocalEvents;
 using Viv.Engine.Middleware;
@@ -30,6 +31,7 @@ namespace Viv.Engine
         private const string ApiTitleKey = "__VivApiTitle";
         private const string VivAuthRegisteredKey = "__VivAuthRegistered";
         private const string VivGrpcServerEnabledKey = "__VivGrpcServerEnabled";
+        private const string VivMagicOnionEnabledKey = "__VivMagicOnionEnabled";
 
         /// <summary>
         /// 配置 Viv API 基础服务：加载配置、Autofac 容器、AddViv、MVC、CORS、OpenAPI、编码注册。
@@ -68,9 +70,10 @@ namespace Viv.Engine
             // gRPC / MagicOnion 服务端（配置驱动）：VivOptions.KekeOption.GrpcOption 的端口由两种传输共用，
             // Protocol 决定这一进程要注册哪些服务端实现：
             //   Grpc       → 只注册 gRPC 服务端（拦截器 + 自动发现 + MapGrpcService）
-            //   MagicOnion → 只绑端口，服务端由 Viv.Keke.MagicOnion 的 AddVivMagicOnionServer 装配
+            //   MagicOnion → 只绑端口，服务端 DI 半段由 KekeRegister 装配，端点映射在本方法末尾自动补
             //   Both       → 两边都注册（迁移期）
             //   None       → 不占端口（GrpcOption 节点配了但协议为 None 等同于没开）
+            // 两边都只在这里判一次协议，宿主不再自己读 KekeOption 决定装不装 MagicOnion。
             var grpcOption = vivOptions.KekeOption?.GrpcOption;
             if (grpcOption is not null && grpcOption.Protocol != KekeProtocol.None)
             {
@@ -80,6 +83,11 @@ namespace Viv.Engine
                 {
                     VivGrpcDiscovery.RegisterServices(builder.Services);
                     builder.Configuration[VivGrpcServerEnabledKey] = "true";
+                }
+
+                if (grpcOption.ServesMagicOnion)
+                {
+                    builder.Configuration[VivMagicOnionEnabledKey] = "true";
                 }
             }
 
@@ -223,6 +231,12 @@ namespace Viv.Engine
             if (builder.Configuration[VivGrpcServerEnabledKey] == "true")
             {
                 VivGrpcDiscovery.MapServices(app);
+            }
+
+            // MagicOnion 服务端同理：DI 已在 KekeRegister 装好，这里只补端点映射（必须在 Build 之后）
+            if (builder.Configuration[VivMagicOnionEnabledKey] == "true")
+            {
+                app.MapVivMagicOnionServices();
             }
 
             configure?.Invoke(app);
