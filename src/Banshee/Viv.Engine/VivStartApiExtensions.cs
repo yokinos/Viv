@@ -117,7 +117,9 @@ namespace Viv.Engine
             })
             .AddNewtonsoftJson(json =>
             {
-                json.SerializerSettings.DateFormatString = "yyyy-MM-dd HH:mm:ss";
+                // 时间一律 ISO 8601 + UTC 后缀，和 VivApiResult / SSE 走同一套规则，
+                // 否则控制器返回和信封返回的时间格式会不一致（前端得写两套解析）。
+                JsonNetSetting.ApplyDateTimeRule(json.SerializerSettings);
                 json.SerializerSettings.ContractResolver = new VivContractResolver()
                 {
                     NamingStrategy = new Newtonsoft.Json.Serialization.CamelCaseNamingStrategy()
