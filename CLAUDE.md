@@ -171,7 +171,7 @@ Background scheduling — `TickerQ` integration for cron/interval job execution 
 **REST + gRPC 明文端口约束**：gRPC 需要 HTTP/2。
 明文下 `Http1AndHttp2` 只认 TLS/ALPN，不认 h2c prior-knowledge 前缀（Grpc.Net.Client 明文即发前缀）→ 回 `HTTP_1_1_REQUIRED`；严格 `Http2` 会把 HTTP/1.1 REST 打挂（400）。
 故 REST 与 gRPC 必须**分开端口**。
-**配置驱动（宿主零手工接线）**：appsettings.json 的 `VivOptions.KekeOption.GrpcOption`（`EnableServer` + `Port`）启用时，`AddVivApi` 自动调 `AddVivGrpcKestrel(port)`（`Viv.Keke.Grpc`：gRPC 端口绑严格 HTTP/2，并把 urls——`--urls`/`ASPNETCORE_URLS`/launchSettings——显式 `Listen` 回 HTTP/1.1；显式 `Listen` 会顶掉 urls 生成的端点，必须重绑，无 urls 回落 Kestrel 默认 5000；声明端口即自动调 `AddVivGrpcServer` 含租户上下文恢复拦截器）+ `VivGrpcDiscovery` 自动发现注册 gRPC 服务，`RunVivApi` 在 `MapControllers()` 后自动 `MapGrpcService<T>`。
+**配置驱动（宿主零手工接线）**：appsettings.json 的 `VivOptions.KekeOption.GrpcOption`（`Protocol` + `Port`，`Protocol` 是唯一开关，`None`/缺省 = 不占端口）启用时，`AddVivApi` 自动调 `AddVivGrpcKestrel(port)`（`Viv.Keke.Grpc`：gRPC 端口绑严格 HTTP/2，并把 urls——`--urls`/`ASPNETCORE_URLS`/launchSettings——显式 `Listen` 回 HTTP/1.1；显式 `Listen` 会顶掉 urls 生成的端点，必须重绑，无 urls 回落 Kestrel 默认 5000；声明端口即自动调 `AddVivGrpcServer` 含租户上下文恢复拦截器）+ `VivGrpcDiscovery` 自动发现注册 gRPC 服务，`RunVivApi` 在 `MapControllers()` 后自动 `MapGrpcService<T>`。
 **自动发现约定**：grpc_csharp_plugin 生成的基类（如 `TenantGrpcServiceBase`）**不继承 `ServiceBase`**，以基类上的 `[BindServiceMethod]` 特性沿基类链判定（`VivGrpcDiscovery.FindServices` 先 `TypeScanMagic.ForceLoadReferencedAssemblies()` 强制加载懒加载程序集）。
 **Apex.Api 已配 7001，托管真实的 `ApexAppQueryService`；Herta.Api 配 7002 但自身没有 gRPC 服务，已不引 Apex.Proxy**。
 示例那套四形态夹具原在 `Viv.ServiceProxy.Tests`（已随重构删除），宿主不再被自动挂一个假数据服务；非 gRPC 宿主服务 `KekeOption.GrpcOption: null`（死属性 `EnableGrpc` 已移除）。
@@ -361,7 +361,7 @@ Every API / Worker / 工具箱 project carries a `VivOptions` node in its `appse
 | `OutboxOption` | 发件箱：投递器开关、轮询间隔、批大小、重试上限、租约、建表、保留期。**为 null = 不启用**（见下） |
 | `InboxOption` | Inbox 清理：保留期（默认 7 天）、批大小（默认 1000）、清理间隔。**与别的子配置不同 —— 为 null 不是「不启用」**：Inbox 只看 `DatabaseOption`，节点缺席就用默认值照常清理，要关掉把保留期配成 0（见下） |
 | `TokenOption` | JWT secret/expiry/issuer |
-| `KekeOption` | HTTP client enable + gRPC（`GrpcOption { EnableServer, Port }`） |
+| `KekeOption` | HTTP client enable + gRPC（`GrpcOption { Protocol, Port }`，`Protocol`: None/Grpc/MagicOnion/Both） |
 | `TickOption` | TickerQ scheduler config |
 | `KinnaOption` | 长连接（Kinna）：`HubPath` / `Prefix` / 租约 / 清扫 / 限流 / 健康检查 / 单连接。**为 null = 不跑长连接**，`AddKinna<THub>` 读到节点不存在且无回调时直接返回；多 Hub 用 `KinnaOption:<Hub 类型名>` 覆盖 |
 

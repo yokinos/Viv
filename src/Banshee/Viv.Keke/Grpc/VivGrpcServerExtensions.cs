@@ -11,7 +11,7 @@ namespace Viv.Keke.Grpc
     {
         /// <summary>
         /// 注册框架级 gRPC 服务端（含 <see cref="VivGrpcServerInterceptor"/> 租户上下文恢复拦截器）。
-        /// 配置驱动（appsettings.json <c>VivOptions.KekeOption.GrpcOption.EnableServer</c>）时由 <see cref="AddVivGrpcKestrel"/>
+        /// 配置驱动（appsettings.json <c>VivOptions.KekeOption.GrpcOption.Protocol</c>）时由 <see cref="AddVivGrpcKestrel"/>
         /// 自动调用，具体业务服务经 <see cref="VivGrpcDiscovery"/> 自动发现注册 + 映射；也可手动显式调用 +
         /// <c>MapGrpcService&lt;T&gt;()</c>。
         /// </summary>
@@ -28,7 +28,7 @@ namespace Viv.Keke.Grpc
         /// <para><paramref name="enableGrpcServer"/> 决定是否顺带注册 gRPC 服务端（含
         /// <see cref="VivGrpcServerInterceptor"/> 租户上下文恢复拦截器）。它现在是独立开关：
         /// MagicOnion 与 gRPC 共用同一条 HTTP/2 端口，协议切到 MagicOnion 时端口仍要绑，但不能注册 gRPC 服务端。
-        /// 配置驱动时由框架 <c>AddVivApi</c>（Viv.Engine）按 <see cref="GrpcOptions.EffectiveProtocol"/> 调用。</para>
+        /// 配置驱动时由框架 <c>AddVivApi</c>（Viv.Engine）按 <see cref="GrpcOptions.Protocol"/> 调用。</para>
         ///
         /// 为什么必须分开端口：gRPC 需要 HTTP/2，明文下 <c>Http1AndHttp2</c> 只认 TLS/ALPN，不认 h2c prior-knowledge
         /// 前缀（Grpc.Net.Client 明文即发前缀），会回 <c>HTTP_1_1_REQUIRED</c>；而严格 Http2 会把 HTTP/1.1 REST 打挂（400）。

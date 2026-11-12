@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Viv.Engine;
+using Viv.Keke;
 using Viv.Momo.Options;
 
 namespace Viv.Engine.Tests;
@@ -112,5 +113,31 @@ public class VivConfigBindingTests
     public void 慢查询阈值默认1000毫秒()
     {
         Assert.Equal(1000, new DatabaseOptions().SlowQueryThresholdMs);
+    }
+
+    /// <summary>
+    /// GrpcOption 只有 Protocol + Port 两个键（EnableServer 已移除），Protocol 支持按名字绑定。
+    /// Serves* 是纯派生量，跟着 Protocol 走。
+    /// </summary>
+    [Theory]
+    [InlineData("None")]
+    [InlineData("Grpc")]
+    [InlineData("MagicOnion")]
+    [InlineData("Both")]
+    public void GrpcOption协议按名字绑定(string protocol)
+    {
+        var config = new ConfigurationBuilder()
+            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes($$"""
+                { "VivOptions": { "KekeOption": { "EnableHttp": false, "GrpcOption": { "Protocol": "{{protocol}}", "Port": 7100 } } } }
+                """)))
+            .Build();
+
+        var grpc = VivConfigLoader.Load(config).KekeOption!.GrpcOption!;
+        var expected = Enum.Parse<KekeProtocol>(protocol);
+
+        Assert.Equal(expected, grpc.Protocol);
+        Assert.Equal(7100, grpc.Port);
+        Assert.Equal(expected.HasFlag(KekeProtocol.Grpc), grpc.ServesGrpc);
+        Assert.Equal(expected.HasFlag(KekeProtocol.MagicOnion), grpc.ServesMagicOnion);
     }
 }

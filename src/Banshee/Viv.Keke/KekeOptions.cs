@@ -30,29 +30,19 @@ namespace Viv.Keke
     public class GrpcOptions
     {
         /// <summary>
-        /// 旧开关：等价于 <c>Protocol = Grpc</c>。保留是为了让已入库的 appsettings.json 不做迁移。
-        /// </summary>
-        public bool EnableServer { get; set; }
-
-        /// <summary>
         /// 服务端专用端口（严格 HTTP/2）。两种传输共用。
         /// </summary>
         public int Port { get; set; }
 
         /// <summary>
-        /// 服务端协议。不配（<see cref="KekeProtocol.None"/>）时回落到 <see cref="EnableServer"/> 的旧语义。
+        /// 服务端协议，唯一开关。配 <see cref="KekeProtocol.None"/>（默认）表示这个进程不占 RPC 端口。
         /// </summary>
         public KekeProtocol Protocol { get; set; } = KekeProtocol.None;
 
-        /// <summary>实际生效的协议：<see cref="Protocol"/> 优先，没配则看 <see cref="EnableServer"/>。</summary>
-        public KekeProtocol EffectiveProtocol => Protocol != KekeProtocol.None
-            ? Protocol
-            : EnableServer ? KekeProtocol.Grpc : KekeProtocol.None;
-
         /// <summary>是否需要注册 gRPC 服务端（拦截器 + 自动发现 + MapGrpcService）。</summary>
-        public bool ServesGrpc => (EffectiveProtocol & KekeProtocol.Grpc) != 0;
+        public bool ServesGrpc => (Protocol & KekeProtocol.Grpc) != 0;
 
         /// <summary>是否需要注册 MagicOnion 服务端（由 <c>Viv.Keke.MagicOnion</c> 的扩展完成）。</summary>
-        public bool ServesMagicOnion => (EffectiveProtocol & KekeProtocol.MagicOnion) != 0;
+        public bool ServesMagicOnion => (Protocol & KekeProtocol.MagicOnion) != 0;
     }
 }

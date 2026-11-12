@@ -66,13 +66,13 @@ namespace Viv.Engine
             builder.Services.AddViv(vivOptions);
 
             // gRPC / MagicOnion 服务端（配置驱动）：VivOptions.KekeOption.GrpcOption 的端口由两种传输共用，
-            // EffectiveProtocol 决定这一进程要注册哪些服务端实现：
+            // Protocol 决定这一进程要注册哪些服务端实现：
             //   Grpc       → 只注册 gRPC 服务端（拦截器 + 自动发现 + MapGrpcService）
             //   MagicOnion → 只绑端口，服务端由 Viv.Keke.MagicOnion 的 AddVivMagicOnionServer 装配
             //   Both       → 两边都注册（迁移期）
-            // 旧配置只写 EnableServer=true 时 EffectiveProtocol 回落为 Grpc，行为不变。
+            //   None       → 不占端口（GrpcOption 节点配了但协议为 None 等同于没开）
             var grpcOption = vivOptions.KekeOption?.GrpcOption;
-            if (grpcOption is not null && grpcOption.EffectiveProtocol != KekeProtocol.None)
+            if (grpcOption is not null && grpcOption.Protocol != KekeProtocol.None)
             {
                 builder.AddVivGrpcKestrel(grpcOption.Port, grpcOption.ServesGrpc);
 
