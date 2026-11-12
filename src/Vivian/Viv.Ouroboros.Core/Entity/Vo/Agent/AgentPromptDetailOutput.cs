@@ -47,6 +47,6 @@ namespace Viv.Ouroboros.Core.Entity.Vo.Agent
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime? CreatedAt { get; set; }
+        public DateTimeOffset? CreatedAt { get; set; }
     }
 }

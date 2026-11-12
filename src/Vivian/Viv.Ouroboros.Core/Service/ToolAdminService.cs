@@ -79,7 +79,7 @@ namespace Viv.Ouroboros.Core.Service
                 IsReadOnly = request.IsReadOnly ?? true,
                 IsEnabled = request.IsEnabled ?? true,
                 Remark = request.Remark,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTimeOffset.UtcNow
             };
 
             if (!await _db.InsertAsync(row)) return VivApiResult.Failed("写入工具失败");
@@ -108,7 +108,7 @@ namespace Viv.Ouroboros.Core.Service
             row.IsReadOnly = request.IsReadOnly ?? true;
             row.IsEnabled = request.IsEnabled ?? row.IsEnabled;
             row.Remark = request.Remark;
-            row.UpdatedAt = DateTime.Now;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
 
             if (!await _db.UpdateAsync(row)) return VivApiResult.Failed("修改工具失败");
 
@@ -135,7 +135,7 @@ namespace Viv.Ouroboros.Core.Service
             }
 
             row.IsEnabled = isEnabled;
-            row.UpdatedAt = DateTime.Now;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
             if (!await _db.UpdateAsync(row)) return VivApiResult.Failed("修改工具失败");
 
             _notifier.Notify();

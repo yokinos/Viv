@@ -295,9 +295,9 @@ namespace Viv.Ouroboros.Core.Service
 
                     if (_entries.TryGetValue(server.ServerName, out var stale))
                     {
-                        if (string.Equals(stale.Fingerprint, fingerprint, StringComparison.Ordinal) && DateTime.UtcNow < stale.NextAttemptAt)
+                        if (string.Equals(stale.Fingerprint, fingerprint, StringComparison.Ordinal) && DateTimeOffset.UtcNow < stale.NextAttemptAt)
                         {
-                            var wait = (int)Math.Ceiling((stale.NextAttemptAt - DateTime.UtcNow).TotalSeconds);
+                            var wait = (int)Math.Ceiling((stale.NextAttemptAt - DateTimeOffset.UtcNow).TotalSeconds);
                             throw new ToolExecutionException(
                                 $"MCP 服务 {server.ServerName} 连续连接失败，{wait} 秒内不再重试：{stale.LastError}", "MCP 服务不可用");
                         }
@@ -349,7 +349,7 @@ namespace Viv.Ouroboros.Core.Service
 
             if (!_entries.TryGetValue(serverName, out var found)) return false;
             if (found.Client is null || !string.Equals(found.Fingerprint, fingerprint, StringComparison.Ordinal)) return false;
-            if (DateTime.UtcNow < found.NextAttemptAt) return false;
+            if (DateTimeOffset.UtcNow < found.NextAttemptAt) return false;
 
             entry = found;
             return true;
@@ -430,7 +430,7 @@ namespace Viv.Ouroboros.Core.Service
             _entries[serverName] = new Entry(serverName, fingerprint)
             {
                 Failures = failures,
-                NextAttemptAt = DateTime.UtcNow.AddSeconds(seconds),
+                NextAttemptAt = DateTimeOffset.UtcNow.AddSeconds(seconds),
                 LastError = ex.Message
             };
 
@@ -677,7 +677,7 @@ namespace Viv.Ouroboros.Core.Service
             public int Failures { get; init; }
 
             /// <summary>这个时间点之前不再尝试连接</summary>
-            public DateTime NextAttemptAt { get; init; } = DateTime.MinValue;
+            public DateTimeOffset NextAttemptAt { get; init; } = DateTimeOffset.MinValue;
 
             /// <summary>最近一次失败原因（透传给运维，不含请求头）</summary>
             public string? LastError { get; init; }

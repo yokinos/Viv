@@ -74,7 +74,7 @@ namespace Viv.Ouroboros.Core.Service
                 RequiresApproval = request.RequiresApproval,
                 AllowedSubjectIds = Normalize(request.AllowedSubjectIds),
                 IsEnabled = request.IsEnabled ?? true,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTimeOffset.UtcNow
             };
 
             if (!await _db.InsertAsync(row)) return VivApiResult.Failed("写入能力绑定失败");
@@ -104,7 +104,7 @@ namespace Viv.Ouroboros.Core.Service
             row.RequiresApproval = request.RequiresApproval;
             row.AllowedSubjectIds = Normalize(request.AllowedSubjectIds);
             row.IsEnabled = request.IsEnabled ?? row.IsEnabled;
-            row.UpdatedAt = DateTime.Now;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
 
             if (!await _db.UpdateAsync(row)) return VivApiResult.Failed("修改能力绑定失败");
 
@@ -119,7 +119,7 @@ namespace Viv.Ouroboros.Core.Service
             if (row is null) return VivApiResult.Failed("能力绑定不存在");
 
             row.IsEnabled = isEnabled;
-            row.UpdatedAt = DateTime.Now;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
             if (!await _db.UpdateAsync(row)) return VivApiResult.Failed("修改能力绑定失败");
 
             _notifier.Notify(row.AgentKey);

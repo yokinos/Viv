@@ -55,12 +55,12 @@ namespace Viv.Entity.Database.Herta
         /// <summary>
         /// 会话创建时间
         /// </summary>
-        public DateTime CreateAt { get; set; }
+        public DateTimeOffset CreateAt { get; set; }
 
         /// <summary>
         /// 最新消息时间，会话列表排序核心字段
         /// </summary>
-        public DateTime? LastMessageTime { get; set; }
+        public DateTimeOffset? LastMessageTime { get; set; }
 
         /// <summary>
         /// 软删除标记
@@ -70,11 +70,11 @@ namespace Viv.Entity.Database.Herta
         /// <summary>
         /// 删除时间
         /// </summary>
-        public DateTime? DeletedAt { get; set; }
+        public DateTimeOffset? DeletedAt { get; set; }
         /// <summary>
         /// 创建时间（UTC）—— 由 MomoDatabase 自动盖章，业务代码不写
         /// </summary>
-        public DateTime? CreatedAt { get; set; }
+        public DateTimeOffset? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人（IVivContext.UserId）—— 无登录上下文（后台任务）时为 null
@@ -84,7 +84,7 @@ namespace Viv.Entity.Database.Herta
         /// <summary>
         /// 更新时间（UTC）—— 每次更新自动盖章，业务代码不写
         /// </summary>
-        public DateTime? UpdatedAt { get; set; }
+        public DateTimeOffset? UpdatedAt { get; set; }
 
         /// <summary>
         /// 更新人（IVivContext.UserId）—— 无登录上下文（后台任务）时为 null

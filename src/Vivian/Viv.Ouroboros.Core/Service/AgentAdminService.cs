@@ -93,7 +93,7 @@ namespace Viv.Ouroboros.Core.Service
                 IsEnabled = request.IsEnabled ?? true,
                 Version = 1,
                 Remark = request.Remark,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTimeOffset.UtcNow
             };
 
             if (!await _db.InsertAsync(row)) return VivApiResult.Failed("写入 Agent 失败");
@@ -140,7 +140,7 @@ namespace Viv.Ouroboros.Core.Service
             row.IsEnabled = request.IsEnabled ?? row.IsEnabled;
             row.Remark = request.Remark;
             row.Version++;
-            row.UpdatedAt = DateTime.Now;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
 
             if (!await _db.UpdateAsync(row)) return VivApiResult.Failed("修改 Agent 失败");
 
@@ -163,7 +163,7 @@ namespace Viv.Ouroboros.Core.Service
 
             row.IsEnabled = isEnabled;
             row.Version++;
-            row.UpdatedAt = DateTime.Now;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
             if (!await _db.UpdateAsync(row)) return VivApiResult.Failed("修改 Agent 失败");
 
             _notifier.Notify(row.AgentKey);
@@ -182,9 +182,9 @@ namespace Viv.Ouroboros.Core.Service
 
             row.IsDeleted = true;
             row.IsEnabled = false;
-            row.DeletedAt = DateTime.Now;
+            row.DeletedAt = DateTimeOffset.UtcNow;
             row.Version++;
-            row.UpdatedAt = DateTime.Now;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
 
             if (!await _db.UpdateAsync(row)) return VivApiResult.Failed("删除 Agent 失败");
 

@@ -74,7 +74,7 @@ namespace Viv.Ouroboros.Core.Service
                 Priority = request.Priority ?? 0,
                 IsEnabled = request.IsEnabled ?? true,
                 Remark = request.Remark,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTimeOffset.UtcNow
             };
 
             if (!await _db.InsertAsync(row)) return VivApiResult.Failed("写入模型档位失败");
@@ -105,7 +105,7 @@ namespace Viv.Ouroboros.Core.Service
             row.Priority = request.Priority ?? 0;
             row.IsEnabled = request.IsEnabled ?? row.IsEnabled;
             row.Remark = request.Remark;
-            row.UpdatedAt = DateTime.Now;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
 
             // null = 前端没带这一项（不动现有密钥）；空串 = 明确要清掉；非空 = 换新密钥
             if (request.ApiKey is not null) row.ApiKeyCipher = EncryptKey(request.ApiKey);
@@ -139,7 +139,7 @@ namespace Viv.Ouroboros.Core.Service
             }
 
             row.IsEnabled = isEnabled;
-            row.UpdatedAt = DateTime.Now;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
             if (!await _db.UpdateAsync(row)) return VivApiResult.Failed("修改模型档位失败");
 
             _notifier.Notify(profileKey: row.ProfileKey);
@@ -173,7 +173,7 @@ namespace Viv.Ouroboros.Core.Service
                 }
 
                 row.ApiKeyCipher = _protector.Encrypt(plain);
-                row.UpdatedAt = DateTime.Now;
+                row.UpdatedAt = DateTimeOffset.UtcNow;
 
                 if (await _db.UpdateAsync(row)) result.Reencrypted++;
                 else result.FailedKeys.Add(row.ProfileKey);

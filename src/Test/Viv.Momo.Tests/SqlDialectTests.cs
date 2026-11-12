@@ -90,11 +90,11 @@ public class SqlDialectTests
     }
 
     [Fact]
-    public void SQLServer软删除用GETDATE与1()
+    public void SQLServer软删除用SYSDATETIMEOFFSET与1()
     {
         var (sql, _) = Sql.GetSoftDeleteSql<SoftDeleteTenantEntity>("users", x => x.Id == 1);
 
         Assert.Contains("[IsDeleted] = 1", sql);
-        Assert.Contains("[DeletedAt] = GETDATE()", sql);
+        Assert.Contains("[DeletedAt] = SYSDATETIMEOFFSET()", sql);
     }
 }

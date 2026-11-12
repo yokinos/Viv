@@ -187,7 +187,7 @@ namespace Viv.Momo.Core
         {
             if (entities.IsNullOrEmpty() || !IsAutoSetValue) return;
 
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
             var userId = CurrentUserId;
 
             foreach (var entity in entities)
@@ -213,7 +213,7 @@ namespace Viv.Momo.Core
         {
             if (entities.IsNullOrEmpty() || !IsAutoSetValue) return;
 
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
             var userId = CurrentUserId;
 
             foreach (var entity in entities)

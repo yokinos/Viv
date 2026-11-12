@@ -83,7 +83,7 @@ namespace Viv.Ouroboros.Core.Service
                 Content = request.Content,
                 Notes = request.Notes,
                 Remark = request.Remark,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTimeOffset.UtcNow
             };
 
             if (!await _db.InsertAsync(row)) return VivApiResult.Failed("写入提示词失败");
@@ -132,7 +132,7 @@ namespace Viv.Ouroboros.Core.Service
 
             agent.ActivePromptVersion = version;
             agent.Version++;
-            agent.UpdatedAt = DateTime.Now;
+            agent.UpdatedAt = DateTimeOffset.UtcNow;
 
             if (!await _db.UpdateAsync(agent)) return VivApiResult.Failed("切换提示词版本失败");
 

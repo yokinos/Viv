@@ -52,7 +52,7 @@ namespace Viv.Entity.Database.Ouroboros
         /// <summary>
         /// 最后一条消息时间（列表排序用）
         /// </summary>
-        public DateTime? LastMessageAt { get; set; }
+        public DateTimeOffset? LastMessageAt { get; set; }
 
         /// <summary>
         /// 累计输入 token
@@ -72,7 +72,7 @@ namespace Viv.Entity.Database.Ouroboros
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime? CreatedAt { get; set; }
+        public DateTimeOffset? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人Id
@@ -82,7 +82,7 @@ namespace Viv.Entity.Database.Ouroboros
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime? UpdatedAt { get; set; }
+        public DateTimeOffset? UpdatedAt { get; set; }
 
         /// <summary>
         /// 更新人Id

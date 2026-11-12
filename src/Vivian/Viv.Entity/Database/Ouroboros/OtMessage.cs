@@ -87,6 +87,6 @@ namespace Viv.Entity.Database.Ouroboros
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime? CreatedAt { get; set; }
+        public DateTimeOffset? CreatedAt { get; set; }
     }
 }

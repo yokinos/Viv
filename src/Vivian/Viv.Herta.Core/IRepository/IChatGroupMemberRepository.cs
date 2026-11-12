@@ -23,7 +23,7 @@ namespace Viv.Herta.Core.IRepository
         Task AddMembersAsync(List<EtGroupChatMember> members);
 
         /// <summary>把成员标记为已退群。不在群里返回 false</summary>
-        Task<bool> RemoveMemberAsync(long realmId, long groupId, long userId, DateTime quitAt);
+        Task<bool> RemoveMemberAsync(long realmId, long groupId, long userId, DateTimeOffset quitAt);
 
         Task<bool> IsMemberAsync(long realmId, long groupId, long userId);
 

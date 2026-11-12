@@ -6,6 +6,6 @@ namespace Viv.Momo.Interface
     /// </summary>
     public interface ICreatedAt
     {
-        DateTime? CreatedAt { get; set; }
+        DateTimeOffset? CreatedAt { get; set; }
     }
 }

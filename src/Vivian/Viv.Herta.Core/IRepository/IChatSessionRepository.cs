@@ -23,13 +23,13 @@ namespace Viv.Herta.Core.IRepository
         /// <summary>该用户的单聊会话行（群聊会话走群成员表，不从这里出）</summary>
         Task<List<EtChatSession>> GetDirectSessionsAsync(long realmId, long userId);
 
-        Task TouchAsync(long realmId, long sessionId, DateTime lastMessageTime);
+        Task TouchAsync(long realmId, long sessionId, DateTimeOffset lastMessageTime);
 
         /// <summary>
         /// 一次更新多行的最后消息时间。逐行 Touch 是「先按主键查再更新」两次往返，
         /// 这里直接 UPDATE，单聊的两行合并成一条语句。
         /// </summary>
-        Task TouchManyAsync(long realmId, IReadOnlyList<long> sessionIds, DateTime lastMessageTime);
+        Task TouchManyAsync(long realmId, IReadOnlyList<long> sessionIds, DateTimeOffset lastMessageTime);
 
         /// <summary>推进已读水位：只前进不后退，乱序到达的旧请求不能把未读变回来</summary>
         Task SetLastReadAsync(long realmId, long userId, EmChatReceiverType receiverType, long targetId, long lastReadMessageId);

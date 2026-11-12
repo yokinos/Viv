@@ -12,7 +12,7 @@ namespace Viv.Herta.Core.IRepository
 
         Task<EtGroupChat?> GetAsync(long realmId, long groupId);
 
-        Task TouchLastMessageAsync(long realmId, long groupId, DateTime lastMessageAt);
+        Task TouchLastMessageAsync(long realmId, long groupId, DateTimeOffset lastMessageAt);
 
         Task<List<EtGroupChat>> GetListAsync(long realmId, List<long> groupIds);
     }

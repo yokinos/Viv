@@ -45,8 +45,8 @@ namespace Viv.Entity.Database.Apex
         public int SourceType { get; set; }
 
         public EmStatus Status { get; set; }
-        public DateTime? CreatedAt { get; set; }
+        public DateTimeOffset? CreatedAt { get; set; }
         public bool IsDeleted { get; set; }
-        public DateTime? DeletedAt { get; set; }
+        public DateTimeOffset? DeletedAt { get; set; }
     }
 }

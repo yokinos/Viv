@@ -76,7 +76,7 @@ public sealed class StubChatSessionRepository : IChatSessionRepository
     /// <summary>会话列表里该用户自己的单聊行</summary>
     public List<EtChatSession> DirectSessions { get; set; } = new();
 
-    public List<(long SessionId, DateTime At)> Touched { get; } = new();
+    public List<(long SessionId, DateTimeOffset At)> Touched { get; } = new();
 
     public long? LastTargetId { get; private set; }
 
@@ -104,9 +104,9 @@ public sealed class StubChatSessionRepository : IChatSessionRepository
         => Task.FromResult(DirectPair);
 
     /// <summary>合并更新：一次调用带多行 Id</summary>
-    public List<(List<long> SessionIds, DateTime At)> TouchedMany { get; } = new();
+    public List<(List<long> SessionIds, DateTimeOffset At)> TouchedMany { get; } = new();
 
-    public Task TouchManyAsync(long realmId, IReadOnlyList<long> sessionIds, DateTime lastMessageTime)
+    public Task TouchManyAsync(long realmId, IReadOnlyList<long> sessionIds, DateTimeOffset lastMessageTime)
     {
         TouchedMany.Add(([.. sessionIds], lastMessageTime));
         return Task.CompletedTask;
@@ -120,7 +120,7 @@ public sealed class StubChatSessionRepository : IChatSessionRepository
         return Task.CompletedTask;
     }
 
-    public Task TouchAsync(long realmId, long sessionId, DateTime lastMessageTime)
+    public Task TouchAsync(long realmId, long sessionId, DateTimeOffset lastMessageTime)
     {
         Touched.Add((sessionId, lastMessageTime));
         return Task.CompletedTask;
@@ -172,12 +172,12 @@ public sealed class StubChatMessageRepository : IChatMessageRepository
     /// <summary>GetAsync 的返回值</summary>
     public ChatMessageEntry? Entry { get; set; }
 
-    public List<(long MessageId, DateTime RecalledAt)> Recalled { get; } = new();
+    public List<(long MessageId, DateTimeOffset RecalledAt)> Recalled { get; } = new();
 
     public Task<ChatMessageEntry?> GetAsync(long tenantId, long messageId, EmChatReceiverType receiverType)
         => Task.FromResult(Entry);
 
-    public Task<bool> RecallAsync(long tenantId, long messageId, EmChatReceiverType receiverType, DateTime recalledAt)
+    public Task<bool> RecallAsync(long tenantId, long messageId, EmChatReceiverType receiverType, DateTimeOffset recalledAt)
     {
         Recalled.Add((messageId, recalledAt));
         return Task.FromResult(true);
@@ -270,7 +270,7 @@ public sealed class StubChatGroupMemberRepository : IChatGroupMemberRepository
     public Task<List<EtGroupChatMember>> GetGroupMembersAsync(long tenantId, long groupId)
         => Task.FromResult(GroupMembers);
 
-    public Task<bool> RemoveMemberAsync(long tenantId, long groupId, long userId, DateTime quitAt)
+    public Task<bool> RemoveMemberAsync(long tenantId, long groupId, long userId, DateTimeOffset quitAt)
     {
         Removed.Add((groupId, userId));
         return Task.FromResult(true);
@@ -324,7 +324,7 @@ public sealed class StubChatGroupRepository : IChatGroupRepository
 {
     public List<EtGroupChat> Groups { get; set; } = new();
 
-    public List<(long GroupId, DateTime At)> Touched { get; } = new();
+    public List<(long GroupId, DateTimeOffset At)> Touched { get; } = new();
 
     public long NextGroupId { get; set; } = 900;
 
@@ -338,7 +338,7 @@ public sealed class StubChatGroupRepository : IChatGroupRepository
         return Task.FromResult(id);
     }
 
-    public Task TouchLastMessageAsync(long tenantId, long groupId, DateTime lastMessageAt)
+    public Task TouchLastMessageAsync(long tenantId, long groupId, DateTimeOffset lastMessageAt)
     {
         Touched.Add((groupId, lastMessageAt));
         return Task.CompletedTask;

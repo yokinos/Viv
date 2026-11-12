@@ -84,7 +84,7 @@ namespace Viv.Herta.Core.Repository
                 ChatSessionType = isGroup ? GroupSession : DirectSession,
                 TargetUserId = isGroup ? null : targetId,
                 GroupChatId = isGroup ? targetId : null,
-                CreateAt = DateTime.UtcNow
+                CreateAt = DateTimeOffset.UtcNow
             };
 
             try
@@ -148,7 +148,7 @@ namespace Viv.Herta.Core.Repository
         /// 只按主键读就能读到别的域的会话行，再把时间写回去。
         /// </para>
         /// </summary>
-        public async Task TouchAsync(long realmId, long sessionId, DateTime lastMessageTime)
+        public async Task TouchAsync(long realmId, long sessionId, DateTimeOffset lastMessageTime)
         {
             var session = await _dbContext.SingleOrDefaultAsync<EtChatSession>(
                 x => x.RealmId == realmId && x.Id == sessionId).ConfigureAwait(false);
@@ -158,7 +158,7 @@ namespace Viv.Herta.Core.Repository
             await _dbContext.UpdateAsync(session).ConfigureAwait(false);
         }
 
-        public async Task TouchManyAsync(long realmId, IReadOnlyList<long> sessionIds, DateTime lastMessageTime)
+        public async Task TouchManyAsync(long realmId, IReadOnlyList<long> sessionIds, DateTimeOffset lastMessageTime)
         {
             if (sessionIds.Count == 0) return;
 

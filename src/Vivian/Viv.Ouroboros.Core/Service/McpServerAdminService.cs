@@ -81,7 +81,7 @@ namespace Viv.Ouroboros.Core.Service
                 AlwaysRequireToolNames = request.AlwaysRequireToolNames,
                 NeverRequireToolNames = request.NeverRequireToolNames,
                 IsEnabled = request.IsEnabled ?? true,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTimeOffset.UtcNow
             };
 
             if (!await _db.InsertAsync(row)) return VivApiResult.Failed("写入 MCP 服务失败");
@@ -110,7 +110,7 @@ namespace Viv.Ouroboros.Core.Service
             row.AlwaysRequireToolNames = request.AlwaysRequireToolNames;
             row.NeverRequireToolNames = request.NeverRequireToolNames;
             row.IsEnabled = request.IsEnabled ?? row.IsEnabled;
-            row.UpdatedAt = DateTime.Now;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
 
             // null = 前端没带这一项（不动现有请求头）；空串 = 明确要清掉；非空 = 整体替换
             if (request.Headers is not null) row.Headers = string.IsNullOrWhiteSpace(request.Headers) ? null : request.Headers;
@@ -139,7 +139,7 @@ namespace Viv.Ouroboros.Core.Service
             }
 
             row.IsEnabled = isEnabled;
-            row.UpdatedAt = DateTime.Now;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
             if (!await _db.UpdateAsync(row)) return VivApiResult.Failed("修改 MCP 服务失败");
 
             _notifier.Notify();

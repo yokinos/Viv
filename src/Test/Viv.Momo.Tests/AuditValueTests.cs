@@ -13,9 +13,9 @@ public class FullAuditRow : IEntity, ITenant, ICreatedAt, ICreatedBy, IUpdatedAt
 {
     public long Id { get; set; }
     public long TenantId { get; set; }
-    public DateTime? CreatedAt { get; set; }
+    public DateTimeOffset? CreatedAt { get; set; }
     public long? CreatedBy { get; set; }
-    public DateTime? UpdatedAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
     public long? UpdatedBy { get; set; }
 }
 
@@ -23,7 +23,7 @@ public class FullAuditRow : IEntity, ITenant, ICreatedAt, ICreatedBy, IUpdatedAt
 public class CreateOnlyRow : IEntity, ICreatedAt, ICreatedBy
 {
     public long Id { get; set; }
-    public DateTime? CreatedAt { get; set; }
+    public DateTimeOffset? CreatedAt { get; set; }
     public long? CreatedBy { get; set; }
 }
 
@@ -31,7 +31,7 @@ public class CreateOnlyRow : IEntity, ICreatedAt, ICreatedBy
 public class UpdateOnlyRow : IEntity, IUpdatedAt, IUpdatedBy
 {
     public long Id { get; set; }
-    public DateTime? UpdatedAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
     public long? UpdatedBy { get; set; }
 }
 
@@ -74,9 +74,9 @@ public class AuditValueTests
         var sut = CreateSut(userId: 9);
         var row = new FullAuditRow();
 
-        var before = DateTime.UtcNow;
+        var before = DateTimeOffset.UtcNow;
         sut.AutoSetInsert(row);
-        var after = DateTime.UtcNow;
+        var after = DateTimeOffset.UtcNow;
 
         Assert.InRange(row.CreatedAt!.Value, before, after);
         Assert.InRange(row.UpdatedAt!.Value, before, after);
@@ -207,9 +207,9 @@ public class AuditValueTests
         var sut = CreateSut(userId: 9);
         var row = new FullAuditRow();
 
-        var before = DateTime.UtcNow;
+        var before = DateTimeOffset.UtcNow;
         sut.AutoSetUpdate(row);
-        var after = DateTime.UtcNow;
+        var after = DateTimeOffset.UtcNow;
 
         Assert.InRange(row.UpdatedAt!.Value, before, after);
         Assert.Equal(9L, row.UpdatedBy);

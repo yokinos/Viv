@@ -32,11 +32,11 @@ namespace Viv.Ouroboros.Core.Entity.Vo.Agent
         /// <summary>
         /// 发起时间
         /// </summary>
-        public DateTime? RequestedAt { get; set; }
+        public DateTimeOffset? RequestedAt { get; set; }
 
         /// <summary>
         /// 过期时间
         /// </summary>
-        public DateTime? ExpiresAt { get; set; }
+        public DateTimeOffset? ExpiresAt { get; set; }
     }
 }

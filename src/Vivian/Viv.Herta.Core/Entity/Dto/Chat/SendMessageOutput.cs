@@ -7,6 +7,6 @@ namespace Viv.Herta.Core.Entity.Dto.Chat
 
         public long SessionId { get; set; }
 
-        public DateTime SentAt { get; set; }
+        public DateTimeOffset SentAt { get; set; }
     }
 }

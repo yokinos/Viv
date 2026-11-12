@@ -66,7 +66,7 @@ public class TenantFilterTests
     {
         var (sql, p) = SqlMagic.For(DatabaseSourceType.SqlServer).GetSoftDeleteSql<SoftDeleteTenantEntity>("[users]", x => x.Name == "a", tenantId: 7);
 
-        Assert.Equal("UPDATE [users] SET [IsDeleted] = 1, [DeletedAt] = GETDATE() WHERE ([Name] = @p0) AND [TenantId] = @TenantId", sql);
+        Assert.Equal("UPDATE [users] SET [IsDeleted] = 1, [DeletedAt] = SYSDATETIMEOFFSET() WHERE ([Name] = @p0) AND [TenantId] = @TenantId", sql);
         Assert.Equal(7L, p["TenantId"]);
     }
 

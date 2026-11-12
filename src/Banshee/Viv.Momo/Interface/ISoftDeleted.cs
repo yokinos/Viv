@@ -22,6 +22,6 @@ namespace Viv.Momo.Interface
         /// <summary>
         /// 删除时间，软删除时赋值
         /// </summary>
-        DateTime? DeletedAt { get; set; }
+        DateTimeOffset? DeletedAt { get; set; }
     }
 }

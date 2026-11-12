@@ -62,9 +62,9 @@ namespace Viv.Ouroboros.Core.Service
         private readonly object _lock = new();
         private long _generation;
         private string? _seenStamp;
-        private DateTime _nextCheckAt = DateTime.MinValue;
+        private DateTimeOffset _nextCheckAt = DateTimeOffset.MinValue;
         private string? _seenFingerprint;
-        private DateTime _nextFingerprintAt = DateTime.MinValue;
+        private DateTimeOffset _nextFingerprintAt = DateTimeOffset.MinValue;
         private int _notEnabledWarned;
         private int _fingerprintWarned;
 
@@ -139,8 +139,8 @@ namespace Viv.Ouroboros.Core.Service
 
             lock (_lock)
             {
-                if (DateTime.UtcNow < _nextCheckAt) return;
-                _nextCheckAt = DateTime.UtcNow + CheckInterval;
+                if (DateTimeOffset.UtcNow < _nextCheckAt) return;
+                _nextCheckAt = DateTimeOffset.UtcNow + CheckInterval;
             }
 
             string? stamp;
@@ -155,7 +155,7 @@ namespace Viv.Ouroboros.Core.Service
                 _logger.Warning("读取配置版本戳失败，本进程退回只清本地缓存：{0}", ex.Message);
                 lock (_lock)
                 {
-                    _nextCheckAt = DateTime.UtcNow + FailureBackoff;
+                    _nextCheckAt = DateTimeOffset.UtcNow + FailureBackoff;
                     return;
                 }
             }
@@ -181,8 +181,8 @@ namespace Viv.Ouroboros.Core.Service
         {
             lock (_lock)
             {
-                if (DateTime.UtcNow < _nextFingerprintAt) return;
-                _nextFingerprintAt = DateTime.UtcNow + FingerprintInterval;
+                if (DateTimeOffset.UtcNow < _nextFingerprintAt) return;
+                _nextFingerprintAt = DateTimeOffset.UtcNow + FingerprintInterval;
             }
 
             string? fingerprint;
@@ -193,7 +193,7 @@ namespace Viv.Ouroboros.Core.Service
             catch (Exception ex)
             {
                 // 库不可用就退避：否则每个请求都要在这里等一次连接超时（此时缓存本来也读不到新配置）
-                lock (_lock) _nextFingerprintAt = DateTime.UtcNow + FailureBackoff;
+                lock (_lock) _nextFingerprintAt = DateTimeOffset.UtcNow + FailureBackoff;
 
                 if (Interlocked.Exchange(ref _fingerprintWarned, 1) == 0)
                     _logger.Warning("读取配置指纹失败，裸改库的察觉暂停（{0} 秒后重试）：{1}",
@@ -272,7 +272,7 @@ namespace Viv.Ouroboros.Core.Service
         {
             lock (_lock)
             {
-                _nextCheckAt = DateTime.UtcNow + CheckInterval;
+                _nextCheckAt = DateTimeOffset.UtcNow + CheckInterval;
                 return ++_generation;
             }
         }

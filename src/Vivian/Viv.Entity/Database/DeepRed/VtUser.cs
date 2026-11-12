@@ -17,6 +17,6 @@ namespace Viv.Entity.Database.DeepRed
         public string Password { get; set; }
         public string Salt { get; set; }
         public bool IsDeleted { get; set; }
-        public DateTime? DeletedAt { get; set; }
+        public DateTimeOffset? DeletedAt { get; set; }
     }
 }

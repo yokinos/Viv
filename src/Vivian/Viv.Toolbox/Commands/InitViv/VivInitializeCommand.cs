@@ -325,7 +325,7 @@ namespace Viv.Toolbox.Commands.InitViv
                     source = (byte)EmAppSouce.Viv,
                     remark = "系统初始化创建",
                     status = StatusEnabled,
-                    createdAt = DateTime.Now
+                    createdAt = DateTimeOffset.UtcNow
                 },
                 cancellationToken);
 
@@ -517,7 +517,7 @@ namespace Viv.Toolbox.Commands.InitViv
             string phone, string password, CancellationToken cancellationToken)
         {
             var inserted = 0;
-            var now = DateTime.Now;
+            var now = DateTimeOffset.UtcNow;
 
             var userId = await db.FindScalarAsync<long?>(
                 "SELECT TOP 1 Id FROM AtUser WHERE Name = @name AND IsDeleted = 0",

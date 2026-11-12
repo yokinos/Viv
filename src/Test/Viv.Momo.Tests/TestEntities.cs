@@ -19,7 +19,7 @@ public class SoftDeleteTenantEntity : IEntity, ITenant, ISoftDeleted
     public long TenantId { get; set; }
     public string Name { get; set; } = "";
     public bool IsDeleted { get; set; }
-    public DateTime? DeletedAt { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
 }
 
 /// <summary>非租户实体：无 ITenant</summary>

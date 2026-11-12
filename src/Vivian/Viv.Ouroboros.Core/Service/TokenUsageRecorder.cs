@@ -130,7 +130,7 @@ namespace Viv.Ouroboros.Core.Service
                     ReasoningTokens = (long)(usage?.ReasoningTokenCount ?? 0),
                     // OtModelProfile 里没有单价列，算不出费用；要出账得先加列（本阶段不动表结构）
                     EstimatedCost = 0m,
-                    Now = DateTime.Now
+                    Now = DateTimeOffset.UtcNow
                 }, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)

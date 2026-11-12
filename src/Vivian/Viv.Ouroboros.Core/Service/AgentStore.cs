@@ -48,13 +48,13 @@ namespace Viv.Ouroboros.Core.Service
 
         public async Task<bool> InsertConversationAsync(OtConversation conversation)
         {
-            conversation.CreatedAt = DateTime.Now;
+            conversation.CreatedAt = DateTimeOffset.UtcNow;
             return await _dbContext.InsertAsync(conversation);
         }
 
         public async Task<bool> UpdateConversationAsync(OtConversation conversation)
         {
-            conversation.UpdatedAt = DateTime.Now;
+            conversation.UpdatedAt = DateTimeOffset.UtcNow;
             return await _dbContext.UpdateAsync(conversation);
         }
 
@@ -78,7 +78,7 @@ namespace Viv.Ouroboros.Core.Service
 
         public async Task<bool> InsertMessageAsync(OtMessage message)
         {
-            message.CreatedAt = DateTime.Now;
+            message.CreatedAt = DateTimeOffset.UtcNow;
             return await _dbContext.InsertAsync(message);
         }
 
@@ -101,13 +101,13 @@ namespace Viv.Ouroboros.Core.Service
                     AgentKey = agentKey,
                     StateJson = stateJson,
                     SchemaVersion = 1,
-                    CreatedAt = DateTime.Now,
-                    UpdatedAt = DateTime.Now
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow
                 });
             }
 
             existing.StateJson = stateJson;
-            existing.UpdatedAt = DateTime.Now;
+            existing.UpdatedAt = DateTimeOffset.UtcNow;
             return await _dbContext.UpdateAsync(existing);
         }
 
@@ -117,7 +117,7 @@ namespace Viv.Ouroboros.Core.Service
 
         public async Task<bool> InsertApprovalAsync(OtApproval approval)
         {
-            approval.CreatedAt = DateTime.Now;
+            approval.CreatedAt = DateTimeOffset.UtcNow;
             return await _dbContext.InsertAsync(approval);
         }
 
@@ -146,7 +146,7 @@ namespace Viv.Ouroboros.Core.Service
 
         public async Task<bool> UpdateApprovalAsync(OtApproval approval)
         {
-            approval.UpdatedAt = DateTime.Now;
+            approval.UpdatedAt = DateTimeOffset.UtcNow;
             return await _dbContext.UpdateAsync(approval);
         }
 
@@ -215,13 +215,13 @@ namespace Viv.Ouroboros.Core.Service
 
         public async Task<bool> InsertToolCallAsync(OtToolCall toolCall)
         {
-            toolCall.CreatedAt = DateTime.Now;
+            toolCall.CreatedAt = DateTimeOffset.UtcNow;
             return await _dbContext.InsertAsync(toolCall);
         }
 
         public async Task<bool> InsertSubAgentCallAsync(OtSubAgentCall subAgentCall)
         {
-            subAgentCall.CreatedAt = DateTime.Now;
+            subAgentCall.CreatedAt = DateTimeOffset.UtcNow;
             return await _dbContext.InsertAsync(subAgentCall);
         }
 

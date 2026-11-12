@@ -191,7 +191,7 @@ namespace Viv.Ouroboros.Core.Service
             });
 
             conversation.MessageCount += 2;
-            conversation.LastMessageAt = DateTime.Now;
+            conversation.LastMessageAt = DateTimeOffset.UtcNow;
             await _store.UpdateConversationAsync(conversation);
 
             await SaveSessionAsync(agent, session, conversation.Id, conversation.MainAgentKey);
@@ -227,8 +227,8 @@ namespace Viv.Ouroboros.Core.Service
             var seq = await _store.NextSeqAsync(conversation!.Id) - 1;
             // 等 Worker 跑完这一幕（默认最多等 3 分钟）；客户端断开时 Task.Delay 抛取消，
             // 迭代器随之结束 —— 但队列里那一轮不受影响，照跑并把回复落库。
-            var deadline = DateTime.UtcNow.AddMinutes(3);
-            while (DateTime.UtcNow < deadline)
+            var deadline = DateTimeOffset.UtcNow.AddMinutes(3);
+            while (DateTimeOffset.UtcNow < deadline)
             {
                 var messages = await _store.ListMessagesAsync(conversation.Id, afterSeq: seq);
                 var reply = messages.FirstOrDefault(x => x.Role == EmMessageRole.Assistant && !string.IsNullOrEmpty(x.Content));
@@ -321,7 +321,7 @@ namespace Viv.Ouroboros.Core.Service
 
             approval.Status = approved ? EmApprovalStatus.Approved : EmApprovalStatus.Rejected;
             approval.DecidedBy = _context.UserId;
-            approval.DecidedAt = DateTime.Now;
+            approval.DecidedAt = DateTimeOffset.UtcNow;
             approval.DecisionRemark = remark;
             await _store.UpdateApprovalAsync(approval);
 
@@ -473,7 +473,7 @@ namespace Viv.Ouroboros.Core.Service
                     });
 
                     conversation.MessageCount = baseMessageCount + (userSeq > 0 ? 2 : 1);
-                    conversation.LastMessageAt = DateTime.Now;
+                    conversation.LastMessageAt = DateTimeOffset.UtcNow;
                     conversation.TotalInputTokens = baseInputTokens + (response.Usage?.InputTokenCount ?? 0);
                     conversation.TotalOutputTokens = baseOutputTokens + (response.Usage?.OutputTokenCount ?? 0);
                     await _store.UpdateConversationAsync(conversation);
@@ -495,8 +495,8 @@ namespace Viv.Ouroboros.Core.Service
                             ToolKey = toolCall?.Name ?? "unknown",
                             Arguments = toolCall is null ? null : JsonSerializer.Serialize(toolCall.Arguments),
                             Status = EmApprovalStatus.Pending,
-                            RequestedAt = DateTime.Now,
-                            ExpiresAt = DateTime.Now.AddHours(24)
+                            RequestedAt = DateTimeOffset.UtcNow,
+                            ExpiresAt = DateTimeOffset.UtcNow.AddHours(24)
                         };
                         await _store.InsertApprovalAsync(approval);
                     }

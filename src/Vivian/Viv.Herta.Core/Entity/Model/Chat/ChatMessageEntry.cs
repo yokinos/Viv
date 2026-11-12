@@ -30,10 +30,10 @@ namespace Viv.Herta.Core.Entity.Model.Chat
 
         public long? ReplyMsgId { get; init; }
 
-        public DateTime SentAt { get; init; }
+        public DateTimeOffset SentAt { get; init; }
 
         public bool IsRecall { get; init; }
 
-        public DateTime? RecallAt { get; init; }
+        public DateTimeOffset? RecallAt { get; init; }
     }
 }

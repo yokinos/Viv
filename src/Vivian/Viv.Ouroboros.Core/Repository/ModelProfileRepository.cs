@@ -35,14 +35,14 @@ namespace Viv.Ouroboros.Core.Repository
         public async Task<bool> AddAsync(OtModelProfile profile)
         {
             ArgumentNullException.ThrowIfNull(profile);
-            profile.CreatedAt = DateTime.Now;
+            profile.CreatedAt = DateTimeOffset.UtcNow;
             return await _dbContext.InsertAsync(profile);
         }
 
         public async Task<bool> UpdateAsync(OtModelProfile profile)
         {
             ArgumentNullException.ThrowIfNull(profile);
-            profile.UpdatedAt = DateTime.Now;
+            profile.UpdatedAt = DateTimeOffset.UtcNow;
             return await _dbContext.UpdateAsync(profile);
         }
     }

@@ -255,7 +255,7 @@ namespace Viv.Herta.Tests
                     ToUserId = ContextUserId,
                     MessageType = EmChatMessageType.Text,
                     Body = "{\"text\":\"yo\"}",
-                    SentAt = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc)
+                    SentAt = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero)
                 }
             ];
 
@@ -495,7 +495,7 @@ namespace Viv.Herta.Tests
                 ReceiverType = EmChatReceiverType.User,
                 FromUserId = ContextUserId,
                 ToUserId = TargetId,
-                SentAt = DateTime.UtcNow.AddSeconds(-10)
+                SentAt = DateTimeOffset.UtcNow.AddSeconds(-10)
             };
 
             var result = await sut.Service.RecallMessageAsync(new RecallMessageRequest
@@ -523,7 +523,7 @@ namespace Viv.Herta.Tests
                 ReceiverType = EmChatReceiverType.User,
                 FromUserId = 99,
                 ToUserId = TargetId,
-                SentAt = DateTime.UtcNow
+                SentAt = DateTimeOffset.UtcNow
             };
 
             var result = await sut.Service.RecallMessageAsync(new RecallMessageRequest
@@ -547,7 +547,7 @@ namespace Viv.Herta.Tests
                 ReceiverType = EmChatReceiverType.User,
                 FromUserId = ContextUserId,
                 ToUserId = TargetId,
-                SentAt = DateTime.UtcNow.AddMinutes(-5)
+                SentAt = DateTimeOffset.UtcNow.AddMinutes(-5)
             };
 
             var result = await sut.Service.RecallMessageAsync(new RecallMessageRequest
@@ -571,7 +571,7 @@ namespace Viv.Herta.Tests
                 ReceiverType = EmChatReceiverType.User,
                 FromUserId = ContextUserId,
                 ToUserId = TargetId,
-                SentAt = DateTime.UtcNow,
+                SentAt = DateTimeOffset.UtcNow,
                 IsRecall = true
             };
 
@@ -611,8 +611,8 @@ namespace Viv.Herta.Tests
             var sut = Create();
             sut.Sessions.DirectSessions =
             [
-                new EtChatSession { Id = 101, TargetUserId = 7, LastMessageTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
-                new EtChatSession { Id = 102, TargetUserId = 8, LastMessageTime = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc) }
+                new EtChatSession { Id = 101, TargetUserId = 7, LastMessageTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero) },
+                new EtChatSession { Id = 102, TargetUserId = 8, LastMessageTime = new DateTimeOffset(2026, 1, 3, 0, 0, 0, TimeSpan.Zero) }
             ];
             sut.GroupMembers.Memberships =
             [
@@ -621,7 +621,7 @@ namespace Viv.Herta.Tests
             ];
             sut.Groups.Groups =
             [
-                new EtGroupChat { Id = 50, Name = "置顶群", LastMessageAt = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc) },
+                new EtGroupChat { Id = 50, Name = "置顶群", LastMessageAt = new DateTimeOffset(2026, 1, 2, 0, 0, 0, TimeSpan.Zero) },
                 new EtGroupChat { Id = 51, Name = "闲置群" }
             ];
             sut.Messages.UnreadByTarget = new Dictionary<long, int> { [8] = 3 };
@@ -654,8 +654,8 @@ namespace Viv.Herta.Tests
             var sut = Create();
             sut.Sessions.DirectSessions =
             [
-                new EtChatSession { Id = 101, TargetUserId = 7, LastMessageTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
-                new EtChatSession { Id = 102, TargetUserId = 8, LastMessageTime = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc) }
+                new EtChatSession { Id = 101, TargetUserId = 7, LastMessageTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero) },
+                new EtChatSession { Id = 102, TargetUserId = 8, LastMessageTime = new DateTimeOffset(2026, 1, 3, 0, 0, 0, TimeSpan.Zero) }
             ];
             sut.GroupMembers.Memberships = [new EtGroupChatMember { GroupChatId = 50 }];
             sut.Groups.Groups = [new EtGroupChat { Id = 50, Name = "群" }];

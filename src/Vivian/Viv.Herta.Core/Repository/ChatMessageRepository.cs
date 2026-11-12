@@ -83,7 +83,7 @@ namespace Viv.Herta.Core.Repository
             return direct == null ? null : MapDirect(direct);
         }
 
-        public async Task<bool> RecallAsync(long realmId, long messageId, EmChatReceiverType receiverType, DateTime recalledAt)
+        public async Task<bool> RecallAsync(long realmId, long messageId, EmChatReceiverType receiverType, DateTimeOffset recalledAt)
         {
             if (receiverType == EmChatReceiverType.Group)
             {

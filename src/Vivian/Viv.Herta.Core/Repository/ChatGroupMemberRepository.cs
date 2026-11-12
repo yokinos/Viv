@@ -46,7 +46,7 @@ namespace Viv.Herta.Core.Repository
                 throw new InvalidOperationException("群成员写入失败");
         }
 
-        public async Task<bool> RemoveMemberAsync(long realmId, long groupId, long userId, DateTime quitAt)
+        public async Task<bool> RemoveMemberAsync(long realmId, long groupId, long userId, DateTimeOffset quitAt)
         {
             var member = await GetMemberAsync(realmId, groupId, userId).ConfigureAwait(false);
             if (member == null) return false;

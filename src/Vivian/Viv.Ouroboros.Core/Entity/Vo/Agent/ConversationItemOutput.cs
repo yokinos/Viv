@@ -37,7 +37,7 @@ namespace Viv.Ouroboros.Core.Entity.Vo.Agent
         /// <summary>
         /// 最后一条消息时间
         /// </summary>
-        public DateTime? LastMessageAt { get; set; }
+        public DateTimeOffset? LastMessageAt { get; set; }
 
         /// <summary>
         /// 累计输入 token

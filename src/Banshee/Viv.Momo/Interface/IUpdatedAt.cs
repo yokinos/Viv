@@ -5,6 +5,6 @@ namespace Viv.Momo.Interface
     /// </summary>
     public interface IUpdatedAt
     {
-        DateTime? UpdatedAt { get; set; }
+        DateTimeOffset? UpdatedAt { get; set; }
     }
 }

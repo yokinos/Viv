@@ -40,7 +40,7 @@ namespace Viv.Entity.Database.Ouroboros
         /// <summary>
         /// 创建时间（即变更时间）
         /// </summary>
-        public DateTime? CreatedAt { get; set; }
+        public DateTimeOffset? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人Id（即操作人）

@@ -19,7 +19,7 @@ namespace Viv.Momo.Dialect
 {
     /// <summary>
     /// SQL Server 方言：PascalCase 命名、<c>[x]</c> 引用符、<c>OFFSET/FETCH</c> 分页、
-    /// <c>GETDATE()</c> 当前时间、布尔字面量 <c>1/0</c>。
+    /// <c>SYSDATETIMEOFFSET()</c> 当前时间（带偏移，配 <c>datetimeoffset</c> 列）、布尔字面量 <c>1/0</c>。
     ///
     /// 自包含：不继承基类、不依赖任何静态 SQL 工具 —— 改这个方言只碰这个文件。
     /// </summary>
@@ -143,7 +143,7 @@ namespace Viv.Momo.Dialect
             var (whereSql, parameters) = new ExpressionToSqlConverter(this).Convert(expression);
             AppendTenantFilter(ref whereSql, parameters, typeof(T), tenantId);
 
-            return ($"UPDATE {tableName} SET {isDeletedCol} = 1, {deletedAtCol} = GETDATE() WHERE {whereSql}", parameters);
+            return ($"UPDATE {tableName} SET {isDeletedCol} = 1, {deletedAtCol} = SYSDATETIMEOFFSET() WHERE {whereSql}", parameters);
         }
 
         private void AppendTenantFilter(ref string where, Dictionary<string, object> parameters, Type entityType, long tenantId)

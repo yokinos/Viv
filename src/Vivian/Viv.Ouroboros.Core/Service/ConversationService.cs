@@ -54,7 +54,7 @@ namespace Viv.Ouroboros.Core.Service
                 MainAgentKey = request.MainAgentKey,
                 Title = request.Title,
                 Status = EmConversationStatus.Active,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTimeOffset.UtcNow
             };
 
             if (!await _store.InsertConversationAsync(conversation)) return VivApiResult.Failed("创建会话失败");

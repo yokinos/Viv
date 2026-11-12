@@ -15,7 +15,7 @@ namespace Viv.Herta.Core.IRepository
         Task<ChatMessageEntry?> GetAsync(long realmId, long messageId, EmChatReceiverType receiverType);
 
         /// <summary>标记为已撤回。消息不存在返回 false</summary>
-        Task<bool> RecallAsync(long realmId, long messageId, EmChatReceiverType receiverType, DateTime recalledAt);
+        Task<bool> RecallAsync(long realmId, long messageId, EmChatReceiverType receiverType, DateTimeOffset recalledAt);
 
         /// <summary>
         /// 按对端取消息。消息属于会话，不属于某一侧的个人会话行。

@@ -25,7 +25,7 @@ namespace Viv.Herta.Core.Repository
         public Task<EtGroupChat?> GetAsync(long realmId, long groupId)
             => _dbContext.SingleOrDefaultAsync<EtGroupChat>(x => x.RealmId == realmId && x.Id == groupId);
 
-        public async Task TouchLastMessageAsync(long realmId, long groupId, DateTime lastMessageAt)
+        public async Task TouchLastMessageAsync(long realmId, long groupId, DateTimeOffset lastMessageAt)
         {
             var group = await _dbContext.SingleOrDefaultAsync<EtGroupChat>(
                 x => x.RealmId == realmId && x.Id == groupId).ConfigureAwait(false);

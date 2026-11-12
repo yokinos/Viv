@@ -46,7 +46,7 @@ namespace Viv.Entity.Database.Herta
         /// <summary>
         /// 单人禁言到期时间，null永久禁言
         /// </summary>
-        public DateTime? MuteEndAt { get; set; }
+        public DateTimeOffset? MuteEndAt { get; set; }
 
         /// <summary>
         /// 消息免打扰
@@ -61,12 +61,12 @@ namespace Viv.Entity.Database.Herta
         /// <summary>
         /// 入群时间
         /// </summary>
-        public DateTime JoinAt { get; set; }
+        public DateTimeOffset JoinAt { get; set; }
 
         /// <summary>
         /// 退群时间，未退群为null
         /// </summary>
-        public DateTime? QuitAt { get; set; }
+        public DateTimeOffset? QuitAt { get; set; }
 
         /// <summary>
         /// 最后已读消息ID
@@ -81,11 +81,11 @@ namespace Viv.Entity.Database.Herta
         /// <summary>
         /// 删除时间
         /// </summary>
-        public DateTime? DeletedAt { get; set; }
+        public DateTimeOffset? DeletedAt { get; set; }
         /// <summary>
         /// 创建时间（UTC）—— 由 MomoDatabase 自动盖章，业务代码不写
         /// </summary>
-        public DateTime? CreatedAt { get; set; }
+        public DateTimeOffset? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人（IVivContext.UserId）—— 无登录上下文（后台任务）时为 null
@@ -95,7 +95,7 @@ namespace Viv.Entity.Database.Herta
         /// <summary>
         /// 更新时间（UTC）—— 每次更新自动盖章，业务代码不写
         /// </summary>
-        public DateTime? UpdatedAt { get; set; }
+        public DateTimeOffset? UpdatedAt { get; set; }
 
         /// <summary>
         /// 更新人（IVivContext.UserId）—— 无登录上下文（后台任务）时为 null

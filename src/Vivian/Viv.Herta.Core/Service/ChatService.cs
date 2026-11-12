@@ -122,19 +122,19 @@ namespace Viv.Herta.Core.Service
                 GroupId = isGroup ? request.TargetId : null,
                 MessageType = request.MessageType,
                 Body = request.Message ?? string.Empty,
-                SentAt = sentAt.UtcDateTime
+                SentAt = sentAt
             });
 
             // 两行的最后消息时间合成一条 UPDATE；逐行 Touch 每行都要先按主键查一次
             await _sessions.TouchManyAsync(
                 realmId,
                 receiverSession == null ? [senderSession.Id] : [senderSession.Id, receiverSession.Id],
-                sentAt.UtcDateTime);
+                sentAt);
 
             if (isGroup)
             {
                 // 群聊的最后消息时间是群级属性，所有成员共用一行
-                await _groups.TouchLastMessageAsync(realmId, request.TargetId, sentAt.UtcDateTime);
+                await _groups.TouchLastMessageAsync(realmId, request.TargetId, sentAt);
             }
 
             await _outbox.EnqueueAsync(new SendMessageEvent(
@@ -150,7 +150,7 @@ namespace Viv.Herta.Core.Service
             {
                 MessageId = messageId,
                 SessionId = senderSession.Id,
-                SentAt = sentAt.UtcDateTime
+                SentAt = sentAt
             });
         }
 
@@ -176,7 +176,7 @@ namespace Viv.Herta.Core.Service
                 realmId, request.ReceiverType, userId, request.TargetId,
                 request.AfterMessageId, request.BeforeMessageId, request.Limit);
 
-            // 字段映射由 Mapperly 在编译期生成，SentAt/RecallAt 走 UtcTime 的 UTC 标注
+            // 字段映射由 Mapperly 在编译期生成，时间字段两侧都是 DateTimeOffset，直接对拷
             var items = entries.Select(ChatMappers.ToItem).ToList();
 
             return VivApiResult<List<MessageItemOutput>>.Success(items);
@@ -204,7 +204,7 @@ namespace Viv.Herta.Core.Service
                 {
                     ReceiverType = EmChatReceiverType.User,
                     TargetId = session.TargetUserId.Value,
-                    LastMessageAt = ToOffset(session.LastMessageTime),
+                    LastMessageAt = session.LastMessageTime,
                     IsTop = session.IsTop,
                     NoDisturb = session.NoDisturb,
                     LastReadMsgId = session.LastReadMsgId
@@ -221,7 +221,7 @@ namespace Viv.Herta.Core.Service
                     TargetId = group.Id,
                     Name = group.Name,
                     AvatarUrl = group.AvatarUrl,
-                    LastMessageAt = ToOffset(group.LastMessageAt),
+                    LastMessageAt = group.LastMessageAt,
                     IsTop = membership?.IsTopSession ?? false,
                     NoDisturb = membership?.NoDisturb ?? false,
                     LastReadMsgId = membership?.LastReadMsgId ?? 0
@@ -304,7 +304,7 @@ namespace Viv.Herta.Core.Service
             if (members.Count + 1 > DefaultMaxGroupMembers)
                 return VivApiResult.Failed($"群成员不能超过 {DefaultMaxGroupMembers} 人");
 
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
             var groupId = await _groups.AddAsync(new EtGroupChat
             {
                 RealmId = realmId,
@@ -385,7 +385,7 @@ namespace Viv.Herta.Core.Service
             if (existing.Count + toAdd.Count > group.MaxMemberCount)
                 return VivApiResult.Failed($"群成员不能超过 {group.MaxMemberCount} 人");
 
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
             await _groupMembers.AddMembersAsync(toAdd.Select(x => new EtGroupChatMember
             {
                 RealmId = realmId,
@@ -434,7 +434,7 @@ namespace Viv.Herta.Core.Service
             if (targets.Contains(group.OwnerUserId))
                 return VivApiResult.Failed("群主不能退群");
 
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
             var removed = new List<long>();
             foreach (var target in targets)
             {
@@ -474,7 +474,7 @@ namespace Viv.Herta.Core.Service
                 UserId = x.UserId,
                 MemberRole = x.MemberRole,
                 GroupNickName = x.GroupNickName,
-                JoinAt = new DateTimeOffset(DateTime.SpecifyKind(x.JoinAt, DateTimeKind.Utc))
+                JoinAt = x.JoinAt
             }).ToList();
 
             return VivApiResult<List<GroupMemberItemOutput>>.Success(items);
@@ -504,11 +504,11 @@ namespace Viv.Herta.Core.Service
                 return VivApiResult.Success();
 
             var now = DateTimeOffset.UtcNow;
-            var sentAt = new DateTimeOffset(DateTime.SpecifyKind(entry.SentAt, DateTimeKind.Utc));
+            var sentAt = entry.SentAt;
             if (now - sentAt > RecallWindow)
                 return VivApiResult.Failed("超过撤回时限");
 
-            await _messages.RecallAsync(realmId, request.MessageId, request.ReceiverType, now.UtcDateTime);
+            await _messages.RecallAsync(realmId, request.MessageId, request.ReceiverType, now);
 
             await _outbox.EnqueueAsync(new MessageRecalledEvent
             {
@@ -540,7 +540,5 @@ namespace Viv.Herta.Core.Service
 
             return VivApiResult<List<PresenceItemOutput>>.Success(items);
         }
-
-        private static DateTimeOffset? ToOffset(DateTime? value) => UtcTime.FromUtc(value);
     }
 }

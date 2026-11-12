@@ -87,12 +87,12 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 删除时间
         /// </summary>
-        public DateTime? DeletedAt { get; set; }
+        public DateTimeOffset? DeletedAt { get; set; }
 
         /// <summary>
         /// 创建时间
         /// </summary>
-        public DateTime? CreatedAt { get; set; }
+        public DateTimeOffset? CreatedAt { get; set; }
 
         /// <summary>
         /// 创建人ID
@@ -102,7 +102,7 @@ namespace Viv.Entity.Database.Apex
         /// <summary>
         /// 更新时间
         /// </summary>
-        public DateTime? UpdatedAt { get; set; }
+        public DateTimeOffset? UpdatedAt { get; set; }
 
         /// <summary>
         /// 更新人ID
