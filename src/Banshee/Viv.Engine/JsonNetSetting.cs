@@ -6,34 +6,20 @@ using Viv.Sandrone.Conveter;
 namespace Viv.Engine
 {
     /// <summary>
-    /// Newtonsoft.Json 序列化配置集合
-    ///
-    /// 时间输出的统一约定见 <see cref="ApplyDateTimeRule"/>：一律 ISO 8601 + UTC 后缀。
+    /// Newtonsoft.Json 序列化配置集合。
+    /// 时间输出统一走 <see cref="ApplyDateTimeRule"/>。
     /// </summary>
     public class JsonNetSetting
     {
         /// <summary>
-        /// 全仓统一的日期时间输出规则：<c>2026-11-12T08:00:00Z</c>。
+        /// 统一的日期时间序列化规则：ISO 8601 + UTC，如 <c>2026-11-12T08:00:00Z</c>。
         ///
-        /// <para>为什么不设 <c>DateFormatString</c>：</para>
-        /// <para>
-        /// 一旦设了自定义格式（原来用的 <c>yyyy-MM-dd HH:mm:ss</c>），输出既没有 <c>T</c> 也没有 <c>Z</c>，
-        /// 前端 <c>new Date("2026-11-12 08:00:00")</c> 会按「浏览器本地时区」解析 —— 一个 UTC 时刻被当成
-        /// 本地时刻，差整整一个时区（东八区差 8 小时），而且不报错，只能靠人肉发现。
-        /// 不设则走 Newtonsoft 的 ISO 8601 默认格式，<c>Kind=Utc</c> 时自动带 <c>Z</c>。
-        /// </para>
-        ///
-        /// <para>为什么要 <c>DateTimeZoneHandling.Utc</c>：</para>
-        /// <para>
-        /// 库里存的是 UTC，但经 ADO / EF 往返后 <c>Kind</c> 常常退化成 <c>Unspecified</c>，
-        /// 默认的 <c>RoundtripKind</c> 会把它输出成不带后缀的裸时间。
-        /// 这个选项把 <c>Unspecified</c> / <c>Local</c> 统一按 UTC 输出，保证结尾一定有 <c>Z</c>，
-        /// 读侧不需要再靠 <c>SpecifyKind</c> 之类的补丁去猜。
-        /// </para>
-        ///
-        /// <para>
-        /// <c>DateTimeOffset</c> 不受这两项影响：它本身就会输出带偏移的 ISO（<c>+00:00</c>），同样能被正确解析。
-        /// </para>
+        /// <list type="bullet">
+        /// <item><description><c>IsoDateFormat</c>：输出带 <c>T</c> 与 <c>Z</c> 的标准格式，前端 <c>new Date()</c> 可直接解析。</description></item>
+        /// <item><description><c>DateTimeZoneHandling.Utc</c>：<c>Unspecified</c> / <c>Local</c> 一律按 UTC 输出，结尾必有 <c>Z</c>。</description></item>
+        /// <item><description><c>DateTimeOffset</c> 不受影响，本身输出带偏移的 ISO（<c>+00:00</c>）。</description></item>
+        /// <item><description>不要设置 <c>DateFormatString</c>：自定义格式会丢掉时区信息。</description></item>
+        /// </list>
         /// </summary>
         public static void ApplyDateTimeRule(JsonSerializerSettings settings)
         {
