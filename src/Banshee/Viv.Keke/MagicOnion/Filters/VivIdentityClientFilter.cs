@@ -32,9 +32,7 @@ namespace Viv.Keke.MagicOnion.Filters
             _tokenOptions = tokenOptions;
         }
 
-        public async ValueTask<ResponseContext> SendAsync(
-            RequestContext context,
-            Func<RequestContext, ValueTask<ResponseContext>> next)
+        public async ValueTask<ResponseContext> SendAsync(RequestContext context, Func<RequestContext, ValueTask<ResponseContext>> next)
         {
             var values = VivIdentityHeaders.Build(_accessor.Current, _tokenOptions);
 
@@ -43,8 +41,7 @@ namespace Viv.Keke.MagicOnion.Filters
             {
                 // RequestContext.CallOptions 是只读属性，拿不到就写不回去；
                 // 静默跳过会变成“服务端按未认证拒绝”，这里直接抛，避免把配置问题伪装成鉴权失败。
-                throw new InvalidOperationException(
-                    "MagicOnion RequestContext.CallOptions.Headers 未初始化，无法注入 x-viv-* 身份头。");
+                throw new InvalidOperationException("MagicOnion RequestContext.CallOptions.Headers 未初始化，无法注入 x-viv-* 身份头。");
             }
 
             foreach (var pair in values.ToHeaderPairs())
