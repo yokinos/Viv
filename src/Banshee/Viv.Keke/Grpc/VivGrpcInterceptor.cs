@@ -2,9 +2,9 @@ using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Options;
-using Viv.Echo.Identity;
+using Viv.Keke.Identity;
 
-namespace Viv.Echo.Grpc
+namespace Viv.Keke.Grpc
 {
     /// <summary>
     /// gRPC 客户端身份头拦截器。头的构造与签名在 <see cref="VivIdentityHeaders"/> 里（传输无关），

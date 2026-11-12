@@ -63,7 +63,7 @@ internal static class AppHostGrpcEndpoint
                 port: port,
                 targetPort: port,
                 name: "grpc",
-                env: "VivOptions__EchoOption__GrpcOption__Port",
+                env: "VivOptions__KekeOption__GrpcOption__Port",
                 isProxied: false)
             .WithEndpoint("grpc", endpoint => endpoint.Transport = "http2");
     }

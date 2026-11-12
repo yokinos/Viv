@@ -1,6 +1,6 @@
 using Viv.Aspire.ServiceDefaults;
-using Viv.Echo;
-using Viv.Echo.MagicOnion;
+using Viv.Keke;
+using Viv.Keke.MagicOnion;
 using Viv.Elysia.Extension;
 using Viv.Elysia.Filter;
 using Viv.Engine;
@@ -15,10 +15,10 @@ public class Program
         builder.AddServiceDefaults();
         builder.AddVivApi(mvc => mvc.Filters.AddElysiaFilter());
 
-        // 服务端协议来自 VivOptions:EchoOption:GrpcOption:Protocol。
+        // 服务端协议来自 VivOptions:KekeOption:GrpcOption:Protocol。
         // 端口由 AddVivApi 按 EffectiveProtocol 绑定（MagicOnion 与 gRPC 共用同一条 HTTP/2 端口），
         // 这里只在协议含 MagicOnion 时装配服务端过滤器与端点映射。
-        var servesMagicOnion = VivEngine.VivOptions?.EchoOption?.GrpcOption?.ServesMagicOnion == true;
+        var servesMagicOnion = VivEngine.VivOptions?.KekeOption?.GrpcOption?.ServesMagicOnion == true;
         if (servesMagicOnion)
         {
             builder.Services.AddVivMagicOnionServer();

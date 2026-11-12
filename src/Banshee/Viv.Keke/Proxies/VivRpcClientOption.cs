@@ -1,4 +1,4 @@
-namespace Viv.Echo.Proxies
+namespace Viv.Keke.Proxies
 {
     /// <summary>
     /// 单个下游服务的代理配置。每个 <see cref="IVivRpcProxyModule"/> 从

@@ -1,13 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using Viv.Delusion;
-using Viv.Echo.Grpc;
-using Viv.Echo.Http;
+using Viv.Keke.Grpc;
+using Viv.Keke.Http;
 
-namespace Viv.Echo
+namespace Viv.Keke
 {
-    public static class EchoRegister
+    public static class KekeRegister
     {
-        public static void Initialize(IServiceCollection services, EchoOptions options)
+        public static void Initialize(IServiceCollection services, KekeOptions options)
         {
             if (options.EnableHttp)
             {

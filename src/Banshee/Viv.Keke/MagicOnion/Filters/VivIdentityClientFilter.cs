@@ -2,9 +2,9 @@ using Grpc.Core;
 using MagicOnion.Client;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Options;
-using Viv.Echo.Identity;
+using Viv.Keke.Identity;
 
-namespace Viv.Echo.MagicOnion.Filters
+namespace Viv.Keke.MagicOnion.Filters
 {
     /// <summary>
     /// MagicOnion 客户端身份头过滤器 —— gRPC <c>VivGrpcInterceptor</c> 的等价物。

@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace Viv.Echo.Http
+namespace Viv.Keke.Http
 {
     public class HttpResult<T>
     {

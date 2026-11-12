@@ -4,7 +4,7 @@ using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Contracts.Options;
 
-namespace Viv.Echo.Identity
+namespace Viv.Keke.Identity
 {
     /// <summary>
     /// x-viv-* 身份头的验签与还原（服务端侧）。与 <see cref="VivIdentityHeaders"/> 配对。

@@ -211,7 +211,7 @@ Viv/
 │   │   ├── Viv.Skirk/                        # 异步任务：入队、认领执行、进度、取消
 │   │   ├── Viv.Redis/                        # 缓存 + 分布式锁（自动续期）
 │   │   ├── Viv.Sandrone/                     # JWT、S3、二维码
-│   │   ├── Viv.Echo/                         # HTTP + gRPC 客户端/服务端、服务发现
+│   │   ├── Viv.Keke/                         # HTTP + gRPC 客户端/服务端、服务发现
 │   │   ├── Viv.Kinna/                        # 长连接推送框架（连接表、Ack/Resync、限流）
 │   │   ├── Viv.Clockwork/                    # TickerQ 调度
 │   │   ├── Viv.Cli/                          # REPL + 命令自动发现
@@ -283,7 +283,7 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 | `MqttOption` | MQTT 连接 | |
 | `TokenOption` | JWT 密钥、有效期、签发方 | |
 | `TickOption` | TickerQ 调度 | |
-| `EchoOption` | HTTP / gRPC 服务端 | `GrpcOption.Port` 需要独立端口 |
+| `KekeOption` | HTTP / gRPC 服务端 | `GrpcOption.Port` 需要独立端口 |
 | `CorsOption` | 允许的 Origin | 未配置时：Development 回显任意 Origin（局域网访问 dev server 需要），其余环境不放行任何跨域来源 |
 | `S3Option` | 对象存储 | |
 | `SkirkOption` | 异步任务（`EnableWorker` 决定本宿主跑不跑） | |
@@ -371,7 +371,7 @@ await _lock.AcquireLockWithExecuteAsync("biz:order:42", TimeSpan.FromSeconds(30)
 
 Redis 故障时读路径回源数据库、取锁走回源兜底；写路径仍抛 `VivConnectionException`（映射 `-502`）。
 
-### 跨服务通信：Echo
+### 跨服务通信：Keke
 
 - **HTTP**：`AddVivGrpcClient` 同源的客户端封装，透传 `x-viv-*` 并签名
 - **gRPC**：`[BindServiceMethod]` 实现自动发现并映射；客户端 `GrpcChannel` 走 HTTP/2

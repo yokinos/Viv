@@ -3,8 +3,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Viv.Apex.Proxy.Contracts;
 using Viv.Apex.Proxy.Ports;
 using Viv.Apex.Proxy.Proxies;
-using Viv.Echo.MagicOnion;
-using Viv.Echo.Proxies;
+using Viv.Keke.MagicOnion;
+using Viv.Keke.Proxies;
 
 namespace Viv.Apex.Proxy
 {

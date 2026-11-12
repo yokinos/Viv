@@ -3,13 +3,13 @@ using MagicOnion.Server;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using Viv.Echo.MagicOnion.Filters;
+using Viv.Keke.MagicOnion.Filters;
 
-namespace Viv.Echo.MagicOnion
+namespace Viv.Keke.MagicOnion
 {
     /// <summary>
     /// MagicOnion 服务端装配。与 gRPC 宿主共用同一条严格 HTTP/2 明文端口
-    /// （端口由 <c>VivOptions.EchoOption.GrpcOption.Port</c> 决定，由 <c>AddVivGrpcKestrel</c> 绑定），
+    /// （端口由 <c>VivOptions.KekeOption.GrpcOption.Port</c> 决定，由 <c>AddVivGrpcKestrel</c> 绑定），
     /// 只是服务路径不同。
     ///
     /// <para>迁移期服务端用 <c>Protocol = Both</c>：gRPC 与 MagicOnion 同时映射，

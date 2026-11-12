@@ -1,6 +1,6 @@
-namespace Viv.Echo
+namespace Viv.Keke
 {
-    public class EchoOptions
+    public class KekeOptions
     {
         public bool EnableHttp { get; set; } = true;
 
@@ -16,7 +16,7 @@ namespace Viv.Echo
     /// 客户端按边切换时不会因为“服务端只开了其中一边”而整条链路失败。
     /// </summary>
     [Flags]
-    public enum EchoProtocol
+    public enum KekeProtocol
     {
         None = 0,
 
@@ -40,19 +40,19 @@ namespace Viv.Echo
         public int Port { get; set; }
 
         /// <summary>
-        /// 服务端协议。不配（<see cref="EchoProtocol.None"/>）时回落到 <see cref="EnableServer"/> 的旧语义。
+        /// 服务端协议。不配（<see cref="KekeProtocol.None"/>）时回落到 <see cref="EnableServer"/> 的旧语义。
         /// </summary>
-        public EchoProtocol Protocol { get; set; } = EchoProtocol.None;
+        public KekeProtocol Protocol { get; set; } = KekeProtocol.None;
 
         /// <summary>实际生效的协议：<see cref="Protocol"/> 优先，没配则看 <see cref="EnableServer"/>。</summary>
-        public EchoProtocol EffectiveProtocol => Protocol != EchoProtocol.None
+        public KekeProtocol EffectiveProtocol => Protocol != KekeProtocol.None
             ? Protocol
-            : EnableServer ? EchoProtocol.Grpc : EchoProtocol.None;
+            : EnableServer ? KekeProtocol.Grpc : KekeProtocol.None;
 
         /// <summary>是否需要注册 gRPC 服务端（拦截器 + 自动发现 + MapGrpcService）。</summary>
-        public bool ServesGrpc => (EffectiveProtocol & EchoProtocol.Grpc) != 0;
+        public bool ServesGrpc => (EffectiveProtocol & KekeProtocol.Grpc) != 0;
 
-        /// <summary>是否需要注册 MagicOnion 服务端（由 <c>Viv.Echo.MagicOnion</c> 的扩展完成）。</summary>
-        public bool ServesMagicOnion => (EffectiveProtocol & EchoProtocol.MagicOnion) != 0;
+        /// <summary>是否需要注册 MagicOnion 服务端（由 <c>Viv.Keke.MagicOnion</c> 的扩展完成）。</summary>
+        public bool ServesMagicOnion => (EffectiveProtocol & KekeProtocol.MagicOnion) != 0;
     }
 }

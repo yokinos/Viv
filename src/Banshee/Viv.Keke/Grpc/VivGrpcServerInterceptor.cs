@@ -5,9 +5,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Options;
-using Viv.Echo.Identity;
+using Viv.Keke.Identity;
 
-namespace Viv.Echo.Grpc
+namespace Viv.Keke.Grpc
 {
     /// <summary>
     /// gRPC 服务端租户上下文恢复拦截器。

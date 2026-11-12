@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Viv.Echo.Proxies
+namespace Viv.Keke.Proxies
 {
     /// <summary>
     /// 一个下游服务一个代理模块（如 <c>ApexProxyModule</c>）。<see cref="VivRpcProxyExtensions.AddVivRpcProxies"/>

@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 using Viv.Delusion.Magic;
 
-namespace Viv.Echo.Grpc
+namespace Viv.Keke.Grpc
 {
     /// <summary>
     /// gRPC 服务自动发现：扫描已加载程序集中「基类链上带 [BindServiceMethod] 的抽象基类」的具体实现类。

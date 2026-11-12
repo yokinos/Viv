@@ -1,6 +1,6 @@
 using Viv.Contracts.Models;
 
-namespace Viv.Echo.Identity
+namespace Viv.Keke.Identity
 {
     /// <summary>
     /// 身份头验签结果。

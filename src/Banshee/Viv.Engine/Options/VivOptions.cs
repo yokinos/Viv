@@ -5,7 +5,7 @@ using Viv.Aoi;
 using Viv.Clockwork.Options;
 using Viv.Contracts.Enums;
 using Viv.Contracts.Options;
-using Viv.Echo;
+using Viv.Keke;
 using Viv.Kinna.Options;
 using Viv.Log;
 using Viv.Momo.Options;
@@ -79,7 +79,7 @@ namespace Viv.Engine.Options
         /// <summary>
         /// 跨服务通信配置（HTTP + gRPC）
         /// </summary>
-        public EchoOptions EchoOption { get; set; }
+        public KekeOptions KekeOption { get; set; }
 
         /// <summary>
         /// CORS 允许的 Origin。未配置时 Development 允许本机回环，其他环境不允许跨域。

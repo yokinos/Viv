@@ -42,7 +42,7 @@ public class VivConfigBindingTests
             "OutboxOption": { "EnableDispatcher": true, "PollIntervalSeconds": 7, "BatchSize": 50, "MaxRetryCount": 4, "LeaseSeconds": 30, "AutoCreateTable": false, "RetentionDays": 3 },
             "TokenOption": null,
             "TickOption": null,
-            "EchoOption": { "EnableHttp": true, "GrpcOption": null },
+            "KekeOption": { "EnableHttp": true, "GrpcOption": null },
             "S3Option": null
           }
         }
@@ -100,9 +100,9 @@ public class VivConfigBindingTests
         Assert.False(options.OutboxOption.AutoCreateTable);
         Assert.Equal(3, options.OutboxOption.RetentionDays);
 
-        // EchoOption（null 子节点）
-        Assert.True(options.EchoOption!.EnableHttp);
-        Assert.Null(options.EchoOption.GrpcOption);
+        // KekeOption（null 子节点）
+        Assert.True(options.KekeOption!.EnableHttp);
+        Assert.Null(options.KekeOption.GrpcOption);
     }
 
     /// <summary>

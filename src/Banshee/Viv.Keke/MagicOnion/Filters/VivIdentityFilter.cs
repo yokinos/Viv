@@ -5,9 +5,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Viv.Contracts;
 using Viv.Contracts.Interface;
 using Viv.Contracts.Options;
-using Viv.Echo.Identity;
+using Viv.Keke.Identity;
 
-namespace Viv.Echo.MagicOnion.Filters
+namespace Viv.Keke.MagicOnion.Filters
 {
     /// <summary>
     /// MagicOnion 服务端身份头过滤器 —— gRPC <c>VivGrpcServerInterceptor</c> 的等价物。

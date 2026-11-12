@@ -6,7 +6,7 @@ using Viv.Contracts.Enums;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
-using Viv.Echo;
+using Viv.Keke;
 using Viv.Engine.HealthChecks;
 using Viv.Engine.HostedServices;
 using Viv.Engine.LocalEvents;
@@ -57,7 +57,7 @@ namespace Viv.Engine
             // 注册日志
             RegisterLogger(services, options);
             // 注册跨服务通信（HTTP + gRPC）
-            RegisterEcho(services, options);
+            RegisterKeke(services, options);
             // 注册缓存
             RegisterCache(services, options);
             // 注册消息队列
@@ -371,12 +371,12 @@ namespace Viv.Engine
 
         #endregion
 
-        #region 跨服务通信 Echo
+        #region 跨服务通信 Keke
 
-        private static void RegisterEcho(IServiceCollection services, VivOptions options)
+        private static void RegisterKeke(IServiceCollection services, VivOptions options)
         {
-            if (options.EchoOption == null) return;
-            EchoRegister.Initialize(services, options.EchoOption);
+            if (options.KekeOption == null) return;
+            KekeRegister.Initialize(services, options.KekeOption);
         }
 
         #endregion

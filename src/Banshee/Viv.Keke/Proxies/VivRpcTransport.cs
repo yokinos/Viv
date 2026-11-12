@@ -1,4 +1,4 @@
-namespace Viv.Echo.Proxies
+namespace Viv.Keke.Proxies
 {
     /// <summary>
     /// 下游调用使用的 RPC 传输。由各服务的代理包（<c>Viv.Xxx.Proxy</c>）在注册时读取配置决定，

@@ -3,7 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Viv.Echo.Http
+namespace Viv.Keke.Http
 {
     public interface IVivHttpService
     {

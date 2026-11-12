@@ -1,6 +1,6 @@
 using Viv.Contracts.Interface;
 
-namespace Viv.Echo.Identity
+namespace Viv.Keke.Identity
 {
     /// <summary>
     /// 一次调用要携带的 x-viv-* 身份头值快照（含签名 token）。

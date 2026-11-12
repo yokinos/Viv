@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.ServiceDiscovery;
 
-namespace Viv.Echo.Grpc
+namespace Viv.Keke.Grpc
 {
     public static class VivGrpcExtensions
     {

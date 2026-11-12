@@ -15,8 +15,8 @@
     <PackageReference Include="Grpc.Net.ClientFactory" />
     <PackageReference Include="Google.Protobuf" />
     <!-- MagicOnion：第二条 RPC 通道（C# 接口 + MessagePack），与 gRPC 并存于同一 HTTP/2 端口。
-         放在框架工程里是有意选择：迁移期由配置（EchoOption.GrpcOption.Protocol）决定用哪条，
-         不想为 5 个文件再加一个工程；代价是每个引用 Echo 的宿主都会带上这几个包（未使用不加载）。 -->
+         放在框架工程里是有意选择：迁移期由配置（KekeOption.GrpcOption.Protocol）决定用哪条，
+         不想为 5 个文件再加一个工程；代价是每个引用 Keke 的宿主都会带上这几个包（未使用不加载）。 -->
     <PackageReference Include="MagicOnion.Server" />
     <PackageReference Include="MagicOnion.Client" />
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" />

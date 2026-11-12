@@ -9,7 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Viv.Echo.Http;
+using Viv.Keke.Http;
 using Viv.Entity.Database.Ouroboros;
 using Viv.Entity.Enums;
 using Viv.Log;
@@ -90,8 +90,8 @@ namespace Viv.Ouroboros.Core.Service
                 var http = Rent(out scope);
                 if (http is null)
                 {
-                    _logger.Warning("HTTP 工具解析不到 IVivHttpService（宿主没启用 EchoOption.EnableHttp）：{0}", tool.ToolKey);
-                    return new HttpToolResult("宿主没有启用 HTTP 服务（EchoOption.EnableHttp），无法调用该工具。",
+                    _logger.Warning("HTTP 工具解析不到 IVivHttpService（宿主没启用 KekeOption.EnableHttp）：{0}", tool.ToolKey);
+                    return new HttpToolResult("宿主没有启用 HTTP 服务（KekeOption.EnableHttp），无法调用该工具。",
                         false, "IVivHttpService 未注册", 0);
                 }
 

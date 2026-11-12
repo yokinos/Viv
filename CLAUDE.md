@@ -40,7 +40,7 @@ The solution splits into two top-level namespaces: **Banshee** (framework) and *
 | `Viv.Outbox` | 发件箱 + Inbox：事务性投递与消费幂等 |
 | `Viv.Redis` | 缓存、分布式锁、多库路由 |
 | `Viv.Sandrone` | 云集成：JWT、S3 |
-| `Viv.Echo` | 服务间通信：HTTP + 框架级 gRPC 宿主 |
+| `Viv.Keke` | 服务间通信：HTTP + 框架级 gRPC 宿主 |
 | `Viv.Clockwork` | 后台调度：TickerQ 集成 |
 | `Viv.Cli` | CLI 框架：REPL + 命令发现 + 输出工具 |
 | `Viv.Forge` | 源生成器基类库 |
@@ -104,9 +104,9 @@ Redis cache — `IRedisService` with pluggable DB allocation (`DbSelectorType`)�
 
 Cloud integrations — JWT `ITokenService`/`JwtTokenService`（TokenOption 对称密钥）、S3 `IS3Service`/`VivS3Service`
 
-#### `Viv.Echo` — 服务间通信
+#### `Viv.Keke` — 服务间通信
 
-Service-to-service communication + **框架级 gRPC 宿主**（`Viv.Echo.Grpc`）— HTTP + gRPC 客户端 `VivGrpcInterceptor`/`AddVivGrpcClient`（支持服务发现；注入 x-viv-* 含 holder-id 并纳入签名）、服务端 `VivGrpcServerInterceptor`（验签后水合 `IVivContext` 并 `SetHolderId`）/`AddVivGrpcServer`/`AddVivGrpcKestrel`/`VivGrpcDiscovery`（自动发现 `[BindServiceMethod]` 实现类 + 注册 + 反射映射；REST + gRPC 分端口，见下）
+Service-to-service communication + **框架级 gRPC 宿主**（`Viv.Keke.Grpc`）— HTTP + gRPC 客户端 `VivGrpcInterceptor`/`AddVivGrpcClient`（支持服务发现；注入 x-viv-* 含 holder-id 并纳入签名）、服务端 `VivGrpcServerInterceptor`（验签后水合 `IVivContext` 并 `SetHolderId`）/`AddVivGrpcServer`/`AddVivGrpcKestrel`/`VivGrpcDiscovery`（自动发现 `[BindServiceMethod]` 实现类 + 注册 + 反射映射；REST + gRPC 分端口，见下）
 
 #### `Viv.Clockwork` — 后台调度
 
@@ -165,16 +165,16 @@ Background scheduling — `TickerQ` integration for cron/interval job execution 
 | `Viv.EventContracts` | Shared message/event class definitions for inter-service messaging |
 | `Viv.Generators` | 应用专用源生成器（netstandard2.0，继承 `Viv.Forge` 基类，字符串全名匹配特性） |
 | `Viv.Meta` | 生成代码宿主（net10.0，挂 Viv.Forge + Viv.Generators 两个 Analyzer，业务引它拿生成类型） |
-| `Viv.Apex.Proxy` | **业务侧 gRPC 代理层**，一个下游服务一个目录：`Common/`（`IProxyModule` 每个服务一个模块 + `ProxyEndpointOption` / `VivProxyOptions` 集合节点 + `AddVivProxies()` 扫描注册）、`Apex/{Ports,Proxies}`（`IProxyApexAppService` 业务端口 + `ApexAppServiceProxy` 实现，实现是 internal）、`Contracts/`（只有 `.proto`，按域分子目录）。**命名约定 `IProxy{服务}{能力}Service`**，`IProxy` 前缀标明跨网络调用。配置统一在 `VivProxies` 集合节点下（`VivProxies:Apex:ServiceName`），加服务只加一个 `IProxyModule` 实现，注册入口与配置结构都不动。框架级能力（`AddVivGrpcServer`/`AddVivGrpcClient`/服务端租户拦截器/`AddVivGrpcKestrel`）在 `Viv.Echo`。**gRPC 四种调用形态目前没有自动化夹具**（原 `Viv.ServiceProxy.Tests` 已随代理层重构删除，其中的 proto 与桩一并移除）。⚠️ 这类示例不能放回本项目的 `Examples/`：自动发现是全局的，任何引用本项目的宿主都会映射出那个假数据服务（Apex.Api 当时就被带上了） |
+| `Viv.Apex.Proxy` | **业务侧 gRPC 代理层**，一个下游服务一个目录：`Common/`（`IProxyModule` 每个服务一个模块 + `ProxyEndpointOption` / `VivProxyOptions` 集合节点 + `AddVivProxies()` 扫描注册）、`Apex/{Ports,Proxies}`（`IProxyApexAppService` 业务端口 + `ApexAppServiceProxy` 实现，实现是 internal）、`Contracts/`（只有 `.proto`，按域分子目录）。**命名约定 `IProxy{服务}{能力}Service`**，`IProxy` 前缀标明跨网络调用。配置统一在 `VivProxies` 集合节点下（`VivProxies:Apex:ServiceName`），加服务只加一个 `IProxyModule` 实现，注册入口与配置结构都不动。框架级能力（`AddVivGrpcServer`/`AddVivGrpcClient`/服务端租户拦截器/`AddVivGrpcKestrel`）在 `Viv.Keke`。**gRPC 四种调用形态目前没有自动化夹具**（原 `Viv.ServiceProxy.Tests` 已随代理层重构删除，其中的 proto 与桩一并移除）。⚠️ 这类示例不能放回本项目的 `Examples/`：自动发现是全局的，任何引用本项目的宿主都会映射出那个假数据服务（Apex.Api 当时就被带上了） |
 | `Viv.Toolbox` | **业务侧通用工具箱（控制台）**：`VivAppBuilder` 的第一个真实宿主，跑 `VivCliHost` 的 REPL。走 Apex 域的配置（`DIOption` 扫 `Viv.Apex.Core`、`EntityTypeOptions` 指 `Viv.Entity.Database.Apex`、库是 `viv_apex_master`），但 `NanaOption` / `OutboxOption` 都为 null —— 工具既不消费 MQ 也不该跟 Worker 抢发件箱；`InboxOption.RetentionDays: 0`，启动路径不碰库 —— 改表结构要靠它自己的 `initviv` 命令（`Cmd_InitViv`），不由启动触发（见 `### Schema sync`）。`Program.cs` 里 `VivCliHost` 先于 `AddVivApp` 构造、`StartAsync` 之后才 `UseContainer`，先后顺序是有意的（见 `### Startup: one-liner API & Worker & Gateway`）|
 
 **REST + gRPC 明文端口约束**：gRPC 需要 HTTP/2。
 明文下 `Http1AndHttp2` 只认 TLS/ALPN，不认 h2c prior-knowledge 前缀（Grpc.Net.Client 明文即发前缀）→ 回 `HTTP_1_1_REQUIRED`；严格 `Http2` 会把 HTTP/1.1 REST 打挂（400）。
 故 REST 与 gRPC 必须**分开端口**。
-**配置驱动（宿主零手工接线）**：appsettings.json 的 `VivOptions.EchoOption.GrpcOption`（`EnableServer` + `Port`）启用时，`AddVivApi` 自动调 `AddVivGrpcKestrel(port)`（`Viv.Echo.Grpc`：gRPC 端口绑严格 HTTP/2，并把 urls——`--urls`/`ASPNETCORE_URLS`/launchSettings——显式 `Listen` 回 HTTP/1.1；显式 `Listen` 会顶掉 urls 生成的端点，必须重绑，无 urls 回落 Kestrel 默认 5000；声明端口即自动调 `AddVivGrpcServer` 含租户上下文恢复拦截器）+ `VivGrpcDiscovery` 自动发现注册 gRPC 服务，`RunVivApi` 在 `MapControllers()` 后自动 `MapGrpcService<T>`。
+**配置驱动（宿主零手工接线）**：appsettings.json 的 `VivOptions.KekeOption.GrpcOption`（`EnableServer` + `Port`）启用时，`AddVivApi` 自动调 `AddVivGrpcKestrel(port)`（`Viv.Keke.Grpc`：gRPC 端口绑严格 HTTP/2，并把 urls——`--urls`/`ASPNETCORE_URLS`/launchSettings——显式 `Listen` 回 HTTP/1.1；显式 `Listen` 会顶掉 urls 生成的端点，必须重绑，无 urls 回落 Kestrel 默认 5000；声明端口即自动调 `AddVivGrpcServer` 含租户上下文恢复拦截器）+ `VivGrpcDiscovery` 自动发现注册 gRPC 服务，`RunVivApi` 在 `MapControllers()` 后自动 `MapGrpcService<T>`。
 **自动发现约定**：grpc_csharp_plugin 生成的基类（如 `TenantGrpcServiceBase`）**不继承 `ServiceBase`**，以基类上的 `[BindServiceMethod]` 特性沿基类链判定（`VivGrpcDiscovery.FindServices` 先 `TypeScanMagic.ForceLoadReferencedAssemblies()` 强制加载懒加载程序集）。
 **Apex.Api 已配 7001，托管真实的 `ApexAppQueryService`；Herta.Api 配 7002 但自身没有 gRPC 服务，已不引 Apex.Proxy**。
-示例那套四形态夹具原在 `Viv.ServiceProxy.Tests`（已随重构删除），宿主不再被自动挂一个假数据服务；非 gRPC 宿主服务 `EchoOption.GrpcOption: null`（死属性 `EnableGrpc` 已移除）。
+示例那套四形态夹具原在 `Viv.ServiceProxy.Tests`（已随重构删除），宿主不再被自动挂一个假数据服务；非 gRPC 宿主服务 `KekeOption.GrpcOption: null`（死属性 `EnableGrpc` 已移除）。
 
 ### IM 模块（Herta + Kinna）的几条硬约定
 
@@ -320,7 +320,7 @@ finally { await app.StopAsync(); }
 - `AddVivGateway` handles config load、Autofac、`AddViv()`、JWT 解析（读 `TokenOption` 对称密钥，**只解析不强制**）、CORS、OutputCache、RateLimiter、`AddReverseProxy().LoadFromMemory(...)`（路由/集群从 Aspire 服务发现自动生成）；`RunVivGateway` 管道：Build → VivLocator → WebSocket → CORS → OutputCache → RateLimiter → Authentication → Authorization → **上下文头透传**（先剥离客户端伪造的 `x-viv-*` 头与 `x-request-token`，再剥离 query 里客户端直传的身份参数 `tenantId/userId/appId`，认证后从 token claims 回填 `x-viv-appId`/`x-viv-subjectId`(=TenantId)/`x-viv-userId`/`x-viv-serviceName`/`x-viv-holder-id`（网关当前 `LockHolderContext`）并 HMAC 签名写 `x-request-token`）→ `MapReverseProxy` → Run。**路由不带 AuthorizationPolicy** —— 网关不鉴权，下游服务自己用 `[Authorize]` 控制。
 - **SignalR/WS 认证**：网关 JwtBearer 支持 `access_token` 查询参数认证（`JwtBearerEvents.OnMessageReceived`，SignalR 升级请求无法带 `Authorization` 头）；客户端经 `/ws/{短名}/...` 需带有效 JWT 才能获得身份（经 `x-viv-*` 头下传），下游 hub（如 `ChatHub`）读 `RequestTokenResolver.GetContextFromHeaders` 取已验身份，**无身份即 `Context.Abort()`**——不再信任客户端 query 直传的 tenantId/userId/appId。
 - **`x-request-token` 防重放**：签名载荷含 unix 时间戳（token 格式 `{unixSeconds}:{base64Sig}`），下游验签时校验 ≤300s，超时/旧格式（无冒号）一律拒绝——截获签名头组也不能无限期重放冒充。
-- **头部契约/白名单集中存放**：上下文头名（`x-viv-appId`/`x-viv-subjectId`/`x-viv-userId`/`x-viv-serviceName`/`x-viv-holder-id`/`x-request-token`）**单一来源定义在 `VivHeaderContract`（`Viv.Contracts`，gRPC/HTTP 跨层共用，Echo/Apex.Proxy 拦截器读它）**，`VivRunDefine`（`Viv.Engine`）以别名引用保持既有调用点不变；HTTP 状态码白名单仍在 `VivRunDefine`。网关/`RequestTokenResolver`/`VivApiResult` 跨层共用同一来源。
+- **头部契约/白名单集中存放**：上下文头名（`x-viv-appId`/`x-viv-subjectId`/`x-viv-userId`/`x-viv-serviceName`/`x-viv-holder-id`/`x-request-token`）**单一来源定义在 `VivHeaderContract`（`Viv.Contracts`，gRPC/HTTP 跨层共用，Keke/Apex.Proxy 拦截器读它）**，`VivRunDefine`（`Viv.Engine`）以别名引用保持既有调用点不变；HTTP 状态码白名单仍在 `VivRunDefine`。网关/`RequestTokenResolver`/`VivApiResult` 跨层共用同一来源。
 - **holderId 跨进程传播**：`LockHolderContext` 仍是进程内 AsyncLocal；跨进程走签名头 `x-viv-holder-id`（HMAC 载荷第 5 个字段，与身份头同组）。**网关是信任根**：`RequestTrackMiddleware` 在 `ServiceType=Gateway` 时一律 `GenerateHolderId()`，认证后回填并签名。下游 API 验签通过且带头才 `SetHolderId(上游)`，否则本进程生成——客户端无密钥伪造不了。gRPC 客户端 `VivGrpcInterceptor` 注入当前 holderId 并纳入签名，服务端 `VivGrpcServerInterceptor` 验签后 `SetHolderId`。`NanaEnvelope.Context.HolderId` 由发布端从 `LockHolderContext` 盖章，Worker `VivConsumer` 优先用它（不再用 `TraceId` 当 holder）。
 - **内部签名密钥 `EnvOption.InternalToken`**：`RequestTokenResolver.GetInternalSecret()` 只取 `VivEngine.VivOptions?.EnvOption?.InternalToken`（appsettings.json 的 `VivOptions.EnvOption` 节点，网关与**所有服务必须配同一个值**，32 位随机 hex），**不回落** `TokenOption.SecretKey`。未配 InternalToken 时不验签，按原行为信任身份头——只用于无租户数据场景；**holderId 除外**（无密钥一律本进程生成，不信任客户端头）。
 - **路由自动生成**：`VivGatewayRouteBuilder.Build()` 从 Aspire 注入的 `services__*` 环境变量（`WithReference`）为每个服务生成 3 条路由 + 1 个集群，**零手写 JSON**（无 `viv.yarp.json`）。新增 API 只需在 AppHost 加 `WithReference`：
@@ -361,7 +361,7 @@ Every API / Worker / 工具箱 project carries a `VivOptions` node in its `appse
 | `OutboxOption` | 发件箱：投递器开关、轮询间隔、批大小、重试上限、租约、建表、保留期。**为 null = 不启用**（见下） |
 | `InboxOption` | Inbox 清理：保留期（默认 7 天）、批大小（默认 1000）、清理间隔。**与别的子配置不同 —— 为 null 不是「不启用」**：Inbox 只看 `DatabaseOption`，节点缺席就用默认值照常清理，要关掉把保留期配成 0（见下） |
 | `TokenOption` | JWT secret/expiry/issuer |
-| `EchoOption` | HTTP client enable + gRPC（`GrpcOption { EnableServer, Port }`） |
+| `KekeOption` | HTTP client enable + gRPC（`GrpcOption { EnableServer, Port }`） |
 | `TickOption` | TickerQ scheduler config |
 | `KinnaOption` | 长连接（Kinna）：`HubPath` / `Prefix` / 租约 / 清扫 / 限流 / 健康检查 / 单连接。**为 null = 不跑长连接**，`AddKinna<THub>` 读到节点不存在且无回调时直接返回；多 Hub 用 `KinnaOption:<Hub 类型名>` 覆盖 |
 

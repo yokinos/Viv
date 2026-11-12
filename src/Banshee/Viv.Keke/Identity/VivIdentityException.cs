@@ -1,4 +1,4 @@
-namespace Viv.Echo.Identity
+namespace Viv.Keke.Identity
 {
     /// <summary>
     /// 身份头验签失败（签名不匹配 / 时间戳过期 / 缺签名）。

@@ -3,10 +3,10 @@ using MagicOnion;
 using MagicOnion.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Viv.Echo.Proxies;
-using Viv.Echo.MagicOnion.Filters;
+using Viv.Keke.Proxies;
+using Viv.Keke.MagicOnion.Filters;
 
-namespace Viv.Echo.MagicOnion
+namespace Viv.Keke.MagicOnion
 {
     /// <summary>
     /// MagicOnion 客户端装配。与 gRPC 客户端共用同一套约定：

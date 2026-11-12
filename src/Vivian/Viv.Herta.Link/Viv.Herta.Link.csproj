@@ -24,7 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Banshee\Viv.Echo\Viv.Echo.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Keke\Viv.Keke.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
     <!-- 长连接推送框架层：连接表 / 租约 / 踢人 / 发送端口 -->
     <ProjectReference Include="..\..\Banshee\Viv.Kinna\Viv.Kinna.csproj" />

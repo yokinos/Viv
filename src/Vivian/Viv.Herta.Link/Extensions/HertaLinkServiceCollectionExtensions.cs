@@ -6,7 +6,7 @@ using Viv.Herta.Link.Dispatch;
 using Viv.Herta.Link.Hubs;
 using Viv.Kinna.Extensions;
 using Viv.Kinna.Ports;
-using Viv.Echo.Proxies;
+using Viv.Keke.Proxies;
 
 namespace Viv.Herta.Link.Extensions
 {

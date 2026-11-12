@@ -7,7 +7,7 @@ using Viv.Aoi;
 using Viv.Clockwork.Options;
 using Viv.Contracts.Options;
 using Viv.Delusion;
-using Viv.Echo;
+using Viv.Keke;
 using Viv.Engine.Options;
 using Viv.Log;
 using Viv.Momo.Options;
@@ -89,8 +89,8 @@ namespace Viv.Engine
             services.Configure<TokenOptions>(configuration.GetSection("VivOptions:TokenOption"));
             services.Configure<TickOptions>(configuration.GetSection("VivOptions:TickOption"));
             services.Configure<TickerQOptions>(configuration.GetSection("VivOptions:TickOption:TickerQ"));
-            services.Configure<EchoOptions>(configuration.GetSection("VivOptions:EchoOption"));
-            services.Configure<GrpcOptions>(configuration.GetSection("VivOptions:EchoOption:GrpcOption"));
+            services.Configure<KekeOptions>(configuration.GetSection("VivOptions:KekeOption"));
+            services.Configure<GrpcOptions>(configuration.GetSection("VivOptions:KekeOption:GrpcOption"));
             services.Configure<CorsOptions>(configuration.GetSection("VivOptions:CorsOption"));
             services.Configure<S3Options>(configuration.GetSection("VivOptions:S3Option"));
 
@@ -123,7 +123,7 @@ namespace Viv.Engine
             }
 
             // VivInternalTokenOptions 由 EnvOption 派生，恒注册（EnvOption 缺失时给空对象）：
-            // Echo gRPC 拦截器构造注入它，未注册会直接导致 gRPC 端激活失败
+            // Keke gRPC 拦截器构造注入它，未注册会直接导致 gRPC 端激活失败
             RegisterOption(services, new VivInternalTokenOptions
             {
                 InternalToken = options.EnvOption?.InternalToken,
@@ -182,13 +182,13 @@ namespace Viv.Engine
                     RegisterOption(services, options.TickOption.TickerQ);
             }
 
-            // EchoOption
-            if (options.EchoOption != null)
+            // KekeOption
+            if (options.KekeOption != null)
             {
-                RegisterOption(services, options.EchoOption);
+                RegisterOption(services, options.KekeOption);
 
-                if (options.EchoOption.GrpcOption != null)
-                    RegisterOption(services, options.EchoOption.GrpcOption);
+                if (options.KekeOption.GrpcOption != null)
+                    RegisterOption(services, options.KekeOption.GrpcOption);
             }
 
             // CorsOption

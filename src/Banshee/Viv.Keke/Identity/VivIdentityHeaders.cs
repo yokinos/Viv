@@ -4,7 +4,7 @@ using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Contracts.Options;
 
-namespace Viv.Echo.Identity
+namespace Viv.Keke.Identity
 {
     /// <summary>
     /// x-viv-* 身份头的构造（客户端侧）。与 <see cref="VivIdentityValidator"/> 配对：

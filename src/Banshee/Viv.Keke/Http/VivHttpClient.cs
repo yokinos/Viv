@@ -5,7 +5,7 @@ using System.Text;
 using Viv.Delusion;
 using Viv.Delusion.Extension;
 
-namespace Viv.Echo.Http
+namespace Viv.Keke.Http
 {
     public class VivHttpClient : IVivHttpService
     {

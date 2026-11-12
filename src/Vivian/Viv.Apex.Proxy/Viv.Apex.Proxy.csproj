@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Banshee\Viv.Echo\Viv.Echo.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Keke\Viv.Keke.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Log\Viv.Log.csproj" />
   </ItemGroup>
 

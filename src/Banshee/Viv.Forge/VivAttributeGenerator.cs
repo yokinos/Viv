@@ -22,12 +22,12 @@ namespace Viv.Forge
         private static readonly string AttributeShortName = typeof(TAttribute).Name;
 
         /// <summary>
-        /// 目标特性全名（如 "Viv.Echo.Grpc.GrpcClientAttribute"）。
+        /// 目标特性全名（如 "Viv.Keke.Grpc.GrpcClientAttribute"）。
         /// </summary>
         private static readonly string AttributeFullName = typeof(TAttribute).FullName ?? AttributeShortName;
 
         /// <summary>
-        /// 目标特性所在命名空间（如 "Viv.Echo.Grpc"），防止同名特性跨命名空间误匹配。
+        /// 目标特性所在命名空间（如 "Viv.Keke.Grpc"），防止同名特性跨命名空间误匹配。
         /// </summary>
         private static readonly string AttributeNamespace = typeof(TAttribute).Namespace ?? "";
 

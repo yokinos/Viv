@@ -2,7 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Viv.Delusion.Magic;
 
-namespace Viv.Echo.Proxies
+namespace Viv.Keke.Proxies
 {
     /// <summary>
     /// 下游代理的注册入口：扫 <see cref="IVivRpcProxyModule"/>，逐模块绑定配置后注册。
