@@ -15,15 +15,24 @@ namespace Viv.Engine
     {
         private const string ServicesEnvPrefix = "services__";
 
-        public sealed record GatewayService(string Name, Uri Uri, string ShortName);
+        /// <summary>
+        /// 一个被引用服务的全部副本地址。<see cref="Uris"/> 至少一个，按 Aspire 的端点序号（...__http__0/__1）排序。
+        /// </summary>
+        public sealed record GatewayService(string Name, IReadOnlyList<Uri> Uris, string ShortName);
 
         /// <summary>
         /// 枚举 Aspire 注入的 services__* 环境变量。同一服务有多个端点（http/https）时优先 http。
         /// </summary>
+        /// <remarks>
+        /// 同一个服务的所有副本都要留下：Aspire 为每个副本注入 <c>services__{name}__http__{序号}</c>，
+        /// 旧实现拿服务名当字典键，后一个副本的地址直接盖掉前一个，最后只剩一个地址 ——
+        /// 网关 cluster 里也就只有一个目标，扩出来的副本收不到任何请求。
+        /// 所以外层按服务名收集，内层按端点序号收集。
+        /// </remarks>
         /// <param name="shortNames">服务名 → 短名；配了就用配置，没配才按服务名推断</param>
         public static List<GatewayService> Load(IReadOnlyDictionary<string, string>? shortNames = null)
         {
-            var found = new Dictionary<string, Uri>(StringComparer.OrdinalIgnoreCase);
+            var found = new Dictionary<string, SortedDictionary<int, Uri>>(StringComparer.OrdinalIgnoreCase);
             foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
             {
                 var key = entry.Key?.ToString();
@@ -42,21 +51,30 @@ namespace Viv.Engine
                     continue;
                 }
 
-                var name = SplitServiceName(remainder);
-                if (string.IsNullOrEmpty(name) || !Uri.TryCreate(value, UriKind.Absolute, out var uri))
+                if (!TryParseEndpoint(remainder, out var name, out var index) ||
+                    !Uri.TryCreate(value, UriKind.Absolute, out var uri))
                 {
                     continue;
                 }
 
-                if (!found.TryGetValue(name, out var existing) ||
-                    (uri.Scheme == Uri.UriSchemeHttp && existing.Scheme != Uri.UriSchemeHttp))
+                if (!found.TryGetValue(name, out var endpoints))
                 {
-                    found[name] = uri;
+                    endpoints = new SortedDictionary<int, Uri>();
+                    found[name] = endpoints;
+                }
+
+                // 同一序号上的 http/https 是同一个副本的两个端点，只能留一个：留 http
+                if (!endpoints.TryGetValue(index, out var existing) || IsPreferred(uri, existing))
+                {
+                    endpoints[index] = uri;
                 }
             }
 
             var services = found
-                .Select(kv => new GatewayService(kv.Key, kv.Value, ResolveShortName(kv.Key, found.Keys, shortNames)))
+                .Select(kv => new GatewayService(
+                    kv.Key,
+                    kv.Value.Values.ToList(),
+                    ResolveShortName(kv.Key, found.Keys, shortNames)))
                 .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
@@ -149,17 +167,25 @@ namespace Viv.Engine
                 StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>同一副本上的两个端点：http 优先于其它协议（gRPC 已在上游跳过）</summary>
+        private static bool IsPreferred(Uri candidate, Uri existing)
+            => candidate.Scheme == Uri.UriSchemeHttp && existing.Scheme != Uri.UriSchemeHttp;
+
         /// <summary>
-        /// 去掉 services__ 之后末尾的端点描述段，还原服务名：
-        ///   viv-apex-api__http__0         -> viv-apex-api
-        ///   viv-apex-api__0               -> viv-apex-api
-        ///   viv-apex-api__default__0      -> viv-apex-api
-        ///   viv-apex-api__0__endpoints__0 -> viv-apex-api
+        /// 拆出服务名与端点序号（序号就是同一服务多个副本的区分位）：
+        ///   viv-apex-api__http__0         -> (viv-apex-api, 0)
+        ///   viv-apex-api__http__1         -> (viv-apex-api, 1)
+        ///   viv-apex-api__0               -> (viv-apex-api, 0)
+        ///   viv-apex-api__default__0      -> (viv-apex-api, 0)
+        ///   viv-apex-api__0__endpoints__0 -> (viv-apex-api, 0)
         /// grpc 段不在这里剥：剥掉会和 REST 合成同一个名字，http 地址就被 gRPC 端口盖掉。
         /// 那种 key 在 <see cref="Load"/> 里直接跳过。
         /// </summary>
-        private static string? SplitServiceName(string remainder)
+        private static bool TryParseEndpoint(string remainder, out string name, out int index)
         {
+            index = 0;
+            var indexFound = false;
+
             for (var i = 0; i < 3; i++)
             {
                 var idx = remainder.LastIndexOf("__", StringComparison.Ordinal);
@@ -175,6 +201,13 @@ namespace Viv.Engine
                     segment.Equals("endpoints", StringComparison.OrdinalIgnoreCase) ||
                     segment.All(char.IsDigit))
                 {
+                    // 从右往左剥，第一个纯数字段就是端点序号
+                    if (!indexFound && segment.All(char.IsDigit) && int.TryParse(segment, out var parsed))
+                    {
+                        index = parsed;
+                        indexFound = true;
+                    }
+
                     remainder = remainder.Substring(0, idx);
                 }
                 else
@@ -183,7 +216,8 @@ namespace Viv.Engine
                 }
             }
 
-            return remainder;
+            name = remainder;
+            return name.Length > 0;
         }
     }
 }

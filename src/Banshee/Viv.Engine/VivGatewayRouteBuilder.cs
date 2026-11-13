@@ -44,13 +44,16 @@ namespace Viv.Engine
                 var shortName = service.ShortName;
                 var clusterId = $"cluster-{shortName}";
 
+                var destinations = new Dictionary<string, DestinationConfig>(service.Uris.Count);
+                for (var i = 0; i < service.Uris.Count; i++)
+                {
+                    destinations[$"d{i + 1}"] = new DestinationConfig { Address = service.Uris[i].ToString() };
+                }
+
                 clusters.Add(new ClusterConfig
                 {
                     ClusterId = clusterId,
-                    Destinations = new Dictionary<string, DestinationConfig>
-                    {
-                        ["d1"] = new DestinationConfig { Address = service.Uri.ToString() }
-                    },
+                    Destinations = destinations,
                     // 流式接口（SSE）与长回答：默认活动超时 100 秒，空闲超了就直接掐断连接；
                     // 这里统一放宽（可由 VivGateway:StreamActivityTimeoutSeconds 调整），并显式关闭响应缓冲，
                     // 保证逐帧转发而不是攒完再发。

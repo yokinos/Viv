@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Linq;
 using Viv.Engine;
 
 namespace Viv.Engine.Tests;
@@ -28,8 +29,9 @@ public class AspireServiceDiscoveryTests
 
                 var apex = Assert.Single(found);
                 Assert.Equal("viv-apex-api", apex.Name);
-                Assert.Equal("http", apex.Uri.Scheme);
-                Assert.Equal(5088, apex.Uri.Port);
+                var uri = Assert.Single(apex.Uris);
+                Assert.Equal("http", uri.Scheme);
+                Assert.Equal(5088, uri.Port);
                 Assert.Equal("apex", apex.ShortName);
             }
             finally
@@ -55,8 +57,61 @@ public class AspireServiceDiscoveryTests
                 var found = AspireServiceDiscovery.Load();
 
                 var apex = Assert.Single(found);
-                Assert.Equal("https", apex.Uri.Scheme);
-                Assert.Equal(7443, apex.Uri.Port);
+                var uri = Assert.Single(apex.Uris);
+                Assert.Equal("https", uri.Scheme);
+                Assert.Equal(7443, uri.Port);
+            }
+            finally
+            {
+                ClearServiceEnv();
+                Restore(snapshot);
+            }
+        }
+    }
+
+    [Fact]
+    public void Load_同一服务的多个副本都保留_并按序号排序()
+    {
+        lock (Gate)
+        {
+            var snapshot = SnapshotServiceEnv();
+            try
+            {
+                ClearServiceEnv();
+                // 写反顺序：结果不能依赖环境变量的枚举顺序
+                Environment.SetEnvironmentVariable("services__viv-apex-api__http__1", "http://127.0.0.1:5089");
+                Environment.SetEnvironmentVariable("services__viv-apex-api__http__0", "http://127.0.0.1:5088");
+
+                var found = AspireServiceDiscovery.Load();
+
+                var apex = Assert.Single(found);
+                Assert.Equal(new[] { 5088, 5089 }, apex.Uris.Select(u => u.Port));
+            }
+            finally
+            {
+                ClearServiceEnv();
+                Restore(snapshot);
+            }
+        }
+    }
+
+    [Fact]
+    public void Load_同一序号上的http与https只留一个()
+    {
+        lock (Gate)
+        {
+            var snapshot = SnapshotServiceEnv();
+            try
+            {
+                ClearServiceEnv();
+                Environment.SetEnvironmentVariable("services__viv-apex-api__https__0", "https://127.0.0.1:7443");
+                Environment.SetEnvironmentVariable("services__viv-apex-api__http__0", "http://127.0.0.1:5088");
+
+                var found = AspireServiceDiscovery.Load();
+
+                // 同一副本的两个端点混进 cluster 会有一半请求打到 TLS 端口上
+                var uri = Assert.Single(Assert.Single(found).Uris);
+                Assert.Equal(5088, uri.Port);
             }
             finally
             {

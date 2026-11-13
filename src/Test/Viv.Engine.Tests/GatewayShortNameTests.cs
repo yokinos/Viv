@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Viv.Engine;
 
@@ -63,8 +63,8 @@ public class GatewayShortNameTests
     {
         var services = new List<AspireServiceDiscovery.GatewayService>
         {
-            new("viv-herta-api", new Uri("http://localhost:1"), "herta"),
-            new("viv-herta-link", new Uri("http://localhost:2"), "herta")
+            new("viv-herta-api", [new Uri("http://localhost:1")], "herta"),
+            new("viv-herta-link", [new Uri("http://localhost:2")], "herta")
         };
 
         var ex = Assert.Throws<InvalidOperationException>(
@@ -79,8 +79,8 @@ public class GatewayShortNameTests
     {
         var services = new List<AspireServiceDiscovery.GatewayService>
         {
-            new("viv-herta-api", new Uri("http://localhost:1"), "herta"),
-            new("viv-herta-link", new Uri("http://localhost:2"), "hertalink")
+            new("viv-herta-api", [new Uri("http://localhost:1")], "herta"),
+            new("viv-herta-link", [new Uri("http://localhost:2")], "hertalink")
         };
 
         AspireServiceDiscovery.EnsureUniqueShortNames(services);

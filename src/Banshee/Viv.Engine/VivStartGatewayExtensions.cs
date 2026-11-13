@@ -14,6 +14,7 @@ using Serilog;
 using System;
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -172,6 +173,8 @@ namespace Viv.Engine
             var app = builder.Build();
             VivLocator.Initialize(app.Services);
 
+            LogClusterDestinations(app);
+
             // Aspire 入口 / 前置 LB 通常不在 loopback；dev 信任转发头，非 dev 只认 TrustedProxies。
             app.UseForwardedHeaders(VivForwardedHeaders.Create(VivEngine.VivOptions?.EnvOption, app.Environment.IsDevelopment()));
 
@@ -271,6 +274,41 @@ namespace Viv.Engine
             configure?.Invoke(app);
 
             app.Run();
+        }
+
+        /// <summary>
+        /// 启动自检：每个集群挂了几个目标。
+        ///
+        /// 「扩容后请求全落在一个副本上」这件事以前在日志里完全看不出来 —— 另一个副本只是安静地空转。
+        /// 现在起第二个副本后，这行里的数字应该跟着变（apex=2）。永远停在 1 就说明服务发现又把
+        /// 多端点按服务名合并掉了（<see cref="AspireServiceDiscovery.Load"/> 的老写法）。
+        /// 只打 Info 不打 Warning：单副本部署时每个集群都是 1，警告会每天刷一遍把人练麻木。
+        /// </summary>
+        private static void LogClusterDestinations(WebApplication app)
+        {
+            try
+            {
+                // 日志是可选依赖：没配 LogOption 的宿主根本没有 ILoggerContract
+                if (app.Services.GetService(typeof(Viv.Log.ILoggerContract)) is not Viv.Log.ILoggerContract logger)
+                {
+                    return;
+                }
+
+                var clusters = app.Services.GetRequiredService<IProxyConfigProvider>().GetConfig().Clusters.ToList();
+                if (clusters.Count == 0)
+                {
+                    logger.Warning("网关未发现任何下游服务（services__* 为空），所有路由都不会命中");
+                    return;
+                }
+
+                var summary = string.Join("；", clusters.Select(c => $"{c.ClusterId}={c.Destinations?.Count ?? 0}"));
+                logger.Info($"网关已加载 {clusters.Count} 个集群，目标数：{summary}");
+            }
+            catch (Exception ex)
+            {
+                // 自检失败不能拦住网关启动
+                System.Diagnostics.Debug.WriteLine($"网关目标数自检失败: {ex.Message}");
+            }
         }
 
         /// <summary>

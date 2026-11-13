@@ -79,13 +79,33 @@ public class GatewayRouteBuilderTests
         });
     }
 
-    private static void WithServiceEnv(Action action)
+    [Fact]
+    public void 服务有多个副本时每个副本生成一个目标()
+    {
+        WithServiceEnv(() =>
+            {
+                var (_, clusters) = new VivGatewayRouteBuilder().Build();
+
+                var cluster = Assert.Single(clusters);
+                Assert.Equal(2, cluster.Destinations!.Count);
+                Assert.Equal("http://127.0.0.1:5088/", cluster.Destinations["d1"].Address);
+                Assert.Equal("http://127.0.0.1:5089/", cluster.Destinations["d2"].Address);
+            },
+            ("services__viv-apex-api__http__1", "http://127.0.0.1:5089"));
+    }
+
+    private static void WithServiceEnv(Action action, params (string Key, string Value)[] extra)
     {
         var snapshot = SnapshotServiceEnv();
         try
         {
             ClearServiceEnv();
             Environment.SetEnvironmentVariable("services__viv-apex-api__http__0", "http://127.0.0.1:5088");
+            foreach (var (key, value) in extra)
+            {
+                Environment.SetEnvironmentVariable(key, value);
+            }
+
             action();
         }
         finally
