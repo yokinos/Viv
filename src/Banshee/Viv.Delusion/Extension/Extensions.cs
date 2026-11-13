@@ -76,19 +76,80 @@ namespace Viv.Delusion.Extension
             if (self == DateTime.MinValue || self == DateTime.MaxValue)
                 return string.Empty;
 
-            var formatText = formt switch
-            {
-                DateFormat.ShortDate => "yyyyMMdd",
-                DateFormat.Date => $"yyyy{symbol}MM{symbol}dd",
-                DateFormat.LongDate => $"yyyy{symbol}MM{symbol}dd HH:mm:ss",
-                DateFormat.CompactLongDate => "yyyyMMddHHmmss",
-                DateFormat.Time => "HHmmss",
-                DateFormat.StandardTime => "HH:mm:ss",
-                _ => string.Empty
-            };
-
-            return self.ToString(formatText);
+            return self.ToString(GetFormatText(formt, symbol));
         }
+
+        /// <summary>
+        /// [扩展方法] 将 DateTimeOffset 转换为指定格式的字符串，处理极值场景
+        /// </summary>
+        /// <param name="self">待转换的 DateTimeOffset 对象</param>
+        /// <param name="formt">日期格式枚举（默认：带时分秒的完整日期）</param>
+        /// <param name="symbol">日期分隔符（默认：-）</param>
+        /// <returns>
+        /// 格式化后的字符串：
+        /// 1. 若为 DateTimeOffset.MinValue/MaxValue → 空字符串
+        /// 2. 其他情况 → 按指定格式和分隔符生成字符串
+        /// </returns>
+        /// <remarks>
+        /// 输出的是值自身偏移下的墙上时间，不做时区转换：偏移为 0（全仓写入的都是 UTC）时
+        /// 得到 UTC 时间。要转成服务器本地时间用 <see cref="ExtToLocalString"/>。
+        /// </remarks>
+        /// <example>
+        /// 示例1：new DateTimeOffset(2026,2,11,8,30,0,TimeSpan.Zero).ExtToString() → "2026-02-11 08:30:00"
+        /// 示例2：new DateTimeOffset(2026,2,11,8,30,0,TimeSpan.Zero).ExtToString(DateFormat.Date, "/") → "2026/02/11"
+        /// </example>
+        [return: NotNull]
+        public static string ExtToString(this DateTimeOffset self, DateFormat formt = DateFormat.LongDate, string symbol = "-")
+        {
+            if (self == DateTimeOffset.MinValue || self == DateTimeOffset.MaxValue)
+                return string.Empty;
+
+            return self.ToString(GetFormatText(formt, symbol));
+        }
+
+        /// <summary>
+        /// [扩展方法] 将 DateTimeOffset 先转成运行环境（服务器）时区，再转换为指定格式的字符串
+        /// </summary>
+        /// <param name="self">待转换的 DateTimeOffset 对象</param>
+        /// <param name="formt">日期格式枚举（默认：带时分秒的完整日期）</param>
+        /// <param name="symbol">日期分隔符（默认：-）</param>
+        /// <returns>
+        /// 格式化后的字符串：
+        /// 1. 若为 DateTimeOffset.MinValue/MaxValue → 空字符串
+        /// 2. 其他情况 → 转本地后按指定格式和分隔符生成字符串
+        /// </returns>
+        /// <remarks>
+        /// 时区取 <see cref="TimeZoneInfo.Local"/>，跟着部署环境走 —— 容器里通常是 UTC，
+        /// 本机开发是东八区，同一份数据两端输出不同。要按“用户所在时区”展示，不要用这个方法，
+        /// 用 <c>ToOffset(TimeZoneInfo.ConvertTime(self, tz).Offset)</c> 显式指定时区后再调 <see cref="ExtToString"/>。
+        /// </remarks>
+        /// <example>
+        /// 示例：new DateTimeOffset(2026,2,11,0,30,0,TimeSpan.Zero).ExtToLocalString() → 东八区下 "2026-02-11 08:30:00"
+        /// </example>
+        [return: NotNull]
+        public static string ExtToLocalString(this DateTimeOffset self, DateFormat formt = DateFormat.LongDate, string symbol = "-")
+        {
+            // 极值必须先判：DateTimeOffset.MaxValue.ToLocalTime() 落到东八区会溢出并被钳到 MaxValue，
+            // 偏移已经变了，转完再判相等就判不出来了
+            if (self == DateTimeOffset.MinValue || self == DateTimeOffset.MaxValue)
+                return string.Empty;
+
+            return self.ToLocalTime().ExtToString(formt, symbol);
+        }
+
+        /// <summary>
+        /// 把 <see cref="DateFormat"/> 翻成 <c>ToString</c> 用的格式串，DateTime 与 DateTimeOffset 共用。
+        /// </summary>
+        private static string GetFormatText(DateFormat formt, string symbol) => formt switch
+        {
+            DateFormat.ShortDate => "yyyyMMdd",
+            DateFormat.Date => $"yyyy{symbol}MM{symbol}dd",
+            DateFormat.LongDate => $"yyyy{symbol}MM{symbol}dd HH:mm:ss",
+            DateFormat.CompactLongDate => "yyyyMMddHHmmss",
+            DateFormat.Time => "HHmmss",
+            DateFormat.StandardTime => "HH:mm:ss",
+            _ => string.Empty
+        };
 
         /// <summary>
         /// [扩展方法] 深度拷贝对象

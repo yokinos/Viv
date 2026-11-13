@@ -109,6 +109,59 @@ public class ExtensionsTests
     }
 
     [Fact]
+    public void DateTimeOffset格式化()
+    {
+        var dto = new DateTimeOffset(2026, 2, 11, 8, 30, 0, TimeSpan.Zero);
+        Assert.Equal("2026-02-11 08:30:00", dto.ExtToString());
+        Assert.Equal("20260211", dto.ExtToString(DateFormat.ShortDate));
+        Assert.Equal("2026/02/11", dto.ExtToString(DateFormat.Date, "/"));
+        Assert.Equal("20260211083000", dto.ExtToString(DateFormat.CompactLongDate));
+        Assert.Equal("083000", dto.ExtToString(DateFormat.Time));
+        Assert.Equal("08:30:00", dto.ExtToString(DateFormat.StandardTime));
+    }
+
+    [Fact]
+    public void DateTimeOffset极值返回空()
+    {
+        Assert.Equal(string.Empty, DateTimeOffset.MinValue.ExtToString());
+        Assert.Equal(string.Empty, DateTimeOffset.MaxValue.ExtToString());
+    }
+
+    /// <summary>输出的是值自身偏移下的墙上时间，不做时区转换 —— 同一个瞬时点换偏移就换显示。</summary>
+    [Fact]
+    public void DateTimeOffset按自身偏移输出()
+    {
+        var utc = new DateTimeOffset(2026, 2, 11, 0, 30, 0, TimeSpan.Zero);
+        var beijing = utc.ToOffset(TimeSpan.FromHours(8));
+
+        Assert.Equal("2026-02-11 00:30:00", utc.ExtToString());
+        Assert.Equal("2026-02-11 08:30:00", beijing.ExtToString());
+    }
+
+    /// <summary>转本地版本按运行环境时区换算，格式化结果与 ToLocalTime() 一致。</summary>
+    [Fact]
+    public void DateTimeOffset转本地再格式化()
+    {
+        var utc = new DateTimeOffset(2026, 2, 11, 0, 30, 0, TimeSpan.Zero);
+
+        Assert.Equal(
+            utc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+            utc.ExtToLocalString());
+
+        // 带偏移的入参也先归一到本地，不受原偏移影响
+        var beijing = utc.ToOffset(TimeSpan.FromHours(8));
+        Assert.Equal(utc.ExtToLocalString(), beijing.ExtToLocalString());
+    }
+
+    /// <summary>极值必须在转时区之前拦掉：MaxValue 转东八区会溢出并被钳回 MaxValue，事后判不出来。</summary>
+    [Fact]
+    public void DateTimeOffset转本地极值返回空()
+    {
+        Assert.Equal(string.Empty, DateTimeOffset.MinValue.ExtToLocalString());
+        Assert.Equal(string.Empty, DateTimeOffset.MaxValue.ExtToLocalString());
+    }
+
+    [Fact]
     public void ToUnixTime()
     {
         Assert.Equal(0L, new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).ToUnixTime());
