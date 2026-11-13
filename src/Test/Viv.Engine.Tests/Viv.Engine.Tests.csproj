@@ -12,6 +12,8 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Testcontainers" />
     <PackageReference Include="Testcontainers.PostgreSql" />
+    <!-- 取号语句两种方言各一个分支，SQL Server 的 OUTPUT INSERTED 也得真跑一次 -->
+    <PackageReference Include="Testcontainers.MsSql" />
   </ItemGroup>
 
   <!-- 工作单元拦截器测试跑真链路（Autofac 接口代理 + Castle 异步拦截），直接用到这三个包，

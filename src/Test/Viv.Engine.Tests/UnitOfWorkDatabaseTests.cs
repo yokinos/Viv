@@ -1,4 +1,5 @@
-﻿using Testcontainers.PostgreSql;
+﻿using Testcontainers.MsSql;
+using Testcontainers.PostgreSql;
 using Viv.Engine.UnitOfWork;
 using Viv.Fakes;
 using Viv.Momo.Core;
@@ -24,12 +25,25 @@ internal sealed class DockerFactAttribute : FactAttribute
     }
 }
 
-public sealed class EnginePostgresFixture : IAsyncLifetime
+/// <summary>
+/// 真库夹具的最小契约。序号那组测试要覆盖两种方言（OUTPUT / RETURNING），
+/// 靠它把「用哪个库」从测试方法里摘出去。
+/// </summary>
+public interface IEngineDatabaseFixture
+{
+    string ConnectionString { get; }
+
+    DatabaseSourceType Source { get; }
+}
+
+public sealed class EnginePostgresFixture : IAsyncLifetime, IEngineDatabaseFixture
 {
     public PostgreSqlContainer? Container { get; private set; }
 
     public string ConnectionString => Container?.GetConnectionString()
         ?? throw new InvalidOperationException("PostgreSQL 容器未启动");
+
+    public DatabaseSourceType Source => DatabaseSourceType.PostgreSQL;
 
     public async Task InitializeAsync()
     {
@@ -53,6 +67,36 @@ public sealed class EnginePostgresFixture : IAsyncLifetime
 
 [CollectionDefinition("EnginePostgres")]
 public sealed class EnginePostgresCollection : ICollectionFixture<EnginePostgresFixture>;
+
+public sealed class EngineSqlServerFixture : IAsyncLifetime, IEngineDatabaseFixture
+{
+    public MsSqlContainer? Container { get; private set; }
+
+    public string ConnectionString => Container?.GetConnectionString()
+        ?? throw new InvalidOperationException("SQL Server 容器未启动");
+
+    public DatabaseSourceType Source => DatabaseSourceType.SqlServer;
+
+    public async Task InitializeAsync()
+    {
+        if (!Viv.Fakes.ContainerTests.IsEnabled) return;
+
+        Container = new MsSqlBuilder()
+            .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
+            .WithPassword("Viv_Sql_77!")
+            .Build();
+        await Container.StartAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (Container is not null)
+            await Container.DisposeAsync();
+    }
+}
+
+[CollectionDefinition("EngineSqlServer")]
+public sealed class EngineSqlServerCollection : ICollectionFixture<EngineSqlServerFixture>;
 
 /// <summary>UoW 真库探测行。不以 Entity 结尾，避免和 Momo 单测扫描撞车。</summary>
 public class UowProbeRow : IEntity
