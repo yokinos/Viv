@@ -47,6 +47,7 @@
     <PackageVersion Include="WolverineFx" Version="6.42.0" />
     <PackageVersion Include="WolverineFx.EntityFrameworkCore" Version="6.42.0" />
     <PackageVersion Include="WolverineFx.RabbitMQ" Version="6.42.0" />
+    <PackageVersion Include="RabbitMQ.Client" Version="7.2.2" />
     <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.42.0" />
     <!-- ── MQTT（设备接入，EMQX）。两个包必须同一个 MQTTnet 大版本 ── -->
     <PackageVersion Include="MQTTnet" Version="4.1.4.563" />

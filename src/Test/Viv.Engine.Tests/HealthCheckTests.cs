@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Viv.Engine.HealthChecks;
 using Viv.Momo.Enums;
 using Viv.Momo.Options;
+using Viv.Nana.Options;
 
 namespace Viv.Engine.Tests;
 
@@ -48,6 +49,27 @@ public class HealthCheckTests
         var result = await check.CheckHealthAsync(new HealthCheckContext());
 
         Assert.Equal(HealthStatus.Unhealthy, result.Status);
+        Assert.NotNull(result.Exception);
+    }
+
+    [Fact]
+    public async Task RabbitMQ探不动时返回Unhealthy而不是抛异常()
+    {
+        // 127.0.0.1:1 上没有 broker，连接会被立刻拒绝 —— 不依赖网络，也不等 3 秒超时
+        var options = new NanaOptions
+        {
+            Host = "127.0.0.1",
+            Port = 1,
+            UserName = "guest",
+            Password = "guest",
+            VirtualHost = "/"
+        };
+        var check = new RabbitMqHealthCheck(options);
+
+        var result = await check.CheckHealthAsync(new HealthCheckContext());
+
+        Assert.Equal(HealthStatus.Unhealthy, result.Status);
+        Assert.Equal("RabbitMQ 不可达", result.Description);
         Assert.NotNull(result.Exception);
     }
 }

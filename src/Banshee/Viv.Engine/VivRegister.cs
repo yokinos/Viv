@@ -263,6 +263,11 @@ namespace Viv.Engine
             {
                 builder.AddCheck<MqttHealthCheck>("mqtt", tags: ["ready"]);
             }
+
+            if (options.NanaOption != null)
+            {
+                builder.AddCheck("rabbitmq", new RabbitMqHealthCheck(options.NanaOption), tags: ["ready"]);
+            }
         }
 
         #endregion
