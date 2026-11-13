@@ -4,6 +4,7 @@ using Microsoft.Extensions.Time.Testing;
 using Viv.Contracts;
 using Viv.Contracts.Models;
 using Viv.Fakes;
+using Viv.Momo;
 using Viv.Nana;
 using Viv.Outbox.Core;
 
@@ -12,6 +13,9 @@ namespace Viv.Outbox.Tests;
 /// <summary>
 /// 写路径：<see cref="OutboxStore.EnqueueAsync"/> 只落库、不发消息。
 /// 「不发消息」在这里是**结构上**保证的（这个类根本拿不到发布器），测试用反射把它钉死。
+///
+/// 入队要求「已经在事务里」（<see cref="IMomoDbContext.IsInTransaction"/>）—— 这是发件箱唯一
+/// 价值的前提，所以正常路径的替身必须把这一项配成 true，另有一条用例专门钉住「不在事务里就抛」。
 /// </summary>
 public class OutboxStoreTests
 {
@@ -21,7 +25,27 @@ public class OutboxStoreTests
         var repo = new StubOutboxRepository();
         var context = new TestContext();
         var logger = new RecordingLogger();
-        return (new OutboxStore(repo, context, logger, time), repo, context, logger);
+        return (new OutboxStore(repo, InTransaction(), context, logger, time), repo, context, logger);
+    }
+
+    /// <summary>「正处于业务事务中」的库上下文替身。<c>IMomoDbContext</c> 有五十多个成员，用代理而不是手写。</summary>
+    private static IMomoDbContext InTransaction()
+        => TestProxy.Create<IMomoDbContext>(proxy => proxy.Returns[typeof(bool)] = true);
+
+    [Fact]
+    public async Task 不在事务中入队_直接抛且不落行()
+    {
+        var repo = new StubOutboxRepository();
+        // 默认回值就是 false —— 没开事务的那个现场
+        var db = TestProxy.Create<IMomoDbContext>();
+        var store = new OutboxStore(repo, db, new TestContext(), new RecordingLogger());
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => store.EnqueueAsync(new OutboxTestEvent { Payload = "p" }));
+
+        // 断言要能把人指到修法上，只说「失败」等于没说话
+        Assert.Contains("事务", ex.Message);
+        Assert.Empty(repo.Inserted);
     }
 
     [Fact]

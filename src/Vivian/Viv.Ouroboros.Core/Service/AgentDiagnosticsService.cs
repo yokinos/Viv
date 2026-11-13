@@ -7,6 +7,7 @@ using Viv.Engine;
 using Viv.Entity.Database.Ouroboros;
 using Viv.Entity.Enums;
 using Viv.EventContracts.Ouroboros;
+using Viv.Momo;
 using Viv.Ouroboros.Core.Entity.Dto.Agent;
 using Viv.Ouroboros.Core.Entity.Vo.Agent;
 using Viv.Ouroboros.Core.IService;
@@ -25,6 +26,7 @@ namespace Viv.Ouroboros.Core.Service
         private readonly IAgentStore _store;
         private readonly IVivContext _context;
         private readonly IVivOutbox _outbox;
+        private readonly IMomoDbContext _db;
 
         /// <summary>
         /// 构造函数
@@ -35,8 +37,9 @@ namespace Viv.Ouroboros.Core.Service
         /// <param name="store">会话与消息库访问</param>
         /// <param name="context">请求上下文（取主体做越权校验）</param>
         /// <param name="outbox">发件箱（入队时打上下文快照，投递交给 Worker）</param>
+        /// <param name="db">数据库上下文（入队必须在事务里，用它开事务）</param>
         public AgentDiagnosticsService(IModelProfileProvider profiles, IAgentFactory agents, IConfigChangeNotifier notifier,
-            IAgentStore store, IVivContext context, IVivOutbox outbox)
+            IAgentStore store, IVivContext context, IVivOutbox outbox, IMomoDbContext db)
         {
             _profiles = profiles;
             _agents = agents;
@@ -44,6 +47,7 @@ namespace Viv.Ouroboros.Core.Service
             _store = store;
             _context = context;
             _outbox = outbox;
+            _db = db;
         }
 
         /// <summary>
@@ -117,50 +121,97 @@ namespace Viv.Ouroboros.Core.Service
             if (conversation.SubjectId != _context.SubjectId) return VivApiResult.Failed("无权访问该会话");
             if (conversation.Status != EmConversationStatus.Active) return VivApiResult.Failed("会话已结束");
 
-            long userMessageId;
-            string text;
-
             if (request.UserMessageId is { } existingId)
             {
-                // 重投模式：认领已落库的那条用户消息，投出的事件内容与首次投递逐字一致
+                // 重投模式：认领已落库的那条用户消息，只重投事件，内容与首次投递逐字一致
                 var existing = (await _store.ListMessagesAsync(conversation.Id)).FirstOrDefault(x => x.Id == existingId);
                 if (existing is null) return VivApiResult.Failed($"用户消息不存在：{existingId}");
 
-                userMessageId = existing.Id;
-                text = existing.Content ?? string.Empty;
+                var replayError = await ExecuteTurnInTransactionAsync(
+                    _ => Task.FromResult<OuroborosTurnEvent?>(new OuroborosTurnEvent
+                    {
+                        ConversationKey = request.ConversationKey,
+                        UserMessageId = existing.Id,
+                        Text = existing.Content ?? string.Empty
+                    }),
+                    cancellationToken);
+
+                return replayError is null
+                    ? VivApiResult.Success(new QueueTurnOutput { Ok = true, UserMessageId = existing.Id })
+                    : VivApiResult.Failed(replayError);
             }
-            else
+
+            if (string.IsNullOrWhiteSpace(request.Text)) return VivApiResult.Failed("text 不能为空");
+
+            // 取号在事务外：同一会话的两个请求会算出同一个 Seq（OtMessage 上没有唯一约束兜底），
+            // 那是取号自身的竞态，和「消息 + 事件」的原子性无关，别把两件事混进一个补丁。
+            var text = request.Text;
+
+            var userMessage = new OtMessage
             {
-                if (string.IsNullOrWhiteSpace(request.Text)) return VivApiResult.Failed("text 不能为空");
+                ConversationId = conversation.Id,
+                Seq = await _store.NextSeqAsync(conversation.Id),
+                Role = EmMessageRole.User,
+                Content = text,
+                ContentType = EmMessageContentType.Text,
+                AgentKey = conversation.MainAgentKey
+            };
 
-                var userMessage = new OtMessage
-                {
-                    ConversationId = conversation.Id,
-                    Seq = await _store.NextSeqAsync(conversation.Id),
-                    Role = EmMessageRole.User,
-                    Content = request.Text,
-                    ContentType = EmMessageContentType.Text,
-                    AgentKey = conversation.MainAgentKey
-                };
-
+            var error = await ExecuteTurnInTransactionAsync(async _ =>
+            {
                 // 先落库再投递：投出去的消息必须已经能在库里被 Worker 读到，否则消费端定位不到这一轮
-                if (!await _store.InsertMessageAsync(userMessage)) return VivApiResult.Failed("写入用户消息失败");
+                if (!await _store.InsertMessageAsync(userMessage)) return null;
 
-                userMessageId = userMessage.Id;
-                text = request.Text;
-            }
-
-            var enqueued = await _outbox.EnqueueAsync(new OuroborosTurnEvent
-            {
-                ConversationKey = request.ConversationKey,
-                UserMessageId = userMessageId,
-                Text = text
+                return new OuroborosTurnEvent
+                {
+                    ConversationKey = request.ConversationKey,
+                    UserMessageId = userMessage.Id,
+                    Text = text
+                };
             }, cancellationToken);
 
-            if (!enqueued) return VivApiResult.Failed("写入发件箱失败");
-
-            return VivApiResult.Success(new QueueTurnOutput { Ok = true, UserMessageId = userMessageId });
+            return error is null
+                ? VivApiResult.Success(new QueueTurnOutput { Ok = true, UserMessageId = userMessage.Id })
+                : VivApiResult.Failed(error);
         }
+
+        /// <summary>
+        /// 在**同一个本地事务**里做「该做的写 + 写发件箱」。返回 null 表示成功，否则为错误文案。
+        ///
+        /// 与 <see cref="AgentChatService.AcceptTurnAsync"/> 同一套取舍：委托式事务里没法
+        /// 「回滚 + 返回」，用哨兵异常跳出、外面翻译成返回值。不做这一步的话，入队失败时
+        /// 业务行已经提交、事件永远不会投递，而接口还告诉调用方成功。
+        ///
+        /// 事务由 <see cref="IMomoDbContext"/> 开，而它和 <see cref="IVivOutbox"/> 都是 Scoped、
+        /// 同一作用域同一实例 —— 这正是发件箱入队能并进业务事务的前提，也是
+        /// <c>OutboxStore.EnqueueAsync</c> 那句断言在验的东西。
+        /// </summary>
+        /// <param name="writeAndBuildEvent">事务内的写动作，返回要投的事件；返回 null 表示写失败</param>
+        private async Task<string?> ExecuteTurnInTransactionAsync(
+            Func<CancellationToken, Task<OuroborosTurnEvent?>> writeAndBuildEvent,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await _db.ExecuteInTransactionAsync(async ct =>
+                {
+                    var evt = await writeAndBuildEvent(ct);
+                    if (evt is null) throw new TurnWriteFailedException("写入用户消息失败");
+
+                    // 入队失败要整笔回滚，而委托里没法「回滚 + 返回」——用哨兵异常跳出
+                    if (!await _outbox.EnqueueAsync(evt, ct)) throw new TurnWriteFailedException("写发件箱失败");
+                }, cancellationToken);
+
+                return null;
+            }
+            catch (TurnWriteFailedException ex)
+            {
+                return ex.Message;
+            }
+        }
+
+        /// <summary>事务内的写失败：用于从委托事务里跳出并回滚</summary>
+        private sealed class TurnWriteFailedException(string message) : Exception(message);
 
         /// <summary>
         /// 清缓存：改完库里的档位、Agent 定义或工具绑定时调用，不必等 TTL。

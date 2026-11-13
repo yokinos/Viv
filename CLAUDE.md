@@ -89,6 +89,7 @@ Messaging — **两条平行的线**：① 跨进程 `NanaEvent` + `IVivEventPub
 
 **发件箱（事务性消息投递）+ Inbox（消费端幂等）** — `IVivOutbox` / `OutboxStore`（Scoped，入队走 `ExecuteSqlAsync` 并入业务事务）+ `OutboxDispatcher`/`OutboxWorker`（后台投递，原子认领）+ 手写 SQL（**一次都不经过 EF**，表 `VivOutboxMessage`）。
 解决「写库 + 发消息」不原子：**写和待发消息进同一个本地事务**，投递交给后台。
+**入队必须在事务里，这是运行期硬断言**：`OutboxStore.EnqueueAsync` 第一件事是查 `IMomoDbContext.IsInTransaction`，不在事务里直接抛 `InvalidOperationException`，不再「照样返回 true」。理由：发件箱唯一的价值是「业务写与入队同时成立」，而这个保证完全由调用方开的事务提供；漏包事务的结果是「消息已落库、事件永不投递」，返回值看不出区别，只能等对账。断言只**验证不代劳** —— `OutboxStore` 连业务写在哪都不知道。需要不入事务地投递时别绕过它，改用 `IVivEventPublisher` / `IVivLocalEventPublisher`。
 Inbox 侧 `IVivInbox` / `InboxStore`（表 `VivInboxMessage`，消息级去重与业务级幂等两族键）+ `InboxDispatcher`（按保留期清理，独立循环）。
 发件箱表另存 `TraceId` / `RequestTraceId` 两列溯源（投递器在后台作用域重建不出入队时的语境，只能入队时存）。
 **发件箱不发自建 span** —— 见下
@@ -628,6 +629,9 @@ public virtual async Task<VivApiResult> CreateOrderAsync(...) { ...; await _outb
 - `RedisHealthCheck`（`GetConnectionAsync()` → `PingAsync()`）与 `DatabaseHealthCheck`（按 `DatabaseSource` 开一条新连接跑 `SELECT 1`）都返回 `Unhealthy` 说结论，不把异常甩出去 —— 甩出去整个 `/health` 变 500，反而看不出是哪一项挂了。按配置条件挂：Redis 那条仅在 `CacheOption.CacheProviderType == Redis` 时、库那条仅在 `DatabaseOption != null` 时。
 - **⚠️ `DatabaseHealthCheck` 只能构造注入 `IOptions<DatabaseOptions>`，绝不能注入 `IMomoDbContext`** —— `AddCheck<T>` 用 `ActivatorUtilities.GetServiceOrCreateInstance<T>(sp)`，而那个 `sp` 是**根** provider：从根解析 Scoped 的 `IMomoDbContext` 会拿到跨请求共享的实例，正是 `LocalEventBus` 当初绕开 `IServiceProvider` 的那个坑。`IOptions<T>` 是 Singleton，安全；顺带也躲开了 EF 模型初始化（本身是个慢操作，放在健康探测里会被放大）。
 - **两条都打 `ready` 标签、不打 `live`**：`/alive` 的谓词是 `Tags.Contains("live")`，所以 Redis 挂了不会让编排系统重启进程；`/health` 走默认谓词（全部检查），真挂了才变红。
+- **`mqtt` 与 `rabbitmq` 是两条不同的依赖**：`MqttHealthCheck` 判设备接入的 MQTT（`MqttOption`，只读 `IsConnected`，不主动探），`RabbitMqHealthCheck` 判消息总线（`NanaOption`）。后者以前**完全没有** —— MQ 挂了 `/health` 照样绿。
+- **`RabbitMqHealthCheck` 是唯一带构造参数的**：用 `NanaOptions` 现拼一条 AMQP 连接、握手成功才判健康，用完立刻关。**不复用 Wolverine 手里那条连接** —— 它在 `Wolverine.RabbitMQ.Internal` 里、是包内部实现，升级就断；而且缓存一条再读 `IsOpen` 也不准，那条连接自己会重连，重连窗口里 `IsOpen=false` 但 broker 其实好好的。代价是上面那条「不新增任何 `PackageReference`」在这里破了一次：`Viv.Engine` 显式引了 `RabbitMQ.Client`（版本与 `WolverineFx.RabbitMQ 6.42.0` 实际解析到的一致，不多引入任何程序集）。
+- **rabbitmq 的注册条件是 `NanaOption != null`**：只写不投的宿主（`OutboxOption.EnableDispatcher = false`，投递交给 Worker）按 `RegisterOutbox` 的校验本来就不该有 `NanaOption`，那种宿主没连 broker，无条件挂上去只会得到一个永远红的假故障。**也不能用 `AddCheck<T>()`** —— 那个重载在根 provider 上建实例，而 `NanaOptions` 是 `Register()` 直接传进来的实例、没有进 DI，只能 `AddCheck(name, new RabbitMqHealthCheck(options.NanaOption), tags: ["ready"])`。
 - **⚠️ 两个类放在 `Viv.Engine/HealthChecks/` 而不是 `Viv.Redis` / `Viv.Momo`（与原计划的偏差）**：那两个项目是纯 `Microsoft.NET.Sdk`、**看不到 `IHealthCheck` / `HealthCheckResult`**（没有 `FrameworkReference Microsoft.AspNetCore.App`、`Directory.Packages.props` 里也没有 HealthChecks 的包引用）。放进 `Viv.Engine` 保住了「不新增任何 PackageReference」这条，代价是位置与直觉不符 —— 找它们去 Engine，别在 Redis / Momo 里翻。
 - **接线**：`Viv.Aspire.ServiceDefaults/Extensions.cs` 的 meter 列表补 `.AddMeter("Viv.Redis")` 与 `.AddMeter("Viv.Momo")` —— **不加的话指标建了也没人采，表现是「什么都看不到」，很容易误判成埋点没生效**。同一个文件的 `MapDefaultEndpoints` 去掉了 `if (app.Environment.IsDevelopment())`，`/health` 与 `/alive` **全环境都 map**（端点定义与谓词一字未动）；原先两个端点只存在于开发环境。`AddHealthChecks()` 重复调用是安全的（内部 `TryAddSingleton` + `Configure` 追加），与 `AddServiceDefaults()` 里那次不冲突。
 - **顺手删掉的死代码**：`VivServiceDefaultExtensions.cs`（`AddVivServiceDefaults` 零调用点，且**只管 Tracing、没有 `WithMetrics` / `AddMeter`** —— 哪天有人改用它，两个 `AddMeter` 会静默消失）。

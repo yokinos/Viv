@@ -5,6 +5,7 @@ using Viv.Contracts.Interface;
 using Viv.Contracts.Models;
 using Viv.Delusion.Magic;
 using Viv.Log;
+using Viv.Momo;
 using Viv.Nana;
 
 namespace Viv.Outbox.Core
@@ -14,22 +15,26 @@ namespace Viv.Outbox.Core
     ///
     /// 必须是 Scoped —— 与业务代码拿到的 <c>IMomoDbContext</c> 同一作用域才能共享事务状态
     /// （Momo 的 <c>_transaction</c> 挂在实例字段上）。换成 Singleton 或 Transient，
-    /// 入队就跑到业务事务外面去了，原子性当场归零。
+    /// 入队就跑到业务事务外面去了，原子性当场归零 —— 所以 <see cref="EnqueueAsync{T}"/> 第一件事
+    /// 就是确认自己确实在那个事务里，不在就直接抛。
     /// </summary>
     internal sealed class OutboxStore : IVivOutbox
     {
         private readonly IOutboxRepository _repository;
+        private readonly IMomoDbContext _db;
         private readonly IVivContext _context;
         private readonly ILoggerContract _logger;
         private readonly TimeProvider _time;
 
         public OutboxStore(
             IOutboxRepository repository,
+            IMomoDbContext db,
             IVivContext context,
             ILoggerContract logger,
             TimeProvider? timeProvider = null)
         {
             _repository = repository;
+            _db = db;
             _context = context;
             _logger = logger;
             _time = timeProvider ?? TimeProvider.System;
@@ -39,6 +44,26 @@ namespace Viv.Outbox.Core
         {
             if (content is null) return false;
             cancellationToken.ThrowIfCancellationRequested();
+
+            // 发件箱的唯一价值是「业务写与入队同时成立」，而这个保证完全由调用方开的事务提供 ——
+            // 方法自己开不了：它连业务写都不知道在哪。所以这里只验证、不代劳。
+            //
+            // 之所以要抛而不是记日志：不抛的话，调用方从返回值看不出区别（照样 true），
+            // 结果是「消息已落库、事件永不投递」，等发现时只能靠对账。而这类疏漏的成因往往是
+            // 「以为外层包了事务」，靠 code review 拦不住，只能靠运行时炸出来。
+            //
+            // 需要合法地不参与事务（补偿脚本、离线补数据）时，别绕过这个断言 ——
+            // 那种场景应该用「不依赖业务写」的路径投递，而不是往发件箱里塞一条永远对不上账的记录。
+            if (!_db.IsInTransaction)
+            {
+                throw new InvalidOperationException(
+                    "发件箱入队必须在事务内进行，当前 IMomoDbContext 不在事务中：" +
+                    "业务写与入队要么一起提交、要么一起回滚，否则会出现「消息落了、事件永不投递」。\n" +
+                    "  · API/服务层：用 IMomoDbContext.ExecuteInTransactionAsync 包住「业务写 + 入队」" +
+                    "（参考 AgentChatService.AcceptTurnAsync）或用 [VivUnitOfWork]（参考 ChatService）\n" +
+                    "  · 消费者：短事务只包写入段，模型调用等长耗时动作留在事务外，不要把整个 HandleAsync 塞进事务\n" +
+                    "  · 若确实不该原子：不要走发件箱，改用 IVivEventPublisher / IVivLocalEventPublisher");
+            }
 
             content.DeliverySource = DeliverySource.Outbox;
             var envelope = new NanaEnvelope<T>

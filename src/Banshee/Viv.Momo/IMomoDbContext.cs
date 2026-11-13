@@ -70,6 +70,15 @@ namespace Viv.Momo
         Task ExecuteInTransactionAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken = default);
         Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default);
         Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> work, Func<T, bool> commitWhen, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 当前是否处于活动事务中（即正跑在 <see cref="ExecuteInTransactionAsync{T}(Func{CancellationToken, Task{T}}, CancellationToken)"/> 的委托里）。
+        ///
+        /// 事务状态挂在<b>实例</b>上，所以这个判据只对「与业务同一作用域」拿到的那个实例成立 ——
+        /// 也正是它能验证的东西：入队和业务写是不是同一个事务。它的用途是让「以为原子其实不原子」
+        /// 的调用点在开发期就炸，而不是等线上数据对不上再回头查。
+        /// </summary>
+        bool IsInTransaction { get; }
         void ChangeTenant(long tenantId);
         void IsAutoSetDefaultValue(bool flag);
         EFAppContext GetEFContext(DbReadWriteType readWriteType = DbReadWriteType.Read);
