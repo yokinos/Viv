@@ -59,6 +59,7 @@ namespace Viv.Ouroboros.Core.Service
         private readonly Lazy<IRedisService?> _redis;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILoggerContract _logger;
+        private readonly TimeProvider _time;
         private readonly object _lock = new();
         private long _generation;
         private string? _seenStamp;
@@ -74,10 +75,16 @@ namespace Viv.Ouroboros.Core.Service
         /// <param name="provider">用来**可选**解析 IRedisService：Redis 关闭时它根本没注册，构造注入会直接失败</param>
         /// <param name="scopeFactory">作用域工厂（读库比对指纹要现开作用域取 IMomoDbContext）</param>
         /// <param name="logger">日志</param>
-        public ConfigVersionGate(IServiceProvider provider, IServiceScopeFactory scopeFactory, ILoggerContract logger)
+        /// <param name="timeProvider">时间源。三个节流窗口的正确性全建立在它上面，默认系统时钟；测试传 FakeTimeProvider 才能拨时间</param>
+        public ConfigVersionGate(
+            IServiceProvider provider,
+            IServiceScopeFactory scopeFactory,
+            ILoggerContract logger,
+            TimeProvider? timeProvider = null)
         {
             _logger = logger;
             _scopeFactory = scopeFactory;
+            _time = timeProvider ?? TimeProvider.System;
             // Lazy + 单例：解析一次，且不会因为首次解析失败就把 null 固化成一辈子的结论
             _redis = new Lazy<IRedisService?>(() => provider.GetService(typeof(IRedisService)) as IRedisService);
         }
@@ -139,8 +146,9 @@ namespace Viv.Ouroboros.Core.Service
 
             lock (_lock)
             {
-                if (DateTimeOffset.UtcNow < _nextCheckAt) return;
-                _nextCheckAt = DateTimeOffset.UtcNow + CheckInterval;
+                var now = _time.GetUtcNow();
+                if (now < _nextCheckAt) return;
+                _nextCheckAt = now + CheckInterval;
             }
 
             string? stamp;
@@ -155,7 +163,7 @@ namespace Viv.Ouroboros.Core.Service
                 _logger.Warning("读取配置版本戳失败，本进程退回只清本地缓存：{0}", ex.Message);
                 lock (_lock)
                 {
-                    _nextCheckAt = DateTimeOffset.UtcNow + FailureBackoff;
+                    _nextCheckAt = _time.GetUtcNow() + FailureBackoff;
                     return;
                 }
             }
@@ -181,8 +189,9 @@ namespace Viv.Ouroboros.Core.Service
         {
             lock (_lock)
             {
-                if (DateTimeOffset.UtcNow < _nextFingerprintAt) return;
-                _nextFingerprintAt = DateTimeOffset.UtcNow + FingerprintInterval;
+                var now = _time.GetUtcNow();
+                if (now < _nextFingerprintAt) return;
+                _nextFingerprintAt = now + FingerprintInterval;
             }
 
             string? fingerprint;
@@ -193,7 +202,7 @@ namespace Viv.Ouroboros.Core.Service
             catch (Exception ex)
             {
                 // 库不可用就退避：否则每个请求都要在这里等一次连接超时（此时缓存本来也读不到新配置）
-                lock (_lock) _nextFingerprintAt = DateTimeOffset.UtcNow + FailureBackoff;
+                lock (_lock) _nextFingerprintAt = _time.GetUtcNow() + FailureBackoff;
 
                 if (Interlocked.Exchange(ref _fingerprintWarned, 1) == 0)
                     _logger.Warning("读取配置指纹失败，裸改库的察觉暂停（{0} 秒后重试）：{1}",
@@ -272,7 +281,7 @@ namespace Viv.Ouroboros.Core.Service
         {
             lock (_lock)
             {
-                _nextCheckAt = DateTimeOffset.UtcNow + CheckInterval;
+                _nextCheckAt = _time.GetUtcNow() + CheckInterval;
                 return ++_generation;
             }
         }

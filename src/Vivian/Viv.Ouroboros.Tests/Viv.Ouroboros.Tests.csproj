@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <!-- FakeTimeProvider：ConfigVersionGate 的三个节流窗口靠拨时间验证，不靠真等 -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Viv.Ouroboros.Core\Viv.Ouroboros.Core.csproj" />
+    <!-- 替身集中在这个程序集里，测试项目只留「被测对象 + 探针 + 测试数据」 -->
+    <ProjectReference Include="..\..\Test\Viv.Fakes\Viv.Fakes.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

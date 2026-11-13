@@ -37,6 +37,9 @@ namespace Viv.Engine
         {
             ArgumentNullException.ThrowIfNull(vivOptions);
 
+            // 注入时间提供器，默认使用系统时间
+            builder.RegisterInstance(TimeProvider.System).As<TimeProvider>();
+
             // 自动依赖注入
             AutoDependencyRegister(builder);
 

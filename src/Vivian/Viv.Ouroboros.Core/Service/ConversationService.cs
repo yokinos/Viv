@@ -6,7 +6,6 @@ using Viv.Contracts.Interface;
 using Viv.Engine;
 using Viv.Entity.Database.Ouroboros;
 using Viv.Entity.Enums;
-using Viv.Entity.Enums;
 using Viv.Log;
 using Viv.Ouroboros.Core.Entity.Dto.Agent;
 using Viv.Ouroboros.Core.Entity.Vo.Agent;
