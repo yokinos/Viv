@@ -76,7 +76,9 @@ internal static class NamingIntegration
         Assert.NotNull(fromDapper);
         Assert.Equal("dapper-2", fromDapper!.DisplayName);
 
-        Assert.Equal(201, await db.CountAsync<NamingProbeRow>(_ => true));
+        // 只数本用例插入的 Id 区间：两个测试共用同一个容器和库，
+        // 另一个用例的 9001 会一直留着，按全表计数会随执行顺序在 201/202 之间跳。
+        Assert.Equal(201, await db.CountAsync<NamingProbeRow>(x => x.Id <= 201));
     }
 
     internal static async Task CommitAndRollbackAsync(string connectionString, DatabaseSourceType source)

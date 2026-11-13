@@ -321,7 +321,7 @@ namespace Viv.Momo.Sync
 
         /// <summary>
         /// 从 PropertyInfo 构建 ColumnInfo：[Table]→表名 [Column]→列名 [Key]→主键
-        /// [StringLength]/[MaxLength]→类型长度 [DatabaseGenerated]→自增
+        /// [StringLength]/[MaxLength]→类型长度 [DatabaseGenerated(Identity)]→自增
         /// nullable 走 _nonPkNullable 控制逻辑
         /// </summary>
         private ColumnInfo BuildColumnInfo(PropertyInfo prop)
@@ -335,7 +335,12 @@ namespace Viv.Momo.Sync
 
             var maxLength = GetMaxLength(prop, clrType);
             var sqlType = MapToSqlType(prop, clrType, maxLength);
-            var isAutoGen = Attribute.IsDefined(prop, typeof(DatabaseGeneratedAttribute));
+
+            // 只有显式 Identity 才算数据库自增。判「有没有这个特性」是不够的：
+            // DatabaseGeneratedOption.None 同样带特性，但语义正好相反（由应用给值），
+            // 按特性存在与否判会把主键建成 IDENTITY，插入显式雪花 Id 时直接失败。
+            var isAutoGen = prop.GetCustomAttribute<DatabaseGeneratedAttribute>()?.DatabaseGeneratedOption
+                == DatabaseGeneratedOption.Identity;
 
             // bool → bit 一律给 DEFAULT 0。软删/启停这类 bit 列在代码里是 !x.IsDeleted、x.IsEnabled 这种谓词，
             // 而这些列本身可空（_nonPkNullable 默认 true）—— 手写 SQL 插入漏写这列就是 NULL，

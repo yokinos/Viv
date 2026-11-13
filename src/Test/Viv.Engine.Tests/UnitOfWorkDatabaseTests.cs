@@ -101,7 +101,11 @@ public sealed class EngineSqlServerCollection : ICollectionFixture<EngineSqlServ
 /// <summary>UoW 真库探测行。不以 Entity 结尾，避免和 Momo 单测扫描撞车。</summary>
 public class UowProbeRow : IEntity
 {
+    /// <summary>与 <c>EntityBase.Id</c> 保持一致：Id 由应用给，数据库不自增。</summary>
+    [System.ComponentModel.DataAnnotations.Schema.DatabaseGenerated(
+        System.ComponentModel.DataAnnotations.Schema.DatabaseGeneratedOption.None)]
     public long Id { get; set; }
+
     public string Label { get; set; } = "";
 }
 

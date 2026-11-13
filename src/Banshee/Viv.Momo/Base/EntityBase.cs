@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using Viv.Contracts.Enums;
 using Viv.Momo.Interface;
 
@@ -15,6 +16,7 @@ namespace Viv.Momo.Base
         /// 主键Id
         /// </summary>
         [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.None)]
         public long Id { get; set; }
     }
 }
