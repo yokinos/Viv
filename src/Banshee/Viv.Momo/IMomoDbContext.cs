@@ -59,6 +59,14 @@ namespace Viv.Momo
         Task<List<T>> FindListAsync<T>(string sql, object? parameters = default, CancellationToken cancellationToken = default) where T : class;
         T? FindScalar<T>(string sql, object? parameters = default);
         Task<T?> FindScalarAsync<T>(string sql, object? parameters = default, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 走**写连接**的标量查询，给「UPDATE ... OUTPUT / RETURNING 取回结果」这类语句用。
+        ///
+        /// 单独立一个方法而不是给 <see cref="FindScalarAsync{T}"/> 加参数：读连接可能是只读从库，
+        /// 写语句在那边直接失败；主从有延迟时还会读到旧值。名字里带 Write 是为了让调用点无法忽略这件事。
+        /// </summary>
+        Task<T?> FindScalarWriteAsync<T>(string sql, object? parameters = default, CancellationToken cancellationToken = default);
         PagedList<T> Page<T>(string sql, int pageIndex, int pageSize, object? parameters = default);
         Task<PagedList<T>> PageAsync<T>(string sql, int pageIndex, int pageSize, object? parameters = default, CancellationToken cancellationToken = default);
         bool ExecuteSql(string sql, object? parameters = default);

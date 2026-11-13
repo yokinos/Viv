@@ -50,6 +50,15 @@ namespace Viv.Entity.Database.Ouroboros
         public int MessageCount { get; set; }
 
         /// <summary>
+        /// 下一条消息的序号水位。取号靠 <c>UPDATE ... SET NextSeq = NextSeq + 1</c> 的原子自增，
+        /// 不再「把所有消息读回来取 max+1」——那样并发下必撞，且长会话是 O(n) 全表扫。
+        ///
+        /// 0 是「还没初始化过」的哨兵：第一次取号时用 <c>MAX(Seq)</c> 补上（见 AgentStore.NextSeqAsync），
+        /// 所以老库不用写迁移脚本，加列后自动对齐。
+        /// </summary>
+        public int NextSeq { get; set; }
+
+        /// <summary>
         /// 最后一条消息时间（列表排序用）
         /// </summary>
         public DateTimeOffset? LastMessageAt { get; set; }

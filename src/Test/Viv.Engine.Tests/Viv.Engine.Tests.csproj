@@ -26,6 +26,8 @@
     <ProjectReference Include="..\..\Banshee\Viv.Engine\Viv.Engine.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Clockwork\Viv.Clockwork.csproj" />
     <ProjectReference Include="..\..\Banshee\Viv.Momo\Viv.Momo.csproj" />
+    <!-- 序号分配要跑真库：UPDATE ... RETURNING / OUTPUT 的写法只能靠实际执行验证 -->
+    <ProjectReference Include="..\..\Vivian\Viv.Ouroboros.Core\Viv.Ouroboros.Core.csproj" />
     <!-- 替身集中在这个程序集里，测试项目只留「被测对象 + 探针 + 测试数据」 -->
     <ProjectReference Include="..\Viv.Fakes\Viv.Fakes.csproj" />
   </ItemGroup>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Viv.Contracts.Interface;
 using Yarp.ReverseProxy.Configuration;
@@ -65,13 +65,13 @@ namespace Viv.Engine
                 });
 
                 // 标准 API：/apex/api/account/apexLogin -> /api/account/apexLogin
-                // 挂限流策略；不挂的话 AddRateLimiter 注册的策略不生效
+                // 限流不挂在路由上：DistributedRateLimitMiddleware 在管道里全局生效，
+                // 这样 docs 通配那种带 catch-all 的旁路也一并被限住
                 routes.Add(new RouteConfig
                 {
                     RouteId = $"{shortName}-api",
                     ClusterId = clusterId,
                     Match = new RouteMatch { Path = $"/{shortName}/api/{{**catch-all}}" },
-                    RateLimiterPolicy = VivStartGatewayExtensions.CustomRateLimiterPolicyName,
                     Transforms =
                     [
                         new Dictionary<string, string> { ["PathPattern"] = "/api/{**catch-all}" }
@@ -87,14 +87,12 @@ namespace Viv.Engine
                 // WebSocket / SignalR：/ws/hertalink/chat -> /chat
                 // 路径保留通配：Hub 的挂载路径由各服务自己决定（MapKinnaHub<THub>("/chat")），
                 // 网关不掌握这个清单。所以 /ws/{short}/api/xxx 在 HTTP 语义上也能打到下游 /api/xxx。
-                // 身份边界靠两层：网关 JWT（access_token 只允许出现在 /ws 前缀下）+ 下游 [Authorize]；
-                // 限流策略与 api 路由一致，不能再靠「docs 通配」那种无策略路径绕过。
+                // 身份边界靠两层：网关 JWT（access_token 只允许出现在 /ws 前缀下）+ 下游 [Authorize]。
                 routes.Add(new RouteConfig
                 {
                     RouteId = $"{shortName}-ws",
                     ClusterId = clusterId,
                     Match = new RouteMatch { Path = $"/ws/{shortName}/{{**catch-all}}" },
-                    RateLimiterPolicy = VivStartGatewayExtensions.CustomRateLimiterPolicyName,
                     Transforms =
                     [
                         new Dictionary<string, string> { ["PathPattern"] = "/{**catch-all}" }
@@ -121,7 +119,6 @@ namespace Viv.Engine
                 RouteId = $"{shortName}-docs-{segment}-root",
                 ClusterId = clusterId,
                 Match = new RouteMatch { Path = $"/docs/{shortName}/{segment}" },
-                RateLimiterPolicy = VivStartGatewayExtensions.CustomRateLimiterPolicyName,
                 Transforms =
                 [
                     new Dictionary<string, string> { ["PathSet"] = $"/{segment}/" }
@@ -134,7 +131,6 @@ namespace Viv.Engine
                 RouteId = $"{shortName}-docs-{segment}",
                 ClusterId = clusterId,
                 Match = new RouteMatch { Path = $"/docs/{shortName}/{segment}/{{**catch-all}}" },
-                RateLimiterPolicy = VivStartGatewayExtensions.CustomRateLimiterPolicyName,
                 Transforms =
                 [
                     new Dictionary<string, string> { ["PathPattern"] = $"/{segment}/{{**catch-all}}" }

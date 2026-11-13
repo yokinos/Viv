@@ -1,9 +1,8 @@
-using Autofac;
+﻿using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -17,7 +16,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Text;
-using System.Threading.RateLimiting;
 using Viv.Aoi;
 using Viv.Contracts;
 using Viv.Contracts.Interface;
@@ -25,6 +23,7 @@ using Viv.Contracts.Models;
 using Viv.Engine.Middleware;
 using Viv.Engine.Options;
 using Viv.Engine.Power;
+using Viv.Engine.RateLimit;
 using Yarp.ReverseProxy;
 using Yarp.ReverseProxy.Configuration;
 
@@ -39,7 +38,6 @@ namespace Viv.Engine
         private const string NoCachePolicyName = "NoCache";
         private const string DefaultCachePolicyName = "DefaultCache";
         private const string CustomCachePolicyName = "CustomCache";
-        internal const string CustomRateLimiterPolicyName = "CustomRateLimiter";
         private const int DefaultCacheSeconds = 20;
         private static readonly string[] _vivClaimTypes = ["subjectId", "userId", "appId"];
 
@@ -137,21 +135,12 @@ namespace Viv.Engine
             // RateLimiter
             // 读 IOptionsMonitor：AddJsonFile(reloadOnChange: true) 改了文件后，下一次请求就用新值。
             // 之前的写法在启动时把值拷进 lambda，热重载配置改了也不生效。
+            //
+            // 计数交给 IRateLimitCounter（Redis），中间件在 Redis 不可用时退回本机分区计数。
+            // 这里不再注册 AddRateLimiter 的策略：框架的分区工厂是同步签名，没法等 Redis，
+            // 只能在请求线程上阻塞 —— 换成自己写的中间件，见 DistributedRateLimitMiddleware。
             builder.Services.Configure<VivRateLimitOptions>(builder.Configuration.GetSection(VivRateLimitOptions.CustomRateLimit));
-            builder.Services.AddRateLimiter(options =>
-            {
-                options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-                // 只有这一个策略，所有自动生成的路由（api / docs / ws）都挂它。
-                // 以前还注册过一个写死 4 次/12 秒的 DefaultRateLimiter，但没有任何路由引用 —— 死配置，删掉。
-                options.AddPolicy(CustomRateLimiterPolicyName, context =>
-                {
-                    var current = context.RequestServices
-                        .GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<VivRateLimitOptions>>()
-                        .CurrentValue;
-                    return BuildPartition(context, current);
-                });
-            });
+            builder.Services.AddSingleton<IRateLimitCounter, RedisRateLimitCounter>();
 
             serviceCollectionConfigure?.Invoke(builder.Services);
             return builder;
@@ -203,7 +192,7 @@ namespace Viv.Engine
             }
 
             app.UseCors(DefaultCorsPolicyName);
-            app.UseRateLimiter();
+            app.UseMiddleware<DistributedRateLimitMiddleware>();
 
             app.UseAuthentication();
             app.UseAuthorization();
@@ -309,36 +298,6 @@ namespace Viv.Engine
                 // 自检失败不能拦住网关启动
                 System.Diagnostics.Debug.WriteLine($"网关目标数自检失败: {ex.Message}");
             }
-        }
-
-        /// <summary>
-        /// 按客户端 IP 分区计数。原实现用 <c>AddFixedWindowLimiter(policy)</c>，那是「全网关共用一个桶」：
-        /// PermitLimit 是整个进程的总量，一个客户端就能把其他所有人挤掉。分区后每个来源各算各的。
-        /// 分区键里带上当前配置值，热重载改了配额会自动切到新分区，不必重启。
-        /// </summary>
-        private static RateLimitPartition<string> BuildPartition(HttpContext context, VivRateLimitOptions options)
-        {
-            // UseForwardedHeaders 已把 RemoteIpAddress 换成真实客户端 IP
-            var client = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-
-            // 约定：PermitLimit <= 0 表示不限流
-            if (options.PermitLimit <= 0)
-            {
-                return RateLimitPartition.GetNoLimiter(client);
-            }
-
-            var key = client + "|"
-                      + options.PermitLimit.ToString(CultureInfo.InvariantCulture) + "|"
-                      + options.Window.ToString(CultureInfo.InvariantCulture) + "|"
-                      + options.QueueLimit.ToString(CultureInfo.InvariantCulture);
-
-            return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = options.PermitLimit,
-                Window = TimeSpan.FromSeconds(Math.Max(1, options.Window)),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit = Math.Max(0, options.QueueLimit)
-            });
         }
 
         /// <summary>

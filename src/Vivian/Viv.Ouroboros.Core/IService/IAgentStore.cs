@@ -38,7 +38,10 @@ namespace Viv.Ouroboros.Core.IService
         /// <summary>取 seq 大于 afterSeq 的消息，按 seq 升序；limit &lt;= 0 表示不限</summary>
         Task<List<OtMessage>> ListMessagesAsync(long conversationId, int afterSeq = 0, int limit = 0);
 
-        /// <summary>取该会话下一个可用 Seq</summary>
+        /// <summary>
+        /// 取该会话下一个可用 Seq。原子：靠会话行上的 <c>NextSeq</c> 自增，多副本并发也不会拿到同一个值。
+        /// 每次调用都会真正推进水位 —— 想给「下一条消息」取号就调一次，不要拿返回值 +1 复用。
+        /// </summary>
         Task<int> NextSeqAsync(long conversationId);
 
         Task<bool> InsertMessageAsync(OtMessage message);

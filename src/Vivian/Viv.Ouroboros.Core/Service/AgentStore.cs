@@ -7,6 +7,7 @@ using Viv.Entity.Database.Ouroboros;
 using Viv.Entity.Enums;
 using Viv.Log;
 using Viv.Momo;
+using Viv.Momo.Enums;
 using Viv.Ouroboros.Core.IService;
 
 using Viv.Ouroboros.Core.Entity.Model.Agent;
@@ -21,6 +22,9 @@ namespace Viv.Ouroboros.Core.Service
     {
         private readonly IMomoDbContext _dbContext;
         private readonly ILoggerContract _logger;
+
+        /// <summary>取号语句。方言在连接里，实例生命周期内不变，拼一次就够</summary>
+        private string? _nextSeqSql;
 
         public AgentStore(IMomoDbContext dbContext, ILoggerContract logger)
         {
@@ -72,8 +76,52 @@ namespace Viv.Ouroboros.Core.Service
 
         public async Task<int> NextSeqAsync(long conversationId)
         {
-            var rows = await _dbContext.FindListAsync<OtMessage>(x => x.ConversationId == conversationId);
-            return rows.Count == 0 ? 1 : rows.Max(x => x.Seq) + 1;
+            // 一次语句里做完「首取时对齐水位」和「自增取号」：
+            // UPDATE 会拿到该会话行的排他锁，并发调用在这里排队，所以不会有两个调用读到同一个值。
+            // NextSeq = 0 是「还没初始化过」的哨兵，用现有消息的 MAX(Seq) 补上 —— 老库加列后不用跑迁移脚本。
+            //
+            // 走写连接：语句本身是 UPDATE，读连接可能是只读从库，主从有延迟时还会读到旧水位
+            var seq = await _dbContext
+                .FindScalarWriteAsync<int?>(_nextSeqSql ??= BuildNextSeqSql(), new { Id = conversationId })
+                .ConfigureAwait(false);
+
+            // 0 行受影响 = 会话不存在。这时不能悄悄返回 1：会和已有消息撞号，且错得很安静。
+            if (seq is null or <= 0)
+            {
+                throw new InvalidOperationException($"会话 {conversationId} 不存在，无法分配消息序号");
+            }
+
+            return seq.Value;
+        }
+
+        /// <summary>
+        /// 取号语句。两种方言只有三处不同：NULL 合并函数（ISNULL / COALESCE）、
+        /// 返回自增后值的写法（OUTPUT INSERTED / RETURNING）、以及表名列名的引用方式（由方言处理）。
+        ///
+        /// CASE 分支保证「一条语句同时覆盖初始化和自增」：NextSeq = 0 时按 MAX(Seq) 补水位并直接取 1 号，
+        /// 否则单纯 +1。两条语句分开写的话，首次取号和后续取号之间会有窗口。
+        /// </summary>
+        private string BuildNextSeqSql()
+        {
+            var dialect = _dbContext.Dialect;
+            var conversationTable = dialect.GetTableName<OtConversation>();
+            var messageTable = dialect.GetTableName<OtMessage>();
+
+            var id = dialect.QuoteClr(nameof(OtConversation.Id));
+            var nextSeq = dialect.QuoteClr(nameof(OtConversation.NextSeq));
+            var conversationId = dialect.QuoteClr(nameof(OtMessage.ConversationId));
+            var seq = dialect.QuoteClr(nameof(OtMessage.Seq));
+
+            var isPostgres = dialect.Source == DatabaseSourceType.PostgreSQL;
+            var coalesce = isPostgres ? "COALESCE" : "ISNULL";
+
+            var set = $"SET {nextSeq} = CASE WHEN {nextSeq} = 0 " +
+                      $"THEN (SELECT {coalesce}(MAX({seq}), 0) + 1 FROM {messageTable} WHERE {conversationId} = @Id) " +
+                      $"ELSE {nextSeq} + 1 END";
+
+            return isPostgres
+                ? $"UPDATE {conversationTable} {set} WHERE {id} = @Id RETURNING {nextSeq}"
+                : $"UPDATE {conversationTable} {set} OUTPUT INSERTED.{nextSeq} WHERE {id} = @Id";
         }
 
         public async Task<bool> InsertMessageAsync(OtMessage message)

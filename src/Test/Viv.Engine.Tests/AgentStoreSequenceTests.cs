@@ -1,0 +1,136 @@
+using Viv.Delusion.Magic;
+using Viv.Entity.Database.Ouroboros;
+using Viv.Entity.Enums;
+using Viv.Fakes;
+using Viv.Momo.Core;
+using Viv.Momo.Enums;
+using Viv.Momo.Interface;
+using Viv.Momo.Options;
+using Viv.Ouroboros.Core.Service;
+
+namespace Viv.Engine.Tests;
+
+/// <summary>
+/// 消息序号分配。必须跑真库：这里的正确性一半在 SQL 语法（OUTPUT / RETURNING），
+/// 一半在数据库给的行锁语义上，桩不出来。
+///
+/// 老实现是「把这个会话的消息全查回来取 max+1」，两个并发请求会拿到同一个号，
+/// 而且长会话每发一条消息都要读回全部历史。
+/// </summary>
+[Collection("EnginePostgres")]
+public class AgentStoreSequenceTests
+{
+    private readonly EnginePostgresFixture _fx;
+
+    public AgentStoreSequenceTests(EnginePostgresFixture fx)
+    {
+        _fx = fx;
+    }
+
+    [DockerFact]
+    public async Task 并发取号不重号()
+    {
+        using var db = CreateDb();
+        await db.SyncTableAsync();
+
+        var conversationId = await InsertConversationAsync(db);
+
+        // 每个「副本」各拿一个上下文，模拟多实例并发命中同一条会话
+        var seqs = await Task.WhenAll(Enumerable.Range(0, 30).Select(async _ =>
+        {
+            using var worker = CreateDb();
+            var store = new AgentStore(worker, new RecordingLogger());
+            return await store.NextSeqAsync(conversationId);
+        }));
+
+        Assert.Equal(30, seqs.Distinct().Count());
+        Assert.Equal(Enumerable.Range(1, 30), seqs.OrderBy(x => x));
+    }
+
+    [DockerFact]
+    public async Task 老会话首次取号从现有最大序号之后开始()
+    {
+        using var db = CreateDb();
+        await db.SyncTableAsync();
+
+        var conversationId = await InsertConversationAsync(db);
+
+        // NextSeq 是新加的列，存量会话那里是 0。取号时必须先对齐到 MAX(Seq)，
+        // 否则会从 1 重新发号，和已有消息撞上 —— 而且加列不需要任何迁移脚本。
+        for (var seq = 1; seq <= 3; seq++)
+        {
+            await db.InsertAsync(new OtMessage
+            {
+                ConversationId = conversationId,
+                Seq = seq,
+                Role = EmMessageRole.User,
+                Content = $"历史消息 {seq}",
+                ContentType = EmMessageContentType.Text
+            });
+        }
+
+        var store = new AgentStore(db, new RecordingLogger());
+
+        Assert.Equal(4, await store.NextSeqAsync(conversationId));
+        Assert.Equal(5, await store.NextSeqAsync(conversationId));
+    }
+
+    [DockerFact]
+    public async Task 会话不存在时抛异常而不是返回1()
+    {
+        using var db = CreateDb();
+        await db.SyncTableAsync();
+
+        var store = new AgentStore(db, new RecordingLogger());
+
+        // 默默返回 1 的话，调用方会拿它写进消息表，和那个会话已有的消息撞号，
+        // 而且错得没有任何痕迹
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.NextSeqAsync(999_999));
+    }
+
+    private MomoDatabaseContext CreateDb()
+    {
+        var options = new DatabaseOptions
+        {
+            DatabaseSource = DatabaseSourceType.PostgreSQL,
+            MasterConnectionString = _fx.ConnectionString,
+            Timeout = 30,
+            EntityTypeOptions =
+            [
+                new FilterTypeOptions
+                {
+                    AssemblyName = "Viv.Entity",
+                    Namespace = "Viv.Entity.Database.Ouroboros",
+                }
+            ]
+        };
+
+        return new MomoDatabaseContext(new TestContext(), new RecordingLogger(), new StaticOptions(options));
+    }
+
+    private static async Task<long> InsertConversationAsync(MomoDatabaseContext db)
+    {
+        var conversation = new OtConversation
+        {
+            ConversationKey = Guid.NewGuid(),
+            MainAgentKey = "main",
+            Status = EmConversationStatus.Active
+        };
+
+        Assert.True(await db.InsertAsync(conversation));
+        Assert.True(conversation.Id > 0);
+        return conversation.Id;
+    }
+
+    private sealed class StaticOptions : IDatabaseOptionsProvider
+    {
+        private readonly DatabaseOptions _options;
+
+        public StaticOptions(DatabaseOptions options)
+        {
+            _options = options;
+        }
+
+        public DatabaseOptions GetRealOptions() => _options;
+    }
+}

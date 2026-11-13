@@ -1502,6 +1502,26 @@ namespace Viv.Momo.Core
             }
         }
 
+        public async Task<T?> FindScalarWriteAsync<T>(string sql, object? parameters = null, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrEmpty(sql)) return default;
+
+            try
+            {
+                // 必须走写连接：这类语句本身是 UPDATE，读连接可能是只读从库
+                var context = GetAppContext(DbReadWriteType.Write);
+                var command = new CommandDefinition(sql, parameters, TransactionFor(context), _timeOut, null, CommandFlags.Buffered, cancellationToken);
+                var result = await _queryTelemetry.MeasureAsync("dapper", "scalar", sql,
+                    async () => await context.DbConnection.QueryFirstOrDefaultAsync<T>(command).ConfigureAwait(false)).ConfigureAwait(false);
+                return result;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                throw WrapDatabaseException($"FindScalarWriteAsync（SQL）,{sql},{ex.Message}", ex);
+            }
+        }
+
         #endregion
 
         #region PagedList

@@ -183,7 +183,9 @@ namespace Viv.Ouroboros.Core.Service
             await _store.InsertMessageAsync(new OtMessage
             {
                 ConversationId = conversation.Id,
-                Seq = seq + 1,
+                // 助手消息单独取号，不用 userSeq + 1：两次写之间可能插进别人的消息
+                // （同一会话并发、或工具回调里另起一轮），+1 会和那条撞号
+                Seq = await _store.NextSeqAsync(conversation.Id),
                 Role = EmMessageRole.Assistant,
                 Content = reply,
                 ContentType = EmMessageContentType.Text,
@@ -404,7 +406,7 @@ namespace Viv.Ouroboros.Core.Service
             using var turn = AgentTurnContext.Enter(conversation.Id, userMessage.Id, conversation.MainAgentKey);
 
             var response = await agent.RunAsync(text, session, cancellationToken: cancellationToken);
-            return await PersistTurnAsync(conversation, agent, session, response, cancellationToken, seq);
+            return await PersistTurnAsync(conversation, agent, session, response, cancellationToken);
         }
 
         /// <summary>
@@ -419,7 +421,7 @@ namespace Viv.Ouroboros.Core.Service
             using var turn = AgentTurnContext.Enter(conversation.Id, userMessage.Id, conversation.MainAgentKey);
 
             var response = await agent.RunAsync(userMessage.Content ?? string.Empty, session, cancellationToken: cancellationToken);
-            return await PersistTurnAsync(conversation, agent, session, response, cancellationToken, userMessage.Seq, sourceMessageId);
+            return await PersistTurnAsync(conversation, agent, session, response, cancellationToken, sourceMessageId);
         }
 
         /// <summary>
@@ -431,9 +433,12 @@ namespace Viv.Ouroboros.Core.Service
         /// 用量出账刻意留在事务外：出账失败不该回滚已经跑完的这一轮。
         /// </summary>
         private async Task<ChatTurnResult> PersistTurnAsync(OtConversation conversation, AIAgent agent, AgentSession session,
-            AgentResponse response, CancellationToken cancellationToken, int userSeq = 0, long sourceMessageId = 0)
+            AgentResponse response, CancellationToken cancellationToken, long sourceMessageId = 0,
+            bool includeUserMessage = true)
         {
-            var seq = userSeq > 0 ? userSeq + 1 : await _store.NextSeqAsync(conversation.Id);
+            // 助手消息的序号在这里独立分配。不再接「用户消息的 seq + 1」：
+            // 模型跑这一轮期间，同一会话完全可能插进别的消息，+1 会撞号。
+            var seq = await _store.NextSeqAsync(conversation.Id);
             var inbox = _services.GetService<IVivInbox>();
 
             ToolApprovalRequestContent? pending = null;
@@ -472,7 +477,9 @@ namespace Viv.Ouroboros.Core.Service
                         ReasoningTokens = response.Usage?.ReasoningTokenCount is { } r ? (int)r : null
                     });
 
-                    conversation.MessageCount = baseMessageCount + (userSeq > 0 ? 2 : 1);
+                    // 这一轮落了用户消息 + 助手消息两条；受理段（AcceptTurnAsync）只写消息不动计数，
+                    // 所以两条都算在这里。没有用户消息的调用方才传 false。
+                    conversation.MessageCount = baseMessageCount + (includeUserMessage ? 2 : 1);
                     conversation.LastMessageAt = DateTimeOffset.UtcNow;
                     conversation.TotalInputTokens = baseInputTokens + (response.Usage?.InputTokenCount ?? 0);
                     conversation.TotalOutputTokens = baseOutputTokens + (response.Usage?.OutputTokenCount ?? 0);

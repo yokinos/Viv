@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,8 +13,6 @@ namespace Viv.Engine.Tests;
 [Collection("VivEngineStaticState")]
 public class GatewayRouteBuilderTests
 {
-    private const string RateLimitPolicy = "CustomRateLimiter";
-
     [Fact]
     public void 文档路由只放scalar和openapi_没有全通配旁路()
     {
@@ -36,14 +34,17 @@ public class GatewayRouteBuilderTests
     }
 
     [Fact]
-    public void 所有路由都挂限流策略()
+    public void 路由不再自己挂限流策略()
     {
         WithServiceEnv(() =>
         {
             var (routes, clusters) = new VivGatewayRouteBuilder().Build();
 
             Assert.NotEmpty(routes);
-            Assert.All(routes, r => Assert.Equal(RateLimitPolicy, r.RateLimiterPolicy));
+
+            // 限流改由 DistributedRateLimitMiddleware 在管道里统一做。
+            // 路由上再挂一遍就是两道闸口，而框架那一道是每副本各算一份的本地计数 —— 比不挂更糟。
+            Assert.All(routes, r => Assert.True(string.IsNullOrEmpty(r.RateLimiterPolicy)));
 
             // 每条路由都要指到一个真实集群，避免改路由表时漏配
             var clusterIds = clusters.Select(c => c.ClusterId!).ToHashSet(StringComparer.Ordinal);
