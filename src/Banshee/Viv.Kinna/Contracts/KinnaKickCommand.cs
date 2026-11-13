@@ -28,6 +28,22 @@ namespace Viv.Kinna.Contracts
         public string? Reason { get; set; }
 
         /// <summary>
+        /// 顶号专用：那条**新**连接的建立时间。有值表示「只踢比它更旧的连接」，
+        /// 为空表示管理动作（封号、强制下线），按 <see cref="AppId"/> / <see cref="UserId"/> 的粒度全踢。
+        ///
+        /// 为什么顶号要带时间：新连接到 A、旧连接在 B，A 广播出去时 B 无法判断
+        /// 自己那条到底是「该被顶掉的旧连接」还是「另一个并发上来的新连接」——
+        /// 全踢会让两条新连接互相踢掉，用户看到连上就被断、断了又连。
+        /// </summary>
+        public DateTimeOffset? EstablishedAt { get; set; }
+
+        /// <summary>
+        /// 顶号时那条新连接的 Id，和 <see cref="EstablishedAt"/> 一起构成全序。
+        /// 两条连接几乎同时建立时时间可能相同，光比时间分不出先后，带上 Id 才能恰好留下一条。
+        /// </summary>
+        public string? ConnectionId { get; set; }
+
+        /// <summary>
         /// 发布方实例 Id。订阅端发现是自己的消息就跳过——
         /// 发布方已经先踢过本机了，再踢一遍只会多记一次 terminated 指标
         /// </summary>

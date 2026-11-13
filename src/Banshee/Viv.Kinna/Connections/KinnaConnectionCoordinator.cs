@@ -65,7 +65,31 @@ namespace Viv.Kinna.Connections
                 }
             }
 
-            _session.Pool.Add(connectionId, identity.AppId, identity.SubjectId, identity.UserId);
+            // 登记时间从连接表拿，别在这里另取一次时钟：广播出去的那个值必须和表里记的一致，
+            // 否则两个副本对「谁更旧」的判断会不一致
+            var establishedAt = _session.Pool.Add(connectionId, identity.AppId, identity.SubjectId, identity.UserId);
+
+            // 上面只踢得掉「本副本上」的旧连接。旧连接在别的副本上时，那边不知道自己已经过时，
+            // 推送会照着它那条连接发，用户就收到两份。所以这里补一条广播。
+            //
+            // 只广播、不调 KickClientEverywhereAsync：那个方法内部是「先踢本机、再广播」，
+            // 踢本机时不排除自己这条，刚登记进来就会被自己一脚踢掉；
+            // 而本机那一步上面已经做过了（还是精确踢的，特意跳过了自己）。
+            if (_session.Options.SingleConnectionPerApp && _kickBus != null)
+            {
+                await PublishKickAsync(
+                    new KinnaKickCommand
+                    {
+                        AppId = identity.AppId,
+                        SubjectId = identity.SubjectId,
+                        UserId = identity.UserId,
+                        EstablishedAt = establishedAt,
+                        ConnectionId = connectionId,
+                        Reason = "顶号"
+                    },
+                    cancellationToken).ConfigureAwait(false);
+            }
+
             await PresenceSafelyAsync(() => _presence.OnlineAsync(identity.SubjectId, identity.UserId), "online")
                 .ConfigureAwait(false);
 
@@ -338,6 +362,27 @@ namespace Viv.Kinna.Connections
             foreach (var connection in connections)
             {
                 await KickAsync(connection.ConnectionId, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        public async Task KickOlderClientsAsync(
+            long appId,
+            long subjectId,
+            long userId,
+            DateTimeOffset establishedAt,
+            string connectionId,
+            CancellationToken cancellationToken = default)
+        {
+            var older = _session.Pool.GetOlderConnections(appId, subjectId, userId, establishedAt, connectionId);
+            if (older.Count == 0) return;
+
+            _logger.Info(
+                $"[{_session.Hub}] 顶号：踢掉 {older.Count} 条更旧的连接 app={appId} subject={subjectId} " +
+                $"user={userId} 新连接={connectionId} 建立于 {establishedAt:O}");
+
+            foreach (var info in older)
+            {
+                await KickAsync(info.ConnectionId, cancellationToken).ConfigureAwait(false);
             }
         }
 

@@ -24,6 +24,9 @@ namespace Viv.Kinna.Connections
 
         private readonly ConcurrentDictionary<string, DateTimeOffset> _lastSeen = new();
 
+        // 建立时间。和 _lastSeen 分开存：心跳会不停刷新 _lastSeen，用它判「谁更旧」永远判不出来
+        private readonly ConcurrentDictionary<string, DateTimeOffset> _connectedAt = new();
+
         // 只保护索引结构（建桶、摘桶），不保护桶里的元素——那是并发字典自己的事
         private readonly object _structureLock = new();
 
@@ -40,10 +43,11 @@ namespace Viv.Kinna.Connections
             _time = timeProvider ?? TimeProvider.System;
         }
 
-        public void Add(string connectionId, long appId, long subjectId, long userId)
+        public DateTimeOffset Add(string connectionId, long appId, long subjectId, long userId)
         {
             var key = new KinnaConnectionKey(appId, subjectId, userId);
             var added = false;
+            var now = _time.GetUtcNow();
 
             lock (_structureLock)
             {
@@ -56,22 +60,27 @@ namespace Viv.Kinna.Connections
                     .TryAdd(connectionId, 0);
 
                 _connectionLookup[connectionId] = key;
-                _lastSeen[connectionId] = _time.GetUtcNow();
+                _lastSeen[connectionId] = now;
+                _connectedAt[connectionId] = now;
             }
 
             // transport 从连接 Id 前缀推断：两套传输共用这本表，指标要能分开看
             if (added)
                 KinnaMetrics.ConnectionAdded(_hub, KinnaTransports.Of(connectionId));
+
+            return now;
         }
 
         public KinnaConnectionInfo? Remove(string connectionId)
         {
             KinnaConnectionKey key;
+            DateTimeOffset connectedAt = default;
             var removedFromUserIndex = false;
 
             lock (_structureLock)
             {
                 _lastSeen.TryRemove(connectionId, out _);
+                _connectedAt.TryRemove(connectionId, out connectedAt);
 
                 // 查表与摘除是一步，谁拿到 key 谁负责后续清理
                 if (!_connectionLookup.TryRemove(connectionId, out key))
@@ -100,7 +109,12 @@ namespace Viv.Kinna.Connections
             if (removedFromUserIndex)
                 KinnaMetrics.ConnectionRemoved(_hub, KinnaTransports.Of(connectionId));
 
-            return new KinnaConnectionInfo(connectionId, key.AppId, key.SubjectId, key.UserId);
+            return new KinnaConnectionInfo(
+                connectionId,
+                key.AppId,
+                key.SubjectId,
+                key.UserId,
+                connectedAt);
         }
 
         public List<string> GetConnectionIds(long subjectId, long userId)
@@ -125,15 +139,61 @@ namespace Viv.Kinna.Connections
                     id,
                     _connectionLookup.TryGetValue(id, out var key) ? key.AppId : 0,
                     kv.Key.SubjectId,
-                    kv.Key.UserId)));
+                    kv.Key.UserId,
+                    _connectedAt.TryGetValue(id, out var at) ? at : default)));
             }
 
             return result;
         }
 
+        public List<KinnaConnectionInfo> GetOlderConnections(
+            long appId,
+            long subjectId,
+            long userId,
+            DateTimeOffset establishedAt,
+            string connectionId)
+        {
+            var ids = GetConnectionIds(appId, subjectId, userId);
+            var older = new List<KinnaConnectionInfo>(ids.Count);
+
+            foreach (var id in ids)
+            {
+                if (id == connectionId) continue;
+                if (!_connectedAt.TryGetValue(id, out var at)) continue;
+                if (!IsOlder(id, at, connectionId, establishedAt)) continue;
+
+                older.Add(new KinnaConnectionInfo(id, appId, subjectId, userId, at));
+            }
+
+            return older;
+        }
+
+        /// <summary>
+        /// 全序比较：先比建立时间，时间相同再比连接 Id。
+        /// 只比时间的话，两条同时在两个副本上建立的连接会判成「一样旧」——
+        /// 用 &lt;= 两边都踢（互相踢掉、来回抖动），用 &lt; 两边都不踢（留下两条）。
+        /// 带上 Id 之后任意两条连接之间必有且只有一个「更旧」。
+        /// </summary>
+        private static bool IsOlder(
+            string connectionId,
+            DateTimeOffset connectedAt,
+            string otherConnectionId,
+            DateTimeOffset otherConnectedAt)
+        {
+            var byTime = connectedAt.CompareTo(otherConnectedAt);
+            return byTime != 0
+                ? byTime < 0
+                : string.CompareOrdinal(connectionId, otherConnectionId) < 0;
+        }
+
         public KinnaConnectionInfo? TryGet(string connectionId)
             => _connectionLookup.TryGetValue(connectionId, out var key)
-                ? new KinnaConnectionInfo(connectionId, key.AppId, key.SubjectId, key.UserId)
+                ? new KinnaConnectionInfo(
+                    connectionId,
+                    key.AppId,
+                    key.SubjectId,
+                    key.UserId,
+                    _connectedAt.TryGetValue(connectionId, out var at) ? at : default)
                 : null;
 
         public void Touch(string connectionId)
@@ -202,6 +262,7 @@ namespace Viv.Kinna.Connections
                 _clientConnections.Clear();
                 _connectionLookup.Clear();
                 _lastSeen.Clear();
+                _connectedAt.Clear();
             }
         }
     }

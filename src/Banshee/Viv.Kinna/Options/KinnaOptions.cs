@@ -67,8 +67,10 @@ namespace Viv.Kinna.Options
 
         /// <summary>
         /// 同一个客户端（租户 + 用户 + AppId）只保留一条连接。新连接进来时踢掉旧的，
-        /// 避免重装、重连在连接表里留下幽灵连接。只在本副本内生效——旧连接在别的副本上
-        /// 时需要广播踢人，暂不支持。配 false 关闭。
+        /// 避免重装、重连在连接表里留下幽灵连接。
+        ///
+        /// 本副本上的旧连接直接踢；别的副本上的靠广播（<see cref="Ports.IKinnaKickBus{THub}"/>）
+        /// 让对方踢掉「比自己更旧」的那条——没注册广播通道时只有本副本生效。配 false 关闭。
         /// </summary>
         public bool SingleConnectionPerApp { get; set; } = true;
 

@@ -79,7 +79,10 @@ public sealed class StubKinnaConnectionPool : IKinnaConnectionPool
 
     public long? LastUserId { get; private set; }
 
-    public void Add(string connectionId, long appId, long subjectId, long userId) { }
+    /// <summary>下一次 Add 返回的建立时间，用例可预设来决定顶号时谁更旧</summary>
+    public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UnixEpoch;
+
+    public DateTimeOffset Add(string connectionId, long appId, long subjectId, long userId) => AddedAt;
 
     public KinnaConnectionInfo? Remove(string connectionId) => Info;
 
@@ -93,6 +96,23 @@ public sealed class StubKinnaConnectionPool : IKinnaConnectionPool
     public List<string> GetConnectionIds(long appId, long subjectId, long userId) => ConnectionIds;
 
     public List<KinnaConnectionInfo> GetConnections(long subjectId) => Connections;
+
+    /// <summary>顶号查询的返回值</summary>
+    public List<KinnaConnectionInfo> OlderConnections { get; set; } = new();
+
+    /// <summary>最近一次顶号查询的参数，用来断言「比的是哪条连接」</summary>
+    public (long AppId, long SubjectId, long UserId, DateTimeOffset EstablishedAt, string ConnectionId)? LastOlderQuery { get; private set; }
+
+    public List<KinnaConnectionInfo> GetOlderConnections(
+        long appId,
+        long subjectId,
+        long userId,
+        DateTimeOffset establishedAt,
+        string connectionId)
+    {
+        LastOlderQuery = (appId, subjectId, userId, establishedAt, connectionId);
+        return OlderConnections;
+    }
 
     /// <summary>TryGet 的返回值</summary>
     public KinnaConnectionInfo? Info { get; set; }
@@ -274,6 +294,13 @@ public sealed class RecordingKinnaKickBus<THub> : IKinnaKickBus<THub> where THub
 
     /// <summary>本实例发布出去的指令，按顺序</summary>
     public List<KinnaKickCommand> Published { get; } = [];
+
+    /// <summary>
+    /// 管理动作（封号、踢单端、踢租户）发出去的指令。
+    /// 连接登记时的顶号广播也走同一条通道，断言广播内容时要把那些排除掉。
+    /// </summary>
+    public List<KinnaKickCommand> PublishedKicks =>
+        [.. Published.Where(x => x.EstablishedAt is null)];
 
     /// <summary>设了就抛，用于测「广播失败不影响本机踢人」</summary>
     public Exception? ThrowOnPublish { get; set; }

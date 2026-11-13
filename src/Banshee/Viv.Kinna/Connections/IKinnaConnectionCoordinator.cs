@@ -73,6 +73,28 @@ namespace Viv.Kinna.Connections
         Task KickSubjectAsync(long subjectId, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 顶号用：只踢本副本上**比给定连接更旧**的同客户端连接。
+        ///
+        /// 和 <see cref="KickClientAsync"/> 的差别就在「更旧」这个限定：新连接进来时，
+        /// 别的副本手上那条可能是该被顶掉的旧连接，也可能是几乎同时上来的另一条新连接——
+        /// 全踢会让两条新连接互相踢掉。判定用 <c>(建立时间, 连接 Id)</c> 全序，见
+        /// <see cref="IKinnaConnectionPool.GetOlderConnections"/>。
+        /// </summary>
+        /// <param name="appId">客户端。顶号只作用于同一端，别的端不受影响</param>
+        /// <param name="subjectId">租户</param>
+        /// <param name="userId">用户</param>
+        /// <param name="establishedAt">那条新连接的建立时间</param>
+        /// <param name="connectionId">那条新连接的 Id</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        Task KickOlderClientsAsync(
+            long appId,
+            long subjectId,
+            long userId,
+            DateTimeOffset establishedAt,
+            string connectionId,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 踢掉某个用户的全部连接，**所有副本**都生效。本机立刻踢，其余副本靠广播。
         ///
         /// 覆盖该用户的所有客户端（PC + 小程序 + …）。只想踢某一端用

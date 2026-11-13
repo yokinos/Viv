@@ -9,7 +9,15 @@ namespace Viv.Kinna.Connections
     /// </summary>
     public interface IKinnaConnectionPool
     {
-        void Add(string connectionId, long appId, long subjectId, long userId);
+        /// <summary>
+        /// 登记连接。
+        /// </summary>
+        /// <returns>
+        /// 这条连接的建立时间——必须是本表真正记下来的那个值。
+        /// 广播顶号时要把同一个值发给别的副本，各自取一次时钟的话，
+        /// 两边差几微秒就可能让两条连接都判不成「谁更旧」，最后留下两条。
+        /// </returns>
+        DateTimeOffset Add(string connectionId, long appId, long subjectId, long userId);
 
         /// <summary>
         /// 移除连接并返回它的身份，未知连接返回 null。
@@ -28,6 +36,21 @@ namespace Viv.Kinna.Connections
         List<string> GetConnectionIds(long appId, long subjectId, long userId);
 
         List<KinnaConnectionInfo> GetConnections(long subjectId);
+
+        /// <summary>
+        /// 查同一客户端上**建立时间早于**给定连接的连接（顶号用）。
+        ///
+        /// 比的是 <c>(建立时间, 连接 Id)</c> 这个全序，不是单纯比时间：
+        /// 两条连接几乎同时到达两个副本时时间可能相同，只比时间会两边都不踢（留下两条）
+        /// 或者两边都踢（互相踢掉、来回抖动）；带上连接 Id 就恰好只有一条被判为更旧。
+        /// <paramref name="connectionId"/> 自己永远不算。
+        /// </summary>
+        List<KinnaConnectionInfo> GetOlderConnections(
+            long appId,
+            long subjectId,
+            long userId,
+            DateTimeOffset establishedAt,
+            string connectionId);
 
         /// <summary>
         /// 不在本进程时返回 null。

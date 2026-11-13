@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Time.Testing;
 using Viv.Contracts.Models;
 using Viv.Fakes;
 using Viv.Kinna.Connections;
@@ -164,7 +165,7 @@ namespace Viv.Kinna.Tests
             await coordinator.KickUserEverywhereAsync(SubjectId, UserId);
 
             // 通道被注入进去了：广播确实从协调器发出
-            Assert.Single(bus.Published);
+            Assert.Single(bus.PublishedKicks);
         }
 
         [Fact]
@@ -199,6 +200,120 @@ namespace Viv.Kinna.Tests
             Assert.Single(fixture.Pool.GetConnectionIds(SubjectId, UserId));
         }
 
+        [Fact]
+        public async Task 顶号指令只踢比它更旧的连接()
+        {
+            // 旧连接挂在别的副本上，那边只知道自己有这一条。指令里带了「新连接的建立时间」，
+            // 它才敢踢；不带时间就只能全踢，而全踢会把并发上来的另一条新连接一起断掉
+            var time = new FakeTimeProvider();
+            await using var fixture = await Fixture.StartAsync(time: time);
+            await fixture.Coordinator.RegisterAsync("old", Identity());
+
+            time.Advance(TimeSpan.FromSeconds(5));
+
+            await fixture.Bus.DeliverAsync(new KinnaKickCommand
+            {
+                AppId = AppId,
+                SubjectId = SubjectId,
+                UserId = UserId,
+                EstablishedAt = time.GetUtcNow(),
+                ConnectionId = "new-on-A",
+                Reason = "顶号",
+                Origin = "other-replica"
+            });
+
+            Assert.Empty(fixture.Pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Contains(
+                fixture.Sender.Calls,
+                x => x.Method == KinnaClientMethods.ForceDisconnect && x.TargetId == "old");
+        }
+
+        [Fact]
+        public async Task 顶号不踢比自己更新的连接()
+        {
+            // 本机这条才刚连上，指令里那条比它旧 —— 该被顶掉的是发指令那边的前任，不是它
+            var time = new FakeTimeProvider();
+            await using var fixture = await Fixture.StartAsync(time: time);
+            var olderCommandAt = time.GetUtcNow();
+
+            time.Advance(TimeSpan.FromSeconds(5));
+            await fixture.Coordinator.RegisterAsync("fresh", Identity());
+
+            await fixture.Bus.DeliverAsync(new KinnaKickCommand
+            {
+                AppId = AppId,
+                SubjectId = SubjectId,
+                UserId = UserId,
+                EstablishedAt = olderCommandAt,
+                ConnectionId = "other-new",
+                Reason = "顶号",
+                Origin = "other-replica"
+            });
+
+            Assert.Equal(new[] { "fresh" }, fixture.Pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Empty(fixture.Sender.Calls);
+        }
+
+        [Fact]
+        public async Task 同一时刻建立的两条连接_恰好只有一条被判为更旧()
+        {
+            // 只比时间的话：用 <= 两边都踢（互相顶掉、来回抖动），用 < 两边都不踢（留下两条）。
+            // 带上连接 Id 之后任意两条之间必有且只有一个「更旧」，这是不抖动的根据
+            var time = new FakeTimeProvider();
+            await using var fixture = await Fixture.StartAsync(time: time);
+            await fixture.Coordinator.RegisterAsync("a", Identity());
+
+            // 对方那条叫 b：同一时刻，但 a < b，本机这条更旧
+            await fixture.Bus.DeliverAsync(new KinnaKickCommand
+            {
+                AppId = AppId,
+                SubjectId = SubjectId,
+                UserId = UserId,
+                EstablishedAt = time.GetUtcNow(),
+                ConnectionId = "b",
+                Origin = "other-replica"
+            });
+
+            Assert.Empty(fixture.Pool.GetConnectionIds(SubjectId, UserId));
+
+            // 反过来：本机这条叫 c，对方那条叫 a —— c 更新，不该被踢
+            await fixture.Coordinator.RegisterAsync("c", Identity());
+            await fixture.Bus.DeliverAsync(new KinnaKickCommand
+            {
+                AppId = AppId,
+                SubjectId = SubjectId,
+                UserId = UserId,
+                EstablishedAt = time.GetUtcNow(),
+                ConnectionId = "a",
+                Origin = "other-replica"
+            });
+
+            Assert.Equal(new[] { "c" }, fixture.Pool.GetConnectionIds(SubjectId, UserId));
+            Assert.DoesNotContain(
+                fixture.Sender.Calls,
+                x => x.Method == KinnaClientMethods.ForceDisconnect && x.TargetId == "c");
+        }
+
+        [Fact]
+        public async Task 管理动作不带建立时间_仍然全踢()
+        {
+            // 封号这类指令和顶号走同一条通道，不能被「只踢更旧的」逻辑带偏
+            var time = new FakeTimeProvider();
+            await using var fixture = await Fixture.StartAsync(time: time);
+            await fixture.Coordinator.RegisterAsync("c1", Identity());
+
+            await fixture.Bus.DeliverAsync(new KinnaKickCommand
+            {
+                AppId = AppId,
+                SubjectId = SubjectId,
+                UserId = UserId,
+                Reason = "token 泄露",
+                Origin = "other-replica"
+            });
+
+            Assert.Empty(fixture.Pool.GetConnectionIds(SubjectId, UserId));
+        }
+
         private sealed class Fixture : IAsyncDisposable
         {
             private Fixture(
@@ -230,9 +345,10 @@ namespace Viv.Kinna.Tests
             public ServiceProvider Provider { get; }
 
             /// <param name="throwOnKick">让踢人本身失败，验证异常被订阅端吞掉</param>
-            internal static async Task<Fixture> StartAsync(bool throwOnKick = false)
+            /// <param name="time">建立时间的来源。顶号要比「谁更旧」，必须能拨时间</param>
+            internal static async Task<Fixture> StartAsync(bool throwOnKick = false, TimeProvider? time = null)
             {
-                var pool = new KinnaConnectionPool();
+                var pool = new KinnaConnectionPool(timeProvider: time ?? TimeProvider.System);
                 var sender = new RecordingKinnaClientSender();
                 if (throwOnKick)
                 {

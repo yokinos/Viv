@@ -676,7 +676,7 @@ namespace Viv.Kinna.Tests
             Assert.Contains(sender.Calls, x => x.Method == KinnaClientMethods.ForceDisconnect && x.TargetId == "c1");
 
             // 广播了一条带 UserId 的指令，Origin 由通道填
-            var command = Assert.Single(bus.Published);
+            var command = Assert.Single(bus.PublishedKicks);
             Assert.Equal(SubjectId, command.SubjectId);
             Assert.Equal(UserId, command.UserId);
             Assert.Equal("封号", command.Reason);
@@ -697,7 +697,7 @@ namespace Viv.Kinna.Tests
 
             // 0 是「整个租户」的约定，订阅端据此选 KickSubjectAsync。
             // 这里若换成实际 UserId，另一个副本就只会踢这一个用户
-            var command = Assert.Single(bus.Published);
+            var command = Assert.Single(bus.PublishedKicks);
             Assert.Equal(0, command.UserId);
         }
 
@@ -741,7 +741,7 @@ namespace Viv.Kinna.Tests
             Assert.DoesNotContain(sender.Calls, x => x.TargetId == "mini");
 
             // 广播要带上 AppId，否则别的副本会当成「踢所有端」
-            var command = Assert.Single(bus.Published);
+            var command = Assert.Single(bus.PublishedKicks);
             Assert.Equal(AppId, command.AppId);
             Assert.Equal(UserId, command.UserId);
         }
@@ -762,7 +762,41 @@ namespace Viv.Kinna.Tests
             await coordinator.KickUserEverywhereAsync(SubjectId, UserId, "封号");
 
             Assert.Empty(pool.GetConnectionIds(SubjectId, UserId));
-            Assert.Equal(0, Assert.Single(bus.Published).AppId);
+            Assert.Equal(0, Assert.Single(bus.PublishedKicks).AppId);
+        }
+
+        [Fact]
+        public async Task RegisterAsync_广播顶号_带AppId和建立时间()
+        {
+            // 旧连接可能挂在别的副本上，本机这个循环踢不到它，只能广播。
+            // AppId 必须带上：留 0 会被订阅端当成「踢这个人所有端」，别的设备白掉线
+            var pool = new KinnaConnectionPool();
+            var bus = new RecordingKinnaKickBus<TestHub>();
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), kickBus: bus);
+
+            await coordinator.RegisterAsync("c1", Identity());
+
+            var command = Assert.Single(bus.Published);
+            Assert.Equal(AppId, command.AppId);
+            Assert.Equal(SubjectId, command.SubjectId);
+            Assert.Equal(UserId, command.UserId);
+            Assert.Equal("c1", command.ConnectionId);
+            Assert.NotNull(command.EstablishedAt);
+            Assert.Equal(bus.InstanceId, command.Origin);
+        }
+
+        [Fact]
+        public async Task RegisterAsync_关掉单连接策略时_不广播顶号()
+        {
+            // 允许多条连接就谈不上顶号，广播只会让别的副本白踢一趟
+            var pool = new KinnaConnectionPool();
+            var bus = new RecordingKinnaKickBus<TestHub>();
+            var coordinator = Create(
+                pool, new RecordingKinnaClientSender(), singleConnectionPerApp: false, kickBus: bus);
+
+            await coordinator.RegisterAsync("c1", Identity());
+
+            Assert.Empty(bus.Published);
         }
 
         [Fact]
