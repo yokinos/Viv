@@ -59,13 +59,6 @@ namespace Viv.Momo
         Task<List<T>> FindListAsync<T>(string sql, object? parameters = default, CancellationToken cancellationToken = default) where T : class;
         T? FindScalar<T>(string sql, object? parameters = default);
         Task<T?> FindScalarAsync<T>(string sql, object? parameters = default, CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// 走**写连接**的标量查询，给「UPDATE ... OUTPUT / RETURNING 取回结果」这类语句用。
-        ///
-        /// 单独立一个方法而不是给 <see cref="FindScalarAsync{T}"/> 加参数：读连接可能是只读从库，
-        /// 写语句在那边直接失败；主从有延迟时还会读到旧值。名字里带 Write 是为了让调用点无法忽略这件事。
-        /// </summary>
         Task<T?> FindScalarWriteAsync<T>(string sql, object? parameters = default, CancellationToken cancellationToken = default);
         PagedList<T> Page<T>(string sql, int pageIndex, int pageSize, object? parameters = default);
         Task<PagedList<T>> PageAsync<T>(string sql, int pageIndex, int pageSize, object? parameters = default, CancellationToken cancellationToken = default);
@@ -78,14 +71,6 @@ namespace Viv.Momo
         Task ExecuteInTransactionAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken = default);
         Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default);
         Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> work, Func<T, bool> commitWhen, CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// 当前是否处于活动事务中（即正跑在 <see cref="ExecuteInTransactionAsync{T}(Func{CancellationToken, Task{T}}, CancellationToken)"/> 的委托里）。
-        ///
-        /// 事务状态挂在<b>实例</b>上，所以这个判据只对「与业务同一作用域」拿到的那个实例成立 ——
-        /// 也正是它能验证的东西：入队和业务写是不是同一个事务。它的用途是让「以为原子其实不原子」
-        /// 的调用点在开发期就炸，而不是等线上数据对不上再回头查。
-        /// </summary>
         bool IsInTransaction { get; }
         void ChangeTenant(long tenantId);
         void IsAutoSetDefaultValue(bool flag);
