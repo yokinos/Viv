@@ -53,8 +53,9 @@ namespace Viv.Entity.Database.Ouroboros
         /// 下一条消息的序号水位。取号靠 <c>UPDATE ... SET NextSeq = NextSeq + 1</c> 的原子自增，
         /// 不再「把所有消息读回来取 max+1」——那样并发下必撞，且长会话是 O(n) 全表扫。
         ///
-        /// 0 是「还没初始化过」的哨兵：第一次取号时用 <c>MAX(Seq)</c> 补上（见 AgentStore.NextSeqAsync），
-        /// 所以老库不用写迁移脚本，加列后自动对齐。
+        /// 新会话这一列是默认值 0，所以第一条消息拿到 1。
+        /// 这个列加入之前建的会话，水位从 0 重新开始 —— 不做存量对齐（不写迁移脚本，
+        /// 也不在取号语句里补 <c>MAX(Seq)</c>）。
         /// </summary>
         public int NextSeq { get; set; }
 

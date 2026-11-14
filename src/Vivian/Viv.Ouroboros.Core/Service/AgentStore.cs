@@ -76,17 +76,16 @@ namespace Viv.Ouroboros.Core.Service
 
         public async Task<int> NextSeqAsync(long conversationId)
         {
-            // 一次语句里做完「首取时对齐水位」和「自增取号」：
-            // UPDATE 会拿到该会话行的排他锁，并发调用在这里排队，所以不会有两个调用读到同一个值。
-            // NextSeq = 0 是「还没初始化过」的哨兵，用现有消息的 MAX(Seq) 补上 —— 老库加列后不用跑迁移脚本。
+            // 一条语句自增取号：UPDATE 会拿到该会话行的排他锁，并发调用在这里排队，
+            // 所以不会有两个调用拿到同一个值。
             //
-            // 走写连接：语句本身是 UPDATE，读连接可能是只读从库，主从有延迟时还会读到旧水位
+            // 走写连接：语句本身是 UPDATE，读连接可能是只读从库
             var seq = await _dbContext
                 .FindScalarWriteAsync<int?>(_nextSeqSql ??= BuildNextSeqSql(), new { Id = conversationId })
                 .ConfigureAwait(false);
 
             // 0 行受影响 = 会话不存在。这时不能悄悄返回 1：会和已有消息撞号，且错得很安静。
-            if (seq is null or <= 0)
+            if (seq is null)
             {
                 throw new InvalidOperationException($"会话 {conversationId} 不存在，无法分配消息序号");
             }
@@ -95,31 +94,23 @@ namespace Viv.Ouroboros.Core.Service
         }
 
         /// <summary>
-        /// 取号语句。两种方言只有三处不同：NULL 合并函数（ISNULL / COALESCE）、
-        /// 返回自增后值的写法（OUTPUT INSERTED / RETURNING）、以及表名列名的引用方式（由方言处理）。
+        /// 取号语句：会话行上的 <c>NextSeq</c> 自增 1 并返回新值。
+        /// 两种方言只有两处不同：返回自增后值的写法（OUTPUT INSERTED / RETURNING）、
+        /// 以及表名列名的引用方式（由方言处理）。
         ///
-        /// CASE 分支保证「一条语句同时覆盖初始化和自增」：NextSeq = 0 时按 MAX(Seq) 补水位并直接取 1 号，
-        /// 否则单纯 +1。两条语句分开写的话，首次取号和后续取号之间会有窗口。
+        /// 新会话的 <c>NextSeq</c> 是列默认值 0，所以第一条消息拿到 1，不需要额外初始化。
         /// </summary>
         private string BuildNextSeqSql()
         {
             var dialect = _dbContext.Dialect;
             var conversationTable = dialect.GetTableName<OtConversation>();
-            var messageTable = dialect.GetTableName<OtMessage>();
 
             var id = dialect.QuoteClr(nameof(OtConversation.Id));
             var nextSeq = dialect.QuoteClr(nameof(OtConversation.NextSeq));
-            var conversationId = dialect.QuoteClr(nameof(OtMessage.ConversationId));
-            var seq = dialect.QuoteClr(nameof(OtMessage.Seq));
 
-            var isPostgres = dialect.Source == DatabaseSourceType.PostgreSQL;
-            var coalesce = isPostgres ? "COALESCE" : "ISNULL";
+            var set = $"SET {nextSeq} = {nextSeq} + 1";
 
-            var set = $"SET {nextSeq} = CASE WHEN {nextSeq} = 0 " +
-                      $"THEN (SELECT {coalesce}(MAX({seq}), 0) + 1 FROM {messageTable} WHERE {conversationId} = @Id) " +
-                      $"ELSE {nextSeq} + 1 END";
-
-            return isPostgres
+            return dialect.Source == DatabaseSourceType.PostgreSQL
                 ? $"UPDATE {conversationTable} {set} WHERE {id} = @Id RETURNING {nextSeq}"
                 : $"UPDATE {conversationTable} {set} OUTPUT INSERTED.{nextSeq} WHERE {id} = @Id";
         }

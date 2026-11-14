@@ -49,34 +49,6 @@ public abstract class AgentStoreSequenceTestsBase
     }
 
     [DockerFact]
-    public async Task 老会话首次取号从现有最大序号之后开始()
-    {
-        using var db = CreateDb();
-        await db.SyncTableAsync();
-
-        var conversationId = await InsertConversationAsync(db);
-
-        // NextSeq 是新加的列，存量会话那里是 0。取号时必须先对齐到 MAX(Seq)，
-        // 否则会从 1 重新发号，和已有消息撞上 —— 而且加列不需要任何迁移脚本。
-        for (var seq = 1; seq <= 3; seq++)
-        {
-            await db.InsertAsync(new OtMessage
-            {
-                ConversationId = conversationId,
-                Seq = seq,
-                Role = EmMessageRole.User,
-                Content = $"历史消息 {seq}",
-                ContentType = EmMessageContentType.Text
-            });
-        }
-
-        var store = new AgentStore(db, new RecordingLogger());
-
-        Assert.Equal(4, await store.NextSeqAsync(conversationId));
-        Assert.Equal(5, await store.NextSeqAsync(conversationId));
-    }
-
-    [DockerFact]
     public async Task 会话不存在时抛异常而不是返回1()
     {
         using var db = CreateDb();
