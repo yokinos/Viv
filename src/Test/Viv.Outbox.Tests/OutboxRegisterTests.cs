@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Viv.Contracts.Interface;
 using Viv.Outbox;
 using Viv.Outbox.Core;
 using Viv.Outbox.Options;
@@ -74,5 +75,33 @@ public class OutboxRegisterTests
         // OutboxOptions / IOptions<OutboxOptions> 由 VivConfigLoader.AddVivConfig 统一注册。
         // 这里再注册一份会多出一个配置源，热更新下两份值会各走各的。
         Assert.DoesNotContain(services, x => x.ServiceType == typeof(OutboxOptions));
+    }
+
+    [Fact]
+    public void 唤醒信号是Singleton_观察者与入队器同作用域()
+    {
+        var services = Register();
+
+        // 信号注册成多个实例，写方叫醒的就不是在读的那个投递器 —— 快路径静默失效，
+        // 表现为「有时候莫名慢 5 秒」，从日志上完全看不出来
+        Assert.Equal(ServiceLifetime.Singleton, services.Single(x => x.ServiceType == typeof(OutboxSignal)).Lifetime);
+
+        // 观察者跨作用域共享的话，一个请求的提交会消费掉另一个请求的入队标记
+        Assert.Equal(ServiceLifetime.Scoped, services.Single(x => x.ServiceType == typeof(OutboxCommitObserver)).Lifetime);
+    }
+
+    [Fact]
+    public void 事务观察者与提交观察者是同一个实例()
+    {
+        var services = Register();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        // Momo 按 IEnumerable<ITransactionObserver> 解析，入队器拿的是 OutboxCommitObserver 具体类型。
+        // 这两条注册指向不同实例的话，入队打的那个标记永远没人消费 —— 快路径完全失效，
+        // 而且编译、启动、单测都不会报错
+        Assert.Same(
+            scope.ServiceProvider.GetRequiredService<OutboxCommitObserver>(),
+            scope.ServiceProvider.GetRequiredService<ITransactionObserver>());
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Viv.Contracts.Interface;
 using Viv.Delusion.Magic;
 using Viv.Outbox.Core;
 using Viv.Outbox.Options;
@@ -27,6 +28,16 @@ namespace Viv.Outbox
             // 认领时刻、租约、退避、保留期都从这里取。TryAdd 而不是 Add：
             // Kinna、其它模块也会注册，重复 Add 会变成多个实例，虽然行为一样但没必要。
             services.TryAddSingleton(TimeProvider.System);
+
+            // 唤醒信号：进程内一份。所有业务作用域往同一条队列里投，投递器从同一条队列里取；
+            // 注册成多个实例的话，写方叫醒的就不是在读的那个投递器了，快路径静默失效。
+            services.TryAddSingleton<OutboxSignal>();
+
+            // Scoped —— 与 IMomoDbContext / OutboxStore 同作用域，「入队」与「这一次提交」才是一笔账。
+            // ITransactionObserver 单独注册一份指向同一个实例：Momo 按 IEnumerable<ITransactionObserver>
+            // 解析，不这样注册它就拿不到。
+            services.AddScoped<OutboxCommitObserver>();
+            services.AddScoped<ITransactionObserver>(sp => sp.GetRequiredService<OutboxCommitObserver>());
 
             // 无状态（发布器逐次传入），进程内一份就够
             services.AddSingleton<IOutboxEnvelopeSenderFactory, OutboxEnvelopeSenderFactory>();

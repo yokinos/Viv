@@ -112,11 +112,17 @@ public class OutboxContractTests
     {
         // 发件箱投的是跨进程那族：复用现成的 {EventName}Exchange fanout 拓扑，
         // 也复用消费端 VivConsumer<T>。约束在编译期挡住别的族混进来。
-        var enqueue = typeof(IVivOutbox).GetMethods().Single(x => x.Name == nameof(IVivOutbox.EnqueueAsync));
-        var constraint = enqueue.GetGenericArguments().Single().BaseType;
+        // 两个入口都要查 —— 新加的那个漏了约束的话，能塞进来的类型就多了一族。
+        var enqueues = typeof(IVivOutbox).GetMethods();
 
-        Assert.NotNull(constraint);
-        Assert.Contains(typeof(NanaEvent), Flatten(constraint!));
+        Assert.NotEmpty(enqueues);
+        foreach (var enqueue in enqueues)
+        {
+            var constraint = enqueue.GetGenericArguments().Single().BaseType;
+
+            Assert.NotNull(constraint);
+            Assert.Contains(typeof(NanaEvent), Flatten(constraint!));
+        }
 
         static IEnumerable<Type> Flatten(Type type)
         {
@@ -128,12 +134,21 @@ public class OutboxContractTests
     }
 
     [Fact]
-    public void 契约只暴露一个入队方法_没有同步重载()
+    public void 契约只暴露两个入队入口_都是异步且没有同步重载()
     {
-        // 同步版本会诱使人写出「在事务里同步等落库」—— 那个场景下事务是开着的，不值得单开一个口子
+        // 同步版本会诱使人写出「在事务里同步等落库」—— 那个场景下事务是开着的，不值得单开一个口子。
+        // 两个入口分别是「必须原子」和「显式放弃原子」；再多就是有人想加第三个口子了。
         var methods = typeof(IVivOutbox).GetMethods();
 
-        Assert.Single(methods);
-        Assert.Equal(nameof(IVivOutbox.EnqueueAsync), methods[0].Name);
+        Assert.Equal(2, methods.Length);
+        Assert.Contains(methods, x => x.Name == nameof(IVivOutbox.EnqueueAsync));
+        Assert.Contains(methods, x => x.Name == nameof(IVivOutbox.EnqueueWithoutTransactionAsync));
+
+        Assert.All(methods, x => Assert.Equal(typeof(Task<bool>), x.ReturnType));
+
+        // 没有取消令牌的长跑方法最后会变成不可中断的孤儿 —— 两个入口都必须带上
+        Assert.All(methods, x => Assert.Contains(
+            x.GetParameters(),
+            p => p.ParameterType == typeof(CancellationToken)));
     }
 }

@@ -148,7 +148,11 @@ internal class StubOutboxRepository : IOutboxRepository
 /// </summary>
 public sealed class RecordingOutbox : IVivOutbox
 {
+    /// <summary>所有入队的事件（两个入口的并集）—— 断言"入队了多少条"用它。</summary>
     public List<NanaEvent> Enqueued { get; } = [];
+
+    /// <summary>只记走"不要事务"那个入口的事件 —— 断言"这里不该绕开事务"用它。</summary>
+    public List<NanaEvent> EnqueuedWithoutTransaction { get; } = [];
 
     public bool Result { get; set; } = true;
 
@@ -156,6 +160,14 @@ public sealed class RecordingOutbox : IVivOutbox
     {
         if (content is null) return Task.FromResult(false);
         Enqueued.Add(content);
+        return Task.FromResult(Result);
+    }
+
+    public Task<bool> EnqueueWithoutTransactionAsync<T>(T content, CancellationToken cancellationToken = default) where T : NanaEvent
+    {
+        if (content is null) return Task.FromResult(false);
+        Enqueued.Add(content);
+        EnqueuedWithoutTransaction.Add(content);
         return Task.FromResult(Result);
     }
 }

@@ -16,18 +16,24 @@ namespace Viv.Momo.Core
 
         private readonly ITransactionAttemptListener? _attemptListener;
 
-        public MomoDbContextFactory(IVivContext vivContext, ILoggerContract logger, ITransactionAttemptListener? attemptListener = null)
+        /// <summary>
+        /// 事务提交观察者
+        /// </summary>
+        private readonly IEnumerable<ITransactionObserver>? _observers;
+
+        public MomoDbContextFactory(IVivContext vivContext, ILoggerContract logger, ITransactionAttemptListener? attemptListener = null, IEnumerable<ITransactionObserver>? observers = null)
         {
             _vivContext = vivContext;
             _logger = logger;
             _attemptListener = attemptListener;
+            _observers = observers;
         }
 
         /// <inheritdoc/>
         public IMomoDbContext? Create(DatabaseOptions options)
         {
             if (options == null) return null;
-            return new MomoDatabaseContext(_vivContext, _logger, new FixedOptionsProvider(options), _attemptListener);
+            return new MomoDatabaseContext(_vivContext, _logger, new FixedOptionsProvider(options), _attemptListener, _observers);
         }
 
         private sealed class FixedOptionsProvider : IDatabaseOptionsProvider

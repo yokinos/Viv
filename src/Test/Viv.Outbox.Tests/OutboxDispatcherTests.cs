@@ -31,7 +31,9 @@ public class OutboxDispatcherTests
         StubOutboxRepository repo,
         RecordingEventPublisher publisher,
         RecordingLogger logger,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        OutboxSignal? signal = null,
+        int pollSeconds = 1)
     {
         var services = new ServiceCollection();
         services.AddScoped<IOutboxRepository>(_ => repo);
@@ -43,8 +45,9 @@ public class OutboxDispatcherTests
             new OutboxEnvelopeSenderFactory(),
             logger,
             // 必须全限定：本测试的命名空间嵌在 Viv.Outbox 下，裸写 Options 会被解析成 Viv.Outbox.Options
-            Microsoft.Extensions.Options.Options.Create(new OutboxOptions { PollIntervalSeconds = 1 }),
-            time);
+            Microsoft.Extensions.Options.Options.Create(new OutboxOptions { PollIntervalSeconds = pollSeconds }),
+            time,
+            signal);
 
         return (dispatcher, provider);
     }
@@ -194,5 +197,73 @@ public class OutboxDispatcherTests
         }
 
         Assert.Contains(logger.Errors, x => x.Contains("稍后重试"));
+    }
+
+    [Fact]
+    public async Task 提交后收到信号_不必等满兜底间隔就进下一轮()
+    {
+        // 兜底间隔给到一小时：第二轮还能跑起来，就只可能是被信号叫醒的。
+        // 这一条钉的是「入队提交 → 立刻投递」这条快路径真的接上了 ——
+        // 接不上不会报错，只会表现为「有时候莫名慢 5 秒」，最难查。
+        var signal = new OutboxSignal();
+        var repo = new StubOutboxRepository();
+        var (dispatcher, provider) = Build(
+            repo, new RecordingEventPublisher(), new RecordingLogger(), signal: signal, pollSeconds: 3600);
+
+        try
+        {
+            await dispatcher.StartAsync(CancellationToken.None);
+
+            Assert.True(
+                await WaitForAsync(() => repo.ReleaseExpiredCalls >= 1, TimeSpan.FromSeconds(10)),
+                "首轮没有跑起来");
+
+            var firstRound = repo.ReleaseExpiredCalls;
+            signal.Notify();
+
+            Assert.True(
+                await WaitForAsync(() => repo.ReleaseExpiredCalls > firstRound, TimeSpan.FromSeconds(5)),
+                "发出唤醒信号后投递器没有立刻进下一轮");
+        }
+        finally
+        {
+            await dispatcher.StopAsync(CancellationToken.None);
+            await provider.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task 没有信号源_仍然按兜底间隔继续跑()
+    {
+        // signal 传 null（直建投递器、没有容器的那种场景）时不能变成忙等，
+        // 也不能就此停住 —— 它退化成「永不来信号」的纯等待
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero));
+        var repo = new StubOutboxRepository();
+        var (dispatcher, provider) = Build(repo, new RecordingEventPublisher(), new RecordingLogger(), time);
+
+        try
+        {
+            await dispatcher.StartAsync(CancellationToken.None);
+
+            Assert.True(
+                await WaitForAsync(() => repo.ReleaseExpiredCalls >= 1, TimeSpan.FromSeconds(10)),
+                "首轮没有跑起来");
+
+            var firstRound = repo.ReleaseExpiredCalls;
+
+            var advanced = false;
+            for (var i = 0; i < 200 && !advanced; i++)
+            {
+                time.Advance(TimeSpan.FromSeconds(1));
+                advanced = await WaitForAsync(() => repo.ReleaseExpiredCalls > firstRound, TimeSpan.FromMilliseconds(100));
+            }
+
+            Assert.True(advanced, "没有信号源时投递器停住了");
+        }
+        finally
+        {
+            await dispatcher.StopAsync(CancellationToken.None);
+            await provider.DisposeAsync();
+        }
     }
 }

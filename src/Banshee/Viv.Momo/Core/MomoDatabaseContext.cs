@@ -26,8 +26,8 @@ namespace Viv.Momo.Core
     {
         private bool _disposed;
 
-        public MomoDatabaseContext(IVivContext vivContext, ILoggerContract logger, IDatabaseOptionsProvider optionsProvider, ITransactionAttemptListener? attemptListener = null)
-            : base(vivContext, logger, optionsProvider, attemptListener) { }
+        public MomoDatabaseContext(IVivContext vivContext, ILoggerContract logger, IDatabaseOptionsProvider optionsProvider, ITransactionAttemptListener? attemptListener = null, IEnumerable<ITransactionObserver>? observers = null)
+            : base(vivContext, logger, optionsProvider, attemptListener, observers) { }
 
         #region Insert
 

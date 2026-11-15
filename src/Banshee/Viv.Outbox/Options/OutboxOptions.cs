@@ -12,8 +12,18 @@ namespace Viv.Outbox.Options
         /// </summary>
         public bool EnableDispatcher { get; set; } = true;
 
-        /// <summary>轮询间隔（秒）—— 决定投递延迟的上界。</summary>
-        public int PollIntervalSeconds { get; set; } = 5;
+        /// <summary>
+        /// 兜底轮询间隔（秒）。
+        ///
+        /// 它决定的已经不是"平均投递延迟"了：本进程入队并提交后，投递器会被提交观察者立刻唤醒，
+        /// 延迟是毫秒级。这个值只剩两个职责 —— 接住<b>别的进程</b>写进来的消息（进程内信号跨不过去），
+        /// 接住信号丢失（通知方回滚、进程刚起）。所以它该按"故障恢复的容忍度"来定，默认 30 秒；
+        /// 按"用户体验"去定成 1 秒是在为一个已经不走这条路的场景付轮询成本。
+        ///
+        /// ★ 例外：投递器与写库不在同一进程的部署（例如 API 写入、Worker 投递），
+        /// 进程内信号打不过去，这个值会重新变回"真实延迟上界"，那边必须单独配小。
+        /// </summary>
+        public int PollIntervalSeconds { get; set; } = 30;
 
         /// <summary>单批认领行数。</summary>
         public int BatchSize { get; set; } = 100;

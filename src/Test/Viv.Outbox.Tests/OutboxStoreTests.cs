@@ -19,18 +19,24 @@ namespace Viv.Outbox.Tests;
 /// </summary>
 public class OutboxStoreTests
 {
+    /// <summary>探针等待时长。只用来区分「立刻被叫醒」和「没人叫」，不必等到兜底间隔</summary>
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromMilliseconds(80);
+
     private static (OutboxStore Store, StubOutboxRepository Repo, TestContext Context, RecordingLogger Logger) Build(
         TimeProvider? time = null)
     {
         var repo = new StubOutboxRepository();
         var context = new TestContext();
         var logger = new RecordingLogger();
-        return (new OutboxStore(repo, InTransaction(), context, logger, time), repo, context, logger);
+        return (new OutboxStore(repo, InTransaction(), context, logger, new OutboxCommitObserver(new OutboxSignal()), time), repo, context, logger);
     }
 
     /// <summary>「正处于业务事务中」的库上下文替身。<c>IMomoDbContext</c> 有五十多个成员，用代理而不是手写。</summary>
     private static IMomoDbContext InTransaction()
         => TestProxy.Create<IMomoDbContext>(proxy => proxy.Returns[typeof(bool)] = true);
+
+    /// <summary>「没开事务」的库上下文替身 —— 代理由默认值给出 <c>IsInTransaction = false</c>。</summary>
+    private static IMomoDbContext NoTransaction() => TestProxy.Create<IMomoDbContext>();
 
     [Fact]
     public async Task 不在事务中入队_直接抛且不落行()
@@ -38,7 +44,7 @@ public class OutboxStoreTests
         var repo = new StubOutboxRepository();
         // 默认回值就是 false —— 没开事务的那个现场
         var db = TestProxy.Create<IMomoDbContext>();
-        var store = new OutboxStore(repo, db, new TestContext(), new RecordingLogger());
+        var store = new OutboxStore(repo, db, new TestContext(), new RecordingLogger(), new OutboxCommitObserver(new OutboxSignal()));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => store.EnqueueAsync(new OutboxTestEvent { Payload = "p" }));
@@ -261,6 +267,127 @@ public class OutboxStoreTests
         Assert.Equal(2, repo.Inserted.Count);
         Assert.Equal(2, repo.Inserted.Select(x => x.Id).Distinct().Count());
         Assert.Equal(2, repo.Inserted.Select(x => x.MessageId).Distinct().Count());
+    }
+
+    // ── 提交后唤醒投递器 ──────────────────────────────────────
+    // 入队本身不能叫醒投递器 —— 行还在未提交的事务里，醒了也认领不到，白跑一轮继续睡。
+    // 所以这里只打标记，由 Momo 在提交成功后回调 OnCommitted 才转成一次 Notify。
+    // 这三条钉的是「谁在什么时候叫醒投递器」，改错任何一处都表现为「偶尔莫名慢 5 秒」。
+
+    [Fact]
+    public async Task 入队后未提交_不唤醒投递器()
+    {
+        var signal = new OutboxSignal();
+        var observer = new OutboxCommitObserver(signal);
+        var store = new OutboxStore(new StubOutboxRepository(), InTransaction(), new TestContext(), new RecordingLogger(), observer);
+
+        await store.EnqueueAsync(new OutboxTestEvent());
+
+        // 还在事务里：此刻叫醒投递器等于让它白跑一轮
+        Assert.False(await signal.WaitAsync(ProbeTimeout, TimeProvider.System, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task 入队后提交_唤醒投递器()
+    {
+        var signal = new OutboxSignal();
+        var observer = new OutboxCommitObserver(signal);
+        var store = new OutboxStore(new StubOutboxRepository(), InTransaction(), new TestContext(), new RecordingLogger(), observer);
+
+        await store.EnqueueAsync(new OutboxTestEvent());
+        observer.OnCommitted();
+
+        Assert.True(await signal.WaitAsync(ProbeTimeout, TimeProvider.System, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task 入队没生效_提交也不唤醒投递器()
+    {
+        var signal = new OutboxSignal();
+        var observer = new OutboxCommitObserver(signal);
+        var repo = new StubOutboxRepository { InsertResult = false };
+        var store = new OutboxStore(repo, InTransaction(), new TestContext(), new RecordingLogger(), observer);
+
+        Assert.False(await store.EnqueueAsync(new OutboxTestEvent()));
+        observer.OnCommitted();
+
+        // 一行都没落，叫醒投递器只会换来一轮空认领
+        Assert.False(await signal.WaitAsync(ProbeTimeout, TimeProvider.System, CancellationToken.None));
+    }
+
+    // ── 不要事务的入口 ────────────────────────────────────────
+    // 与事务版的差别只有两处：开头不校验事务、无事务时落库即唤醒。
+    // 前者写错会让原子性无声消失，后者写漏会让这条路径退回 5 秒延迟 —— 两条都钉在这里。
+
+    [Fact]
+    public async Task 不要事务的入队_不在事务中也照常落库()
+    {
+        var repo = new StubOutboxRepository();
+        var store = new OutboxStore(repo, NoTransaction(), new TestContext(), new RecordingLogger(), new OutboxCommitObserver(new OutboxSignal()));
+
+        Assert.True(await store.EnqueueWithoutTransactionAsync(new OutboxTestEvent { Payload = "p" }));
+
+        var row = Assert.Single(repo.Inserted);
+        Assert.Equal(OutboxStatus.Pending, row.Status);
+        Assert.Equal(0, row.RetryCount);
+    }
+
+    [Fact]
+    public async Task 不要事务的入队_落库即唤醒投递器()
+    {
+        var signal = new OutboxSignal();
+        var observer = new OutboxCommitObserver(signal);
+        var store = new OutboxStore(new StubOutboxRepository(), NoTransaction(), new TestContext(), new RecordingLogger(), observer);
+
+        await store.EnqueueWithoutTransactionAsync(new OutboxTestEvent());
+
+        // 语句自动提交：InsertAsync 返回时行已可见，没有"提交"可等，
+        // 不该让投递器干等一个兜底间隔
+        Assert.True(await signal.WaitAsync(ProbeTimeout, TimeProvider.System, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task 不要事务的入队_恰好有事务时仍等提交才唤醒()
+    {
+        var signal = new OutboxSignal();
+        var observer = new OutboxCommitObserver(signal);
+        var store = new OutboxStore(new StubOutboxRepository(), InTransaction(), new TestContext(), new RecordingLogger(), observer);
+
+        await store.EnqueueWithoutTransactionAsync(new OutboxTestEvent());
+
+        // 入口名说的是"不要求事务"，不是"不许有事务"。外层真开了事务，
+        // 这条消息就跟着一起提交 —— 提前叫醒等于认领一个还看不见的行
+        Assert.False(await signal.WaitAsync(ProbeTimeout, TimeProvider.System, CancellationToken.None));
+
+        observer.OnCommitted();
+        Assert.True(await signal.WaitAsync(ProbeTimeout, TimeProvider.System, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task 不要事务的入队_记一条Warning说明放弃了原子性()
+    {
+        var logger = new RecordingLogger();
+        var store = new OutboxStore(new StubOutboxRepository(), NoTransaction(), new TestContext(), logger, new OutboxCommitObserver(new OutboxSignal()));
+
+        await store.EnqueueWithoutTransactionAsync(new OutboxTestEvent());
+
+        // 它不是错误（调用方是知情地选的），但必须留下痕迹：
+        // 「消息发了、业务没成」事后对账时，这条日志是唯一能解释原因的线索
+        var warning = Assert.Single(logger.Warnings);
+        Assert.Contains("未参与事务", warning);
+        Assert.Contains(nameof(IVivOutbox.EnqueueAsync), warning);
+        Assert.Empty(logger.Errors);
+    }
+
+    [Fact]
+    public async Task 不要事务的入队_内容为null_返回false且不落库()
+    {
+        var repo = new StubOutboxRepository();
+        var store = new OutboxStore(repo, NoTransaction(), new TestContext(), new RecordingLogger(), new OutboxCommitObserver(new OutboxSignal()));
+
+        Assert.False(await store.EnqueueWithoutTransactionAsync<OutboxTestEvent>(null!));
+
+        Assert.Empty(repo.Inserted);
     }
 
     [Fact]

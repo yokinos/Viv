@@ -51,6 +51,19 @@ namespace Viv.Momo.Core
         /// </summary>
         protected readonly ITransactionAttemptListener? _attemptListener;
 
+        /// <summary>
+        /// 事务提交观察者（可选，由宿主传入）。只在事务真正提交成功后回调。
+        ///
+        /// 与 <see cref="_attemptListener"/> 分工不同：那个管「这次尝试失败了要撤掉什么」，
+        /// 这个管「确定成了，把在等它的那些事叫醒」—— 发件箱投递器就靠它在入队提交后
+        /// 立刻被唤起，而不是干等一个轮询间隔。
+        /// 没传（初始化工具、单元测试直建上下文）时不做任何通知。
+        ///
+        /// 用数组而不是 IEnumerable：每次提交都要遍历一遍，且注册是启动期一次性的，
+        /// 没有延迟解析的必要。
+        /// </summary>
+        protected readonly ITransactionObserver[] _observers;
+
         protected int _timeOut = 30;
         protected static readonly HashSet<string> _primaryKeys = ["Id"];
 
@@ -71,7 +84,11 @@ namespace Viv.Momo.Core
         /// 需要指定另一份配置（如 <see cref="MomoDbContextFactory"/> 的一次性会话）时，
         /// 由调用方包一个 <see cref="IDatabaseOptionsProvider"/> 传进来。
         /// </summary>
-        public MomoDatabase(IVivContext vivContext, ILoggerContract logger, IDatabaseOptionsProvider optionsProvider, ITransactionAttemptListener? attemptListener = null)
+        /// <param name="observers">
+        /// 事务提交观察者。容器注入时自然是空集合（没注册就是没人关心），
+        /// 直建上下文（初始化工具、单测）时可以不传。
+        /// </param>
+        public MomoDatabase(IVivContext vivContext, ILoggerContract logger, IDatabaseOptionsProvider optionsProvider, ITransactionAttemptListener? attemptListener = null, IEnumerable<ITransactionObserver>? observers = null)
         {
             ArgumentNullException.ThrowIfNull(vivContext);
             ArgumentNullException.ThrowIfNull(logger);
@@ -83,9 +100,10 @@ namespace Viv.Momo.Core
             _vivContext = vivContext;
             _logger = logger;
             _attemptListener = attemptListener;
+            _observers = observers as ITransactionObserver[] ?? observers?.ToArray() ?? [];
+
             _dialect = SqlMagic.For(options.DatabaseSource);
-            _accessor = vivContext.VivContextAccessor
-                ?? throw new InvalidOperationException("IVivContext.VivContextAccessor 不能为空：Momo 需要它挂租户过滤器。");
+            _accessor = vivContext.VivContextAccessor ?? throw new InvalidOperationException("IVivContext.VivContextAccessor 不能为空：Momo 需要它挂租户过滤器。");
             _databaseOptions = options;
             _timeOut = options.Timeout;
             _queryTelemetry = new QueryTelemetry(logger, options.SlowQueryThresholdMs);
@@ -342,6 +360,11 @@ namespace Viv.Momo.Core
                         if (commitWhen is null || commitWhen(result))
                         {
                             await transaction.CommitAsync(CancellationToken.None).ConfigureAwait(false);
+
+                            // 提交已成事实之后才通知：在 work 里、COMMIT 之前通知都是错的 ——
+                            // 被叫醒的一方看不到尚未提交的行，白醒一次，然后还得再等一个轮询间隔。
+                            // 放在这里而不是 CommitAsync 之前，也不放在 else 分支。
+                            NotifyCommitted();
                         }
                         else
                         {
@@ -396,6 +419,30 @@ namespace Viv.Momo.Core
                 // 重试耗尽（或本就不可重试）时保持对外契约：API 过滤器靠 VivConnectionException 映射 -5xx，
                 // 指标收口也在 WrapDatabaseException 里
                 throw WrapDatabaseException($"ExecuteInTransactionAsync 重试后仍失败,{dbException.Message}", dbException);
+            }
+        }
+
+        /// <summary>
+        /// 提交成功后逐个通知观察者。
+        ///
+        /// 观察者抛异常一律吞掉并记日志：此刻数据已经在库里，把异常放出去会让调用方
+        /// 认为提交失败并触发上游补偿 —— 那是比"少叫醒一次"严重得多的错误。
+        /// 少叫醒的代价只是对方多等一个轮询间隔，自己会好。
+        /// </summary>
+        private void NotifyCommitted()
+        {
+            if (_observers.Length == 0) return;
+
+            foreach (var observer in _observers)
+            {
+                try
+                {
+                    observer.OnCommitted();
+                }
+                catch (Exception ex)
+                {
+                    WriteLog($"事务提交观察者回调失败：{observer.GetType().Name}，{ex.Message}", ex);
+                }
             }
         }
 
