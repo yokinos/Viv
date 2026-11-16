@@ -64,6 +64,14 @@ public static class Extensions
         // 不能用 Logging.SetMinimumLevel —— 那是所有 Provider 的，会把 Serilog 的 Debug 一起砍掉。
         builder.Logging.AddFilter<OpenTelemetryLoggerProvider>("*", LogLevel.Information);
 
+        // 上面那条按 Provider 通配，会把「遥测上报自身」的日志也放进面板：OTLP 导出器的 HttpClient
+        // 每 60 秒推一次 metrics（Start/Sending/Received/End 各一条），Polly 韧性管道每次记一条
+        // Execution attempt —— 全是 INFO、全是 200，纯噪声。
+        // Provider 级规则后加优先，所以这几条必须排在通配那条之后，否则被 "*" 吃掉。
+        builder.Logging.AddFilter<OpenTelemetryLoggerProvider>("System.Net.Http", LogLevel.Warning);
+        builder.Logging.AddFilter<OpenTelemetryLoggerProvider>("OpenTelemetry", LogLevel.Error);
+        builder.Logging.AddFilter<OpenTelemetryLoggerProvider>("Polly", LogLevel.Warning);
+
         builder.Services.AddOpenTelemetry()
             .WithMetrics(metrics =>
             {
