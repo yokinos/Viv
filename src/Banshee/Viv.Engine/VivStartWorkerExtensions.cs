@@ -1,14 +1,7 @@
-using Autofac;
 using Autofac.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Console;
-using Serilog;
 using System.Text;
 using Viv.Aoi;
-using Viv.Contracts.Interface;
-using Viv.Sandrone.Impl;
 
 namespace Viv.Engine
 {

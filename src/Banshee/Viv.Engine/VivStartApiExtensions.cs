@@ -4,24 +4,18 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Console;
 using Microsoft.OpenApi;
-using Serilog;
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using Viv.Aoi;
-using Viv.Contracts.Interface;
-using Viv.Delusion.Extension;
-using Viv.Keke;
-using Viv.Keke.Grpc;
-using Viv.Keke.MagicOnion;
 using Viv.Engine.Filter;
 using Viv.Engine.LocalEvents;
 using Viv.Engine.Middleware;
 using Viv.Engine.Options;
 using Viv.Engine.Power;
+using Viv.Keke;
+using Viv.Keke.Grpc;
+using Viv.Keke.MagicOnion;
 using Viv.Sandrone.Conveter;
 using Viv.Sandrone.OpenApi;
 
@@ -31,9 +25,6 @@ namespace Viv.Engine
     {
         /// <summary>
         /// Scalar 文档标题：<c>DisplayName</c> 优先，回落 <c>ServiceName</c>。
-        ///
-        /// 不能拿它当「注册期算好、启动期读回」的中转值：写进 IConfiguration 的中间键会跟着进配置树，
-        /// 还会被环境变量与命令行覆盖链改写。两处都调这个纯函数，没有第二个真值来源。
         /// </summary>
         private static string ResolveApiTitle(EnvOptions? envOption)
         {
@@ -41,29 +32,22 @@ namespace Viv.Engine
             return envOption?.ServiceName ?? string.Empty;
         }
 
-        /// <summary>grpc 服务端是否要装：协议不是 None 且配置里勾了 ServesGrpc。</summary>
-        private static bool IsGrpcServerEnabled(GrpcOptions? grpcOption)
-            => grpcOption is { Protocol: not KekeProtocol.None, ServesGrpc: true };
+        private static bool IsGrpcServerEnabled(GrpcOptions? grpcOption) => grpcOption is { Protocol: not KekeProtocol.None, ServesGrpc: true };
 
-        /// <summary>MagicOnion 服务端是否要装：协议不是 None 且配置里勾了 ServesMagicOnion。</summary>
-        private static bool IsMagicOnionEnabled(GrpcOptions? grpcOption)
-            => grpcOption is { Protocol: not KekeProtocol.None, ServesMagicOnion: true };
+        private static bool IsMagicOnionEnabled(GrpcOptions? grpcOption) => grpcOption is { Protocol: not KekeProtocol.None, ServesMagicOnion: true };
 
         /// <summary>
         /// 配置 Viv API 基础服务：加载配置、Autofac 容器、AddViv、MVC、CORS、OpenAPI、编码注册。
         /// 需要先调用 builder.AddServiceDefaults()。
         /// </summary>
         /// <param name="configureMvc">注册额外 MVC 过滤器（默认已添加 VivExceptionFilterAttribute）</param>
-        public static WebApplicationBuilder AddVivApi(this WebApplicationBuilder builder,
-            Action<MvcOptions>? configureMvc = null,
-            Action<IServiceCollection>? serviceCollectionConfigure = null)
+        public static WebApplicationBuilder AddVivApi(this WebApplicationBuilder builder, Action<MvcOptions>? configureMvc = null, Action<IServiceCollection>? serviceCollectionConfigure = null)
         {
             // 绑定 + 写 VivEngine.VivOptions 快照 + 注册进 DI，三件事在这一次调用里做完
             var vivOptions = builder.AddVivConfig();
             var envOption = vivOptions.EnvOption;
 
             // 标题与网关前缀都来自配置（EnvOption.DisplayName / ShortName），宿主代码不再传名字。
-            // 标题不在这里落盘，RunVivApi 用同一个 ResolveApiTitle 现算。
             builder.Services.AddHttpContextAccessor();
 
             // Autofac 容器
@@ -94,9 +78,6 @@ namespace Viv.Engine
                 {
                     VivGrpcDiscovery.RegisterServices(builder.Services);
                 }
-
-                // MagicOnion 无需在此登记：服务端 DI 半段由 KekeRegister 装配，
-                // 端点映射在 RunVivApi 里按同一份配置直接判定（IsMagicOnionEnabled）。
             }
 
             // 下游自鉴权：注册 JwtBearer（读 appsettings.json 的 VivOptions.TokenOption）。
@@ -137,7 +118,6 @@ namespace Viv.Engine
             {
                 options.AddOperationTransformer<VivOpenApiOperationTransformer>();
                 options.AddSchemaTransformer<VivOpenApiSchemaTransformer>();
-                // Scalar 的 "Try it out" 走网关前缀；短名没配就不设，等同于直连服务
                 if (!string.IsNullOrWhiteSpace(envOption?.ShortName))
                 {
                     var shortName = envOption.ShortName;

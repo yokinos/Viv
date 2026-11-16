@@ -7,13 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Console;
-using Serilog;
-using System;
-using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using Viv.Aoi;
@@ -24,7 +18,6 @@ using Viv.Engine.Middleware;
 using Viv.Engine.Options;
 using Viv.Engine.Power;
 using Viv.Engine.RateLimit;
-using Yarp.ReverseProxy;
 using Yarp.ReverseProxy.Configuration;
 
 namespace Viv.Engine
@@ -39,7 +32,6 @@ namespace Viv.Engine
         private const string DefaultCachePolicyName = "DefaultCache";
         private const string CustomCachePolicyName = "CustomCache";
         private const int DefaultCacheSeconds = 20;
-        private static readonly string[] _vivClaimTypes = ["subjectId", "userId", "appId"];
 
         /// <summary>
         /// 转发前必须丢弃的 query 参数。
@@ -47,8 +39,7 @@ namespace Viv.Engine
         /// 后三个是 JWT 载体：网关已用它们完成认证，再原样转发就会随下游访问日志、OTel span、
         /// Referer 和浏览器历史一路扩散，等于把明文令牌留在一串日志里。
         /// </summary>
-        private static readonly string[] _strippedQueryKeys =
-            ["subjectId", "userId", "appId", "access_token", "refresh_token", "id_token"];
+        private static readonly string[] _strippedQueryKeys = ["subjectId", "userId", "appId", "access_token", "refresh_token", "id_token"];
 
         /// <summary>
         /// 配置 Viv 网关基础服务：加载配置、限流配置热重载、Autofac、AddViv、JWT 解析、YARP（路由/集群从 Aspire 服务发现自动生成）、CORS、OutputCache、RateLimiter、编码注册。
