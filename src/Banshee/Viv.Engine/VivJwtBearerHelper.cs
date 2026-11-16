@@ -14,6 +14,16 @@ namespace Viv.Engine
     public static class VivJwtBearerHelper
     {
         /// <summary>
+        /// 这份配置能不能撑起 JwtBearer 注册（<c>TokenOption</c> 存在且 <c>SecretKey</c> 非空）。
+        ///
+        /// 单独暴露成纯函数，是为了让「注册时到底装没装鉴权」在别处也能算出同一个答案：
+        /// 管道装配阶段（RunVivApi）必须知道要不要 <c>UseAuthentication</c>，但拿不到注册时的返回值。
+        /// 两边调同一个判定，不留第二个真值来源。
+        /// </summary>
+        public static bool CanRegister(TokenOptions? tokenOptions)
+            => tokenOptions != null && !string.IsNullOrWhiteSpace(tokenOptions.SecretKey);
+
+        /// <summary>
         /// 从 TokenOption 注册 JwtBearer 对称密钥验证。
         /// </summary>
         /// <param name="services">服务集合</param>
@@ -28,7 +38,7 @@ namespace Viv.Engine
             Action<JwtBearerOptions>? configureJwt = null,
             bool throwIfMissing = true)
         {
-            if (tokenOptions == null || string.IsNullOrWhiteSpace(tokenOptions.SecretKey))
+            if (!CanRegister(tokenOptions))
             {
                 if (throwIfMissing)
                 {
@@ -37,7 +47,9 @@ namespace Viv.Engine
                 return false;
             }
 
-            var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(tokenOptions.SecretKey));
+            // CanRegister 判过就不可能是 null；这里收窄成局部非空变量，后面几处不必再各写一个 !
+            var token = tokenOptions!;
+            var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(token.SecretKey));
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
@@ -45,9 +57,9 @@ namespace Viv.Engine
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidateIssuer = true,
-                        ValidIssuer = tokenOptions.Issuer,
+                        ValidIssuer = token.Issuer,
                         ValidateAudience = true,
-                        ValidAudience = tokenOptions.Audience,
+                        ValidAudience = token.Audience,
                         ValidateLifetime = true,
                         IssuerSigningKey = signingKey,
                         ClockSkew = TimeSpan.Zero // 关闭时钟偏移容错，严格校验过期时间

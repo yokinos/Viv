@@ -50,6 +50,14 @@ namespace Viv.Log
 
         public static ILogger GetLogger() => Serilog.Log.Logger;
 
+        /// <summary>
+        /// Serilog 全局 logger 是否已经建起来。
+        ///
+        /// 给装配期摘要用：没初始化时 <see cref="Serilog.Log.Logger"/> 是 SilentLogger，
+        /// 写进去等于丢掉，调用方据此决定要不要退回控制台。
+        /// </summary>
+        public static bool IsInitialized => _initialized;
+
         public static void CloseAndFlush()
         {
             if (_initialized)

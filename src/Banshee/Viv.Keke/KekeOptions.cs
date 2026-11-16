@@ -2,6 +2,11 @@ namespace Viv.Keke
 {
     public class KekeOptions
     {
+        /// <summary>
+        /// 总开关。<c>false</c> = HTTP 客户端与服务端、gRPC 与 MagicOnion 全都不装。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
         public bool EnableHttp { get; set; } = true;
 
         /// <summary>

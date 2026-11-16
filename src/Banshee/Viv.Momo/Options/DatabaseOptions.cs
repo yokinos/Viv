@@ -12,6 +12,11 @@ namespace Viv.Momo.Options
     /// </summary>
     public class DatabaseOptions
     {
+        /// <summary>
+        /// 总开关。<c>false</c> = 依赖库的 Outbox / Skirk / Inbox 一并停用 —— 它们都以库为前置条件。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
         public DatabaseSourceType DatabaseSource { get; set; } = DatabaseSourceType.PostgreSQL;
 
         /// <summary>

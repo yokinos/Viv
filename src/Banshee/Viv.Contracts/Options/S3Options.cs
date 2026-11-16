@@ -6,6 +6,11 @@
     public sealed class S3Options
     {
         /// <summary>
+        /// 总开关。<c>false</c> = <c>IS3Service</c> 解析不到 —— 不是「能注入、用了才炸」。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
+        /// <summary>
         /// RustFS 访问地址，例如：
         /// http://127.0.0.1:9000
         /// </summary>

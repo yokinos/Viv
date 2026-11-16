@@ -7,6 +7,11 @@ namespace Viv.Outbox.Options
     public class OutboxOptions
     {
         /// <summary>
+        /// 总开关。与 <see cref="EnableDispatcher"/> 正交：那个决定投不投，这个决定装不装。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
+        /// <summary>
         /// 本进程是否运行投递器。默认开。
         /// 只在「只写 outbox、由别的服务负责投递」的部署里关掉。
         /// </summary>

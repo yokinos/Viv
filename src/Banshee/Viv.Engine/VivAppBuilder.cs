@@ -96,12 +96,7 @@ namespace Viv.Engine
 
             _builder.Services.AddViv(vivOptions);
 
-            if (vivOptions.LogOption?.LogType == Log.LogType.Serilog)
-            {
-                // 同 AddVivWorker：ClearProviders 会连 OTel 日志 Provider 一起清掉
-                _builder.Logging.AddSerilog(dispose: false);
-                _builder.Logging.AddFilter<ConsoleLoggerProvider>(null, LogLevel.None);
-            }
+            _builder.Logging.AttachVivLogging(vivOptions.LogOption);
 
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             return this;

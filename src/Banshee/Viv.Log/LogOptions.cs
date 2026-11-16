@@ -11,9 +11,21 @@ namespace Viv.Log
     public class LogOptions
     {
         /// <summary>
+        /// 总开关。<c>false</c> = 不注册 <c>ILoggerContract</c>（注入它的服务会解析失败）；
+        /// 只想要「静默日志」应保持 true、把 <see cref="LogType"/> 设成非 Serilog。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
+        /// <summary>
         /// 日志框架类型  
         /// </summary>
         public LogType LogType { get; set; } = LogType.Serilog;
+
+        /// <summary>
+        /// 本配置是不是要 Serilog 承载日志。四个 starter 的判定统一走这里，
+        /// 装配动作由 <c>LoggingBuilderExtensions.AttachVivLogging</c> 完成。
+        /// </summary>
+        public bool IsSerilog => LogType == LogType.Serilog;
 
         /// <summary>
         /// 全局最低日志级别，默认 Information（排查时按服务调到 Debug）

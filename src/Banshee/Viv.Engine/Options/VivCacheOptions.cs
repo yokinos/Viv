@@ -13,6 +13,12 @@ namespace Viv.Engine.Options
     public record VivCacheOptions
     {
         /// <summary>
+        /// 总开关。<c>false</c> = 缓存与分布式锁都不装：<c>IRedisService</c>、<c>IDistributedLock</c> 解析不到，
+        /// 标了 <c>[VivDistributedLock]</c> 的类型也不会注册代理。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
+        /// <summary>
         /// 分布式缓存类型
         /// </summary>
         public DistributedCacheType CacheProviderType { get; set; }

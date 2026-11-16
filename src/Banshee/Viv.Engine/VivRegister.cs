@@ -6,7 +6,6 @@ using Viv.Contracts.Enums;
 using Viv.Contracts.Interface;
 using Viv.Delusion.Extension;
 using Viv.Delusion.Magic;
-using Viv.Keke;
 using Viv.Engine.HealthChecks;
 using Viv.Engine.HostedServices;
 using Viv.Engine.LocalEvents;
@@ -14,6 +13,7 @@ using Viv.Engine.Locking;
 using Viv.Engine.Metrics;
 using Viv.Engine.Options;
 using Viv.Engine.UnitOfWork;
+using Viv.Keke;
 using Viv.Log;
 using Viv.Momo;
 using Viv.Momo.Core;
@@ -38,57 +38,17 @@ namespace Viv.Engine
     /// </summary>
     internal static class VivRegister
     {
-
         /// <summary>
-        /// 注册所有Viv内部组件
+        /// 注册所有Viv内部组件。
         /// </summary>
         public static void Register(IServiceCollection services, VivOptions options)
         {
-            // 指标读取（常驻 listener 收账）。这里构造实例再注册，而不是 AddSingleton<接口,实现> ——
-            // 后者要等第一次有人解析它才起来，之前的测量全丢。MeterListener 只收「起来之后」的，
-            // 历史补不回来，所以必须在组装期就挂上
-            services.AddSingleton<IVivMeter>(new VivMeter());
-
-            // 注册Viv上下文
-            services.AddSingleton<IVivContextProvider, DefaultVivContextProvider>();
-            services.AddSingleton<IVivContextAccessor, VivContextAccessor>();
-            services.AddScoped<IVivContext, VivContext>();
-
-            // 注册日志
-            RegisterLogger(services, options);
-            // 注册跨服务通信（HTTP + gRPC）
-            RegisterKeke(services, options);
-            // 注册缓存
-            RegisterCache(services, options);
-            // 注册消息队列
-            RegisterNana(services, options);
-            // 注册 MQTT 接入（设备）—— 与 Nana 独立，没配 MqttOption 就完全不启用
-            RegisterMqtt(services, options);
-            // 注册数据库
-            RegisterDatabase(services, options);
-            // 健康检查（依赖数据库与缓存两项配置）
-            RegisterHealthChecks(services, options);
-            // 注册发件箱（依赖数据库 + MQ；内部会注册 IHostedService 投递器）
-            RegisterOutbox(services, options);
-            // 可选 Inbox（有数据库就注册，消费者自行决定是否用）
-            RegisterInbox(services, options);
-            // 注册异步任务（Skirk）：任务表在业务主库，EnableWorker 决定本宿主跑不跑消费者
-            RegisterSkirk(services, options);
-            // 注册长连接（SignalR 进程级选项；每个 Hub 的会话由宿主 AddKinna<THub>() 补）
-            RegisterKinna(services, options);
-            // 注册Token
-            RegisterToken(services, options);
-            // 注册调度
-            RegisterScheduler(services, options);
-            // 注册本地事件总线（扫描 IVivLocalEventHandler<> 处理器，与 Nana 完全解耦）
-            LocalEventRegistration.Register(services);
-            // 注册其他服务
-            RegisterOtherServices(services, options);
+            VivModules.RegisterAll(services, options);
         }
 
         #region 日志
 
-        private static void RegisterLogger(IServiceCollection services, VivOptions options)
+        internal static void RegisterLogger(IServiceCollection services, VivOptions options)
         {
             if (options.LogOption == null) return;
 
@@ -112,7 +72,7 @@ namespace Viv.Engine
 
         #region 缓存
 
-        private static void RegisterCache(IServiceCollection services, VivOptions options)
+        internal static void RegisterCache(IServiceCollection services, VivOptions options)
         {
             if (options.CacheOption == null) return;
 
@@ -151,7 +111,7 @@ namespace Viv.Engine
 
         #region 消息队列 Nana
 
-        private static void RegisterNana(IServiceCollection services, VivOptions options)
+        internal static void RegisterNana(IServiceCollection services, VivOptions options)
         {
             if (options.NanaOption == null) return;
 
@@ -214,7 +174,7 @@ namespace Viv.Engine
 
         #region 数据库 Momo
 
-        private static void RegisterDatabase(IServiceCollection services, VivOptions options)
+        internal static void RegisterDatabase(IServiceCollection services, VivOptions options)
         {
             if (options.DatabaseOption == null) return;
 
@@ -245,26 +205,28 @@ namespace Viv.Engine
         /// 依赖挂了不该让编排系统去重启它。AddHealthChecks 重复调用是安全的（TryAddSingleton + Configure 追加），
         /// 与 AddServiceDefaults 里那次不冲突。
         /// </summary>
-        private static void RegisterHealthChecks(IServiceCollection services, VivOptions options)
+        internal static void RegisterHealthChecks(IServiceCollection services, VivOptions options)
         {
             var builder = services.AddHealthChecks();
 
-            if (options.CacheOption?.CacheProviderType == DistributedCacheType.Redis)
+            if (options.CacheOption is { IsEnabled: true, CacheProviderType: DistributedCacheType.Redis })
             {
                 builder.AddCheck<RedisHealthCheck>("redis", tags: ["ready"]);
             }
 
-            if (options.DatabaseOption != null)
+            // 三个检查都要求「模块真的装上了」—— 配了节点但 IsEnabled=false 时对应客户端没注册，
+            // 挂上去只会让 /health 恒为 Unhealthy，把「自己关掉的模块」报成故障
+            if (options.DatabaseOption is { IsEnabled: true })
             {
                 builder.AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
             }
 
-            if (options.MqttOption != null)
+            if (options.MqttOption is { IsEnabled: true })
             {
                 builder.AddCheck<MqttHealthCheck>("mqtt", tags: ["ready"]);
             }
 
-            if (options.NanaOption != null)
+            if (options.NanaOption is { IsEnabled: true })
             {
                 builder.AddCheck("rabbitmq", new RabbitMqHealthCheck(options.NanaOption), tags: ["ready"]);
             }
@@ -274,7 +236,7 @@ namespace Viv.Engine
 
         #region MQTT（设备接入）
 
-        private static void RegisterMqtt(IServiceCollection services, VivOptions options)
+        internal static void RegisterMqtt(IServiceCollection services, VivOptions options)
         {
             services.AddVivMqtt(options.MqttOption);
         }
@@ -283,12 +245,13 @@ namespace Viv.Engine
 
         #region 异步任务 Skirk
 
-        private static void RegisterSkirk(IServiceCollection services, VivOptions options)
+        internal static void RegisterSkirk(IServiceCollection services, VivOptions options)
         {
             if (options.SkirkOption == null) return;
 
-            // 任务表存在业务主库里：没配数据库既入不了队也执行不了，这里把话说死
-            if (options.DatabaseOption == null)
+            // 任务表存在业务主库里：没配数据库（或数据库被 IsEnabled=false 关掉）既入不了队也执行不了，
+            // 这里把话说死
+            if (options.DatabaseOption is not { IsEnabled: true })
             {
                 throw new Exception("SkirkOption 需要 DatabaseOption：异步任务表存在业务主库，缺少数据库配置无法工作");
             }
@@ -300,7 +263,7 @@ namespace Viv.Engine
 
         #region 发件箱 Outbox
 
-        private static void RegisterOutbox(IServiceCollection services, VivOptions options)
+        internal static void RegisterOutbox(IServiceCollection services, VivOptions options)
         {
             if (options.OutboxOption == null) return;
 
@@ -309,14 +272,14 @@ namespace Viv.Engine
             // 故 NanaOption 的硬校验只对真的跑投递器的宿主成立：只写不投的宿主
             // （EnableDispatcher = false，把投递交给 Worker）配齐它等于平白多开一个 MQ 宿主，
             // 而跑投递器却没有 MQ 不是「降级运行」而是彻底不工作，照样在这里把话说死。
-            if (options.OutboxOption.EnableDispatcher && options.NanaOption == null)
+            if (options.OutboxOption.EnableDispatcher && options.NanaOption is not { IsEnabled: true })
             {
-                throw new Exception("OutboxOption.EnableDispatcher 为 true 却没有 NanaOption：投递器要把待发消息发上 MQ，缺少 MQ 配置无法工作；本进程只写不投请配 EnableDispatcher = false");
+                throw new Exception("OutboxOption.EnableDispatcher 为 true 却没有启用 NanaOption：投递器要把待发消息发上 MQ，缺少 MQ 配置无法工作；本进程只写不投请配 EnableDispatcher = false");
             }
 
-            if (options.DatabaseOption == null)
+            if (options.DatabaseOption is not { IsEnabled: true })
             {
-                throw new Exception("配置了 OutboxOption 却没有 DatabaseOption：发件箱要靠业务主库原子地存下待发消息");
+                throw new Exception("配置了 OutboxOption 却没有启用 DatabaseOption：发件箱要靠业务主库原子地存下待发消息");
             }
 
             OutboxRegister.Initialize(services, options.OutboxOption);
@@ -326,9 +289,9 @@ namespace Viv.Engine
 
         #region Inbox
 
-        private static void RegisterInbox(IServiceCollection services, VivOptions options)
+        internal static void RegisterInbox(IServiceCollection services, VivOptions options)
         {
-            if (options.DatabaseOption == null) return;
+            if (options.DatabaseOption is not { IsEnabled: true }) return;
             InboxRegister.Initialize(services, options.InboxOption);
         }
 
@@ -338,7 +301,9 @@ namespace Viv.Engine
 
         public static void RegisterToken(IServiceCollection services, VivOptions options)
         {
-            if (options.TokenOption != null)
+            // 这里永远注册 ITokenService，只是选实现：TokenOption 缺失或 IsEnabled=false
+            // 都回落 NoneTokenService —— 不注册的话构造注入 ITokenService 的服务会解析失败
+            if (options.TokenOption is { IsEnabled: true })
             {
                 // 注册token实现
                 services.AddScoped<ITokenService, JwtTokenService>();
@@ -353,7 +318,7 @@ namespace Viv.Engine
 
         #region 调度框架
 
-        private static void RegisterScheduler(IServiceCollection services, VivOptions options)
+        internal static void RegisterScheduler(IServiceCollection services, VivOptions options)
         {
             if (options.TickOption == null) return;
 
@@ -367,7 +332,7 @@ namespace Viv.Engine
         /// 长连接的共享部分。Hub 是泛型，这里只能配 SignalR 的进程级选项；
         /// 每个 Hub 的会话由宿主 AddKinna&lt;THub&gt;() 注册。
         /// </summary>
-        private static void RegisterKinna(IServiceCollection services, VivOptions options)
+        internal static void RegisterKinna(IServiceCollection services, VivOptions options)
         {
             if (options.KinnaOption == null) return;
 
@@ -378,7 +343,7 @@ namespace Viv.Engine
 
         #region 跨服务通信 Keke
 
-        private static void RegisterKeke(IServiceCollection services, VivOptions options)
+        internal static void RegisterKeke(IServiceCollection services, VivOptions options)
         {
             if (options.KekeOption == null) return;
             KekeRegister.Initialize(services, options.KekeOption);
@@ -388,11 +353,22 @@ namespace Viv.Engine
 
         #region 其他服务注册
 
-        public static void RegisterOtherServices(IServiceCollection services, VivOptions options)
+        internal static void RegisterOtherServices(IServiceCollection services, VivOptions options)
         {
             // 单例：无可变状态；Agent 是长生命周期对象，可能在后台线程/流式回调里取用，
             // Scoped 在那个时机已经释放（实测过：Scoped 会在后台场景随机解析失败）
             services.AddSingleton<IAiClientFactory, AiClientFactory>();
+        }
+
+        /// <summary>
+        /// 对象存储。与其它子系统同姿态：配了节点才装。
+        ///
+        /// 不配也照样能注入 <see cref="IS3Service"/> 的话，失败点会推到「第一次真的上传文件」那一刻，
+        /// 离根因（没配 S3Option）隔着好几层调用栈。解析不到就是没配，更早也更准。
+        /// 真要在没配 S3 的宿主里用，走 <c>GetService</c> 拿可空实例，别用构造注入。
+        /// </summary>
+        internal static void RegisterS3(IServiceCollection services, VivOptions options)
+        {
             services.AddSingleton<IS3Service, VivS3Service>();
         }
 

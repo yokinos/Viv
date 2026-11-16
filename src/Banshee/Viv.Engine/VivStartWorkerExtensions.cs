@@ -32,13 +32,8 @@ namespace Viv.Engine
             // 基础服务
             builder.Services.AddViv(vivOptions);
 
-            if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
-            {
-                // 不能 ClearProviders：它会把 AddServiceDefaults 注册的 OTel 日志 Provider 一起清掉，
-                // 于是 Aspire 面板没有日志。改成只关 MS 自带控制台，全量放行给 Serilog。
-                builder.Logging.AddSerilog(dispose: false);
-                builder.Logging.AddFilter<ConsoleLoggerProvider>(null, LogLevel.None);
-            }
+            // Serilog 挂载与「不能 ClearProviders」那条坑的说明都在 AttachVivLogging 里，四个 starter 共用
+            builder.Logging.AttachVivLogging(vivOptions.LogOption);
 
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             return builder;

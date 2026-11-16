@@ -82,11 +82,7 @@ namespace Viv.Engine
 
             builder.Services.AddViv(vivOptions);
 
-            if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
-            {
-                builder.Logging.AddSerilog(dispose: false);
-                builder.Logging.AddFilter<ConsoleLoggerProvider>(null, LogLevel.None);
-            }
+            builder.Logging.AttachVivLogging(vivOptions.LogOption);
 
             builder.Services.AddHttpContextAccessor();
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);

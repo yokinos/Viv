@@ -6,6 +6,11 @@ namespace Viv.Skirk.Options
     public sealed class SkirkOption
     {
         /// <summary>
+        /// 总开关。与 <see cref="EnableWorker"/> 正交：那个决定本宿主跑不跑消费者，这个决定装不装。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
+        /// <summary>
         /// 本宿主是否跑任务消费者。
         ///
         /// <c>null</c> = 不启用（默认）。Api 与 Worker 共享同一个库，

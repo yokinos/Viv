@@ -9,6 +9,11 @@ namespace Viv.Nana.Options
     /// </summary>
     public class MqttOptions
     {
+        /// <summary>
+        /// 总开关。<c>false</c> = 设备接入（EMQX）不装，与消息队列的 <c>NanaOption</c> 互不影响。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
         public string Host { get; set; } = "localhost";
 
         public int Port { get; set; } = 1883;

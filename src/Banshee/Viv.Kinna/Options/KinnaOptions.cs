@@ -4,6 +4,12 @@ namespace Viv.Kinna.Options
     public sealed class KinnaOptions
     {
         /// <summary>
+        /// 总开关。<c>false</c> = 不再配置 SignalR 的进程级选项（每个 Hub 仍由宿主
+        /// <c>AddKinna&lt;THub&gt;()</c> 自己装配）。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
+        /// <summary>
         /// Hub 的映射路径。
         /// </summary>
         public string HubPath { get; set; } = "/kinna";

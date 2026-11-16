@@ -1,3 +1,5 @@
+using System;
+using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -76,23 +78,24 @@ namespace Viv.Engine
 
             var options = Load(configuration);
 
+            // 模块配置段：路径约定 VivOptions:{Section}，清单来自 VivModules.All。
+            // 手抄清单漏过 MqttOptions / KinnaOptions / SkirkOption —— 那三个节点会让注入解析失败
+            foreach (var module in VivModules.All)
+            {
+                if (module.OptionsType is not { } optionsType || module.Section is not { } section) continue;
+                ConfigureSection(services, optionsType, configuration.GetSection($"VivOptions:{section}"));
+            }
+
+            // 宿主级配置：不是可插拔模块，没有开关
             services.Configure<VivOptions>(configuration.GetSection("VivOptions"));
             services.Configure<EnvOptions>(configuration.GetSection("VivOptions:EnvOption"));
             services.Configure<DIOptions>(configuration.GetSection("VivOptions:DIOption"));
-            services.Configure<VivCacheOptions>(configuration.GetSection("VivOptions:CacheOption"));
-            services.Configure<RedisOptions>(configuration.GetSection("VivOptions:CacheOption:RedisOptions"));
-            services.Configure<LogOptions>(configuration.GetSection("VivOptions:LogOption"));
-            services.Configure<DatabaseOptions>(configuration.GetSection("VivOptions:DatabaseOption"));
-            services.Configure<NanaOptions>(configuration.GetSection("VivOptions:NanaOption"));
-            services.Configure<OutboxOptions>(configuration.GetSection("VivOptions:OutboxOption"));
-            services.Configure<InboxOptions>(configuration.GetSection("VivOptions:InboxOption"));
-            services.Configure<TokenOptions>(configuration.GetSection("VivOptions:TokenOption"));
-            services.Configure<TickOptions>(configuration.GetSection("VivOptions:TickOption"));
-            services.Configure<TickerQOptions>(configuration.GetSection("VivOptions:TickOption:TickerQ"));
-            services.Configure<KekeOptions>(configuration.GetSection("VivOptions:KekeOption"));
-            services.Configure<GrpcOptions>(configuration.GetSection("VivOptions:KekeOption:GrpcOption"));
             services.Configure<CorsOptions>(configuration.GetSection("VivOptions:CorsOption"));
-            services.Configure<S3Options>(configuration.GetSection("VivOptions:S3Option"));
+
+            // 嵌套子配置：路径比模块名深一层，描述符里推不出来，只有这三处
+            services.Configure<RedisOptions>(configuration.GetSection("VivOptions:CacheOption:RedisOptions"));
+            services.Configure<TickerQOptions>(configuration.GetSection("VivOptions:TickOption:TickerQ"));
+            services.Configure<GrpcOptions>(configuration.GetSection("VivOptions:KekeOption:GrpcOption"));
 
             // VivInternalTokenOptions 与静态模式保持一致，从 EnvOption 派生
             services.AddSingleton(sp =>
@@ -109,18 +112,19 @@ namespace Viv.Engine
         }
 
         /// <summary>
-        /// 将非 null 的配置实例注册到 DI 容器（T + IOptions&lt;T&gt;）
+        /// 将非 null 的配置实例注册到 DI 容器（T + IOptions&lt;T&gt;）。
+        ///
+        /// 模块配置段的清单来自 <see cref="VivModules.All"/>，这里不含散落的 if。
         /// </summary>
         private static void RegisterOptions(IServiceCollection services, VivOptions options)
         {
             // 主配置
             RegisterOption(services, options);
 
-            // EnvOption
-            if (options.EnvOption != null)
-            {
-                RegisterOption(services, options.EnvOption);
-            }
+            // 宿主级配置：不是可插拔模块，没有开关
+            if (options.EnvOption != null) RegisterOption(services, options.EnvOption);
+            if (options.DIOption != null) RegisterOption(services, options.DIOption);
+            if (options.CorsOption != null) RegisterOption(services, options.CorsOption);
 
             // VivInternalTokenOptions 由 EnvOption 派生，恒注册（EnvOption 缺失时给空对象）：
             // Keke gRPC 拦截器构造注入它，未注册会直接导致 gRPC 端激活失败
@@ -130,78 +134,17 @@ namespace Viv.Engine
                 ServiceName = options.EnvOption?.ServiceName
             });
 
-            // DIOption
-            if (options.DIOption != null)
-                RegisterOption(services, options.DIOption);
-
-            // CacheOption
-            if (options.CacheOption != null)
+            // 模块配置段（清单唯一来源）。这里刻意不看 IsEnabled —— 配了就该能注入，
+            // 「装了没装」是 VivModules.RegisterAll 的事
+            foreach (var module in VivModules.All)
             {
-                RegisterOption(services, options.CacheOption);
-
-                if (options.CacheOption.RedisOptions != null)
-                    RegisterOption(services, options.CacheOption.RedisOptions);
+                if (module.OptionsOf(options) is { } moduleOptions) RegisterOptionInstance(services, moduleOptions);
             }
 
-            // LogOption
-            if (options.LogOption != null)
-                RegisterOption(services, options.LogOption);
-
-            // DatabaseOption
-            if (options.DatabaseOption != null)
-                RegisterOption(services, options.DatabaseOption);
-
-            // NanaOption
-            if (options.NanaOption != null)
-                RegisterOption(services, options.NanaOption);
-
-            // OutboxOption
-            if (options.OutboxOption != null)
-                RegisterOption(services, options.OutboxOption);
-
-            // MqttOption —— 与 Outbox 同语义：null = 不启用
-            if (options.MqttOption != null)
-                RegisterOption(services, options.MqttOption);
-
-            // InboxOption —— 与别的子配置不同，这个节点允许缺席：
-            // Inbox 的启用条件是「配了 DatabaseOption」。缺席时不在这里注册，
-            // 由 InboxRegister 用默认值兜底，否则清理器解析不到配置会直接把宿主拖垮。
-            if (options.InboxOption != null)
-                RegisterOption(services, options.InboxOption);
-
-            // TokenOption
-            if (options.TokenOption != null)
-                RegisterOption(services, options.TokenOption);
-
-            // TickOption
-            if (options.TickOption != null)
-            {
-                RegisterOption(services, options.TickOption);
-
-                if (options.TickOption.TickerQ != null)
-                    RegisterOption(services, options.TickOption.TickerQ);
-            }
-
-            // KekeOption
-            if (options.KekeOption != null)
-            {
-                RegisterOption(services, options.KekeOption);
-
-                if (options.KekeOption.GrpcOption != null)
-                    RegisterOption(services, options.KekeOption.GrpcOption);
-            }
-
-            // CorsOption
-            if (options.CorsOption != null)
-                RegisterOption(services, options.CorsOption);
-
-            // S3Option
-            if (options.S3Option != null)
-                RegisterOption(services, options.S3Option);
-
-            // KinnaOption —— 长连接（只有 Herta.Link 这类宿主会配）。null = 不跑长连接
-            if (options.KinnaOption != null)
-                RegisterOption(services, options.KinnaOption);
+            // 嵌套子配置：路径比模块名深一层，描述符里推不出来，只有这三处
+            if (options.CacheOption?.RedisOptions is { } redisOptions) RegisterOption(services, redisOptions);
+            if (options.TickOption?.TickerQ is { } tickerQOptions) RegisterOption(services, tickerQOptions);
+            if (options.KekeOption?.GrpcOption is { } grpcOptions) RegisterOption(services, grpcOptions);
         }
 
         /// <summary>
@@ -213,5 +156,47 @@ namespace Viv.Engine
             services.AddSingleton(value);
             services.AddSingleton(Microsoft.Extensions.Options.Options.Create(value));
         }
+
+        /// <summary>
+        /// 非泛型重载：遍历描述符时手里只有 <c>object</c>，泛型参数 T 要到运行期才知道。
+        ///
+        /// 不能直接调 <see cref="RegisterOption{T}"/> —— 传 <c>object</c> 会被推断成 T=object，
+        /// 于是登记出 <c>IOptions&lt;object&gt;</c>，注入 <c>IOptions&lt;DatabaseOptions&gt;</c> 时解析不到。
+        /// 所以这里按运行期类型登记，<c>IOptions&lt;T&gt;</c> 用反射构造一次 <c>Options.Create&lt;T&gt;</c>：
+        /// 启动期跑十几次、不在热路径上，代价可以忽略。
+        /// </summary>
+        private static void RegisterOptionInstance(IServiceCollection services, object value)
+        {
+            var type = value.GetType();
+            services.AddSingleton(type, value);
+
+            var createOptions = CreateOptionsMethod.MakeGenericMethod(type);
+            services.AddSingleton(typeof(IOptions<>).MakeGenericType(type), createOptions.Invoke(null, [value])!);
+        }
+
+        /// <summary>
+        /// 把一段配置登记成 <c>IOptions&lt;T&gt;</c>（保留 IOptionsMonitor 热更新语义）。
+        ///
+        /// 没有 <c>Configure(Type, IConfiguration)</c> 这样的非泛型重载 —— 只有泛型版本，
+        /// 而 T 要到运行期才知道，只能反射调一次。启动期十几次，不在热路径上。
+        /// </summary>
+        private static void ConfigureSection(IServiceCollection services, Type optionsType, IConfiguration section)
+        {
+            ConfigureSectionMethod.MakeGenericMethod(optionsType).Invoke(null, [services, section]);
+        }
+
+        private static readonly MethodInfo ConfigureSectionMethod =
+            typeof(OptionsConfigurationServiceCollectionExtensions)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Single(m => m.Name == nameof(OptionsConfigurationServiceCollectionExtensions.Configure)
+                             && m.IsGenericMethodDefinition
+                             && m.GetParameters() is { Length: 2 } parameters
+                             && parameters[1].ParameterType == typeof(IConfiguration));
+
+        private static readonly MethodInfo CreateOptionsMethod =
+            typeof(Microsoft.Extensions.Options.Options).GetMethod(
+                nameof(Microsoft.Extensions.Options.Options.Create),
+                BindingFlags.Public | BindingFlags.Static)
+            ?? throw new InvalidOperationException("找不到 Options.Create<T>，无法注册 IOptions<T>。");
     }
 }

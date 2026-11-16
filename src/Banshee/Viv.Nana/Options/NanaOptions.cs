@@ -6,6 +6,11 @@ namespace Viv.Nana.Options
     public class NanaOptions
     {
         /// <summary>
+        /// 总开关。<c>false</c> = 消息发布订阅与 Saga 都不装，此时 Outbox 的投递器会因缺 MQ 直接报错。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
+        /// <summary>
         /// RabbitMQ 主机地址
         /// </summary>
         public string Host { get; set; } = "localhost";

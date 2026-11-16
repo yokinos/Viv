@@ -8,6 +8,12 @@ namespace Viv.Contracts.Options
     public class TokenOptions
     {
         /// <summary>
+        /// 总开关。<c>false</c> = 不签发/校验自己的令牌，<c>ITokenService</c> 回落 <c>NoneTokenService</c>；
+        /// 节点本身仍可注入，读配置不受影响。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
+        /// <summary>
         /// 当前使用的令牌类型
         /// </summary>
         public TokenType TokenType { get; set; } = TokenType.Jwt;

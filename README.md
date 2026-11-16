@@ -108,7 +108,7 @@ DatabaseOption.MasterConnectionString、NanaOption.Password/SagaConnectionString
 
 三处来源按环境补：
 
-1. **本地开发** — `appsettings.Development.json`（`.gitignore` 已排除，整份覆盖）。新机器 clone 后没有这个文件，需要自备。
+1. **本地开发** — `appsettings.Development.json`（`.gitignore` 已排除）。按层级合并：同名键覆盖，没写的键仍取 `appsettings.json`；把整个节点写成 `null` 才会整体清空。新机器 clone 后没有这个文件，需要自备。
 2. **生产** — 环境变量，层级用双下划线：`VivOptions__TokenOption__SecretKey`、`VivOptions__EnvOption__InternalToken`、`VivOptions__DatabaseOption__MasterConnectionString`。
 3. **不要写回 `appsettings.json`** —— 那份是共享且会提交的。
 
@@ -203,7 +203,7 @@ Viv/
 │   │   ├── Viv.Contracts/                    # 基础契约（IVivContext、IDependency、IDistributedLock…）
 │   │   ├── Viv.Delusion/                     # 工具：类型扫描、SafeMapper、加密、扩展
 │   │   ├── Viv.Aoi/                          # DI 桥接（VivLocator）+ 内置容器 Paradox
-│   │   ├── Viv.Engine/                       # 核心引擎：配置、AddViv、启动扩展、网关路由、自检
+│   │   ├── Viv.Engine/                       # 核心引擎：配置、AddViv、模块装配清单、启动扩展、网关路由、自检
 │   │   ├── Viv.Log/                          # Serilog / No-op + Seq
 │   │   ├── Viv.Momo/                         # EF Core + Dapper 混合、读写分离、多租户、建表
 │   │   ├── Viv.Nana/                         # Wolverine + RabbitMQ 发布订阅、Saga、MQTT
@@ -267,6 +267,7 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 `AddVivApi` 依次完成：绑定 `VivOptions` → Autofac 容器 → `AddViv()` → JWT → MVC/JSON/CORS/OpenAPI → 编码注册。
 标题与网关前缀取自 `EnvOption.DisplayName` / `ShortName`，宿主代码不再传名字。
 `RunVivApi` 的 `configure` 回调可追加端点（`app.UseTickerQ()`、`app.MapHub<ChatHub>("/chat")` 等）。
+装配阶段会打一行模块摘要（见下方 [`VivOptions` 各段](#vivoptions-各段)）。
 
 ### `VivOptions` 各段
 
@@ -275,18 +276,50 @@ builder.RunVivGateway(app => app.MapDefaultEndpoints());
 | `EnvOption` | 环境、服务标识、`InternalToken`、`DisplayName`/`ShortName` | `InternalToken` 网关与服务必须同值 |
 | `DIOption` | Service / Repository 扫描规则 | 与 `IDependency` 标记共同构成注册来源 |
 | `CacheOption` | Redis 连接、模式、多库分配 | 支持 Standalone / Cluster / Sentinel |
-| `LogOption` | Serilog、Seq | |
-| `DatabaseOption` | 方言、读写分离、实体扫描、慢查询阈值 | |
+| `LogOption` | Serilog、Seq | `LogType` 非 Serilog = 静默实现（仍注册 `ILoggerContract`） |
+| `DatabaseOption` | 方言、读写分离、实体扫描、慢查询阈值 | Outbox / Skirk / Inbox 的前置 |
 | `NanaOption` | RabbitMQ、消费类型、重试、Saga | |
-| `OutboxOption` | 发件箱投递器、保留期 | 为 null = 不启用 |
-| `InboxOption` | Inbox 清理保留期 | 与别段不同：为 null 不是"不启用" |
-| `MqttOption` | MQTT 连接 | |
-| `TokenOption` | JWT 密钥、有效期、签发方 | |
-| `TickOption` | TickerQ 调度 | |
+| `OutboxOption` | 发件箱投递器、保留期 | `EnableDispatcher = false` = 只写不投 |
+| `InboxOption` | Inbox 清理保留期 | 真门是 `DatabaseOption`，见下方例外 |
+| `MqttOption` | MQTT 连接 | 与 `NanaOption` 独立，互不影响 |
+| `TokenOption` | JWT 密钥、有效期、签发方 | 关掉后 `ITokenService` 回落 `NoneTokenService` |
+| `TickOption` | TickerQ 调度 | 模块名是 `Scheduler`，摘要里按后者显示 |
 | `KekeOption` | HTTP / gRPC 服务端 | `GrpcOption.Port` 需要独立端口 |
 | `CorsOption` | 允许的 Origin | 未配置时：Development 回显任意 Origin（局域网访问 dev server 需要），其余环境不放行任何跨域来源 |
-| `S3Option` | 对象存储 | |
+| `S3Option` | 对象存储 | 关掉后 `IS3Service` 解析不到 |
 | `SkirkOption` | 异步任务（`EnableWorker` 决定本宿主跑不跑） | |
+
+**每个模块配置段都有 `IsEnabled`（默认 `true`）**，它和「节点为 null」是两码事：
+
+| 配置写法 | 含义 | 装配 |
+|---|---|---|
+| 节点不写 / 显式 `null` | 没配 | 不装 |
+| `"IsEnabled": false` | 节点留着（配置照样能注入、能读），但这个进程不装 | 不装 |
+| 省略或 `true` | 启用 | 装 |
+
+入库的 `appsettings.json` 一律显式写出来，读的人不必猜哪个模块开着：
+
+```jsonc
+"DatabaseOption": {
+  "IsEnabled": true,          // 省略也是 true；写出来是为了配置自解释
+  "DatabaseSource": 0,
+  "MasterConnectionString": ""
+},
+"TickOption": {
+  "IsEnabled": false          // 节点留着但不装 —— 比写成 null 更能说明「确定不要」
+}
+```
+
+例外三处：`TokenOption` 永不 skip（关掉后 `ITokenService` 回落 `NoneTokenService`，不然构造注入它的服务全解析失败）；`Inbox` 的真门是 `DatabaseOption`，`InboxOption` 缺席也算启用；`HealthChecks` 恒装（`AddHealthChecks()` 是 `/health` 端点存在的前提）。
+
+装配完成会打一行摘要，启用/跳过分列、跳过项带原因：
+
+```
+Viv 模块装配：启用 11 [Log, Keke, Cache, Nana, Database, HealthChecks, Inbox, Token(jwt), S3, LocalEvent, OtherServices]；
+             跳过 5 [Mqtt(未配置), Outbox(未配置), Skirk(未配置), Kinna(未配置), Scheduler(IsEnabled=false)]
+```
+
+「配了但没生效」是第一类排障问题 —— 日志直接说清是没配，还是被 `IsEnabled = false` 关掉的。清单只在 `Viv.Engine/VivModules.cs` 一处维护，加模块只改那张表。
 
 ### DI 注册与启动自检
 

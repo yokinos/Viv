@@ -9,6 +9,12 @@ namespace Viv.Outbox.Options
     public class InboxOptions
     {
         /// <summary>
+        /// 与别处不同：本节点缺席也算启用，真门是 <c>DatabaseOption</c>。
+        /// <c>false</c> 只关掉清理器，消费端仍可用 Inbox 去重。
+        /// </summary>
+        public bool IsEnabled { get; set; } = true;
+
+        /// <summary>
         /// 已接受行的保留天数，超期分批清理。0 或负数 = 不清理。
         ///
         /// 它同时是去重窗口：行被删掉之后，同一条消息再被投递就会被当成新消息重新处理。

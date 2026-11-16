@@ -20,6 +20,7 @@ using Viv.Keke.MagicOnion;
 using Viv.Engine.Filter;
 using Viv.Engine.LocalEvents;
 using Viv.Engine.Middleware;
+using Viv.Engine.Options;
 using Viv.Engine.Power;
 using Viv.Sandrone.Conveter;
 using Viv.Sandrone.OpenApi;
@@ -28,10 +29,25 @@ namespace Viv.Engine
 {
     public static class VivStartApiExtensions
     {
-        private const string ApiTitleKey = "__VivApiTitle";
-        private const string VivAuthRegisteredKey = "__VivAuthRegistered";
-        private const string VivGrpcServerEnabledKey = "__VivGrpcServerEnabled";
-        private const string VivMagicOnionEnabledKey = "__VivMagicOnionEnabled";
+        /// <summary>
+        /// Scalar 文档标题：<c>DisplayName</c> 优先，回落 <c>ServiceName</c>。
+        ///
+        /// 不能拿它当「注册期算好、启动期读回」的中转值：写进 IConfiguration 的中间键会跟着进配置树，
+        /// 还会被环境变量与命令行覆盖链改写。两处都调这个纯函数，没有第二个真值来源。
+        /// </summary>
+        private static string ResolveApiTitle(EnvOptions? envOption)
+        {
+            if (!string.IsNullOrWhiteSpace(envOption?.DisplayName)) return envOption.DisplayName;
+            return envOption?.ServiceName ?? string.Empty;
+        }
+
+        /// <summary>grpc 服务端是否要装：协议不是 None 且配置里勾了 ServesGrpc。</summary>
+        private static bool IsGrpcServerEnabled(GrpcOptions? grpcOption)
+            => grpcOption is { Protocol: not KekeProtocol.None, ServesGrpc: true };
+
+        /// <summary>MagicOnion 服务端是否要装：协议不是 None 且配置里勾了 ServesMagicOnion。</summary>
+        private static bool IsMagicOnionEnabled(GrpcOptions? grpcOption)
+            => grpcOption is { Protocol: not KekeProtocol.None, ServesMagicOnion: true };
 
         /// <summary>
         /// 配置 Viv API 基础服务：加载配置、Autofac 容器、AddViv、MVC、CORS、OpenAPI、编码注册。
@@ -46,9 +62,8 @@ namespace Viv.Engine
             var vivOptions = builder.AddVivConfig();
             var envOption = vivOptions.EnvOption;
 
-            // 标题与网关前缀都来自配置（EnvOption.DisplayName / ShortName），宿主代码不再传名字
-            builder.Configuration[ApiTitleKey] =
-                string.IsNullOrWhiteSpace(envOption?.DisplayName) ? envOption?.ServiceName ?? string.Empty : envOption.DisplayName;
+            // 标题与网关前缀都来自配置（EnvOption.DisplayName / ShortName），宿主代码不再传名字。
+            // 标题不在这里落盘，RunVivApi 用同一个 ResolveApiTitle 现算。
             builder.Services.AddHttpContextAccessor();
 
             // Autofac 容器
@@ -58,11 +73,7 @@ namespace Viv.Engine
                 container.VivAutofacRegister(vivOptions);
             });
 
-            if (vivOptions.LogOption != null && vivOptions.LogOption.LogType == Log.LogType.Serilog)
-            {
-                builder.Logging.AddSerilog(dispose: false);
-                builder.Logging.AddFilter<ConsoleLoggerProvider>(null, LogLevel.None);
-            }
+            builder.Logging.AttachVivLogging(vivOptions.LogOption);
 
             // 基础服务
             builder.Services.AddViv(vivOptions);
@@ -75,27 +86,23 @@ namespace Viv.Engine
             //   None       → 不占端口（GrpcOption 节点配了但协议为 None 等同于没开）
             // 两边都只在这里判一次协议，宿主不再自己读 KekeOption 决定装不装 MagicOnion。
             var grpcOption = vivOptions.KekeOption?.GrpcOption;
-            if (grpcOption is not null && grpcOption.Protocol != KekeProtocol.None)
+            if (grpcOption is { Protocol: not KekeProtocol.None })
             {
                 builder.AddVivGrpcKestrel(grpcOption.Port, grpcOption.ServesGrpc);
 
-                if (grpcOption.ServesGrpc)
+                if (IsGrpcServerEnabled(grpcOption))
                 {
                     VivGrpcDiscovery.RegisterServices(builder.Services);
-                    builder.Configuration[VivGrpcServerEnabledKey] = "true";
                 }
 
-                if (grpcOption.ServesMagicOnion)
-                {
-                    builder.Configuration[VivMagicOnionEnabledKey] = "true";
-                }
+                // MagicOnion 无需在此登记：服务端 DI 半段由 KekeRegister 装配，
+                // 端点映射在 RunVivApi 里按同一份配置直接判定（IsMagicOnionEnabled）。
             }
 
             // 下游自鉴权：注册 JwtBearer（读 appsettings.json 的 VivOptions.TokenOption）。
             // 网关不强制鉴权，只解析透传 x-viv-* 上下文头；API 服务自己用 [Authorize] 控制。
             // TokenOption 为 null（如 hertalink）时跳过，保持匿名——此时 RunVivApi 不注册 UseAuthentication/UseAuthorization。
-            var hasAuth = VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, throwIfMissing: false);
-            builder.Configuration[VivAuthRegisteredKey] = hasAuth ? "true" : "false";
+            VivJwtBearerHelper.ConfigureJwtBearer(builder.Services, vivOptions.TokenOption, throwIfMissing: false);
 
             serviceCollectionConfigure?.Invoke(builder.Services);
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -170,11 +177,18 @@ namespace Viv.Engine
         {
             // 配置已在 AddVivApi 加载过一次并写入 VivEngine.VivOptions，这里不重复读（原二次读取是死变量）
             var corsPolicyName = Assembly.GetEntryAssembly()?.GetName().Name ?? "VivApi";
-            var apiTitle = builder.Configuration[ApiTitleKey] ?? "Viv API";
+
+            // 标题、鉴权开关、gRPC/MagicOnion 端点都在这里现算，不从配置里读中间键 ——
+            // 那种键会参与环境变量与命令行覆盖链：把鉴权标志顶成 "true"，就会在没有 JwtBearer
+            // 注册的情况下调 UseAuthentication，启动直接崩。
+            var vivOptions = VivEngine.VivOptions;
+            var apiTitle = ResolveApiTitle(vivOptions?.EnvOption);
+            if (string.IsNullOrWhiteSpace(apiTitle)) apiTitle = "Viv API";
 
             // TokenOption=null（匿名服务）时 ConfigureJwtBearer 未注册鉴权，此时不能调用 UseAuthentication/UseAuthorization，
             // 否则会抛 "Unable to resolve service for type 'IAuthenticationSchemeProvider'"。
-            var hasAuth = builder.Configuration[VivAuthRegisteredKey] == "true";
+            // CanRegister 与 AddVivApi 里的注册调用共用同一个判定，不会出现「说装了但没装」。
+            var hasAuth = VivJwtBearerHelper.CanRegister(vivOptions?.TokenOption);
 
             var app = builder.Build();
             VivLocator.Initialize(app.Services);
@@ -182,7 +196,7 @@ namespace Viv.Engine
             // 网关代理场景：信任 YARP 透传的 X-Forwarded-Proto/Host/For。
             // Aspire/YARP 网关不在 loopback，dev 下清空默认 KnownProxies；非 dev 只认 TrustedProxies，
             // 没配就退回 loopback 默认，避免任意来源伪造 X-Forwarded-For。
-            app.UseForwardedHeaders(VivForwardedHeaders.Create(VivEngine.VivOptions?.EnvOption, app.Environment.IsDevelopment()));
+            app.UseForwardedHeaders(VivForwardedHeaders.Create(vivOptions?.EnvOption, app.Environment.IsDevelopment()));
 
             if (app.Environment.IsDevelopment())
             {
@@ -219,7 +233,7 @@ namespace Viv.Engine
             // 默认不跳转：TLS 在网关 / 边缘终止，下游自己跳转会把浏览器 307 到服务自身的 https 端口
             // （如 https://localhost:7093），请求逃出网关且丢掉 /{服务短名} 前缀 —— 与 VivForwardedHeaders
             // 注释里那个坑是同一个。只有服务被直接以 http 暴露时才在 appsettings.json 打开。
-            if (VivEngine.VivOptions?.EnvOption?.EnableHttpsRedirection == true)
+            if (vivOptions?.EnvOption?.EnableHttpsRedirection == true)
             {
                 app.UseHttpsRedirection();
             }
@@ -229,14 +243,16 @@ namespace Viv.Engine
             }
             app.MapControllers();
 
-            // gRPC 服务端启用时自动映射发现的服务（配置驱动，宿主无需手动 MapGrpcService<T>）
-            if (builder.Configuration[VivGrpcServerEnabledKey] == "true")
+            // gRPC / MagicOnion 端点映射：与 AddVivApi 里的注册调同一组判定函数，条件只有一份，
+            // 不会出现「注册了却没 Map」或反过来。
+            var grpcOption = vivOptions?.KekeOption?.GrpcOption;
+            if (IsGrpcServerEnabled(grpcOption))
             {
                 VivGrpcDiscovery.MapServices(app);
             }
 
             // MagicOnion 服务端同理：DI 已在 KekeRegister 装好，这里只补端点映射（必须在 Build 之后）
-            if (builder.Configuration[VivMagicOnionEnabledKey] == "true")
+            if (IsMagicOnionEnabled(grpcOption))
             {
                 app.MapVivMagicOnionServices();
             }
