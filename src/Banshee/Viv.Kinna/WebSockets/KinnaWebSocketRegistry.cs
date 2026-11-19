@@ -247,16 +247,36 @@ namespace Viv.Kinna.WebSockets
         }
 
         /// <summary>
-        /// 发一帧给组内所有本机连接，返回成功入队的条数
+        /// 发一帧给组内所有本机连接，返回成功入队的条数。
+        /// <paramref name="excludedConnectionIds"/> 是要剔掉的连接（发起这次请求的那条）。
         /// </summary>
-        internal int SendToGroup(string groupName, string method, object?[] args)
+        internal int SendToGroup(
+            string groupName,
+            string method,
+            object?[] args,
+            IReadOnlyCollection<string>? excludedConnectionIds = null)
         {
             if (!_groups.TryGetValue(groupName, out var members) || members.IsEmpty)
             {
                 return 0;
             }
 
-            return SendMany([.. members.Keys], method, args);
+            if (excludedConnectionIds is not { Count: > 0 })
+            {
+                return SendMany([.. members.Keys], method, args);
+            }
+
+            // 组内成员逐个比对：排除集通常只有一条，用 HashSet 反而是额外分配
+            var targets = new List<string>(members.Count);
+            foreach (var connectionId in members.Keys)
+            {
+                if (!excludedConnectionIds.Contains(connectionId))
+                {
+                    targets.Add(connectionId);
+                }
+            }
+
+            return SendMany(targets, method, args);
         }
 
         internal void AddToGroup(string connectionId, string groupName)

@@ -441,8 +441,34 @@ services.AddKinnaPusher<ChatHub, SendMessageEvent, ChatMessagePusher>();
 **组名只由框架生成**（`IKinnaKeys.GroupName`，带租户前缀）。业务只给租户和群 Id，
 自己拼字符串一旦漏了租户，跨租户串组不会报错，只会把消息发给不该看的人。
 
+### 发送方自己会不会收到
+
+**发起这次请求的那个客户端不吃推送**（`KinnaPushPlan.SkipSenderClient`，默认开）。
+它已经通过接口返回拿到了 `MessageId` / `SentAt`，再推一份就是同屏两条；
+剔掉之后每条消息对每条连接**至多一次**，客户端不需要按 Id 去重。
+
+判定用的是信封里的 `AppId` + `UserId` + 租户，不是连接 Id：
+
+- 请求和长连接可能落在不同副本，但每台副本只推本机连接。持有发起端连接的副本查出来非空、
+  由它把这个端剔掉；不持有它的副本查出来是空的，本来也推不到它——所以不需要跨副本路由。
+- `AppId` 表达「哪个客户端」。默认 `SingleConnectionPerApp = true`，一个 `AppId` 就一条连接。
+
+发送方的**其它**端要不要同步，分两种：
+
+| 目标 | 发送方其它端 | 怎么到 |
+|---|---|---|
+| 群 | 自动同步 | 它们本来就是群成员，组播覆盖。发起端靠 `GroupExcept` 剔掉 |
+| 单聊 | 需要 `MirrorToSender: true` | 投递目标只有接收方，所以把署名人的连接并进来，再剔掉发起端、按连接去重 |
+
+单聊不开 `MirrorToSender` 的后果是「手机发出、PC 上看不到」。自己发给自己时两路查出来是
+同一批连接，去重在这一层做完，不会推到两条。
+
+`SkipSenderClient = false` 只适用于**不靠接口返回渲染气泡**的客户端：那种客户端要干等推送，
+把发起端剔掉会让它看不到自己刚发的消息。
+
 署名与调用者不一致（`plan.AuthorId != context.UserId`）不算错误——模拟发送、机器人代发
-都是正常场景，只记 `kinna.identity.override` 做审计。
+都是正常场景，只记 `kinna.identity.override` 做审计。代发时补投的是**署名人**的其它端，
+不是调用者的。
 
 ---
 

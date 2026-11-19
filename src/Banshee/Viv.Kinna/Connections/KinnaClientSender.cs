@@ -20,8 +20,21 @@ namespace Viv.Kinna.Connections
         public Task SendToConnectionsAsync(IReadOnlyList<string> connectionIds, string method, object? payload, CancellationToken cancellationToken = default)
             => _hub.Clients.Clients(connectionIds).SendCoreAsync(method, [payload], cancellationToken);
 
-        public Task SendToGroupAsync(string groupName, string method, object? payload, CancellationToken cancellationToken = default)
-            => _hub.Clients.Group(groupName).SendCoreAsync(method, [payload], cancellationToken);
+        /// <summary>
+        /// 组播。有排除项时走 <c>GroupExcept</c>：SignalR 的组广播本身不排除任何成员，
+        /// 发消息的那条连接也在组里，不剔掉它就会收到自己刚发的消息。
+        /// </summary>
+        public Task SendToGroupAsync(
+            string groupName,
+            string method,
+            object? payload,
+            IReadOnlyList<string>? excludedConnectionIds = null,
+            CancellationToken cancellationToken = default)
+            => excludedConnectionIds is { Count: > 0 }
+                ? _hub.Clients.GroupExcept(groupName, excludedConnectionIds)
+                    .SendCoreAsync(method, [payload], cancellationToken)
+                : _hub.Clients.Group(groupName)
+                    .SendCoreAsync(method, [payload], cancellationToken);
 
         public Task AddToGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default)
             => _hub.Groups.AddToGroupAsync(connectionId, groupName, cancellationToken);

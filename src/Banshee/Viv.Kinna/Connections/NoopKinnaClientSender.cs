@@ -30,6 +30,7 @@ namespace Viv.Kinna.Connections
             string groupName,
             string method,
             object? payload,
+            IReadOnlyList<string>? excludedConnectionIds = null,
             CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 

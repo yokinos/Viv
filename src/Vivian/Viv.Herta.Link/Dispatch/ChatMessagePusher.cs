@@ -44,6 +44,8 @@ namespace Viv.Herta.Link.Dispatch
                 TraceId = context?.TraceId
             };
 
+            // 群聊：发送方的其它端本来就在组里，这次组播就同步到了。
+            // 单聊：目标只有接收方，必须显式补投给发送方的其它端，否则手机发出、PC 上看不到
             return isGroup
                 ? new KinnaPushPlan(
                     "group",
@@ -56,7 +58,8 @@ namespace Viv.Herta.Link.Dispatch
                     KinnaClientMethods.ReceiveMessage,
                     payload,
                     KinnaPushTarget.ToUser(subjectId, evt.TargetId),
-                    evt.FromUserId);
+                    evt.FromUserId,
+                    MirrorToSender: true);
         }
     }
 }

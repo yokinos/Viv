@@ -186,7 +186,9 @@ namespace Viv.Herta.Tests
 
             Assert.True(result.IsSuccess);
             Assert.Equal(RealmId, pool.LastSubjectId);
-            Assert.Equal(5L, pool.LastUserId);
+
+            // 单聊会额外查一次发送方（补投它的其它端），所以断言「查过接收方」而不是「最后一次查的是它」
+            Assert.Contains(5L, pool.QueriedUserIds);
 
             var call = Assert.Single(sender.Calls);
             Assert.Equal("Clients", call.TargetKind);

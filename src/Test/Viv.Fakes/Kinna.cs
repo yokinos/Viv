@@ -19,6 +19,9 @@ public sealed class RecordingKinnaClientSender : IKinnaClientSender
 
     public List<(string ConnectionId, string Group)> Removed { get; } = new();
 
+    /// <summary>最近一次组播被剔掉的连接（发起端的那些）</summary>
+    public List<string> Excluded { get; } = new();
+
     /// <summary>设了就抛，用于测发送失败</summary>
     public Exception? ThrowOnSend { get; set; }
 
@@ -38,10 +41,16 @@ public sealed class RecordingKinnaClientSender : IKinnaClientSender
         return Task.CompletedTask;
     }
 
-    public Task SendToGroupAsync(string groupName, string method, object? payload, CancellationToken cancellationToken = default)
+    public Task SendToGroupAsync(
+        string groupName,
+        string method,
+        object? payload,
+        IReadOnlyList<string>? excludedConnectionIds = null,
+        CancellationToken cancellationToken = default)
     {
         if (ThrowOnSend != null) throw ThrowOnSend;
 
+        Excluded.AddRange(excludedConnectionIds ?? []);
         Calls.Add(new SenderCall("Group", groupName, method, [payload]));
         return Task.CompletedTask;
     }
@@ -86,14 +95,40 @@ public sealed class StubKinnaConnectionPool : IKinnaConnectionPool
 
     public KinnaConnectionInfo? Remove(string connectionId) => Info;
 
+    /// <summary>按用户预设连接，设了优先用它，否则回落到 <see cref="ConnectionIds"/></summary>
+    public Dictionary<long, List<string>> ConnectionsByUser { get; set; } = new();
+
+    /// <summary>
+    /// 按用户查过的 userId，按调用顺序记下来。投递一次可能查多个用户
+    /// （接收方，加上单聊补投时的发送方），只看最后一次会漏掉前一次。
+    /// </summary>
+    public List<long> QueriedUserIds { get; } = new();
+
     public List<string> GetConnectionIds(long subjectId, long userId)
     {
         LastSubjectId = subjectId;
         LastUserId = userId;
-        return ConnectionIds;
+        QueriedUserIds.Add(userId);
+        return ConnectionsByUser.TryGetValue(userId, out var ids) ? ids : ConnectionIds;
     }
 
-    public List<string> GetConnectionIds(long appId, long subjectId, long userId) => ConnectionIds;
+    /// <summary>
+    /// 按客户端查的返回值，投递流程用它算「发起端要剔掉哪几条」。
+    /// 默认空：老用例没有「发起端也要排除」的语义，给同一份 ConnectionIds 会把目标全剔光。
+    /// </summary>
+    public List<string> AppConnectionIds { get; set; } = new();
+
+    /// <summary>按用户预设「该用户在这个客户端上的连接」，设了优先用它</summary>
+    public Dictionary<long, List<string>> AppConnectionsByUser { get; set; } = new();
+
+    /// <summary>最近一次按客户端查的 AppId，用来断言用的是信封里那个而非别的值</summary>
+    public long? LastAppId { get; private set; }
+
+    public List<string> GetConnectionIds(long appId, long subjectId, long userId)
+    {
+        LastAppId = appId;
+        return AppConnectionsByUser.TryGetValue(userId, out var ids) ? ids : AppConnectionIds;
+    }
 
     public List<KinnaConnectionInfo> GetConnections(long subjectId) => Connections;
 

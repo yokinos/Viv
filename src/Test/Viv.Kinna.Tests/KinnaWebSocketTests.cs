@@ -574,6 +574,28 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
+        public async Task SendToGroup_可以剔掉指定连接()
+        {
+            // 发消息那台设备自己也在组里，不剔掉它就会收到自己刚发的消息
+            var registry = new KinnaWebSocketRegistry<TestHub>(64);
+            var phone = new RecordingWebSocket();
+            var pc = new RecordingWebSocket();
+            registry.Bind("ws:phone", phone, CancellationToken.None);
+            registry.Bind("ws:pc", pc, CancellationToken.None);
+
+            registry.AddToGroup("ws:phone", "g1");
+            registry.AddToGroup("ws:pc", "g1");
+
+            Assert.Equal(1, registry.SendToGroup("g1", "ReceiveMessage", [1], ["ws:phone"]));
+
+            await WaitUntilAsync(() => pc.Sent.Count == 1, "组内其它连接收到");
+            Assert.Empty(phone.Sent);
+
+            // 剔除项不在组里（也不在本机）不该影响投递
+            Assert.Equal(2, registry.SendToGroup("g1", "ReceiveMessage", [1], ["ws:elsewhere"]));
+        }
+
+        [Fact]
         public async Task SendToConnectionsAsync_按归属分流到两套传输()
         {
             var registry = new KinnaWebSocketRegistry<TestHub>(64);

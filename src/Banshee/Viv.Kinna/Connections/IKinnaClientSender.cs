@@ -12,7 +12,19 @@ namespace Viv.Kinna.Connections
 
         Task SendToConnectionsAsync(IReadOnlyList<string> connectionIds, string method, object? payload, CancellationToken cancellationToken = default);
 
-        Task SendToGroupAsync(string groupName, string method, object? payload, CancellationToken cancellationToken = default);
+        /// <summary>
+        /// 发一帧给组内所有连接。
+        /// </summary>
+        /// <param name="excludedConnectionIds">
+        /// 要从组里剔掉的连接。传发起这次请求的那条连接，那个客户端就不会收到自己触发的消息。
+        /// 不在组里的 Id 传进来无所谓，两种传输都按「有就跳过、没有就算了」处理。
+        /// </param>
+        Task SendToGroupAsync(
+            string groupName,
+            string method,
+            object? payload,
+            IReadOnlyList<string>? excludedConnectionIds = null,
+            CancellationToken cancellationToken = default);
 
         Task AddToGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default);
 

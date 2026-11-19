@@ -19,8 +19,21 @@ namespace Viv.Kinna.Tests
             return new KinnaMessageDispatcher<TestHub, string>(session, pusher, logger ?? new RecordingLogger());
         }
 
-        private static KinnaPushPlan UserPlan(string method = "M", long subjectId = SubjectId, long userId = UserId)
-            => new("user", method, "payload", KinnaPushTarget.ToUser(subjectId, userId));
+        private static KinnaPushPlan UserPlan(
+            string method = "M",
+            long subjectId = SubjectId,
+            long userId = UserId,
+            long authorId = 0,
+            bool mirrorToSender = false,
+            bool skipSenderClient = true)
+            => new(
+                "user",
+                method,
+                "payload",
+                KinnaPushTarget.ToUser(subjectId, userId),
+                authorId,
+                mirrorToSender,
+                skipSenderClient);
 
         private static KinnaPushPlan GroupPlan(long groupId = 5, long subjectId = SubjectId, string method = "M")
             => new("group", method, "payload", KinnaPushTarget.ToGroup(subjectId, groupId));
@@ -211,6 +224,137 @@ namespace Viv.Kinna.Tests
 
             Assert.Equal(KinnaPushOutcome.Success, outcome);
             Assert.Single(sender.Calls);
+        }
+
+        [Fact]
+        public async Task 群播_把发起端从组里剔掉()
+        {
+            // 发起请求那台设备已经在接口返回里拿到了结果，再推一份就是同屏两条
+            var sender = new RecordingKinnaClientSender();
+            var pool = new StubKinnaConnectionPool { AppConnectionIds = ["phone"] };
+            var pusher = new FakeKinnaPusher<string> { OnPlan = (_, _) => GroupPlan() };
+
+            var outcome = await Create(pusher, sender, pool)
+                .DispatchAsync("evt", new KinnaPushContext(7, SubjectId, UserId, null));
+
+            Assert.Equal(KinnaPushOutcome.Success, outcome);
+            Assert.Equal("phone", Assert.Single(sender.Excluded));
+
+            // 用的是信封里的 AppId：它才是「这个客户端」，连接 Id 不参与判断
+            Assert.Equal(7, pool.LastAppId);
+        }
+
+        [Fact]
+        public async Task 群播_没有信封时一个人都不剔()
+        {
+            // 没有身份就没法判断哪条是发起端，宁可多发一份也不能漏人
+            var sender = new RecordingKinnaClientSender();
+            var pool = new StubKinnaConnectionPool { AppConnectionIds = ["phone"] };
+            var pusher = new FakeKinnaPusher<string> { OnPlan = (_, _) => GroupPlan() };
+
+            await Create(pusher, sender, pool).DispatchAsync("evt", null);
+
+            Assert.Empty(sender.Excluded);
+            Assert.Single(sender.Calls);
+        }
+
+        [Fact]
+        public async Task 群播_关掉剔除开关时发起端照收()
+        {
+            // 发送方不用接口返回渲染气泡的客户端才需要这条：剔掉它自己就看不到消息了
+            var sender = new RecordingKinnaClientSender();
+            var pool = new StubKinnaConnectionPool { AppConnectionIds = ["phone"] };
+            var pusher = new FakeKinnaPusher<string>
+            {
+                OnPlan = (_, _) => GroupPlan() with { SkipSenderClient = false }
+            };
+
+            var outcome = await Create(pusher, sender, pool)
+                .DispatchAsync("evt", new KinnaPushContext(7, SubjectId, UserId, null));
+
+            Assert.Equal(KinnaPushOutcome.Success, outcome);
+            Assert.Empty(sender.Excluded);
+        }
+
+        [Fact]
+        public async Task 单聊_补投发送方的其它端()
+        {
+            // 手机发出、PC 同步：目标除了接收方，还要并上署名人除发起端以外的连接
+            const long receiverId = 22;
+            const long authorId = 33;
+
+            var sender = new RecordingKinnaClientSender();
+            var pool = new StubKinnaConnectionPool
+            {
+                ConnectionsByUser =
+                {
+                    [receiverId] = ["rcv"],
+                    [authorId] = ["phone", "pc"]
+                },
+                AppConnectionsByUser = { [authorId] = ["phone"] }
+            };
+
+            var pusher = new FakeKinnaPusher<string>
+            {
+                OnPlan = (_, _) => UserPlan(userId: receiverId, authorId: authorId, mirrorToSender: true)
+            };
+
+            var outcome = await Create(pusher, sender, pool)
+                .DispatchAsync("evt", new KinnaPushContext(7, SubjectId, authorId, null));
+
+            Assert.Equal(KinnaPushOutcome.Success, outcome);
+            var call = Assert.Single(sender.Calls);
+
+            // 接收方 + 发送方的 PC，发起端（phone）被剔掉
+            Assert.Equal("rcv,pc", call.TargetId);
+        }
+
+        [Fact]
+        public async Task 单聊_自己发给自己_同一连接只发一次()
+        {
+            // 接收方和发送方是同一个人，两路查出来是同一批连接，必须按连接去重
+            const long userId = 33;
+
+            var sender = new RecordingKinnaClientSender();
+            var pool = new StubKinnaConnectionPool
+            {
+                ConnectionsByUser = { [userId] = ["phone", "pc"] },
+                AppConnectionsByUser = { [userId] = ["phone"] }
+            };
+
+            var pusher = new FakeKinnaPusher<string>
+            {
+                OnPlan = (_, _) => UserPlan(userId: userId, authorId: userId, mirrorToSender: true)
+            };
+
+            await Create(pusher, sender, pool)
+                .DispatchAsync("evt", new KinnaPushContext(7, SubjectId, userId, null));
+
+            var call = Assert.Single(sender.Calls);
+            Assert.Equal("pc", call.TargetId);
+        }
+
+        [Fact]
+        public async Task 单聊_目标只剩发起端自己时算跳过()
+        {
+            // 那条连接已经拿过接口返回了，没有别人要发。判 Skipped 而不是 Failed，
+            // 否则消费者会把「本来就没人可发」当成推送失败
+            const long userId = 33;
+
+            var sender = new RecordingKinnaClientSender();
+            var pool = new StubKinnaConnectionPool
+            {
+                ConnectionsByUser = { [userId] = ["phone"] },
+                AppConnectionsByUser = { [userId] = ["phone"] }
+            };
+
+            var pusher = new FakeKinnaPusher<string> { OnPlan = (_, _) => UserPlan(userId: userId) };
+
+            var outcome = await Create(pusher, sender, pool)
+                .DispatchAsync("evt", new KinnaPushContext(7, SubjectId, userId, null));
+
+            Assert.Equal(KinnaPushOutcome.Skipped, outcome);
+            Assert.Empty(sender.Calls);
         }
     }
 }

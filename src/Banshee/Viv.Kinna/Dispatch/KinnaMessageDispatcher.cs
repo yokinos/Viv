@@ -56,6 +56,10 @@ namespace Viv.Kinna.Dispatch
 
             try
             {
+                // 发起这次请求的那个客户端。它已经通过接口返回拿到了结果，不再吃推送，
+                // 这样每条消息对每条连接至多一次，客户端不用去重
+                var excluded = ResolveSenderClientConnections(plan, context, plan.Target.SubjectId);
+
                 if (plan.Target.Kind == KinnaTargetKind.Group)
                 {
                     if (plan.Target.SubjectId <= 0 || plan.Target.GroupId <= 0)
@@ -70,8 +74,10 @@ namespace Viv.Kinna.Dispatch
                     // 组名只在这里生成：业务只给租户和群 Id，拼错了不会静默发错人
                     var groupName = _session.Keys.GroupName(plan.Target.SubjectId, plan.Target.GroupId);
 
+                    // 发送方的其它端不用另外补投：它们本来就是群成员，这次组播就覆盖了。
+                    // 只需要把发起端剔掉，否则发送的这台设备会收到自己刚发的消息
                     await _session.Sender
-                        .SendToGroupAsync(groupName, plan.Method, plan.Payload, cancellationToken)
+                        .SendToGroupAsync(groupName, plan.Method, plan.Payload, excluded.Count == 0 ? null : excluded, cancellationToken)
                         .ConfigureAwait(false);
 
                     KinnaMetrics.RecordDispatch(_session.Hub, plan.Kind, "ok");
@@ -85,8 +91,8 @@ namespace Viv.Kinna.Dispatch
                     return KinnaPushOutcome.Dropped;
                 }
 
-                var connectionIds = _session.Pool.GetConnectionIds(plan.Target.SubjectId, plan.Target.UserId);
-                if (connectionIds.Count == 0)
+                var targets = CollectTargets(plan, context, excluded);
+                if (targets.Count == 0)
                 {
                     // 每个副本都收到全量消息，查不到就是人没连在这台机器上
                     KinnaMetrics.RecordDispatch(_session.Hub, plan.Kind, "skipped");
@@ -94,7 +100,7 @@ namespace Viv.Kinna.Dispatch
                 }
 
                 await _session.Sender
-                    .SendToConnectionsAsync(connectionIds, plan.Method, plan.Payload, cancellationToken)
+                    .SendToConnectionsAsync(targets, plan.Method, plan.Payload, cancellationToken)
                     .ConfigureAwait(false);
 
                 KinnaMetrics.RecordDispatch(_session.Hub, plan.Kind, "ok");
@@ -113,6 +119,74 @@ namespace Viv.Kinna.Dispatch
                 KinnaMetrics.RecordDispatch(_session.Hub, plan.Kind, "failed");
                 return KinnaPushOutcome.Failed;
             }
+        }
+
+        /// <summary>
+        /// 单聊的实际投递目标：接收方 + 发送方的其它端，剔掉发起端，同一条连接只留一份。
+        ///
+        /// 自己给自己发时「接收方」和「发送方」是同一批连接，两路查出来会重叠，
+        /// 所以必须按连接 Id 去重——否则那台设备会收到两条一模一样的消息。
+        /// 这一层去重是服务端的事：客户端只管按收到的帧渲染，不需要自己认哪条是重复的。
+        /// </summary>
+        private List<string> CollectTargets(KinnaPushPlan plan, KinnaPushContext? context, List<string> excluded)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var targets = new List<string>();
+
+            void Add(List<string> connectionIds)
+            {
+                foreach (var connectionId in connectionIds)
+                {
+                    if (seen.Add(connectionId))
+                    {
+                        targets.Add(connectionId);
+                    }
+                }
+            }
+
+            Add(_session.Pool.GetConnectionIds(plan.Target.SubjectId, plan.Target.UserId));
+
+            // 群聊不走这里：发送方的端本来就在组里，组播已经覆盖
+            if (plan.MirrorToSender)
+            {
+                // 代发时署名人和调用者不是同一个：要同步的是署名人的那台设备
+                var authorId = plan.AuthorId > 0 ? plan.AuthorId : context?.UserId ?? 0;
+                if (authorId > 0 && authorId != plan.Target.UserId)
+                {
+                    Add(_session.Pool.GetConnectionIds(plan.Target.SubjectId, authorId));
+                }
+            }
+
+            if (excluded.Count > 0)
+            {
+                targets.RemoveAll(excluded.Contains);
+            }
+
+            return targets;
+        }
+
+        /// <summary>
+        /// 找出「发起这次请求的那个客户端」在本机上的连接。
+        ///
+        /// 用 AppId + 用户 + 租户定位，不靠连接 Id：HTTP 请求和长连接可能落在不同副本上，
+        /// 但每台副本只推本机连接，所以持有这条连接的副本查出来非空、由它把发起端剔掉；
+        /// 不持有它的副本查出来是空的，本来也推不到那个端。
+        ///
+        /// 计划里关掉 <c>SkipSenderClient</c>、没有信封、或信封没带 AppId 时返回空，等于不排除任何人。
+        /// </summary>
+        private List<string> ResolveSenderClientConnections(KinnaPushPlan plan, KinnaPushContext? context, long subjectId)
+        {
+            if (!plan.SkipSenderClient || context is null)
+            {
+                return [];
+            }
+
+            if (context.AppId <= 0 || context.UserId <= 0 || subjectId <= 0)
+            {
+                return [];
+            }
+
+            return _session.Pool.GetConnectionIds(context.AppId, subjectId, context.UserId);
         }
     }
 }

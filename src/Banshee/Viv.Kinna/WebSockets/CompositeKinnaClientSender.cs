@@ -105,21 +105,23 @@ namespace Viv.Kinna.WebSockets
 
         /// <summary>
         /// 两边都发。组名相同但成员分处两张表，发到没有成员的那一侧是空操作，不用先判断。
+        /// 排除项要往两边都传：原生连接和 SignalR 连接可能同处一个组里。
         /// </summary>
         public async Task SendToGroupAsync(
             string groupName,
             string method,
             object? payload,
+            IReadOnlyList<string>? excludedConnectionIds = null,
             CancellationToken cancellationToken = default)
         {
-            _webSockets.SendToGroup(groupName, method, [payload]);
+            _webSockets.SendToGroup(groupName, method, [payload], excludedConnectionIds);
 
             if (!_signalrEnabled)
             {
                 return;
             }
 
-            await _signalr.SendToGroupAsync(groupName, method, payload, cancellationToken)
+            await _signalr.SendToGroupAsync(groupName, method, payload, excludedConnectionIds, cancellationToken)
                 .ConfigureAwait(false);
         }
 
