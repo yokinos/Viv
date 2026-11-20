@@ -188,11 +188,26 @@ namespace Viv.Kinna.Connections
         {
             var now = _time.GetUtcNow();
 
-            // 被限流就不续租：客户端下一个窗口再 Ping 一次就恢复了，没必要在这里阻塞或抛错
-            if (_limiter?.TryAcquire(connectionId) == false)
+            // 被限流就不续租：客户端下一个窗口再 Ping 一次就恢复了，没必要在这里阻塞或抛错。
+            // 心跳走独立的一档配额，不会被刷屏的 Ack 挤掉
+            if (!AcquireUplink(connectionId, KinnaUplinkChannel.Heartbeat, out _))
             {
                 KinnaMetrics.RecordUplinkThrottled(_session.Hub, "Ping");
-                return new KinnaPong { ServerTime = now, LeaseExpiresAt = now + _leaseTtl };
+
+                // 没 Touch 就不能回「now + ttl」：客户端会按它安排下一次心跳，而表里的倒计时
+                // 一秒都没停，实际可能马上就被清扫。回表里那个真实的到期时间
+                var throttled = _session.Pool.TryGet(connectionId);
+                if (throttled is null)
+                {
+                    // 表里已经没有了：这时候最该告诉客户端的是「你不算数了」，让它重连
+                    return new KinnaPong { ServerTime = now, LeaseExpiresAt = now, Alive = false };
+                }
+
+                return new KinnaPong
+                {
+                    ServerTime = now,
+                    LeaseExpiresAt = throttled.Value.LastSeen is { } seen ? seen + _leaseTtl : now
+                };
             }
 
             var info = _session.Pool.TryGet(connectionId);
@@ -217,11 +232,16 @@ namespace Viv.Kinna.Connections
 
         public async Task<KinnaAckResult> AckAsync(string connectionId, IReadOnlyList<long> messageIds, CancellationToken cancellationToken = default)
         {
-            if (_limiter?.TryAcquire(connectionId) == false)
+            if (!AcquireUplink(connectionId, KinnaUplinkChannel.Command, out var ackRetryAfterMs))
             {
-                // 丢一次确认不会丢消息：客户端看到 Throttled 稍后重报，或者由 Resync 触发补拉
+                // 丢一次确认不会丢消息：客户端看到 Throttled 稍后重报，或者由 Resync 触发补拉。
+                // 回执里带上窗口剩余时间，客户端才知道「稍后」是多久
                 KinnaMetrics.RecordUplinkThrottled(_session.Hub, "Ack");
-                return new KinnaAckResult { Status = KinnaAckStatus.Throttled };
+                return new KinnaAckResult
+                {
+                    Status = KinnaAckStatus.Throttled,
+                    RetryAfterMs = ackRetryAfterMs
+                };
             }
 
             // 身份从连接表拿：客户端不能自己报 userId，否则可以替别人确认
@@ -260,7 +280,7 @@ namespace Viv.Kinna.Connections
 
             // Resync 是上行里最贵的一条：一次存储读，客户端拿到结果后往往还跟一次 HTTP 补拉。
             // 重连风暴时恰恰是它最先被打爆，所以和其它上行指令共用同一份配额
-            if (_limiter?.TryAcquire(connectionId) == false)
+            if (!AcquireUplink(connectionId, KinnaUplinkChannel.Command, out var resyncRetryAfterMs))
             {
                 KinnaMetrics.RecordUplinkThrottled(_session.Hub, "Resync");
 
@@ -270,6 +290,7 @@ namespace Viv.Kinna.Connections
                 {
                     Throttled = true,
                     NeedBackfill = false,
+                    RetryAfterMs = resyncRetryAfterMs,
                     ServerTime = now
                 };
             }
@@ -460,6 +481,23 @@ namespace Viv.Kinna.Connections
                     $"[{_session.Hub}] 广播踢人失败，其余副本将靠租约过期回收: " +
                     $"subject={command.SubjectId} user={command.UserId} {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// 取一个上行配额。没注册限流器时一律放行（对应通道的配额配 0 时它压根不建窗口）。
+        ///
+        /// 单独一个方法是因为 <c>_limiter?.TryAcquire(..., out var x)</c> 在 <c>_limiter</c> 为 null 时
+        /// 不会给 <c>x</c> 赋值，后面就没法把它填进回执里。
+        /// </summary>
+        private bool AcquireUplink(string connectionId, KinnaUplinkChannel channel, out int retryAfterMs)
+        {
+            if (_limiter is null)
+            {
+                retryAfterMs = 0;
+                return true;
+            }
+
+            return _limiter.TryAcquire(connectionId, channel, out retryAfterMs);
         }
 
         /// <summary>

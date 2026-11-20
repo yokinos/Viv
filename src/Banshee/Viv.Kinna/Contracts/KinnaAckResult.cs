@@ -28,5 +28,16 @@ namespace Viv.Kinna.Contracts
 
         /// <summary>记录后的水位。只有 <see cref="KinnaAckStatus.Accepted"/> 时有意义</summary>
         public long Watermark { get; init; }
+
+        /// <summary>
+        /// 建议的最短退避时间（毫秒）。只在 <see cref="KinnaAckStatus.Throttled"/> 时有值，其余为 0。
+        ///
+        /// 它是**下限**不是精确值：客户端要在它之上叠加自己的指数退避。严格按这个值重试，
+        /// 窗口翻转的那一毫秒所有被挡的连接会同时回来，下一个窗口立刻又满。
+        ///
+        /// 量级能区分原因，不需要额外的原因字段：上行配额用尽 → 窗口剩余（默认最多 10 秒）；
+        /// 服务端串行队列满（下游慢）→ 几百毫秒。前者是自己的问题，后者该等得更久一点。
+        /// </summary>
+        public int RetryAfterMs { get; init; }
     }
 }

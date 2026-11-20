@@ -1,9 +1,9 @@
-using System.Buffers;
-using System.Net.WebSockets;
-using System.Threading.Channels;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
+using System.Buffers;
+using System.Net.WebSockets;
+using System.Threading.Channels;
 using Viv.Kinna.Connections;
 using Viv.Kinna.Contracts;
 using Viv.Kinna.Metrics;
@@ -42,6 +42,18 @@ namespace Viv.Kinna.WebSockets
         /// Resync 丢弃时回 Throttled 让客户端退避重试，两者都不碰存储。
         /// </summary>
         private const int DefaultSerialQueueCapacity = 64;
+
+        /// <summary>
+        /// 串行队列满时给客户端的退避建议（毫秒）。
+        ///
+        /// 这个值没有精确依据——队列排空时间取决于下游存储有多慢，那是不可知的。
+        /// 取 200ms 是「再等一拍」的量级：给到 10ms 等于催客户端立刻重试，队列还是满的；
+        /// 给到几秒又让本来几十毫秒就能通过的确认白等。
+        ///
+        /// 和上行配额那条路径的区别在量级：那边是窗口剩余（默认秒级），这边是百毫秒级。
+        /// 客户端按这个差异就能分辨「自己太吵」还是「服务端忙」，不需要额外的原因字段。
+        /// </summary>
+        private const int SerialQueueRetryAfterMs = 200;
 
         /// <summary>
         /// 服务端主动发关闭帧之后，等对端回一帧 Close 完成握手的上限。
@@ -606,16 +618,11 @@ namespace Viv.Kinna.WebSockets
                 switch (dropped.Type)
                 {
                     case KinnaInboundMethods.Ack:
-                        registry.Send(
-                            connectionId,
-                            KinnaClientMethods.Ack,
-                            [new KinnaAckResult { Status = KinnaAckStatus.Throttled }]);
+                        registry.Send(connectionId, KinnaClientMethods.Ack, [new KinnaAckResult { Status = KinnaAckStatus.Throttled, RetryAfterMs = SerialQueueRetryAfterMs }]);
                         break;
 
                     case KinnaInboundMethods.Resync:
-                        registry.Send(
-                            connectionId,
-                            KinnaClientMethods.Resync,
+                        registry.Send(connectionId, KinnaClientMethods.Resync,
                             [
                                 new KinnaResyncResult
                                 {
@@ -624,6 +631,7 @@ namespace Viv.Kinna.WebSockets
                                     // 被限流时一定为 false：这时候让客户端去补拉，
                                     // 只是把长连接的压力原样搬到数据库上
                                     NeedBackfill = false,
+                                    RetryAfterMs = SerialQueueRetryAfterMs,
                                     ServerTime = time.GetUtcNow()
                                 }
                             ]);

@@ -568,6 +568,10 @@ namespace Viv.Kinna.Tests
                          && frame.Contains($"\"status\":{(int)KinnaAckStatus.Throttled}", StringComparison.Ordinal))
                 {
                     throttled++;
+
+                    // 队列满给的是固定的百毫秒级值：客户端据此分辨「服务端忙」，
+                    // 而不是把它当成「自己太吵」去等一整个配额窗口
+                    Assert.Contains("\"retryAfterMs\":200", frame, StringComparison.Ordinal);
                 }
             }
 

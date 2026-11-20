@@ -228,8 +228,8 @@ handshake`），所以停机只摘表、不碰 socket，让读循环等对端 Cl
 - 读循环**绝不等指令跑完**，也**绝不等队列腾位置**。
 - 队列满时丢的一定要有回执：静默丢弃会让客户端以为服务端收下了，那条 Ack 永不重报，
   水位卡死（表现是重连后一直重复补拉）。
-  - `ack` → `{"status":1}`（`Throttled`），稍后重报
-  - `resync` → `{"throttled":true,"needBackfill":false}`，**不给补拉信号**——
+  - `ack` → `{"status":1,"retryAfterMs":200}`（`Throttled`），稍后重报
+  - `resync` → `{"throttled":true,"needBackfill":false,"retryAfterMs":200}`，**不给补拉信号**——
     限流期间让客户端去补拉，只是把长连接的压力原样转给数据库
 - 两个回帧都不碰存储，只编码一帧。
 
@@ -240,12 +240,47 @@ handshake`），所以停机只摘表、不碰 socket，让读循环等对端 Cl
 | 值 | 含义 | 客户端动作 |
 |---|---|---|
 | `Accepted` | 已记录，`Watermark` 有效 | 不必重报 |
-| `Throttled` | 超配额或服务端排不下，没记 | 稍后重报 |
+| `Throttled` | 超配额或服务端排不下，没记 | 按 `RetryAfterMs` 退避后重报 |
 | `UnknownConnection` | 服务端不认这条连接 | 重连再报 |
 | `Failed` | 落库失败 | 重报 |
 
 `KinnaResyncResult.NeedBackfill`：服务端记录的水位比客户端持有的还大（或压根没水位）时为 `true`，
 客户端走 HTTP 增量拉取。`Throttled = true` 时**一定** `NeedBackfill = false`。
+
+**`RetryAfterMs` 是下限不是精确值**。只回一个 `Throttled` 而不给时长，客户端只能猜：
+猜短了就是「收到就立刻重报」的忙循环（配额一直满、日志和指标一起涨），猜长了白等一个窗口。
+客户端必须在它之上叠加自己的指数退避——严格按这个值重试，窗口翻转的那一毫秒所有被挡的
+连接会同时回来，下一个窗口立刻又满。
+
+它同时承担「区分原因」的作用，所以不需要额外的 `Reason` 字段：
+
+| 来源 | 值 | 客户端理解 |
+|---|---|---|
+| 上行配额用尽 | 窗口剩余（默认 ≤10s，上限 60s） | 我自己太吵，等窗口翻页 |
+| 串行队列满 | 固定 200ms | 服务端忙，很快就好 |
+
+上限 60s 是刻意的：窗口配得再长也不让客户端干等——超过一分钟它该重连（换连接 Id、
+换窗口），而不是坐着不动。
+
+### 5.4 上行配额分两档
+
+`KinnaUplinkLimiter` 按通道各记一套窗口，**心跳和命令互不挤占**：
+
+| 通道 | 谁在用 | 默认配额 | 单次成本 |
+|---|---|---|---|
+| `Heartbeat` | `Ping` | 60 次 / 10 秒 | 2-3 次 Redis 往返（`EXIST` + `EXPIRE`，键过期时多一次 `INCREMENT`） |
+| `Command` | `Ack` / `Resync` | 20 次 / 10 秒 | 一次存储往返 |
+
+分开的理由：共用一个桶时，大群刷屏会让客户端连续 `Ack` 把配额吃光，**紧跟着的那次 Ping
+就被一起挡掉**——心跳一挡，租约不续，90 秒后连接被清扫，客户端掉线重连，重连又要一次性补拉。
+越急越掉线。两档独立计数就没这个耦合。
+
+心跳配额给得宽，是因为它是保命操作：正常客户端 30-60 秒 Ping 一次（10 秒窗口内最多 1 次），
+60 次留了几十倍余量，挡的只是「每几十毫秒 Ping 一次」的失控客户端。
+
+**被限流的心跳不会假装续过租约**。它没有 `Touch`，所以回给客户端的是表里真实的
+`lastSeen + ttl`，不是 `now + ttl`——回后者会让客户端以为还能撑满一个周期，
+而表里的倒计时一秒都没停，实际可能马上就被清扫。
 
 ---
 
@@ -270,8 +305,10 @@ handshake`），所以停机只摘表、不碰 socket，让读循环等对端 Cl
 | `EnableHealthCheck` | `true` | 连接数健康检查 |
 | `EnableSignalR` | `true` | 关掉后 `MapKinnaHub` 变空操作，下行不再走 SignalR |
 | `SingleConnectionPerApp` | `true` | 同 AppId 只留一条连接，新连接顶掉旧的（**仅本副本内**） |
-| `UplinkPermitLimit` | 20 | 每连接窗口内的上行次数，`0` = 不限流 |
-| `UplinkWindowSeconds` | 10 | 配额窗口长度 |
+| `UplinkPermitLimit` | 20 | 每连接窗口内的 **Ack / Resync** 次数，`0` = 不限流 |
+| `UplinkWindowSeconds` | 10 | 命令配额的窗口长度 |
+| `UplinkHeartbeatPermitLimit` | 60 | 每连接窗口内的 **Ping** 次数，`0` = 不限流（单独一档，不会被 Ack 挤掉） |
+| `UplinkHeartbeatWindowSeconds` | 10 | 心跳配额的窗口长度 |
 | `DeliveryIdLimit` | 200 | 最多逐个记多少条消息 Id，超出只留水位；存储实现按它决定清理 |
 | `WebSocketPath` | 空 | 原生 WS 挂载路径。**空 = 不启用** |
 | `WebSocketQueueCapacity` | 512 | 单连接待发队列帧数上限（管「发不出去」） |
@@ -604,6 +641,11 @@ services.AddKinnaPusher<ChatHub, SendMessageEvent, ChatMessagePusher>();
 **「Ack 一直不前进」**
 看 `kinna.ws.inbound.dropped`：服务端排不下（存储慢）时客户端会一直收到 `Throttled`。
 调大 `WebSocketSerialQueueCapacity` 只是把内存换成排队时间，正解是让下游别慢。
+
+两个指标的读法不同，别混：`kinna.uplink.throttled` 是**客户端发太快**（配额用尽），
+`kinna.ws.inbound.dropped` 是**服务端排不下**（存储慢）。回执里的 `RetryAfterMs` 也是这个量级差：
+配额用尽是窗口剩余（秒级），队列满是 200ms。如果客户端按 `RetryAfterMs` 退避后
+`throttled` 还在涨，那说明它的退避没生效或者没有叠加指数退避——不是配额配小了。
 
 **「多 Hub 启动报错」**
 `WebSocketKeepAliveSeconds` 是 `UseWebSockets` 的进程级参数，两个 Hub 配了不同值会直接抛。

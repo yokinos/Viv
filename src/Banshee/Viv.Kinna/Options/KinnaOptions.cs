@@ -42,8 +42,11 @@ namespace Viv.Kinna.Options
         public int DeliveryIdLimit { get; set; } = 200;
 
         /// <summary>
-        /// 每连接的上行配额：窗口内允许几次 Ping、Ack。配 0 表示不限流。
+        /// 每连接的上行配额：窗口内允许几次 Ack / Resync。配 0 表示不限流。
         /// 限流只挡高频请求，不惩罚客户端——被挡下的 Ack 下次照常上报。
+        ///
+        /// 只管「命令」（要碰存储的那两个）。心跳有自己的一档，见
+        /// <see cref="UplinkHeartbeatPermitLimit"/>：两者成本差一个数量级，共用一个桶会互相拖累。
         /// </summary>
         public int UplinkPermitLimit { get; set; } = 20;
 
@@ -51,6 +54,26 @@ namespace Viv.Kinna.Options
         /// 上行配额的窗口长度，配合 <see cref="UplinkPermitLimit"/> 使用。
         /// </summary>
         public int UplinkWindowSeconds { get; set; } = 10;
+
+        /// <summary>
+        /// 每连接的心跳配额：窗口内允许几次 Ping。默认 60 次 / 10 秒，配 0 表示心跳不限流。
+        ///
+        /// 为什么单独一档：Ping 每次是 2-3 次 Redis 往返（<c>EXIST</c> + <c>EXPIRE</c>，
+        /// 键过期时多一次 <c>INCREMENT</c>），谈不上便宜，所以需要挡；但它同时是
+        /// 「不续租就会被清扫」的保命操作，被挡一次就可能掉线。
+        ///
+        /// 和 <see cref="UplinkPermitLimit"/> 共用一个桶时，大群刷屏把配额吃光的那一下
+        /// 会正好把心跳一起挡掉——客户端越急越掉线，掉线重连又更急。
+        ///
+        /// 正常客户端 30-60 秒 Ping 一次（10 秒窗口内最多 1 次），这里留了几十倍余量，
+        /// 挡的只是「每几十毫秒 Ping 一次」的失控客户端。
+        /// </summary>
+        public int UplinkHeartbeatPermitLimit { get; set; } = 60;
+
+        /// <summary>
+        /// 心跳配额的窗口长度，配合 <see cref="UplinkHeartbeatPermitLimit"/> 使用。
+        /// </summary>
+        public int UplinkHeartbeatWindowSeconds { get; set; } = 10;
 
         /// <summary>
         /// 是否注册连接数健康检查。

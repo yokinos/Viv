@@ -300,25 +300,42 @@ namespace Viv.Kinna.Tests
 
             // 下限流要有明确的状态，不能和「未知连接」「落库失败」都回一个 0 混在一起
             Assert.Equal(KinnaAckStatus.Throttled, second.Status);
+
+            // 只回 Throttled 不给时长，客户端只能猜「稍后」是多久
+            Assert.InRange(second.RetryAfterMs, 1, 60_000);
             Assert.Single(delivery.Acks);
         }
 
         [Fact]
-        public async Task PingAsync_被上限挡下时仍回Pong但不续租()
+        public async Task PingAsync_被限流时回真实到期时间_不假装续过()
         {
-            var pool = new KinnaConnectionPool();
+            // 心跳走单独一档配额：配 1 次就不会被 Ack 挤掉
+            var time = new FakeTimeProvider();
+            var pool = new KinnaConnectionPool(nameof(TestHub), time);
             var presence = new StubKinnaPresenceSink<TestHub>();
-            var session = new StubKinnaSession<TestHub>(pool, options: new KinnaOptions { UplinkPermitLimit = 1 });
+            var session = new StubKinnaSession<TestHub>(
+                pool,
+                options: new KinnaOptions { UplinkHeartbeatPermitLimit = 1 });
             using var limiter = new KinnaUplinkLimiter<TestHub>(session);
 
-            var coordinator = Create(pool, new RecordingKinnaClientSender(), presence: presence, limiter: limiter);
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), presence: presence, limiter: limiter, time: time);
             await coordinator.RegisterAsync("c1", Identity());
 
+            time.Advance(TimeSpan.FromSeconds(30));
             var first = await coordinator.PingAsync("c1");
+
+            time.Advance(TimeSpan.FromSeconds(30));
             var second = await coordinator.PingAsync("c1");
 
             Assert.NotNull(first);
             Assert.NotNull(second);
+
+            // 被挡的这次没有 Touch，租约到期的时刻一秒都没往后走。
+            // 以前这里回的是 now + ttl，比真实值晚了一个心跳周期——
+            // 客户端据此安排下一次心跳，就会在租约已经过期之后才来续，连接被清扫
+            Assert.Equal(first.LeaseExpiresAt, second.LeaseExpiresAt);
+
+            // 续期只发生在成功那次
             Assert.Single(presence.RenewedUsers);
         }
 
@@ -366,14 +383,17 @@ namespace Viv.Kinna.Tests
             var coordinator = Create(pool, new RecordingKinnaClientSender(), delivery: delivery, limiter: limiter);
             await coordinator.RegisterAsync("c1", Identity());
 
-            // 用掉唯一的名额，Resync 就应该被挡在查存储之前
-            await coordinator.PingAsync("c1");
+            // 用掉唯一的命令名额（Ping 走另一档，消耗不到它），Resync 就该被挡在查存储之前
+            await coordinator.AckAsync("c1", [1]);
             var result = await coordinator.ResyncAsync("c1", lastMessageId: 10);
 
             Assert.True(result.Throttled);
 
             // 不能给补拉信号：那样客户端会立刻去打 HTTP，把压力从长连接搬到数据库
             Assert.False(result.NeedBackfill);
+
+            // 退避时长是客户端唯一能据以等待的信息
+            Assert.InRange(result.RetryAfterMs, 1, 60_000);
         }
 
         [Fact]

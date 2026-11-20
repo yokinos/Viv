@@ -140,7 +140,8 @@ namespace Viv.Kinna.Connections
                     _connectionLookup.TryGetValue(id, out var key) ? key.AppId : 0,
                     kv.Key.SubjectId,
                     kv.Key.UserId,
-                    _connectedAt.TryGetValue(id, out var at) ? at : default)));
+                    _connectedAt.TryGetValue(id, out var at) ? at : default,
+                    _lastSeen.TryGetValue(id, out var seen) ? seen : null)));
             }
 
             return result;
@@ -162,7 +163,13 @@ namespace Viv.Kinna.Connections
                 if (!_connectedAt.TryGetValue(id, out var at)) continue;
                 if (!IsOlder(id, at, connectionId, establishedAt)) continue;
 
-                older.Add(new KinnaConnectionInfo(id, appId, subjectId, userId, at));
+                older.Add(new KinnaConnectionInfo(
+                    id,
+                    appId,
+                    subjectId,
+                    userId,
+                    at,
+                    _lastSeen.TryGetValue(id, out var seen) ? seen : null));
             }
 
             return older;
@@ -193,7 +200,8 @@ namespace Viv.Kinna.Connections
                     key.AppId,
                     key.SubjectId,
                     key.UserId,
-                    _connectedAt.TryGetValue(connectionId, out var at) ? at : default)
+                    _connectedAt.TryGetValue(connectionId, out var at) ? at : default,
+                    _lastSeen.TryGetValue(connectionId, out var seen) ? seen : null)
                 : null;
 
         public void Touch(string connectionId)

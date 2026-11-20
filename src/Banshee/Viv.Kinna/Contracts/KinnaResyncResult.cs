@@ -30,6 +30,15 @@ namespace Viv.Kinna.Contracts
         /// </summary>
         public bool Throttled { get; init; }
 
+        /// <summary>
+        /// 建议的最短退避时间（毫秒）。只在 <see cref="Throttled"/> 为 true 时有值。
+        ///
+        /// 和 <see cref="KinnaAckResult.RetryAfterMs"/> 同一个语义：下限，不是精确值。
+        /// 被限流时 <see cref="NeedBackfill"/> 一定是 false —— 退避期间让客户端去补拉，
+        /// 只是把长连接的压力搬到数据库上。
+        /// </summary>
+        public int RetryAfterMs { get; init; }
+
         public DateTimeOffset ServerTime { get; init; }
     }
 }
