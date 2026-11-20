@@ -511,15 +511,25 @@ services.AddKinnaPusher<ChatHub, SendMessageEvent, ChatMessagePusher>();
 
 ## 9. 踢人
 
-三档粒度，靠 `UserId` / `AppId` 是否为 0 区分：
+四档粒度，靠 `SubjectId` / `UserId` / `AppId` 是否为 0 区分：
 
 | 方法 | 粒度 | 典型场景 |
 |---|---|---|
 | `KickUserEverywhereAsync(subjectId, userId, reason)` | 该用户**所有**客户端 | 封号 |
 | `KickClientEverywhereAsync(appId, subjectId, userId, reason)` | 该用户**某一端** | token 泄露、某端版本有问题要强制重登 |
 | `KickSubjectEverywhereAsync(subjectId, reason)` | 整个租户 | 租户停用 |
+| `KickAppEverywhereAsync(appId, reason)` | **某一端的全部用户，跨租户** | 客户端版本有 bug 要整体下架 |
 
 `*Async`（无 `Everywhere`）= 只踢本副本。
+
+**`KickAppEverywhereAsync` 是唯一不带租户的粒度**：一个 `AppId` 往往服务多个租户，
+「这一端整体强制重登」本来就不该有租户维度。广播指令里 `SubjectId` 留 0，订阅端靠
+「`AppId` 有值 且 `UserId` 为 0 且租户为空」这**三个条件同时成立**才认它是 app 级——
+少一个当脏消息丢掉。判宽了，一条 `SubjectId` 忘填的消息就会变成「踢掉这个 app 的所有人」，
+而判窄了只是踢不动，代价不对称。
+
+它靠遍历连接表拿目标（`GetConnectionIdsByApp`），不是专门的索引：踢人是低频管理动作，
+而连接建立/断开是热路径，不为一本一年用不上几次的索引给热路径加维护成本。
 
 **跨副本的顺序是先踢本机、再广播**：Redis 抖一下就封不了号是最难接受的失败模式。
 其余副本收到指令只踢本机连接，并按 `Origin` 跳过自己那份，不成环。

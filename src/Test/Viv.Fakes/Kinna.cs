@@ -130,6 +130,18 @@ public sealed class StubKinnaConnectionPool : IKinnaConnectionPool
         return AppConnectionsByUser.TryGetValue(userId, out var ids) ? ids : AppConnectionIds;
     }
 
+    /// <summary>按客户端（不分租户/用户）查的返回值，给「按 app 踢人」用</summary>
+    public List<string> AppConnectionIdsByApp { get; set; } = new();
+
+    /// <summary>最近一次按客户端整体查的 AppId</summary>
+    public long? LastAppQuery { get; private set; }
+
+    public List<string> GetConnectionIdsByApp(long appId)
+    {
+        LastAppQuery = appId;
+        return AppConnectionIdsByApp;
+    }
+
     public List<KinnaConnectionInfo> GetConnections(long subjectId) => Connections;
 
     /// <summary>顶号查询的返回值</summary>

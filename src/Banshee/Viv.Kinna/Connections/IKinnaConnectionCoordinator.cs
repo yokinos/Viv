@@ -73,6 +73,17 @@ namespace Viv.Kinna.Connections
         Task KickSubjectAsync(long subjectId, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 踢掉本副本上某个客户端的**全部**连接——不分租户、不分用户。
+        ///
+        /// 用于「某一端整体强制重登」：客户端版本有 bug 要下架、某个端的安全事故。
+        /// 和 <see cref="KickClientAsync"/> 的差别是它不收用户：那个是「某人在某端」，
+        /// 这个是「这个端的所有人」。真实场景里一个 AppId 往往服务多个租户，
+        /// 所以这里刻意不带租户——只踢某个租户的那一端，调用方自己按租户筛，或者用
+        /// <see cref="KickClientEverywhereAsync"/> 的用户粒度。
+        /// </summary>
+        Task KickAppAsync(long appId, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 顶号用：只踢本副本上**比给定连接更旧**的同客户端连接。
         ///
         /// 和 <see cref="KickClientAsync"/> 的差别就在「更旧」这个限定：新连接进来时，
@@ -139,6 +150,24 @@ namespace Viv.Kinna.Connections
         /// <param name="cancellationToken">取消令牌</param>
         Task KickSubjectEverywhereAsync(
             long subjectId,
+            string? reason = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 踢掉某个客户端的全部连接，**所有副本**都生效——不分租户、不分用户。
+        ///
+        /// 强制某一端升级 / 下线时用（客户端版本有 bug、某端凭证体系出问题）。
+        /// 广播走的指令里 <c>SubjectId</c> 是 0，订阅端靠「AppId 有值且租户为空」认出这种粒度；
+        /// 这也是唯一允许不带租户的踢人指令，其余粒度缺租户一律当脏消息丢掉。
+        ///
+        /// 影响面是全租户的这一端，用之前想清楚：没注册 <see cref="Ports.IKinnaKickBus{THub}"/>
+        /// 时退化成只踢本机，和 <see cref="KickAppAsync"/> 等价。
+        /// </summary>
+        /// <param name="appId">客户端</param>
+        /// <param name="reason">只进日志，便于追溯是谁触发的</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        Task KickAppEverywhereAsync(
+            long appId,
             string? reason = null,
             CancellationToken cancellationToken = default);
     }

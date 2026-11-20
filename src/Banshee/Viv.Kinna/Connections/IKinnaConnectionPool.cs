@@ -35,6 +35,15 @@ namespace Viv.Kinna.Connections
         /// </summary>
         List<string> GetConnectionIds(long appId, long subjectId, long userId);
 
+        /// <summary>
+        /// 按客户端查，**不分租户也不分用户**：拿到这个 AppId 在本副本上的全部连接。
+        ///
+        /// 给「某一端整体强制重登」用（版本有 bug、客户端被下架）。这种方法靠遍历
+        /// <c>_connectionLookup</c> 而不是专门维护一本索引：踢人是低频管理动作，
+        /// 而连接建立/断开是热路径，为一本可能一年用不上几次的索引给它加维护成本不值。
+        /// </summary>
+        List<string> GetConnectionIdsByApp(long appId);
+
         List<KinnaConnectionInfo> GetConnections(long subjectId);
 
         /// <summary>

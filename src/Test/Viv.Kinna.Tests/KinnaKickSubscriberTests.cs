@@ -91,6 +91,54 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
+        public async Task 收到按客户端踢人指令_踢掉该app的所有连接()
+        {
+            // 一个 AppId 往往服务多个租户：强制执行某一端（版本有 bug 要下架）时，
+            // 这些连接不管属于谁都要断，其它 app 一条都不动
+            await using var fixture = await Fixture.StartAsync();
+            await fixture.Coordinator.RegisterAsync("pc-a", Identity());
+            await fixture.Coordinator.RegisterAsync(
+                "pc-b", new VivContextContent { AppId = AppId, SubjectId = 2, UserId = 7 });
+            await fixture.Coordinator.RegisterAsync(
+                "mini", new VivContextContent { AppId = 4, SubjectId = SubjectId, UserId = UserId });
+
+            await fixture.Bus.DeliverAsync(new KinnaKickCommand
+            {
+                AppId = AppId,
+                SubjectId = 0,
+                UserId = 0,
+                Reason = "强制升级",
+                Origin = "other-replica"
+            });
+
+            // 同一个 app 的两条都断了，跨租户也断
+            Assert.Empty(fixture.Pool.GetConnectionIdsByApp(AppId));
+
+            // 别的 app 不受影响
+            Assert.Equal(new[] { "mini" }, fixture.Pool.GetConnectionIdsByApp(4));
+        }
+
+        [Fact]
+        public async Task 缺租户但带了用户_不能升级成按客户端踢()
+        {
+            // AppId 有值、UserId 也有值，但租户为空 —— 定位不了是哪个人，只能丢。
+            // 这里判宽了就变成「踢掉这个 app 的所有人」，一条填错的消息能断掉一整个端
+            await using var fixture = await Fixture.StartAsync();
+            await fixture.Coordinator.RegisterAsync("c1", Identity());
+
+            await fixture.Bus.DeliverAsync(new KinnaKickCommand
+            {
+                AppId = AppId,
+                SubjectId = 0,
+                UserId = UserId,
+                Origin = "other-replica"
+            });
+
+            Assert.Single(fixture.Pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Empty(fixture.Sender.Calls);
+        }
+
+        [Fact]
         public async Task 跳过自己发布的指令_避免本机踢两遍()
         {
             await using var fixture = await Fixture.StartAsync();

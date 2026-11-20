@@ -127,6 +127,27 @@ namespace Viv.Kinna.Connections
                 ? [.. connections.Keys]
                 : [];
 
+        /// <summary>
+        /// 按客户端查全部连接，不分租户也不分用户。
+        ///
+        /// 遍历的是 <c>_connectionLookup</c>（每条连接一行），不是 <c>_clientConnections</c>
+        /// 的键（那是三元组，按 appId 查要扫所有桶）。ConcurrentDictionary 的遍历是弱一致快照，
+        /// 中间有连接断开也没关系：摘不到的 Id 在 <see cref="Remove"/> 里返回 null，踢不动而已。
+        /// </summary>
+        public List<string> GetConnectionIdsByApp(long appId)
+        {
+            var result = new List<string>();
+            foreach (var kv in _connectionLookup)
+            {
+                if (kv.Value.AppId == appId)
+                {
+                    result.Add(kv.Key);
+                }
+            }
+
+            return result;
+        }
+
         /// <summary>管理用途（按租户踢人、排障），允许遍历。</summary>
         public List<KinnaConnectionInfo> GetConnections(long subjectId)
         {

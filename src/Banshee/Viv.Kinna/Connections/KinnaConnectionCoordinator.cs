@@ -386,6 +386,29 @@ namespace Viv.Kinna.Connections
             }
         }
 
+        /// <summary>
+        /// 踢掉本副本上某个客户端的全部连接，不分租户也不分用户。
+        ///
+        /// 一次遍历把 Id 全拿到再逐个踢：边遍历边踢的话，<see cref="KickAsync"/> 内部的
+        /// <c>Remove</c> 会同时改 <c>_connectionLookup</c>，等于在遍历一个正在被自己改的字典。
+        /// ConcurrentDictionary 本身不会抛，但遍历结果没有意义。
+        /// </summary>
+        public async Task KickAppAsync(long appId, CancellationToken cancellationToken = default)
+        {
+            if (appId <= 0) return;
+
+            var connectionIds = _session.Pool.GetConnectionIdsByApp(appId);
+            if (connectionIds.Count > 0)
+            {
+                _logger.Info($"[{_session.Hub}] 按客户端踢人：app={appId} 本副本 {connectionIds.Count} 条连接");
+            }
+
+            foreach (var connectionId in connectionIds)
+            {
+                await KickAsync(connectionId, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         public async Task KickOlderClientsAsync(
             long appId,
             long subjectId,
@@ -450,6 +473,27 @@ namespace Viv.Kinna.Connections
 
             await PublishKickAsync(
                 new KinnaKickCommand { SubjectId = subjectId, UserId = 0, Reason = reason },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 按客户端踢人，所有副本生效。
+        ///
+        /// 指令里 <c>SubjectId</c> 留 0：这是唯一一种不带租户的粒度，订阅端靠
+        /// 「AppId 有值但租户为空」识别它。其它粒度缺租户还是当脏消息丢掉——
+        /// 否则一条字段没填全的消息会被解释成「踢掉某个 app 的所有人」，代价大得多。
+        /// </summary>
+        public async Task KickAppEverywhereAsync(
+            long appId,
+            string? reason = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (appId <= 0) return;
+
+            await KickAppAsync(appId, cancellationToken).ConfigureAwait(false);
+
+            await PublishKickAsync(
+                new KinnaKickCommand { AppId = appId, SubjectId = 0, UserId = 0, Reason = reason },
                 cancellationToken).ConfigureAwait(false);
         }
 

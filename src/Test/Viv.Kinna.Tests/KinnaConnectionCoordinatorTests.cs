@@ -571,6 +571,65 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
+        public async Task KickAppAsync_踢掉该app的全部连接_不分租户和用户()
+        {
+            // 强制执行某一端时，这个 app 的连接不管属于哪个租户、哪个用户都要断
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var coordinator = Create(pool, sender);
+
+            pool.Add("a1", appId: AppId, subjectId: 1, userId: 2);
+            pool.Add("a2", appId: AppId, subjectId: 2, userId: 5);
+            pool.Add("a3", appId: AppId, subjectId: 1, userId: 3);
+            pool.Add("b1", appId: 99, subjectId: 1, userId: 2);
+
+            await coordinator.KickAppAsync(AppId);
+
+            Assert.Equal(3, sender.Calls.Count);
+            Assert.Empty(pool.GetConnectionIdsByApp(AppId));
+
+            // 别的 app 一条都不动
+            Assert.Equal(new[] { "b1" }, pool.GetConnectionIdsByApp(99));
+        }
+
+        [Fact]
+        public async Task KickAppEverywhereAsync_本机先踢再广播_指令里不带租户()
+        {
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var bus = new RecordingKinnaKickBus<TestHub>();
+            var coordinator = Create(pool, sender, kickBus: bus);
+
+            pool.Add("a1", appId: AppId, subjectId: 1, userId: 2);
+            pool.Add("a2", appId: AppId, subjectId: 2, userId: 5);
+
+            await coordinator.KickAppEverywhereAsync(AppId, "强制升级");
+
+            Assert.Empty(pool.GetConnectionIdsByApp(AppId));
+
+            var published = Assert.Single(bus.PublishedKicks);
+            Assert.Equal(AppId, published.AppId);
+
+            // 这是唯一允许不带租户的踢人指令：订阅端靠「AppId 有值 + 租户为空」认出这种粒度
+            Assert.Equal(0, published.SubjectId);
+            Assert.Equal("强制升级", published.Reason);
+        }
+
+        [Fact]
+        public async Task KickAppAsync_非法AppId不做事()
+        {
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var coordinator = Create(pool, sender);
+            pool.Add("a1", appId: AppId, subjectId: 1, userId: 2);
+
+            await coordinator.KickAppAsync(0);
+
+            Assert.Empty(sender.Calls);
+            Assert.Single(pool.GetConnectionIdsByApp(AppId));
+        }
+
+        [Fact]
         public async Task RegisterAsync_群查询失败时连接照常建立()
         {
             // 群服务抖一下不该让人连不上 IM：单聊和按人推送都还正常，只是这次没进组。

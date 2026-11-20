@@ -39,6 +39,37 @@ namespace Viv.Kinna.Tests
         }
 
         [Fact]
+        public void GetConnectionIdsByApp_不分租户也不分用户()
+        {
+            // 「强制某一端重登」要能一次拿到这个 app 在**所有**租户、所有用户下的连接
+            var pool = new KinnaConnectionPool();
+            pool.Add("a1", appId: AppId, subjectId: SubjectId, userId: UserId);
+            pool.Add("a2", appId: AppId, subjectId: SubjectId + 1, userId: UserId);
+            pool.Add("a3", appId: AppId, subjectId: SubjectId, userId: UserId + 1);
+            pool.Add("b1", appId: AppId + 1, subjectId: SubjectId, userId: UserId);
+
+            var byApp = pool.GetConnectionIdsByApp(AppId);
+
+            Assert.Equal(3, byApp.Count);
+            Assert.Contains("a1", byApp);
+            Assert.Contains("a2", byApp);
+            Assert.Contains("a3", byApp);
+            Assert.DoesNotContain("b1", byApp);
+        }
+
+        [Fact]
+        public void GetConnectionIdsByApp_连接摘掉后不再返回()
+        {
+            var pool = new KinnaConnectionPool();
+            pool.Add("a1", appId: AppId, subjectId: SubjectId, userId: UserId);
+            pool.Add("a2", appId: AppId, subjectId: SubjectId, userId: UserId + 1);
+
+            pool.Remove("a1");
+
+            Assert.Equal(new[] { "a2" }, pool.GetConnectionIdsByApp(AppId));
+        }
+
+        [Fact]
         public void Add_字段顺序不会串位()
         {
             // 三个 long 写反了编译不报错，这条盯住顺序

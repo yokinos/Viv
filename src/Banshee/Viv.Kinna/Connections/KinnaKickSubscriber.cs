@@ -18,6 +18,7 @@ namespace Viv.Kinna.Connections
     /// 这里只调 <see cref="IKinnaConnectionCoordinator{THub}.KickUserAsync"/> /
     /// <see cref="IKinnaConnectionCoordinator{THub}.KickClientAsync"/> /
     /// <see cref="IKinnaConnectionCoordinator{THub}.KickSubjectAsync"/> /
+    /// <see cref="IKinnaConnectionCoordinator{THub}.KickAppAsync"/> /
     /// <see cref="IKinnaConnectionCoordinator{THub}.KickOlderClientsAsync"/> 这几个**本地**方法。
     /// 调用 *Everywhere* 会再广播一次，自己收自己的消息就成环了。
     /// </summary>
@@ -81,10 +82,17 @@ namespace Viv.Kinna.Connections
 
         private async Task DispatchAsync(KinnaKickCommand command)
         {
-            // 脏消息一律丢弃：UserId 为 0 表示整租户，SubjectId 都没有就没法定位
-            if (command.SubjectId <= 0)
+            // 只有「按客户端踢」允许不带租户（AppId 是全局的，跨租户生效）；
+            // 其余粒度缺租户就没法定位，一律当脏消息丢。
+            // 这条例外必须显式判：否则一条 SubjectId 忘了填的消息会被解释成
+            // 「踢掉这个 app 的所有人」——两种误判的代价差好几个数量级
+            var appScoped = command.AppId > 0 && command.UserId <= 0 && command.SubjectId <= 0;
+
+            if (command.SubjectId <= 0 && !appScoped)
             {
-                _logger.Warning($"[{HubName}] 收到无效的踢人指令，已丢弃: subject={command.SubjectId} user={command.UserId}");
+                _logger.Warning(
+                    $"[{HubName}] 收到无效的踢人指令，已丢弃: subject={command.SubjectId} " +
+                    $"user={command.UserId} app={command.AppId}");
                 return;
             }
 
@@ -99,11 +107,16 @@ namespace Viv.Kinna.Connections
                 await using var scope = _scopes.CreateAsyncScope();
                 var coordinator = scope.ServiceProvider.GetRequiredService<IKinnaConnectionCoordinator<THub>>();
 
-                // 三种粒度，靠 UserId / AppId 是否为 0 区分：
-                // 整租户（UserId=0）→ 某用户全部客户端（AppId=0）→ 某用户某一端。
+                // 四种粒度，靠 UserId / AppId / SubjectId 是否为 0 区分：
+                // 某个客户端的所有人（无租户）→ 整租户（UserId=0）→
+                // 某用户全部客户端（AppId=0）→ 某用户某一端。
                 // 带 EstablishedAt 的是顶号广播，只踢「比它更旧」的那条，不能全踢——
                 // 全踢会把几乎同时登上来的另一条新连接也断掉，用户看到连上就被踢。
-                if (command.UserId <= 0)
+                if (appScoped)
+                {
+                    await coordinator.KickAppAsync(command.AppId, _stopping).ConfigureAwait(false);
+                }
+                else if (command.UserId <= 0)
                 {
                     await coordinator.KickSubjectAsync(command.SubjectId, _stopping).ConfigureAwait(false);
                 }

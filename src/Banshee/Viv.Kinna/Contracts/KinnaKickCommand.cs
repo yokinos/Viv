@@ -10,7 +10,12 @@ namespace Viv.Kinna.Contracts
     /// </summary>
     public sealed class KinnaKickCommand
     {
-        /// <summary>租户。必填，小于等于 0 时订阅端直接丢弃</summary>
+        /// <summary>
+        /// 租户。除「按客户端踢」外必填，小于等于 0 时订阅端当脏消息丢弃。
+        ///
+        /// 唯一的例外是 <see cref="AppId"/> &gt; 0 且 <see cref="UserId"/> 为 0 的情况：
+        /// 那表示踢掉这个客户端的全部连接（跨租户），此时租户留 0。
+        /// </summary>
         public long SubjectId { get; set; }
 
         /// <summary>用户。为 0 表示踢该租户下的全部连接</summary>
@@ -20,7 +25,10 @@ namespace Viv.Kinna.Contracts
         /// 客户端。为 0 表示该用户的**所有**客户端（封号、强制下线）；
         /// 大于 0 只踢这一端（某一端 token 泄露、某一端版本有 bug 要强制重新登录）。
         ///
-        /// 两端并存时 AppId 必须不同，所以这个字段才区分得开
+        /// 两端并存时 AppId 必须不同，所以这个字段才区分得开。
+        ///
+        /// <see cref="UserId"/> 也是 0 时语义升级成「这个客户端的全部连接，不分租户」，
+        /// 见 <see cref="SubjectId"/>。
         /// </summary>
         public long AppId { get; set; }
 
