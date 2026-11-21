@@ -8,14 +8,6 @@ namespace Viv.Entity.Database.Apex
 {
     /// <summary>
     /// 公司授权点数变动流水（只增不改，<b>没有软删除</b>）。
-    ///
-    /// <para>与 <see cref="AtOrgSystemVersionPointLog"/> 同一套规则，层级下移一级：
-    /// 代理批给公司（<see cref="EmPointChangeType.Recharge"/>）、公司卖给租户
-    /// （<see cref="EmPointChangeType.Consume"/>）、撤销时退回（<see cref="EmPointChangeType.Refund"/>）。</para>
-    ///
-    /// <para><b>为什么要单独一张表而不是共用代理的流水</b>：同一笔点数在两层各记一次是<b>故意的</b>
-    /// —— 代理那层记「出池 1 点」，公司那层记「入池 1 点」。两边的余额各自可独立核对，
-    /// 对账时能发现「代理扣了但公司没加」这类半途失败。共用一张表就区分不出是哪一层的池子。</para>
     /// </summary>
     public class AtCompanySystemVersionPointLog : EntityBase, ICreatedAt, ICreatedBy
     {

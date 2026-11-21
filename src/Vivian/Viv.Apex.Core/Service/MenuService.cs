@@ -173,7 +173,7 @@ namespace Viv.Apex.Core.Service
                 await _actions.AddAsync(new AtMenuAction
                 {
                     MenuId = menu.Id,
-                    BitIndex = await _actions.NextBitIndexAsync(),
+                    BitIndex = await _actions.NextBitIndexAsync(menu.ClientAppId),
                     Name = name,
                     ActionCode = request.ActionCode,
                     Sort = request.Sort,

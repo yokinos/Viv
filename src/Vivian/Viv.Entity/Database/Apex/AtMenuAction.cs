@@ -18,11 +18,16 @@ namespace Viv.Entity.Database.Apex
         public long MenuId { get; set; }
 
         /// <summary>
-        /// 位索引，<b>全局自增</b>（不是每个菜单从 0 开始）。
+        /// 位索引，<b>每个应用内自增</b>（应用归属靠 <c>MenuId</c> → <see cref="AtMenu.ClientAppId"/> 反查）。
         ///
-        /// <para>为什么必须全局唯一：角色的授权是「一个角色一个掩码」（<c>AtUserRole.ButtonMask</c>），
-        /// 里面没有菜单维度。如果两个菜单下的动作都占第 0 位，给角色授了其中一个，
-        /// 另一个也自动被授 —— 那是提权，不是显示问题。</para>
+        /// <para>只在应用内唯一就够：角色的授权掩码是按「角色 × 应用」存的
+        /// （<see cref="AtUserRoleApp.ButtonMask"/>），一个应用一套掩码，跨应用根本不会碰到同一位。
+        /// 早先因为掩码挂在角色本体上、没有应用维度，这里被迫改成全局唯一来绕开「跨菜单同位互相授权」；
+        /// 掩码补上应用维度之后，那个约束就没有存在意义了，位号回到应用内自增——
+        /// 号段短、能在后台按应用人工核对。</para>
+        ///
+        /// <para>位号一经分配<b>不回收</b>（发号取的是含软删行的 MAX），否则删掉高位动作后新动作
+        /// 复用同一个位，旧角色掩码会静默变成对新动作的授权。</para>
         /// </summary>
         public int BitIndex { get; set; }
 
@@ -33,13 +38,12 @@ namespace Viv.Entity.Database.Apex
         public string? Name { get; set; }
 
         /// <summary>
-        /// 动作编码（如 <c>user:create</c>），服务端 <c>[VivRequirePermission]</c> 按它判定，与 BitIndex 无关。
-        ///
-        /// <para><b>为什么不能用 BitIndex 当标识</b>：它是 <c>max+1</c> 算出来的自增值，
-        /// 开发库和生产库不一致，菜单动作增删一轮还会复用。<b>源码里只能写这个编码。</b></para>
-        ///
-        /// <para>约定：<c>模块:操作</c>，全局唯一（一个服务只对一套应用提供 API，跨应用重名请自己加前缀）。
-        /// 为空 = 这个权限点只能用于前端按钮显隐，服务端按编码查不到它。</para>
+        /// 权限类型（比如多个tab就是页面  新增就是按钮 ）
+        /// </summary>
+        public EmMenuActionType ActionType { get; set; }
+
+        /// <summary>
+        /// 动作编码 单个App下不能重复
         /// </summary>
         [StringLength(128)]
         public string? ActionCode { get; set; }

@@ -30,7 +30,7 @@ namespace Viv.Entity.Database.Apex
         public string? MenuMask { get; set; }
 
         /// <summary>
-        /// 当前App对应的子页面权限掩码
+        /// 当前App对应的页面权限掩码
         /// </summary>
         public string? SubPageMask { get; set; }
 

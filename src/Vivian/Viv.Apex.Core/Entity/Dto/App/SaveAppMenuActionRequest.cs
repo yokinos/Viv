@@ -25,7 +25,8 @@ namespace Viv.Apex.Core.Entity.Dto.App
 
         /// <summary>
         /// 动作编码（如 <c>user:create</c>），服务端 <c>[VivRequirePermission]</c> 按它判定。
-        /// 全局唯一（跨应用重名请自己加前缀）。留空 = 这个权限点只能做前端按钮显隐，服务端查不到它。
+        /// 同一应用内不能重复（编码→位号的映射是按应用建的）；跨应用可以同名，各应用自己解释。
+        /// 留空 = 这个权限点只能做前端按钮显隐，服务端查不到它。
         /// </summary>
         [StringLength(128)]
         [DisplayName("动作编码")]

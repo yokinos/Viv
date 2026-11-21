@@ -19,11 +19,10 @@ namespace Viv.Entity.Database.Apex
         public long ClientAppId { get; set; }
 
         /// <summary>
-        /// 位索引，菜单类型独立自增（用于权限位运算）。
+        /// 位索引，<b>每个应用内自增</b>（按 <see cref="ClientAppId"/> 分组）。
         ///
-        /// <para><b>注意</b>：这里是「每个应用从 0 自增」，而角色的页面权限掩码
-        /// （<c>AtUserRole.MenuMask</c>）没有应用维度 —— 一旦真按页面做跨应用授权，
-        /// 不同应用的同号页面会互相授权。届时需要改成全局唯一（动作位已经改了）。</para>
+        /// <para>应用内唯一即可：角色的页面掩码按「角色 × 应用」存（<see cref="AtUserRoleApp.MenuMask"/>），
+        /// 一个应用一套掩码，跨应用的同号页面不会相遇。</para>
         /// </summary>
         public int BitIndex { get; set; }
 
@@ -42,9 +41,10 @@ namespace Viv.Entity.Database.Apex
         /// 菜单编码（如 <c>user</c>），页面级权限的稳定标识，服务端
         /// <c>[VivRequirePermission("user")]</c> 按它判定，与 BitIndex 无关。
         ///
-        /// <para>约定：不带冒号，全局唯一。<b>目录和页面都能编</b> —— 给目录编一个就是
+        /// <para>约定：不带冒号，<b>同一应用内唯一</b>（位号是应用内分配的，编码→位号的映射也按应用建；
+        /// 跨应用同名不是错，各应用自己解释）。<b>目录和页面都能编</b> —— 给目录编一个就是
         /// 「模块级权限」（有这个模块就能进），给页面编就是「页面级」。
-        /// 动作的编码另有一套（<c>user:add</c>，带冒号），两套编码不能重名。</para>
+        /// 动作的编码另有一套（<c>user:add</c>，带冒号），同一应用内两套编码不能重名。</para>
         ///
         /// <para>为空 = 这个菜单只能靠角色掩码里的位表达，源码里引用不到。</para>
         /// </summary>

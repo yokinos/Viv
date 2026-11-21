@@ -321,8 +321,16 @@ namespace Viv.Apex.Tests
             MenuProbe? menus = null,
             SubPageProbe? pages = null,
             ActionProbe? actions = null)
-            => new(context, users, apps ?? new AppProbe(), menus ?? new MenuProbe(), pages ?? new SubPageProbe(),
-                actions ?? new ActionProbe(), new AdapterIndex(new VueMenuRouteAdapter()));
+        {
+            var menuProbe = menus ?? new MenuProbe();
+            var actionProbe = actions ?? new ActionProbe();
+
+            // 动作位按应用分组发号，需要知道 MenuId → ClientAppId 的归属
+            actionProbe.Menus = menuProbe;
+
+            return new(context, users, apps ?? new AppProbe(), menuProbe, pages ?? new SubPageProbe(),
+                actionProbe, new AdapterIndex(new VueMenuRouteAdapter()));
+        }
 
         private sealed class ContextProbe : IVivContext
         {
@@ -578,6 +586,10 @@ namespace Viv.Apex.Tests
         {
             public List<AtMenuAction> Rows { get; } = [];
             public List<long> DeletedMenuIds { get; } = [];
+
+            /// <summary>由 MenuServiceOf 挂上，用来把 MenuId 归到 ClientAppId</summary>
+            public MenuProbe? Menus { get; set; }
+
             private long _nextId = 1;
 
             public Task<List<AtMenuAction>> ListByMenuIdsAsync(IReadOnlyList<long> menuIds)
@@ -586,10 +598,16 @@ namespace Viv.Apex.Tests
             public Task<AtMenuAction?> GetAsync(long id)
                 => Task.FromResult(Rows.FirstOrDefault(row => row.Id == id));
 
-            public Task<int> NextBitIndexAsync()
+            public Task<int> NextBitIndexAsync(long clientAppId)
             {
-                // 与生产实现一致：动作权限位全局唯一（角色的掩码没有菜单维度）
-                return Task.FromResult(Rows.Count == 0 ? 0 : Rows.Max(row => row.BitIndex) + 1);
+                // 与生产实现一致：动作权限位按应用分组（角色的掩码按「角色 × 应用」存）
+                var menuIds = (Menus?.Rows ?? [])
+                    .Where(row => row.ClientAppId == clientAppId)
+                    .Select(row => row.Id)
+                    .ToHashSet();
+
+                var own = Rows.Where(row => menuIds.Contains(row.MenuId)).ToList();
+                return Task.FromResult(own.Count == 0 ? 0 : own.Max(row => row.BitIndex) + 1);
             }
 
             public Task<long> AddAsync(AtMenuAction action)

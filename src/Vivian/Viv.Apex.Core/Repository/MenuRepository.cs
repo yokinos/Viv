@@ -31,11 +31,15 @@ namespace Viv.Apex.Core.Repository
             return _dbContext.PageAsync<AppMenuRow>(sql, request.PageIndex, request.PageSize, parameters);
         }
 
-        public async Task<int> NextBitIndexAsync(long clientAppId)
-        {
-            var menus = await GetByAppAsync(clientAppId);
-            return menus.Count == 0 ? 0 : menus.Max(x => x.BitIndex) + 1;
-        }
+        /// <summary>
+        /// 该应用下的下一个菜单位。取<b>含软删行</b>的 MAX：位号一经分配不回收，
+        /// 否则删掉高位菜单后新菜单复用同一个位，旧角色掩码会静默变成对新菜单的授权
+        /// （EF 的全局软删过滤器会把已删行滤掉，所以走裸 SQL）。
+        /// </summary>
+        public Task<int> NextBitIndexAsync(long clientAppId)
+            => _dbContext.FindScalarAsync<int>(
+                "SELECT COALESCE(MAX(BitIndex), -1) + 1 FROM AtMenu WHERE ClientAppId = @clientAppId",
+                new { clientAppId });
 
         public Task<AtMenu?> GetAsync(long id)
             => _dbContext.SingleOrDefaultAsync<AtMenu>(x => x.Id == id);

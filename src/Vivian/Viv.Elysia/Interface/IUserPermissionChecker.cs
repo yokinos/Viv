@@ -20,7 +20,8 @@ namespace Viv.Elysia.Interface
     public interface IUserPermissionChecker
     {
         /// <summary>
-        /// 该用户是否拥有指定动作编码（用户全部启用角色的并集）。
+        /// 该用户是否拥有指定权限编码（用户全部启用角色的并集；Apex 按「角色 × 当前应用」取，
+        /// 应用来自 <c>IVivContext.AppId</c>）。
         /// 实现里不要抛「用户不存在」之类的业务异常 —— 没有权限就返回 false。
         /// </summary>
         Task<bool> HasPermissionAsync(long userId, string permissionCode, CancellationToken cancellationToken = default);

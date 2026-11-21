@@ -27,6 +27,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 种子脚本随程序集嵌入：initviv 可能要单文件发布，不能依赖 bin 目录下的散装 .sql -->
+    <EmbeddedResource Include="Commands\InitViv\Scripts\*.sql" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

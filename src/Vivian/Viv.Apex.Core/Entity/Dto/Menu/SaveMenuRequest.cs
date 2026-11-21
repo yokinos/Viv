@@ -24,7 +24,7 @@ namespace Viv.Apex.Core.Entity.Dto.Menu
         public EmMenuType Type { get; set; }
 
         /// <summary>
-        /// 菜单编码（如 <c>user</c>），服务端页面级权限按它判定。全局唯一、不带冒号；
+        /// 菜单编码（如 <c>user</c>），服务端页面级权限按它判定。同一应用内唯一、不带冒号；
         /// 冒号留给动作编码（<c>user:add</c>）。留空 = 源码里引用不到这个菜单。
         /// </summary>
         [StringLength(128)]

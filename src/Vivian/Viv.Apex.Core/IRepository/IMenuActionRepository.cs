@@ -12,10 +12,11 @@ namespace Viv.Apex.Core.IRepository
         Task<AtMenuAction?> GetAsync(long id);
 
         /// <summary>
-        /// 下一个空闲的权限位。**全局唯一**，不是每个菜单从 0 开始 —— 角色的授权掩码
-        /// （<c>AtUserRole.ButtonMask</c>）没有菜单维度，位重复就等于互相授权。
+        /// 该应用下的下一个空闲权限位。**按应用分组**，不是全局 —— 角色的操作掩码按
+        /// 「角色 × 应用」存（<c>AtUserRoleApp.ButtonMask</c>），跨应用的同一位不会相遇。
+        /// 位号一经分配不回收（取含软删行的 MAX），否则旧掩码会静默授权给新动作。
         /// </summary>
-        Task<int> NextBitIndexAsync();
+        Task<int> NextBitIndexAsync(long clientAppId);
 
         /// <summary>按 Id 新增，返回落库后的行 Id</summary>
         Task<long> AddAsync(AtMenuAction action);

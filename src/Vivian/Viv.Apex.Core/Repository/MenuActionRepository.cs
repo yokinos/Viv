@@ -26,10 +26,23 @@ namespace Viv.Apex.Core.Repository
         public Task<AtMenuAction?> GetAsync(long id)
             => _dbContext.SingleOrDefaultAsync<AtMenuAction>(x => x.Id == id);
 
-        public async Task<int> NextBitIndexAsync()
+        /// <summary>
+        /// 该应用下的下一个动作位。<b>按应用分组</b>（角色的操作掩码按「角色 × 应用」存，
+        /// 见 <see cref="AtUserRoleApp.ButtonMask"/>）；动作表没有 ClientAppId 列，归属靠 MenuId 反查。
+        ///
+        /// <para>走裸 SQL 而不是 <c>FindListAsync</c>：发号要取<b>含软删行</b>的 MAX，否则删掉高位动作后
+        /// 新动作复用同一个位，旧角色掩码会静默变成对新动作的授权（EF 的全局软删过滤器会把这些行滤掉）。
+        /// COALESCE 是为了两种方言都能跑。</para>
+        /// </summary>
+        public async Task<int> NextBitIndexAsync(long clientAppId)
         {
-            var actions = await _dbContext.FindListAsync<AtMenuAction>(x => x.Id > 0).ConfigureAwait(false);
-            return actions.Count == 0 ? 0 : actions.Max(x => x.BitIndex) + 1;
+            var next = await _dbContext.FindScalarAsync<int>(
+                @"SELECT COALESCE(MAX(a.BitIndex), -1) + 1
+                  FROM AtMenuAction a INNER JOIN AtMenu m ON m.Id = a.MenuId
+                  WHERE m.ClientAppId = @clientAppId",
+                new { clientAppId }).ConfigureAwait(false);
+
+            return next;
         }
 
         public async Task<long> AddAsync(AtMenuAction action)
