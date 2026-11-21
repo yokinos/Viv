@@ -1,35 +1,24 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Viv.Delusion.Generic
 {
     /// <summary>
-    /// 通用键值对数据模型
-    /// 用于封装任意类型的键（Key）和值（Value）组合，替代系统原生KeyValuePair的不可变限制
+    /// 通用键值对数据模型。
+    /// 用于封装任意类型的键（Key）与值（Value）组合，支持可变赋值与 null 值。
     /// </summary>
     /// <typeparam name="TKey">键的类型</typeparam>
     /// <typeparam name="TValue">值的类型</typeparam>
     /// <remarks>
-    /// 区别于 <see cref="KeyValuePair{TKey, TValue}"/>：
-    /// 1. 本类为可变类型（属性支持读写），KeyValuePair为不可变结构体；
-    /// 2. 本类属性支持null值（可空类型），适配更多业务场景；
-    /// 3. 提供无参构造函数，便于序列化/反序列化、反射实例化等场景
+    /// 与 <see cref="KeyValuePair{TKey, TValue}"/> 的区别：
+    /// 1. 引用类型，可空、可继承（若需）；
+    /// 2. 属性可读写，适合 DTO / 序列化 / 配置绑定场景；
+    /// 3. 允许 null 值（引用类型 TValue 或 Nullable&lt;TValue&gt;）。
+    /// 注意：本类型**可变**，不适合作为 Dictionary/HashSet 的键。
     /// </remarks>
-    public struct KeyValueItem<TKey, TValue>
+    public sealed class KeyValueItem<TKey, TValue> : IEquatable<KeyValueItem<TKey, TValue>>
     {
-        /// <summary>
-        /// 无参构造函数
-        /// 适配序列化、反射、ORM等需要无参实例化的场景
-        /// </summary>
         public KeyValueItem() { }
 
-        /// <summary>
-        /// 带参构造函数
-        /// 快速初始化键值对数据
-        /// </summary>
-        /// <param name="key">键值对的键</param>
-        /// <param name="value">键值对的值</param>
         public KeyValueItem(TKey key, TValue value)
         {
             Key = key;
@@ -37,13 +26,31 @@ namespace Viv.Delusion.Generic
         }
 
         /// <summary>
-        /// 键值对的键（支持null值）
+        /// 键值对的键（允许 null）
         /// </summary>
         public TKey? Key { get; set; }
 
         /// <summary>
-        /// 键值对的值（支持null值）
+        /// 键值对的值（允许 null）
         /// </summary>
         public TValue? Value { get; set; }
+
+        public bool Equals(KeyValueItem<TKey, TValue>? other)
+        {
+            if (other is null) return false;
+            return EqualityComparer<TKey?>.Default.Equals(Key, other.Key) && EqualityComparer<TValue?>.Default.Equals(Value, other.Value);
+        }
+
+        public override bool Equals(object? obj) => Equals(obj as KeyValueItem<TKey, TValue>);
+
+        public override int GetHashCode() => HashCode.Combine(Key is null ? 0 : EqualityComparer<TKey?>.Default.GetHashCode(Key), Value is null ? 0 : EqualityComparer<TValue?>.Default.GetHashCode(Value));
+
+        public override string ToString() => $"[{Key}, {Value}]";
+
+        public void Deconstruct(out TKey? key, out TValue? value)
+        {
+            key = Key;
+            value = Value;
+        }
     }
 }
