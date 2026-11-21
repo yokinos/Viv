@@ -111,11 +111,11 @@ namespace Viv.Apex.Api.Rpc
             // 主体被禁用（或已删）时授权关系可能还留着，所以先看主体本身。
             // 这两次读的是同一个缓存 bucket，第二次不会回源。
             var tenant = await _tenants.GetTenantAsync(tenantId).ConfigureAwait(false);
-            if (tenant == null || tenant.Status != EmStatus.Enabled)
+            if (tenant == null || !tenant.IsActive(DateTimeOffset.UtcNow))
                 return false;
 
-            var relations = await _tenants.GetTenantAppRelationsAsync(tenantId).ConfigureAwait(false);
-            return relations.Any(x => x.ClientAppId == appId && x.Status == EmStatus.Enabled);
+            var appIds = await _tenants.GetTenantAuthorizedAppIdsAsync(tenantId).ConfigureAwait(false);
+            return appIds.Contains(appId);
         }
 
         private async Task<bool> CompanyAuthorizedAsync(long companyId, long appId)
@@ -125,8 +125,8 @@ namespace Viv.Apex.Api.Rpc
             if (company == null || company.Status != EmStatus.Enabled)
                 return false;
 
-            var relations = await _companies.GetCompanyAppsAsync(companyId).ConfigureAwait(false);
-            return relations.Any(x => x.ClientAppId == appId && x.Status == EmStatus.Enabled);
+            var appIds = await _companies.GetCompanyAuthorizedAppIdsAsync(companyId).ConfigureAwait(false);
+            return appIds.Contains(appId);
         }
 
         private async Task<bool> OrgAuthorizedAsync(long orgId, long appId)

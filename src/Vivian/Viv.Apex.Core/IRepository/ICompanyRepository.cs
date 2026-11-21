@@ -8,9 +8,12 @@ namespace Viv.Apex.Core.IRepository
 {
     public interface ICompanyRepository
     {
-        Task<EntityListBucket<AtCompany, AtCompanyAppRelation>?> GetBucketAsync(long companyId);
+        Task<EntityListBucket<AtCompany, AtCompanySystemVersion>?> GetBucketAsync(long companyId);
 
-        Task<List<AtCompanyAppRelation>> GetCompanyAppsAsync(long companyId);
+        /// <summary>
+        /// 该公司有权使用的 App Id —— 取自它买的各版本绑定的 App，取并集。
+        /// </summary>
+        Task<List<long>> GetCompanyAuthorizedAppIdsAsync(long companyId);
 
         Task<AtCompany?> GetCompanyAsync(long companyId);
 

@@ -1,6 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using System.ComponentModel.DataAnnotations;
 using Viv.Entity.Enums;
 using Viv.Momo.Base;
 using Viv.Momo.Interface;
@@ -8,43 +7,41 @@ using Viv.Momo.Interface;
 namespace Viv.Entity.Database.Apex
 {
     /// <summary>
-    /// 公司应用关联表
-    /// 在组织允许的App范围内，管控单个集团可用应用
-    ///
-    /// 三个掩码列存的是十进制数字符串（BigInteger 的 ToString），不是 long ——
-    /// 权限位不受 64 位限制，读写走 BitIndexMaskMagic 的 FromText / ToText。
+    /// 公司购买的版本数量
     /// </summary>
-    public class AtCompanyAppRelation : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
+    public class AtCompanySystemVersion : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
         /// <summary>
-        /// 公司Id（关联AtCompany.Id）
+        /// 公司Id（关联 AtCompany.Id）
         /// </summary>
         public long CompanyId { get; set; }
 
         /// <summary>
-        /// 客户端应用Id（关联AtClientApp.Id）
+        /// 版本Id（关联 <see cref="AtSystemVersion.Id"/>）
         /// </summary>
-        public long ClientAppId { get; set; }
+        public long SystemVersionId { get; set; }
 
         /// <summary>
-        /// 该公司此App允许开放的菜单最大权限掩码
+        /// 代理批给该公司的总授权点数（1 点 = 1 个「授权年」，即卖一套一年期扣 1 点）。
         /// </summary>
-        public string? MenuMask { get; set; }
+        public int TotalPoints { get; set; }
 
         /// <summary>
-        /// 该公司此App允许开放的子页面最大权限掩码
+        /// 已用点数。剩余 = <c>TotalPoints - UsedPoints</c>（不存派生列）。
+        /// 退回授权时减回去，并在 <see cref="AtCompanySystemVersionPointLog"/> 留一条流水。
         /// </summary>
-        public string? SubPageMask { get; set; }
-
-        /// <summary>
-        /// 该公司此App允许开放的按钮最大权限掩码
-        /// </summary>
-        public string? ButtonMask { get; set; }
+        public int UsedPoints { get; set; }
 
         /// <summary>
         /// 状态
         /// </summary>
         public EmStatus Status { get; set; }
+
+        /// <summary>
+        /// 备注（代理发货说明：合同号、批次、特批原因等）
+        /// </summary>
+        [StringLength(500)]
+        public string? Remark { get; set; }
 
         /// <summary>
         /// 创建时间

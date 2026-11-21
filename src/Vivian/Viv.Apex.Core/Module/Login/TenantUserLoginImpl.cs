@@ -47,27 +47,22 @@ namespace Viv.Apex.Core.Module.Login
                 return FuncResult<LoginOutput>.Failed("租户不存在");
             }
 
-            if (tenant.Status != EmStatus.Enabled)
+            // 到期即不可用：状态只表达人工开关，到期是时间函数（不靠定时任务去改状态）
+            if (!tenant.IsActive(DateTimeOffset.UtcNow))
             {
-                return FuncResult<LoginOutput>.Failed("租户状态异常");
+                return FuncResult<LoginOutput>.Failed(tenant.Status != EmStatus.Enabled ? "租户状态异常" : "租户授权已到期");
             }
 
-            var tenantApps = await _tenantRepository.GetTenantAppRelationsAsync(tenant.Id);
-            if (tenantApps.IsNullOrEmpty())
+            // 租户买的是一个版本，版本绑定的 App 就是它有权用的 App（版本不可原地改，引用即快照）
+            var authorizedAppIds = await _tenantRepository.GetTenantAuthorizedAppIdsAsync(tenant.Id);
+            if (authorizedAppIds.IsNullOrEmpty())
             {
                 return FuncResult<LoginOutput>.Failed("客户端授权异常");
             }
 
-
-            var appRelation = tenantApps.SingleOrDefault(x => x.ClientAppId == clientAppId);
-            if (appRelation == null)
+            if (!authorizedAppIds.Contains(clientAppId))
             {
                 return FuncResult<LoginOutput>.Failed("当前组织未获得授权");
-            }
-
-            if (appRelation.Status != EmStatus.Enabled)
-            {
-                return FuncResult<LoginOutput>.Failed("当前组织授权已过期");
             }
 
             // 主体就是本次 SubjectCode 解析出的机构：同一手机号在别的机构另有账号，不能串

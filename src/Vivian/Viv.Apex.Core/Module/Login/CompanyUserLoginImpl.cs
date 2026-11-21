@@ -51,21 +51,16 @@ namespace Viv.Apex.Core.Module.Login
                 return FuncResult<LoginOutput>.Failed("集团状态异常");
             }
 
-            var companyApps = await _companyRepository.GetCompanyAppsAsync(company.Id);
-            if (companyApps.IsNullOrEmpty())
+            // 公司买的是版本，版本绑定的 App 就是它有权用的 App（一个公司可买多个版本，取并集）
+            var authorizedAppIds = await _companyRepository.GetCompanyAuthorizedAppIdsAsync(company.Id);
+            if (authorizedAppIds.IsNullOrEmpty())
             {
                 return FuncResult<LoginOutput>.Failed("客户端授权异常");
             }
 
-            var appRelation = companyApps.SingleOrDefault(x => x.ClientAppId == clientAppId);
-            if (appRelation == null)
+            if (!authorizedAppIds.Contains(clientAppId))
             {
                 return FuncResult<LoginOutput>.Failed("当前组织未获得授权");
-            }
-
-            if (appRelation.Status != EmStatus.Enabled)
-            {
-                return FuncResult<LoginOutput>.Failed("当前组织授权已过期");
             }
 
             // 主体就是本次 SubjectCode 解析出的公司：同一手机号在别家公司另有账号，不能串

@@ -34,7 +34,7 @@ namespace Viv.Entity.Database.Apex
         public string? Code { get; set; }
 
         /// <summary>
-        /// 租户购买的系统售卖版本Id（关联AtSystemVersion.Id）
+        /// 租户购买的系统售卖版本Id（关联 <see cref="AtSystemVersion.Id"/>）。
         /// </summary>
         public long? SystemVersionId { get; set; }
 
@@ -42,6 +42,25 @@ namespace Viv.Entity.Database.Apex
         /// 到期时间，null代表永久有效
         /// </summary>
         public DateTime? ExpireTime { get; set; }
+
+        /// <summary>
+        /// 当前是否可用：<c>Status == 启用</c> 且未到期。
+        ///
+        /// <para><b>到期做成派生判断，不落成状态</b>：如果把「已到期」写进 <see cref="Status"/>，
+        /// 就得有人（定时任务）按时去改它 —— 任务一挂，到期客户照样能用，而且「停用」到底是因为
+        /// 到期还是人工封停就分不清了。时间函数交给时间算，状态只表达「人工开关」。</para>
+        /// </summary>
+        public bool IsActive(DateTimeOffset now) => Status == EmStatus.Enabled && (ExpireTime is null || ExpireTime.Value > now.UtcDateTime);
+
+        /// <summary>
+        /// 是否试用
+        /// </summary>
+        public bool IsTrialUse { get; set; }
+
+        /// <summary>
+        /// 购买制度
+        /// </summary>
+        public EmPurchaseMode PurchaseMode { get; set; }
 
         /// <summary>
         /// 租户状态

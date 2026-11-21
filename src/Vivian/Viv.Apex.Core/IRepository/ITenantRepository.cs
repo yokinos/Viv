@@ -18,6 +18,11 @@ namespace Viv.Apex.Core.IRepository
         Task<AtTenant?> GetTenantByCodeAsync(string code);
 
         Task<PagedList<AtTenant>> GetTenantPagedListAsync(IApiPagedRequest request);
-        Task<List<AtTenantAppRelation>> GetTenantAppRelationsAsync(long tenantId);
+
+        /// <summary>
+        /// 该租户有权使用的 App Id —— 取自它买的版本绑定的 App（<c>AtSystemVersionAppRelation</c>）。
+        /// 版本不可原地修改，所以引用版本即快照。
+        /// </summary>
+        Task<List<long>> GetTenantAuthorizedAppIdsAsync(long tenantId);
     }
 }
