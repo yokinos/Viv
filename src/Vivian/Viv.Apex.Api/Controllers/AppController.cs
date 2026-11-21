@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Viv.Apex.Core;
 using Viv.Apex.Core.Entity.Dto.App;
 using Viv.Apex.Core.Entity.Vo.App;
 using Viv.Apex.Core.Entity.Vo.Menu;
@@ -37,6 +38,7 @@ namespace Viv.Apex.Api.Controllers
         /// <returns></returns>
         [ProducesResponseType(typeof(PagedList<ClientAppListItem>), StatusCodes.Status200OK)]
         [HttpPost("getAppPage")]
+        [VivRequirePermission(Permissions.App.Menu)]
         public async Task<IActionResult> GetAppPageAsync(AppPageRequest request)
         {
             return await _clientAppService.GetPageAsync(request);
@@ -49,6 +51,7 @@ namespace Viv.Apex.Api.Controllers
         /// <returns></returns>
         [ProducesResponseType(typeof(SaveAppOutput), StatusCodes.Status200OK)]
         [HttpPost("saveApp")]
+        [VivRequirePermission(Permissions.App.Add, Permissions.App.Edit)]
         public async Task<IActionResult> SaveAppAsync(SaveAppRequest request)
         {
             return await _clientAppService.SaveAsync(request);
