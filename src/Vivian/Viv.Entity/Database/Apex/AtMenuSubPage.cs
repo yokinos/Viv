@@ -7,8 +7,7 @@ using Viv.Momo.Interface;
 namespace Viv.Entity.Database.Apex
 {
     /// <summary>
-    /// 菜单子页面（依附 <see cref="AtMenu"/>，描述页面内部的子视图，比如列表页里的基础/筛选两个视图）
-    /// 和菜单一样：只存展示信息与一份客户端路由配置，具体怎么解释由各端自己的适配器决定
+    /// 菜单子页面（依附 <see cref="AtMenu"/>，纯路由
     /// </summary>
     public class AtMenuSubPage : EntityBase, ISoftDeleted, ICreatedAt, ICreatedBy, IUpdatedAt, IUpdatedBy
     {
@@ -16,11 +15,6 @@ namespace Viv.Entity.Database.Apex
         /// 上级菜单Id（关联 AtMenu.Id）
         /// </summary>
         public long MenuId { get; set; }
-
-        /// <summary>
-        /// 位索引（权限位运算）
-        /// </summary>
-        public int BitIndex { get; set; }
 
         /// <summary>
         /// 显示名称

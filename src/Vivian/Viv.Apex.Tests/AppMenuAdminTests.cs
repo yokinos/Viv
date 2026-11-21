@@ -270,7 +270,7 @@ namespace Viv.Apex.Tests
             var second = await service.SaveSubPageForAppAsync(new SaveAppMenuSubPageRequest { ClientAppId = 8, MenuId = 2, Title = "详情", Sort = 2 });
             Assert.Equal(200, first.Code);
             Assert.Equal(200, second.Code);
-            Assert.Equal([0, 1], pages.Rows.Select(row => row.BitIndex));
+            Assert.Equal(["列表", "详情"], pages.Rows.Select(row => row.Title));
 
             var updated = await service.SaveSubPageForAppAsync(new SaveAppMenuSubPageRequest
             {
@@ -284,7 +284,6 @@ namespace Viv.Apex.Tests
             Assert.Equal(200, updated.Code);
             var row = pages.Rows.Single(item => item.Id == 1);
             Assert.Equal("列表改名", row.Title);
-            Assert.Equal(0, row.BitIndex);
             Assert.False(row.IsVisible);
 
             var deleted = await service.DeleteSubPageForAppAsync(new DeleteAppMenuSubPageRequest { ClientAppId = 8, Id = 1 });
@@ -545,12 +544,6 @@ namespace Viv.Apex.Tests
             public Task<AtMenuSubPage?> GetAsync(long id)
                 => Task.FromResult(Rows.FirstOrDefault(row => row.Id == id));
 
-            public Task<int> NextBitIndexAsync(long menuId)
-            {
-                var mine = Rows.Where(row => row.MenuId == menuId).ToList();
-                return Task.FromResult(mine.Count == 0 ? 0 : mine.Max(row => row.BitIndex) + 1);
-            }
-
             public Task<long> AddAsync(AtMenuSubPage page)
             {
                 page.Id = _nextId++;
@@ -593,10 +586,10 @@ namespace Viv.Apex.Tests
             public Task<AtMenuAction?> GetAsync(long id)
                 => Task.FromResult(Rows.FirstOrDefault(row => row.Id == id));
 
-            public Task<int> NextBitIndexAsync(long menuId)
+            public Task<int> NextBitIndexAsync()
             {
-                var mine = Rows.Where(row => row.MenuId == menuId).ToList();
-                return Task.FromResult(mine.Count == 0 ? 0 : mine.Max(row => row.BitIndex) + 1);
+                // 与生产实现一致：动作权限位全局唯一（角色的掩码没有菜单维度）
+                return Task.FromResult(Rows.Count == 0 ? 0 : Rows.Max(row => row.BitIndex) + 1);
             }
 
             public Task<long> AddAsync(AtMenuAction action)

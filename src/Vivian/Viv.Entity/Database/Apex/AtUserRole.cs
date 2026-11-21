@@ -35,6 +35,29 @@ namespace Viv.Entity.Database.Apex
         public string? Remark { get; set; }
 
         /// <summary>
+        /// 页面权限掩码：十进制存 <c>BigInteger</c>，位下标 = <c>AtMenu.BitIndex</c>。
+        /// 控制「这个角色能看哪些页面」，配合前端路由显隐；后端按页面挡不挡（见 <see cref="ButtonMask"/> 的说明）。
+        ///
+        /// <para><b>目前没有写入口，也没有读取方</b> —— 后端鉴权走操作权限。等真做页面鉴权时，
+        /// 注意 <c>AtMenu.BitIndex</c> 现在是「每个应用从 0 自增」，而角色掩码没有应用维度，
+        /// 跨应用的同号页面会互相授权，那时要把菜单位也改成全局唯一。</para>
+        /// </summary>
+        public string? MenuMask { get; set; }
+
+        /// <summary>
+        /// 操作权限掩码：十进制存 <c>BigInteger</c>，位下标 = <c>AtMenuAction.BitIndex</c>。
+        /// 控制「这个角色能执行哪些动作」，服务端 <c>[VivRequirePermission]</c> 判的就是它。
+        ///
+        /// <para>不建角色-动作关联表：动作总量在几百的量级，位掩码一个字段就够；
+        /// 判定时把用户全部启用角色的掩码按位或，再测目标位 —— 一次位与，不要 join。
+        /// 前提是 <c>AtMenuAction.BitIndex</c> <b>全局唯一</b>（见那里的注释）。</para>
+        ///
+        /// <para>读写一律走 <c>BitIndexMaskMagic</c>（<c>FromText</c>/<c>ToText</c>/<c>Combine</c>/<c>Has</c>），
+        /// 空值当 0（无权限位）。</para>
+        /// </summary>
+        public string? ButtonMask { get; set; }
+
+        /// <summary>
         /// 状态 0禁用 1启用
         /// </summary>
         public EmStatus Status { get; set; }

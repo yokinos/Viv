@@ -11,8 +11,11 @@ namespace Viv.Apex.Core.IRepository
         /// <summary>按 Id 取，不存在或已删返回 null</summary>
         Task<AtMenuAction?> GetAsync(long id);
 
-        /// <summary>该菜单下一个空闲的权限位。没有动作时从 0 开始</summary>
-        Task<int> NextBitIndexAsync(long menuId);
+        /// <summary>
+        /// 下一个空闲的权限位。**全局唯一**，不是每个菜单从 0 开始 —— 角色的授权掩码
+        /// （<c>AtUserRole.ButtonMask</c>）没有菜单维度，位重复就等于互相授权。
+        /// </summary>
+        Task<int> NextBitIndexAsync();
 
         /// <summary>按 Id 新增，返回落库后的行 Id</summary>
         Task<long> AddAsync(AtMenuAction action);

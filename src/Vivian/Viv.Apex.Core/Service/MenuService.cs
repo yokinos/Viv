@@ -161,6 +161,7 @@ namespace Viv.Apex.Core.Service
                     return VivApiResult.Failed("动作不存在");
 
                 existing.Name = name;
+                existing.ActionCode = request.ActionCode;
                 existing.Sort = request.Sort;
                 existing.Remark = request.Remark;
                 existing.Status = request.Status;
@@ -172,8 +173,9 @@ namespace Viv.Apex.Core.Service
                 await _actions.AddAsync(new AtMenuAction
                 {
                     MenuId = menu.Id,
-                    BitIndex = await _actions.NextBitIndexAsync(menu.Id),
+                    BitIndex = await _actions.NextBitIndexAsync(),
                     Name = name,
+                    ActionCode = request.ActionCode,
                     Sort = request.Sort,
                     Remark = request.Remark,
                     Status = request.Status
@@ -249,7 +251,6 @@ namespace Viv.Apex.Core.Service
                 await _subPages.AddAsync(new AtMenuSubPage
                 {
                     MenuId = menu.Id,
-                    BitIndex = await _subPages.NextBitIndexAsync(menu.Id),
                     Title = title,
                     Sort = request.Sort,
                     IsVisible = request.IsVisible,
@@ -326,6 +327,7 @@ namespace Viv.Apex.Core.Service
                     ParentId = request.ParentId,
                     BitIndex = await _menus.NextBitIndexAsync(appId),
                     Title = title,
+                    MenuCode = request.MenuCode,
                     Type = request.Type,
                     Icon = request.Icon,
                     Sort = request.Sort,
@@ -339,6 +341,7 @@ namespace Viv.Apex.Core.Service
             {
                 existing.ParentId = request.ParentId;
                 existing.Title = title;
+                existing.MenuCode = request.MenuCode;
                 existing.Type = request.Type;
                 existing.Icon = request.Icon;
                 existing.Sort = request.Sort;

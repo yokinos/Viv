@@ -14,9 +14,6 @@ namespace Viv.Apex.Core.IRepository
         /// <summary>按 Id 取，不存在或已删返回 null</summary>
         Task<AtMenuSubPage?> GetAsync(long id);
 
-        /// <summary>该菜单下一个空闲的权限位。没有子页面时从 0 开始</summary>
-        Task<int> NextBitIndexAsync(long menuId);
-
         /// <summary>按 Id 新增，返回落库后的行 Id</summary>
         Task<long> AddAsync(AtMenuSubPage page);
 

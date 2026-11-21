@@ -36,12 +36,6 @@ namespace Viv.Apex.Core.Repository
         public Task<AtMenuSubPage?> GetAsync(long id)
             => _dbContext.SingleOrDefaultAsync<AtMenuSubPage>(x => x.Id == id);
 
-        public async Task<int> NextBitIndexAsync(long menuId)
-        {
-            var pages = await _dbContext.FindListAsync<AtMenuSubPage>(x => x.MenuId == menuId).ConfigureAwait(false);
-            return pages.Count == 0 ? 0 : pages.Max(x => x.BitIndex) + 1;
-        }
-
         public async Task<long> AddAsync(AtMenuSubPage page)
         {
             await _dbContext.InsertAsync(page).ConfigureAwait(false);

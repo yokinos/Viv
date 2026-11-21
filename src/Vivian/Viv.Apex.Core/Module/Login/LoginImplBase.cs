@@ -1,6 +1,7 @@
 using Azure.Core;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using Viv.Apex.Core.Entity.Dto.Account;
 using Viv.Apex.Core.Entity.Vo.Account;
@@ -61,12 +62,31 @@ namespace Viv.Apex.Core.Module.Login
         public virtual async Task<LoginOutput> BuildLoginOutputAsync(long clientAppId, AtUser user)
         {
             var tokenOptions = _tokenService.GetOptions();
+
+            // 角色编码进 token（一人多角色 = 多条 ClaimTypes.Role claim）。
+            // GetUserRolesAsync 不过滤状态，已禁用的角色不能带进去 —— 那等于把停用的权限重新发一遍。
+            // 登录是低频动作，多这一次查询换「下游不用再查角色表」是划算的。
+            var roles = await _userRepository.GetUserRolesAsync(user.Id);
+            var roleCodes = roles
+                .Where(static role => role.Status == EmStatus.Enabled && !string.IsNullOrWhiteSpace(role.RoleCode))
+                .Select(static role => role.RoleCode!)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
             var newAccessToken = _tokenService.GenerateToken(new Contracts.Models.TokenPayload
             {
                 AppId = clientAppId,
                 SubjectId = ResolveSubjectId(user),
                 UserId = user.Id,
-                UserName = user.Name
+                UserName = user.Name,
+                Roles = roleCodes,
+                // 用户类型进 token 的 claim，供 [VivRequireUserType] 判定。
+                // 取库里那份（user.UserType），不取请求里客户端自报的 —— 那条只是用来选登录实现。
+                // 只走 JWT：不进 x-viv-* 头、不进 IVivContext，框架层不携带业务分类。
+                Extensions = new Dictionary<string, string>
+                {
+                    [VivUserClaimTypes.UserType] = ((int)user.UserType).ToString(CultureInfo.InvariantCulture)
+                }
             });
 
             // refresh token 是 30–45 天的长期凭证，必须用 CSPRNG；GenerateFastString 走的是 Random.Shared，

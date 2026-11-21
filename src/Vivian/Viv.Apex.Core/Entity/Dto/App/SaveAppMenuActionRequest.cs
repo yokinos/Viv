@@ -23,6 +23,14 @@ namespace Viv.Apex.Core.Entity.Dto.App
         [DisplayName("动作名称")]
         public string Name { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 动作编码（如 <c>user:create</c>），服务端 <c>[VivRequirePermission]</c> 按它判定。
+        /// 全局唯一（跨应用重名请自己加前缀）。留空 = 这个权限点只能做前端按钮显隐，服务端查不到它。
+        /// </summary>
+        [StringLength(128)]
+        [DisplayName("动作编码")]
+        public string? ActionCode { get; set; }
+
         /// <summary>排序号，越小越靠前</summary>
         public int Sort { get; set; }
 

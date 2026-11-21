@@ -1,5 +1,8 @@
 ﻿using Viv.Apex.Proxy.Ports;
+using System.Collections.Generic;
+using System.Globalization;
 using Viv.Contracts.Interface;
+using Viv.Elysia;
 using Viv.Contracts.Models;
 using Viv.Delusion.Magic;
 using Viv.Delusion.Security;
@@ -117,7 +120,12 @@ namespace Viv.Herta.Core.Service
                 // 主体 Id 只留在库里，不进 token —— 一旦进了，下游就会拿它当隔离键。
                 SubjectId = user.RealmId,
                 UserId = user.Id,
-                UserName = user.NickName ?? loginCode
+                UserName = user.NickName ?? loginCode,
+                // 用户类型进 token 的 claim（只走 JWT，框架层不携带业务分类）
+                Extensions = new Dictionary<string, string>
+                {
+                    [VivUserClaimTypes.UserType] = ((int)user.UserType).ToString(CultureInfo.InvariantCulture)
+                }
             });
 
             return VivApiResult<HertaLoginOutput>.Success(new HertaLoginOutput

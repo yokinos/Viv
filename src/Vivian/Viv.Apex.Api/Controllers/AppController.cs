@@ -6,7 +6,9 @@ using Viv.Apex.Core.Entity.Vo.App;
 using Viv.Apex.Core.Entity.Vo.Menu;
 using Viv.Apex.Core.IService;
 using Viv.Delusion.Generic;
+using Viv.Elysia.Attributes;
 using Viv.Elysia.Request;
+using Viv.Entity.Enums;
 
 namespace Viv.Apex.Api.Controllers
 {
@@ -15,6 +17,7 @@ namespace Viv.Apex.Api.Controllers
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
+    [VivRequireUserType(EmUserType.Master)]
     [Authorize]
     public class AppController : ControllerBase
     {

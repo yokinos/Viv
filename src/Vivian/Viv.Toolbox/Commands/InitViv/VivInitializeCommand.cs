@@ -457,23 +457,16 @@ namespace Viv.Toolbox.Commands.InitViv
 
                 if (subPages.Count > 0)
                 {
-                    foreach (var group in subPages.GroupBy(x => x.MenuId))
-                    {
-                        var next = await NextBitIndexAsync(db, "AtMenuSubPage", "MenuId", group.Key, ct);
-                        foreach (var page in group) page.BitIndex = next++;
-                    }
-
                     if (!await db.InsertAsync(subPages, ct))
                         throw new InvalidOperationException("初始菜单子页面写入失败");
                 }
 
                 if (actions.Count > 0)
                 {
-                    foreach (var group in actions.GroupBy(x => x.MenuId))
-                    {
-                        var next = await NextBitIndexAsync(db, "AtMenuAction", "MenuId", group.Key, ct);
-                        foreach (var action in group) action.BitIndex = next++;
-                    }
+                    // 动作权限位全局唯一（角色的操作权限掩码没有菜单维度），
+                    // 所以整批统一从一个起点发号，不能按菜单分组各自从 0 开始。
+                    var nextActionBit = await NextGlobalBitIndexAsync(db, "AtMenuAction", ct);
+                    foreach (var action in actions) action.BitIndex = nextActionBit++;
 
                     if (!await db.InsertAsync(actions, ct))
                         throw new InvalidOperationException("初始菜单动作写入失败");
@@ -492,6 +485,15 @@ namespace Viv.Toolbox.Commands.InitViv
             => db.FindScalarAsync<int>(
                 $"SELECT ISNULL(MAX(BitIndex), -1) + 1 FROM {table} WHERE {ownerColumn} = @ownerId AND IsDeleted = 0",
                 new { ownerId },
+                cancellationToken);
+
+        /// <summary>
+        /// 取某张表的全局下一个 BitIndex（不按归属列分组）。表名是内部常量，不来自外部输入。
+        /// </summary>
+        private static Task<int> NextGlobalBitIndexAsync(IMomoDbContext db, string table, CancellationToken cancellationToken)
+            => db.FindScalarAsync<int>(
+                $"SELECT ISNULL(MAX(BitIndex), -1) + 1 FROM {table} WHERE IsDeleted = 0",
+                null,
                 cancellationToken);
 
         /// <summary>

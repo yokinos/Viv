@@ -82,6 +82,35 @@ public class JwtTokenServiceTests
     }
 
     [Fact]
+    public void 角色编码写成标准RoleClaim_IsInRole可读()
+    {
+        // [Authorize(Roles = "...")] 与 User.IsInRole 依赖 RoleClaimType 是 ClaimTypes.Role；
+        // 换成自定义 claim 类型的话这条会静默失效（解析回环测试看不出来）
+        var service = CreateService();
+        var token = service.GenerateToken(new TokenPayload
+        {
+            UserId = 7,
+            UserName = "x",
+            Roles = { "org_admin", "auditor" },
+        });
+
+        var principal = new JwtSecurityTokenHandler().ValidateToken(token, new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = Issuer,
+            ValidateAudience = true,
+            ValidAudience = Audience,
+            ValidateLifetime = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret)),
+            ClockSkew = TimeSpan.Zero,
+        }, out _);
+
+        Assert.True(principal.IsInRole("org_admin"));
+        Assert.True(principal.IsInRole("auditor"));
+        Assert.False(principal.IsInRole("admin"));
+    }
+
+    [Fact]
     public void 缺省AppIdTenantId解析为0()
     {
         var service = CreateService();

@@ -26,9 +26,9 @@ namespace Viv.Apex.Core.Repository
         public Task<AtMenuAction?> GetAsync(long id)
             => _dbContext.SingleOrDefaultAsync<AtMenuAction>(x => x.Id == id);
 
-        public async Task<int> NextBitIndexAsync(long menuId)
+        public async Task<int> NextBitIndexAsync()
         {
-            var actions = await _dbContext.FindListAsync<AtMenuAction>(x => x.MenuId == menuId).ConfigureAwait(false);
+            var actions = await _dbContext.FindListAsync<AtMenuAction>(x => x.Id > 0).ConfigureAwait(false);
             return actions.Count == 0 ? 0 : actions.Max(x => x.BitIndex) + 1;
         }
 
