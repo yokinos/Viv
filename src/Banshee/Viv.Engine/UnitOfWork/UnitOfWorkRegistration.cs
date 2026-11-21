@@ -89,23 +89,34 @@ namespace Viv.Engine.UnitOfWork
                 // 里面新写的非虚方法就静默没有事务。
                 var classLevel = type.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: true);
 
-                // ② 方法级特性：逐条严查（这是 API 侧的主路径，必须能拦到）
-                //    必须带上 Static —— 漏了它静态方法根本不在枚举结果里，
-                //    "标了特性的静态方法"会被静默放行（ValidateMethod 里的 IsStatic 判断也就成了死代码）
-                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic
-                                                       | BindingFlags.Instance | BindingFlags.Static
-                                                       | BindingFlags.DeclaredOnly))
+                // ② 方法级特性：枚举「会真正被代理命中的方法集」—— 继承链上的 public 实例方法
+                //    （override 只留最派生的那一个，正是运行期 MethodInvocationTarget 指向的方法），
+                //    特性沿 override 链找，与运行期 ShouldIntercept 的 inherit: true 对齐。
+                //    只用 DeclaredOnly + inherit: false 的话：「基类标了、子类重写不标」整条跳过校验，
+                //    「基类标了、子类不重写」连 HasAttribute 都发现不了 —— 类型不进拦截清单，静默无事务。
+                //
+                //    这里不跳 IsSpecialName（类级那趟要跳）：显式标在属性访问器上的事务一定开不了 ——
+                //    存取器是同步方法，异步拦截链管不了它 —— 必须报错，不能像类级那样放行。
+                foreach (var method in GetInterceptableMethods(type))
                 {
-                    var methodAttribute = method.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: false);
-                    if (methodAttribute == null) continue;
-                    if (!methodAttribute.Enabled) continue;
+                    var methodAttribute = method.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: true);
+                    if (methodAttribute is not { Enabled: true }) continue;
 
                     ValidateMethod(type, method);
                     if (classProxy) RequireVirtual(type, method);
+                    else RequireInterfaceMethod(type, method);
                     methodCount++;
                 }
 
-                // ③ 类级特性：与方法级同一把尺子。标了就必须能拦到，否则启动失败。
+                // ③ 标在非 public / static 方法上：代理一定拦不到，也不在上面那趟有效方法集里。
+                //    必须带上 Static —— 漏了它静态方法根本不在枚举结果里，
+                //    "标了特性的静态方法"会被静默放行（ValidateMethod 里的 IsStatic 判断也就成了死代码）
+                foreach (var method in MisplacedMethods(type))
+                {
+                    ValidateMethod(type, method);
+                }
+
+                // ④ 类级特性：与方法级同一把尺子。标了就必须能拦到，否则启动失败。
                 //    Enabled = false 是明确的「这个类不要事务」—— 派生类去掉基类继承来的特性只有这一个办法
                 //    （AttributeUsage 是 Inherited = true），所以它必须真的豁免，不能标了反而启动失败。
                 if (classLevel is { Enabled: true })
@@ -116,7 +127,7 @@ namespace Viv.Engine.UnitOfWork
                 intercepted.Add(type);
             }
 
-            // ④ 特性标在「扫描注册够不到」的类型上 —— 最隐蔽的一种失效：能编译、能跑、就是没事务。
+            // ⑤ 特性标在「扫描注册够不到」的类型上 —— 最隐蔽的一种失效：能编译、能跑、就是没事务。
             //    无接口类代理只支持 DIOption 扫描注册（Scoped），[VivDependency(AsSelf = true)] 那条路
             //    没有挂拦截器的地方，生命周期也不一定是 Scoped（拦截器是 Scoped，单例会 captive）。
             foreach (var type in dependencyTypes.Distinct())
@@ -141,7 +152,7 @@ namespace Viv.Engine.UnitOfWork
         /// </summary>
         private static void ValidateMethod(Type type, MethodInfo method)
         {
-            var where = $"{type.FullName}.{method.Name}";
+            var where = Where(type, method);
 
             if (!method.IsPublic)
                 throw new InvalidOperationException($"[VivUnitOfWork] 标在非 public 方法上，代理拦不到：{where}");
@@ -216,16 +227,50 @@ namespace Viv.Engine.UnitOfWork
             if (method.IsVirtual && !method.IsFinal) return;
 
             throw new InvalidOperationException(
-                $"[VivUnitOfWork] 无业务接口的类型走类代理，只能拦 public virtual 方法：{type.FullName}.{method.Name}。" +
+                $"[VivUnitOfWork] 无业务接口的类型走类代理，只能拦 public virtual 方法：{Where(type, method)}。" +
                 "非 virtual 或 sealed override 都拦不到，请加 virtual，或为它定义接口。");
+        }
+
+        /// <summary>
+        /// 接口代理只按接口调用（<c>AsImplementedInterfaces()</c>，类型本身不注册 AsSelf）——
+        /// 标了特性的方法不在任何接口的映射里，容器里根本调不到它，事务一定开不起来。
+        /// 这是最像「生效了」的一种失效：注册期不报错、代理也挂上了，只有那个方法永远没人走。
+        /// </summary>
+        private static void RequireInterfaceMethod(Type type, MethodInfo method)
+        {
+            foreach (var contract in type.GetInterfaces())
+            {
+                foreach (var target in type.GetInterfaceMap(contract).TargetMethods)
+                {
+                    // 继承实现的 TargetMethods 给的是基类那份，用 GetBaseDefinition 归一化后再比
+                    if (target == method || target.GetBaseDefinition() == method.GetBaseDefinition()) return;
+                }
+            }
+
+            throw new InvalidOperationException(
+                $"[VivUnitOfWork] {Where(type, method)} 标了特性，但它不是任何业务接口的成员 —— " +
+                "该类型有业务接口，只能走接口代理（只按接口注册，类型本身不注册 AsSelf），" +
+                "这个方法从容器里根本调不到，事务不会生效。请把它加进业务接口（特性仍标在实现类上），" +
+                "或去掉特性。");
         }
 
         /// <summary>
         /// 类级特性下，每个公开实例方法都必须能被拦截（与方法级同一套 ValidateMethod），
         /// 否则「标了特性 = 有事务」不成立。方法上显式 <c>Enabled = false</c> 的跳过。
         ///
+        /// <para>方法级（含从基类继承来的）优先于类级 —— 与运行期 ShouldIntercept 的取值顺序一致，
+        /// 所以这里的跳过判定也要用 <c>inherit: true</c>：派生类重写基类那个带特性的方法时，
+        /// 运行期拿到的是方法级特性，类级不该再校验一遍。</para>
+        ///
         /// <para>类代理下额外要求 public virtual。注意：类代理会拦 <c>this.VirtualMethod()</c>
         /// （虚派发），自调用会再开一层嵌套事务 —— 现有嵌套语义是子句柄、提交 no-op，安全。</para>
+        ///
+        /// <para>只扫本类声明的方法，不是取舍，是与运行期一致：ShouldIntercept 找不到方法级特性时
+        /// 回落到 <c>method.DeclaringType</c> 上的类级特性，继承来的方法 DeclaringType 是基类，
+        /// 根本读不到派生类的类级事务。要让基类方法也开事务，就在基类上标方法级特性。</para>
+        ///
+        /// <para>属性存取器（<c>IsSpecialName</c>）跳过：存取器是同步方法，异步拦截链一定管不了，
+        /// 校验它们只会让「带 public 属性的类级事务」全部启动失败。</para>
         /// </summary>
         private static int CollectClassLevelAsyncMethods(Type type, bool requireVirtual)
         {
@@ -235,11 +280,12 @@ namespace Viv.Engine.UnitOfWork
             {
                 if (method.IsSpecialName) continue;              // 属性存取器不单独计数
 
-                var methodAttribute = method.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: false);
-                if (methodAttribute is { Enabled: false }) continue;
+                var methodAttribute = method.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: true);
+                if (methodAttribute is not null) continue;       // 方法级（含继承来的）已经校验过
 
                 ValidateMethod(type, method);
                 if (requireVirtual) RequireVirtual(type, method);
+                else RequireInterfaceMethod(type, method);
                 count++;
             }
 
@@ -250,10 +296,52 @@ namespace Viv.Engine.UnitOfWork
         {
             if (type.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: true) != null) return true;
 
-            return type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic
-                                   | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
-                       .Any(m => m.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: true) != null);
+            // 会被代理命中的方法：继承链上的 public 实例方法，特性沿 override 链找。
+            // 继承来的方法（派生类没重写）也必须算进来 —— 漏了它类型就不进拦截清单，
+            // 运行期连拦截器都不挂，基类上标的那个事务静默失效。
+            if (GetInterceptableMethods(type)
+                .Any(m => m.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: true) != null))
+            {
+                return true;
+            }
+
+            // 标在非 public / static 方法上 —— 拦不到，但也不能当没看见，交给主循环报错
+            return MisplacedMethods(type).Any();
         }
+
+        /// <summary>
+        /// 会真正被代理命中的方法集：继承链上的 public 实例方法。override 在结果里只保留最派生的
+        /// 那一个 —— 正好是运行期 <c>MethodInvocationTarget</c> 指向的方法，特性也从它往基类找。
+        /// </summary>
+        private static IEnumerable<MethodInfo> GetInterceptableMethods(Type type)
+            => type.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+
+        /// <summary>
+        /// 标了特性但代理一定拦不到的声明方法：非 public 或 static。只扫本类声明 ——
+        /// 继承来的 private 不可见，static 本来也不参与代理。这个集合只用来报错。
+        /// </summary>
+        private static IEnumerable<MethodInfo> MisplacedMethods(Type type)
+        {
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic
+                                                   | BindingFlags.Instance | BindingFlags.Static
+                                                   | BindingFlags.DeclaredOnly))
+            {
+                if (method.IsPublic && !method.IsStatic) continue;   // 有效方法集那趟已经覆盖
+
+                if (method.GetCustomAttribute<VivUnitOfWorkAttribute>(inherit: false) is { Enabled: true })
+                {
+                    yield return method;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 报错定位。方法是从基类继承来的时候把声明类型也带上 —— 要补 virtual 的是基类那一份。
+        /// </summary>
+        private static string Where(Type type, MethodInfo method)
+            => method.DeclaringType is null || method.DeclaringType == type
+                ? $"{type.FullName}.{method.Name}"
+                : $"{type.FullName}.{method.Name}（声明在 {method.DeclaringType.FullName}）";
 
         /// <summary>
         /// 消费者（<c>VivConsumer&lt;T&gt;</c> / <c>VivLocalConsumer&lt;T&gt;</c>）豁免接口代理校验 ——

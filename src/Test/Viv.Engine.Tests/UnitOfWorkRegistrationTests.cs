@@ -198,6 +198,63 @@ public class UnitOfWorkRegistrationTests
         public virtual VivApiResult SyncVirtual() => VivApiResult.Success();
     }
 
+    /// <summary>基类标了方法级特性 —— 派生类重写（自己不标）/ 不重写两种形态都要被发现</summary>
+    public class InheritedAttributeBaseService : IGoodService
+    {
+        [VivUnitOfWork]
+        public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>重写了但自己不标特性 —— 运行期沿 override 链拿得到基类那条，注册期不能跳过校验</summary>
+    public class InheritedOverrideService : InheritedAttributeBaseService
+    {
+        public override Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>不重写 —— 继承来的方法同样会被代理命中，类型必须进拦截清单</summary>
+    public class InheritedNoOverrideService : InheritedAttributeBaseService;
+
+    /// <summary>基类把特性标在 ValueTask 方法上 —— 派生类重写同样要启动失败</summary>
+    public class ValueTaskBaseService : IGoodService
+    {
+        public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+
+        [VivUnitOfWork]
+        public virtual ValueTask Vt() => ValueTask.CompletedTask;
+    }
+
+    public class ValueTaskDerivedService : ValueTaskBaseService
+    {
+        public override ValueTask Vt() => ValueTask.CompletedTask;
+    }
+
+    /// <summary>没有接口 + 基类方法非 virtual + 派生类不重写 —— 类代理拦不到</summary>
+    public class NoInterfaceInheritedBase
+    {
+        [VivUnitOfWork]
+        public Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    public class NoInterfaceInheritedDerivedService : NoInterfaceInheritedBase;
+
+    /// <summary>有业务接口，但 InternalAsync 不在接口上 —— 容器里调不到，事务不可能生效</summary>
+    public class NotOnInterfaceService : IGoodService
+    {
+        public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+
+        [VivUnitOfWork]
+        public virtual Task<VivApiResult> InternalAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
+    /// <summary>类级特性 + 本类 public 方法不在接口上 —— 类级事务同样覆盖不到</summary>
+    [VivUnitOfWork]
+    public class ClassLevelNotOnInterfaceService : IGoodService
+    {
+        public virtual Task<VivApiResult> RunAsync() => Task.FromResult(VivApiResult.Success());
+
+        public virtual Task<VivApiResult> InternalAsync() => Task.FromResult(VivApiResult.Success());
+    }
+
     [VivUnitOfWork]
     public class OpenGenericAttributedService<T> : IOpenGenericService<T>
     {
@@ -445,6 +502,70 @@ public class UnitOfWorkRegistrationTests
     {
         // 派生类没有别的办法去掉基类继承下来的特性，这条豁免不生效的话「显式关掉反而起不来」
         Assert.Single(Resolve([typeof(ClassLevelDerivedOptOutService)]));
+    }
+
+    [Fact]
+    public void 方法级特性_基类标了派生类重写不标_照样进拦截清单()
+    {
+        // 运行期 ShouldIntercept 用 inherit: true，沿 override 链拿得到基类那条特性。
+        // 注册期只看 DeclaredOnly + inherit: false 的话，这条整段跳过校验 ——
+        // 等于给了一条「重写一下就绕过启动期检查」的后门。
+        var intercepted = Resolve([typeof(InheritedOverrideService)]);
+
+        Assert.Contains(typeof(InheritedOverrideService), intercepted);
+    }
+
+    [Fact]
+    public void 方法级特性_基类标了派生类不重写_照样进拦截清单()
+    {
+        // 以前 HasAttribute 用 DeclaredOnly 枚举不到继承来的方法 → 类型不进拦截清单
+        // → 拦截器根本没挂 → 能编译、能跑、就是没事务。运行期其实查得到，
+        // 纯粹是注册期漏判。
+        var intercepted = Resolve([typeof(InheritedNoOverrideService)]);
+
+        Assert.Contains(typeof(InheritedNoOverrideService), intercepted);
+    }
+
+    [Fact]
+    public void 方法级特性_基类标在ValueTask方法上_派生类重写_启动失败()
+    {
+        // 特性在基类、签名在派生类 —— 只有把继承来的特性拿到派生类方法上校验才拦得住
+        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(ValueTaskDerivedService)]));
+
+        Assert.Contains(nameof(ValueTaskBaseService.Vt), ex.Message);
+        Assert.Contains("ValueTask", ex.Message);
+    }
+
+    [Fact]
+    public void 方法级特性_基类标了派生类不重写且方法非virtual_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => Resolve([typeof(NoInterfaceInheritedDerivedService)]));
+
+        Assert.Contains(nameof(NoInterfaceInheritedBase.RunAsync), ex.Message);
+        Assert.Contains("virtual", ex.Message);
+        Assert.Contains("声明在", ex.Message);
+    }
+
+    [Fact]
+    public void 方法级特性_方法不在业务接口上_启动失败()
+    {
+        // 有业务接口就只按接口注册（AsImplementedInterfaces，不注册 AsSelf），
+        // 这个方法从容器里根本调不到 —— 注册期不报错的话，它永远安安静静地没有事务。
+        var ex = Assert.Throws<InvalidOperationException>(() => Resolve([typeof(NotOnInterfaceService)]));
+
+        Assert.Contains(nameof(NotOnInterfaceService.InternalAsync), ex.Message);
+        Assert.Contains("不是任何业务接口的成员", ex.Message);
+    }
+
+    [Fact]
+    public void 类级特性_本类方法不在业务接口上_启动失败()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => Resolve([typeof(ClassLevelNotOnInterfaceService)]));
+
+        Assert.Contains(nameof(ClassLevelNotOnInterfaceService.InternalAsync), ex.Message);
+        Assert.Contains("不是任何业务接口的成员", ex.Message);
     }
 
     [Fact]
