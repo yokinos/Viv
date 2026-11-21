@@ -39,8 +39,10 @@ namespace Viv.Elysia.Attributes
     /// 用户→角色→掩码 + Redis 缓存）。宿主没注册实现时一律拒绝 —— 启动期
     /// <c>VivGateStartupFilter</c> 会先把这种配置错误挡下来。</para>
     ///
-    /// <para><b>不隐式放过超级管理员</b>：这是刻意的。要放行就给超管角色配上对应权限，
-    /// 而不是在代码里开一个没人看得见的后门。</para>
+    /// <para><b>框架层不隐式放过超级管理员</b>：这是刻意的。Elysia 不认识「超管」这种业务分类，
+    /// 在框架里开一个没人看得见的后门，等于让所有宿主都静默继承一条自己没写过的规则。
+    /// 要放行由 <see cref="IUserPermissionChecker"/> 的实现自己决定 —— Apex 就是
+    /// 「<c>IsSuperAdmin</c> 且账号可用时整体放行」，那条规则写在业务代码里、可被读到也被测试覆盖。</para>
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
     public sealed class VivRequirePermissionAttribute : Attribute, IAsyncAuthorizationFilter
@@ -99,9 +101,7 @@ namespace Viv.Elysia.Attributes
             // 任一编码通过即放行；全都不通过才拒绝
             foreach (var permission in Permissions)
             {
-                if (await checker
-                        .HasPermissionAsync(userId.Value, permission, context.HttpContext.RequestAborted)
-                        .ConfigureAwait(false))
+                if (await checker.HasPermissionAsync(userId.Value, permission, context.HttpContext.RequestAborted).ConfigureAwait(false))
                 {
                     return;
                 }
