@@ -49,22 +49,6 @@ namespace Viv.Engine
 
         #region ID 生成器
 
-        /// <summary>
-        /// 全局 ID 生成器。没有配置开关 —— 任何宿主都要生成 ID。
-        ///
-        /// <para>
-        /// <b>机器号取自 <c>EnvOption.MachineId</c>，这是本方法的全部意义。</b>
-        /// 在这之前 <see cref="IdMagic"/> 的默认机器号写死为 1，各宿主 appsettings 里配的
-        /// MachineId（2~11）只被欢迎页拿去显示 —— 所有宿主生成的 ID 机器段全是 1，
-        /// 任意两个进程在同一毫秒各发一粒 ID 就会得到完全相同的 long。
-        /// </para>
-        ///
-        /// <para>
-        /// 同时绑定 <see cref="IdMagic.Default"/>：<c>VivCallContext</c>（AsyncLocal 静态上下文）
-        /// 和消息信封的属性初始化器拿不到容器，只能走静态门面，两处必须指向同一个生成器实例 ——
-        /// 各自 new 一个会各跑各的序列，等于把机器号相同的问题在进程内重演一遍。
-        /// </para>
-        /// </summary>
         internal static void RegisterIdGenerator(IServiceCollection services, VivOptions options)
         {
             var machineId = options.EnvOption?.MachineId ?? 0;
