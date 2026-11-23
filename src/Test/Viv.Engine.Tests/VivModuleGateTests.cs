@@ -18,6 +18,7 @@ namespace Viv.Engine.Tests;
 /// 断言用的是 <see cref="IServiceProviderIsService"/>（只看注册表、不实例化），
 /// 所以这组测试零数据库、零 Redis、零外部依赖。
 /// </summary>
+[Collection("VivEngineStaticState")]
 public class VivModuleGateTests
 {
     private static ServiceProvider Build(Action<VivOptions>? configure = null)

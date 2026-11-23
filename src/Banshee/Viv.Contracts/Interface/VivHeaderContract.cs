@@ -37,5 +37,12 @@ namespace Viv.Contracts.Interface
         /// 内部请求签名 Token（HMAC）
         /// </summary>
         public const string InnerRequestToken = "x-request-token";
+
+        /// <summary>
+        /// 链路追踪 Id。<b>不参与 <see cref="InnerRequestToken"/> 的签名</b>：
+        /// 由网关（信任根）生成、下游逐跳复用，只用于日志串联，
+        /// 不带权限语义 —— 不进 VivContextContent、不影响鉴权与数据过滤。
+        /// </summary>
+        public const string TraceId = "X-Trace-Id";
     }
 }

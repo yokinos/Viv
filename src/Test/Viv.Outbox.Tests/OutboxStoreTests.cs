@@ -141,7 +141,7 @@ public class OutboxStoreTests
     {
         var (store, repo, context, _) = Build();
         context.Snapshot = new VivContextContent { SubjectId = 1, HolderId = "upstream-holder" };
-        LockHolderContext.SetHolderId("local-holder");
+        VivCallContext.SetHolderId("local-holder");
         try
         {
             await store.EnqueueAsync(new OutboxTestEvent());
@@ -152,7 +152,7 @@ public class OutboxStoreTests
         }
         finally
         {
-            LockHolderContext.Clear();
+            VivCallContext.Clear();
         }
     }
 
@@ -160,7 +160,7 @@ public class OutboxStoreTests
     public async Task 入队_无上下文时_兜底成空上下文并盖当前holder()
     {
         var (store, repo, _, _) = Build();
-        LockHolderContext.SetHolderId("local-holder");
+        VivCallContext.SetHolderId("local-holder");
         try
         {
             await store.EnqueueAsync(new OutboxTestEvent());
@@ -172,7 +172,7 @@ public class OutboxStoreTests
         }
         finally
         {
-            LockHolderContext.Clear();
+            VivCallContext.Clear();
         }
     }
 

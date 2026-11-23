@@ -226,7 +226,7 @@ namespace Viv.Engine
                     context.Request.Headers[VivRunDefine.AppIdHeader] = context.User.FindFirstValue(VivClaimTypes.AppId) ?? "";
                     context.Request.Headers[VivRunDefine.SubjectIdHeader] = context.User.FindFirstValue(VivClaimTypes.SubjectId) ?? "";
                     context.Request.Headers[VivRunDefine.ServiceNameHeader] = VivEngine.VivOptions?.EnvOption?.ServiceName ?? "";
-                    context.Request.Headers[VivRunDefine.HolderIdHeader] = LockHolderContext.CurrentHolderId;
+                    context.Request.Headers[VivRunDefine.HolderIdHeader] = VivCallContext.HolderId;
                     context.Request.Headers[VivRunDefine.InnerRequestTokenHeader] = Power.RequestTokenResolver.SignContextHeaders(context.Request.Headers);
                 }
 

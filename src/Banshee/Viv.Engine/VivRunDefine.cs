@@ -26,7 +26,7 @@ namespace Viv.Engine
         /// </summary>
         public const string ApiResultItemKey = "Viv.Engine.ApiResult";
 
-        public const string VivTraceIdHeader = "X-Trace-Id";
+        public const string VivTraceIdHeader = VivHeaderContract.TraceId;
         public const string ContextTraceId = "TraceId";
 
         /// <summary>

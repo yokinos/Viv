@@ -487,7 +487,7 @@ namespace Viv.Redis
         public bool AcquireLock(string lockKey, TimeSpan expire, string lockHolderId = null, bool isReentrant = false)
         {
             if (lockHolderId.IsNullOrEmpty())
-                lockHolderId = LockHolderContext.CurrentHolderId;
+                lockHolderId = VivCallContext.HolderId;
 
             if (string.IsNullOrWhiteSpace(lockHolderId) || expire <= TimeSpan.Zero)
                 return false;
@@ -512,7 +512,7 @@ namespace Viv.Redis
         public async Task<bool> AcquireLockAsync(string lockKey, TimeSpan expire, string lockHolderId = null, bool isReentrant = false)
         {
             if (lockHolderId.IsNullOrEmpty())
-                lockHolderId = LockHolderContext.CurrentHolderId;
+                lockHolderId = VivCallContext.HolderId;
 
             if (string.IsNullOrWhiteSpace(lockHolderId) || expire <= TimeSpan.Zero)
                 return false;
@@ -567,7 +567,7 @@ namespace Viv.Redis
         public bool ReleaseLock(string lockKey, string lockHolderId = null, bool isReentrant = false)
         {
             if (lockHolderId.IsNullOrEmpty())
-                lockHolderId = LockHolderContext.CurrentHolderId;
+                lockHolderId = VivCallContext.HolderId;
 
             if (string.IsNullOrWhiteSpace(lockHolderId))
                 return false;
@@ -607,7 +607,7 @@ namespace Viv.Redis
         public async Task<bool> ReleaseLockAsync(string lockKey, string lockHolderId = null, bool isReentrant = false)
         {
             if (lockHolderId.IsNullOrEmpty())
-                lockHolderId = LockHolderContext.CurrentHolderId;
+                lockHolderId = VivCallContext.HolderId;
 
             if (string.IsNullOrWhiteSpace(lockHolderId))
                 return false;

@@ -5,7 +5,7 @@ namespace Viv.Delusion.Tests;
 
 /// <summary>
 /// 雪花 ID —— 单机严格递增且唯一；机器段可从 ID 还原。
-/// IdMagic 静态字典按 MachineId 缓存生成器实例。测试只用本类，避免跨类并行干扰静态字典。
+/// IdMagic 走的是装配式默认实例（未装配时按兜底机器号懒创建），本类只验证主路径。
 /// </summary>
 public class SnowflakeIdTests
 {
@@ -58,22 +58,5 @@ public class SnowflakeIdTests
         {
             Assert.True(seen.Add(IdMagic.NextId()), $"第 {i} 个 ID 应唯一");
         }
-    }
-
-    [Fact]
-    public void IdMagic相同MachineId复用生成器()
-    {
-        var a = IdMagic.NextId(5);
-        var b = IdMagic.NextId(5);
-        Assert.True(b > a); // 同一生成器实例 → 递增
-    }
-
-    [Fact]
-    public void RemoveGenerator后可重建()
-    {
-        const long machineId = 123;
-        _ = IdMagic.NextId(machineId);
-        Assert.True(IdMagic.RemoveGenerator(machineId));
-        _ = IdMagic.NextId(machineId); // 移除后仍可用（重新创建生成器）
     }
 }

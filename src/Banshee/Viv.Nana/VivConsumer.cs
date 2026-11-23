@@ -16,7 +16,7 @@ namespace Viv.Nana
     /// 上下文：基类 HandleAsync 自动 SetSnapshot / Clear，消息处理完强制清理。
     /// 子类可以手动 SetSnapshot/Clear，但仅限当前消息的 async 执行流内。
     /// 禁止把 _context 捕获进 Task.Run 或后台即忘任务 —— ExecutionContext 会流动，造成多消息上下文串扰。
-    /// LockHolderContext 由基类 finally 统一清理，子类不要手动操作。
+    /// VivCallContext 由基类 finally 统一清理，子类不要手动操作。
     ///
     /// 消费锁：HandleAsync 在执行业务 ReceiveMessageAsync 之前抢占 Redis 分布式锁，锁Key
     /// <c>nana:{ServiceName}:{EventType}:{MessageId}</c>。ServiceName 是队列后缀，取自入口程序集；
@@ -141,9 +141,9 @@ namespace Viv.Nana
                         holderId = envelope.Context.HolderId;
                 }
 
-                LockHolderContext.SetHolderId(holderId);
+                VivCallContext.SetHolderId(holderId);
 
-                // 取 Key 排在上下文水合之后：重写方要用 _context / LockHolderContext 拼业务 Key，得先看得到本条消息
+                // 取 Key 排在上下文水合之后：重写方要用 _context / VivCallContext 拼业务 Key，得先看得到本条消息
                 lockKey = GetConsumeLockKey(envelope);
                 if (_distributedLock != null && lockKey != null)
                 {
@@ -228,7 +228,9 @@ namespace Viv.Nana
                     _localEventBus.Discard();
 
                 _context?.Clear();
-                LockHolderContext.Clear();
+                // 只清 holderId：这条消息可能是在某个 HTTP 请求的异步流里被消费的，
+                // traceId 属于那一层，由 RequestTrackMiddleware 的 finally 统一清
+                VivCallContext.ClearHolderId();
             }
         }
 
@@ -270,7 +272,7 @@ namespace Viv.Nana
         /// 默认是消息级去重锁 <c>nana:{ServiceName}:{EventType}:{MessageId}</c>；
         /// 重写它可以把锁换成业务粒度 —— 比如按订单号锁，让同一订单的不同消息互斥。
         ///
-        /// 在上下文水合之后调用，重写方能读到本条消息的 <c>_context</c> 与 <c>LockHolderContext</c>。
+        /// 在上下文水合之后调用，重写方能读到本条消息的 <c>_context</c> 与 <c>VivCallContext</c>。
         /// 别返回空字符串：那是一个合法的 Key，而 Redis 不接受空 Key，会抛异常把消息送进死信。
         /// </summary>
         protected virtual object? GetConsumeLockKey(NanaEnvelope<T> envelope)

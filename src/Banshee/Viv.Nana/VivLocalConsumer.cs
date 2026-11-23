@@ -91,7 +91,7 @@ namespace Viv.Nana
                         holderId = envelope.Context.HolderId;
                 }
 
-                LockHolderContext.SetHolderId(holderId);
+                VivCallContext.SetHolderId(holderId);
 
                 var result = await ConsumerUnitOfWork.ExecuteAsync(
                     _unitOfWork,
@@ -126,9 +126,10 @@ namespace Viv.Nana
                 else
                     _localEventBus.Discard();
 
-                // 正常返回 / 抛出异常 / 重投三条路径统一清理，避免消息上下文残留在后台线程上串到下一条消息
+                // 正常返回 / 抛出异常 / 重投三条路径统一清理，避免消息上下文残留在后台线程上串到下一条消息。
+                // 只清 holderId：本地事件跑在同一请求的异步流里，traceId 得留着，否则后续日志丢链路
                 _context?.Clear();
-                LockHolderContext.Clear();
+                VivCallContext.ClearHolderId();
             }
         }
     }

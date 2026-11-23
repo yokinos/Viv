@@ -13,7 +13,7 @@ namespace Viv.Keke.MagicOnion.Filters
     /// MagicOnion 服务端身份头过滤器 —— gRPC <c>VivGrpcServerInterceptor</c> 的等价物。
     ///
     /// <para>验签与还原逻辑一行都不重写：调用 <see cref="VivIdentityValidator"/>（传输无关），
-    /// 这里只做两件事 —— 把结果写进 <see cref="IVivContext"/> / <see cref="LockHolderContext"/>，
+    /// 这里只做两件事 —— 把结果写进 <see cref="IVivContext"/> / <see cref="VivCallContext"/>，
     /// 以及把 <see cref="VivIdentityException"/> 映射成 gRPC 的 Unauthenticated。</para>
     ///
     /// <para>必须通过 <c>MagicOnionOptions.GlobalFilters</c> 全局挂载：漏挂不会报错，
@@ -47,7 +47,7 @@ namespace Viv.Keke.MagicOnion.Filters
             {
                 if (result.HolderId is { } holderId)
                 {
-                    LockHolderContext.SetHolderId(holderId);
+                    VivCallContext.SetHolderId(holderId);
                 }
 
                 // 从本次请求的作用域拿 IVivContext：过滤器实例的生命周期不该被用来捕获 Scoped 服务。

@@ -422,14 +422,14 @@ public class OutboxWorkerTests
             new Viv.Contracts.Models.VivContextContent { HolderId = "holder-at-publish" });
         repo.ClaimScript.Enqueue(new List<OutboxMessage> { row });
 
-        LockHolderContext.SetHolderId("holder-now");
+        VivCallContext.SetHolderId("holder-now");
         try
         {
             await Build(repo, publisher, new RecordingLogger()).RunOnceAsync();
         }
         finally
         {
-            LockHolderContext.Clear();
+            VivCallContext.Clear();
         }
 
         var envelope = publisher.Last<OutboxTestEvent>();

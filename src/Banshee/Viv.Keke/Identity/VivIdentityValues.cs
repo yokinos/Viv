@@ -15,6 +15,7 @@ namespace Viv.Keke.Identity
         string UserId,
         string ServiceName,
         string HolderId,
+        string? TraceId = null,
         string? RequestToken = null)
     {
         /// <summary>
@@ -27,6 +28,13 @@ namespace Viv.Keke.Identity
             yield return Pair(VivHeaderContract.UserId, UserId);
             yield return Pair(VivHeaderContract.ServiceName, ServiceName);
             yield return Pair(VivHeaderContract.HolderId, HolderId);
+
+            // traceId 不参与签名，也不进 VivContextContent：下游 RequestTrackMiddleware 读到复用即可，
+            // 空值时整条不带（后台任务调 gRPC 时没有 traceId，别塞一个空串让下游误判）
+            if (!string.IsNullOrWhiteSpace(TraceId))
+            {
+                yield return Pair(VivHeaderContract.TraceId, TraceId);
+            }
 
             if (!string.IsNullOrWhiteSpace(RequestToken))
             {

@@ -14,7 +14,7 @@ namespace Viv.Keke.Grpc
     ///
     /// VivContextMiddleware 只对 /api 前缀水合上下文，gRPC 路径必须由此拦截器从 x-viv-* 头恢复。
     /// 验签与还原逻辑在 <see cref="VivIdentityValidator"/>（传输无关，MagicOnion 的 Filter 用同一份），
-    /// 这里只负责把结果写进 DI 里的 <see cref="IVivContext"/> 与 <see cref="LockHolderContext"/>，
+    /// 这里只负责把结果写进 DI 里的 <see cref="IVivContext"/> 与 <see cref="VivCallContext"/>，
     /// 并把 <see cref="VivIdentityException"/> 映射成 gRPC 的 Unauthenticated。
     ///
     /// 未配置 InternalToken 时不信任裸头（不灌上下文，也不拒绝，方便本地没配密钥的服务）。
@@ -99,7 +99,7 @@ namespace Viv.Keke.Grpc
 
             if (result.HolderId is { } holderId)
             {
-                LockHolderContext.SetHolderId(holderId);
+                VivCallContext.SetHolderId(holderId);
             }
 
             context.GetHttpContext()

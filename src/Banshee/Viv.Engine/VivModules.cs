@@ -50,6 +50,7 @@ namespace Viv.Engine
         public static readonly IReadOnlyList<VivModule> All =
         [
             new("Log", typeof(LogOptions), "LogOption",o => o.LogOption, o => o.LogOption is { IsEnabled: true },VivRegister.RegisterLogger),
+            new("IdGenerator", null, null, _ => null, _ => true,VivRegister.RegisterIdGenerator),
             new("Keke", typeof(KekeOptions), "KekeOption",o => o.KekeOption, o => o.KekeOption is { IsEnabled: true },VivRegister.RegisterKeke),
             new("Cache", typeof(VivCacheOptions), "CacheOption",o => o.CacheOption, o => o.CacheOption is { IsEnabled: true },VivRegister.RegisterCache),
             new("Nana", typeof(NanaOptions), "NanaOption",o => o.NanaOption, o => o.NanaOption is { IsEnabled: true },VivRegister.RegisterNana),

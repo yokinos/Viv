@@ -36,7 +36,8 @@ namespace Viv.Keke.Identity
                 (snapshot?.SubjectId ?? 0).ToString(CultureInfo.InvariantCulture),
                 (snapshot?.UserId ?? 0).ToString(CultureInfo.InvariantCulture),
                 tokenOptions.ServiceName ?? string.Empty,
-                LockHolderContext.CurrentHolderId);
+                VivCallContext.HolderId,
+                VivCallContext.TraceId);
 
             var secret = tokenOptions.InternalToken;
             if (string.IsNullOrWhiteSpace(secret))

@@ -113,7 +113,7 @@ namespace Viv.Nana.Tests
         {
             var (pub, proxy) = CapturingPublisher();
 
-            LockHolderContext.SetHolderId("holder-of-this-process");
+            VivCallContext.SetHolderId("holder-of-this-process");
             var envelope = new NanaEnvelope<TestApexEvent>
             {
                 Content = new TestApexEvent { Payload = "x" },
@@ -127,14 +127,14 @@ namespace Viv.Nana.Tests
             Assert.Equal(originalMessageId, sent.MessageId);          // 消费端去重键，不能变
             Assert.Equal("holder-frozen-in-db", sent.Context!.HolderId);
             Assert.Equal(42, sent.Context!.SubjectId);
-            LockHolderContext.Clear();
+            VivCallContext.Clear();
         }
 
         [Fact]
         public async Task 原样重发_信封没holderId也不补当前holder_而内容发布会补()
         {
             var (pub, proxy) = CapturingPublisher();
-            LockHolderContext.SetHolderId("holder-of-this-process");
+            VivCallContext.SetHolderId("holder-of-this-process");
 
             // 内容版：当场盖章 —— 两个信封都从库里反序列化，Context 里没有 holder
             await pub.PublishAsync(new TestApexEvent { Payload = "content" });
@@ -150,7 +150,7 @@ namespace Viv.Nana.Tests
             var fromEnvelope = Assert.IsType<NanaEnvelope<TestApexEvent>>(proxy.LastArg);
             Assert.Null(fromEnvelope.Context!.HolderId);
 
-            LockHolderContext.Clear();
+            VivCallContext.Clear();
         }
 
         [Fact]

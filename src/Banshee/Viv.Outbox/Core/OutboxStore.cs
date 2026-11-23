@@ -161,7 +161,7 @@ namespace Viv.Outbox.Core
             snapshot ??= new VivContextContent();
             if (string.IsNullOrWhiteSpace(snapshot.HolderId))
             {
-                snapshot.HolderId = LockHolderContext.CurrentHolderId;
+                snapshot.HolderId = VivCallContext.HolderId;
             }
 
             return snapshot;

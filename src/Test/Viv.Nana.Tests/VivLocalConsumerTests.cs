@@ -17,7 +17,7 @@ namespace Viv.Nana.Tests
     /// 成功消费，并记录「进入业务那一刻」看到的东西 —— holder 与租户快照。
     ///
     /// 必须记在 handler 里、不能事后读上下文，两个原因：
-    /// ① holder：<c>LockHolderContext</c> 的写入只在该异步流内生效，从外面读拿不到 handler 里的值；
+    /// ① holder：<c>VivCallContext</c> 的写入只在该异步流内生效，从外面读拿不到 handler 里的值；
     /// ② 快照：<c>HandleAsync</c> 的 finally 会清上下文，方法返回后快照已经没了 ——
     ///    事后断言只会读到 null，「到底水合没水合」就成了一笔糊涂账。
     /// 两者都只有站在 handler 内部才看得见，而那正是要测的东西。
@@ -29,7 +29,7 @@ namespace Viv.Nana.Tests
         public RecordingLocalConsumer(VivLocalConsumerDependency dependency, TestContext context) : base(dependency)
             => _testContext = context;
 
-        /// <summary>进入业务时 <c>LockHolderContext</c> 里的 holder</summary>
+        /// <summary>进入业务时 <c>VivCallContext</c> 里的 holder</summary>
         public string? HolderIdInsideHandler { get; private set; }
 
         /// <summary>进入业务时上下文里的租户快照（信封水合的成果）</summary>
@@ -37,7 +37,7 @@ namespace Viv.Nana.Tests
 
         public override Task<SubscribeResult> ReceiveMessageAsync(NanaLocalEnvelope<LocalTestEvent> envelope, CancellationToken cancellationToken = default)
         {
-            HolderIdInsideHandler = LockHolderContext.CurrentHolderId;
+            HolderIdInsideHandler = VivCallContext.HolderId;
             SnapshotInsideHandler = _testContext.GetRawSnapshot();
             return Task.FromResult(SubscribeResult.Success());
         }
@@ -154,10 +154,10 @@ namespace Viv.Nana.Tests
             Assert.Equal("7", consumer.HolderIdInsideHandler);
         }
 
-        // 关于 finally 里的 LockHolderContext.Clear()：从测试外部观察不到，故不作断言。
+        // 关于 finally 里的 VivCallContext.Clear()：从测试外部观察不到，故不作断言。
         // 两个原因叠加 ——
         // ① AsyncLocal 的写入只在子异步流内生效，HandleAsync 里 Set/Clear 不会回流到调用方；
-        // ② LockHolderContext.CurrentHolderId 的 getter 在值为空时会懒生成一个新 id 并写回，
+        // ② VivCallContext.HolderId 的 getter 在值为空时会懒生成一个新 id 并写回，
         //    所以在测试里读它既拿不到 handler 里的值，也拿不到「已被清空」这个状态（只会凭空生成一个）。
         // 能验证的是另一半：finally 确实跑了（ClearCalls）+ handler 内部看到 holder 已被设置（HolderIdInsideHandler）。
         [Fact]

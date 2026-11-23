@@ -164,7 +164,7 @@ namespace Viv.Nana.Core
             snap ??= new VivContextContent();
             if (string.IsNullOrWhiteSpace(snap.HolderId))
             {
-                snap.HolderId = LockHolderContext.CurrentHolderId;
+                snap.HolderId = VivCallContext.HolderId;
             }
 
             return snap;

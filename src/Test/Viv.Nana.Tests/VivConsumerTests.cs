@@ -88,7 +88,7 @@ namespace Viv.Nana.Tests
         protected override object? GetConsumeLockKey(NanaEnvelope<TestApexEvent> envelope)
         {
             SeenTenantId = _context.SubjectId;
-            SeenHolderId = LockHolderContext.CurrentHolderId;
+            SeenHolderId = VivCallContext.HolderId;
             // 走到这里 Content 必不为 null：HandleAsync 开头就挡掉了空信封
             return $"biz:apex:{envelope.Content!.Payload}";
         }

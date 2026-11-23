@@ -17,6 +17,7 @@ namespace Viv.Engine.Tests;
 /// Viv.Ouroboros.Api 就是 —— 它写发件箱，但配 MqttOption 之外的 MQ 宿主纯属多余。
 /// 早先那条校验会把这类宿主直接拦在启动外。
 /// </summary>
+[Collection("VivEngineStaticState")]
 public class OutboxRegistrationTests
 {
     /// <summary>带库 + 有 InternalToken，越过 InternalTrustGuard 这道与发件箱无关的前置校验。</summary>

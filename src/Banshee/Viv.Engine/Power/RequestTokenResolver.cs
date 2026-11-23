@@ -154,7 +154,7 @@ namespace Viv.Engine.Power
             var subjectIdText = user.FindFirstValue(VivClaimTypes.SubjectId);
             long.TryParse(subjectIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var subjectId);
 
-            var holderId = LockHolderContext.CurrentHolderId;
+            var holderId = VivCallContext.HolderId;
             return Task.FromResult<VivContextContent?>(new VivContextContent
             {
                 AppId = appId,

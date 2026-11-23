@@ -79,6 +79,13 @@ namespace Viv.Keke.Grpc
             AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.ServiceName), values.ServiceName);
             AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.HolderId), values.HolderId);
 
+            // 下游 RequestTrackMiddleware 靠这条把两个服务的日志串成一条链；
+            // 不带的话下游读不到头就另造一个，同一业务动作在日志里分裂成两条
+            if (!string.IsNullOrWhiteSpace(values.TraceId))
+            {
+                AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.TraceId), values.TraceId);
+            }
+
             if (!string.IsNullOrWhiteSpace(values.RequestToken))
             {
                 AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.InnerRequestToken), values.RequestToken);

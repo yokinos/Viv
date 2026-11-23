@@ -79,14 +79,14 @@ namespace Viv.Nana.Core
 
         /// <summary>
         /// 快照 + 盖章 holderId。与 <see cref="NanaEventPublisher"/> 里的同名逻辑一致：
-        /// 快照自带 HolderId 就不覆盖（重投场景要保留原始 holder），否则取当前进程的 LockHolderContext。
+        /// 快照自带 HolderId 就不覆盖（重投场景要保留原始 holder），否则取当前进程的 VivCallContext。
         /// </summary>
         private static VivContextContent SnapshotWithHolder(VivContextContent? snap)
         {
             snap ??= new VivContextContent();
             if (string.IsNullOrWhiteSpace(snap.HolderId))
             {
-                snap.HolderId = LockHolderContext.CurrentHolderId;
+                snap.HolderId = VivCallContext.HolderId;
             }
 
             return snap;
