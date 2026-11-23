@@ -23,7 +23,7 @@ namespace Viv.Delusion.Extension
         /// <example>
         /// 示例：new List<int>{1,2,3}.Join("|") → "1|2|3"
         /// </example>
-        public static string Join<T>([NotNull] this ICollection<T> self, string key = ",")
+        public static string Join<T>([NotNull] this IEnumerable<T> self, string key = ",")
         {
             return string.Join(key, self);
         }
@@ -225,47 +225,6 @@ namespace Viv.Delusion.Extension
                     yield return resultSelector(leftItem, rightItem);
                 }
             }
-        }
-
-        /// <summary>
-        /// [扩展方法] 使用摩尔投票算法 (Boyer-Moore Voting Algorithm) 查找列表中的绝对多数元素
-        /// </summary>
-        /// <typeparam name="T">列表元素的类型</typeparam>
-        /// <param name="list">待查找的列表集合（为 null 或空时返回 default(T)）</param>
-        /// <returns>
-        /// 如果存在绝对多数元素（出现次数严格大于 n/2），则返回该元素；
-        /// 若不存在绝对多数元素，返回值不可靠（仅为抵消后剩余的候选值）；
-        /// 若列表为空或为 null，返回 default(T)。
-        /// </returns>
-        /// <remarks>
-        /// 1. 【核心前提】本方法仅适用于寻找“绝对多数”元素，即该元素的出现次数必须大于列表总长度的一半 (n/2)。
-        ///    若业务需求是寻找普通众数（频率最高的元素，不要求过半），请勿使用此方法。
-        /// 2. 【极致性能】相比传统的 Dictionary 统计频次法，本算法仅需遍历一次数组，时间复杂度为 O(n)，且只使用常数级变量，空间复杂度为 O(1)。
-        /// 3. 【底层原理】利用“极限一换一”的抵消思想，将多数元素视为友军，其他元素视为敌人进行相互抵消。由于多数元素数量过半，最终存活的候选人必定是多数元素。
-        /// </remarks>
-        [return: MaybeNull]
-        public static T? GetMajorityElement<T>(this List<T> list)
-        {
-            if (list == null || list.Count == 0)
-                return default;
-
-            T? candidate = default;
-            int count = 0;
-
-            foreach (var item in list)
-            {
-                // 计数器归零，更换候选人
-                if (count == 0)
-                    candidate = item;
-
-                // 相同+1，不同-1
-                if (Equals(item, candidate))
-                    count++;
-                else
-                    count--;
-            }
-
-            return candidate;
         }
     }
 }

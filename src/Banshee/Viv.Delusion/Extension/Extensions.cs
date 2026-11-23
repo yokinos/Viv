@@ -151,6 +151,12 @@ namespace Viv.Delusion.Extension
             _ => string.Empty
         };
 
+        private static readonly JsonSerializerSettings _deepCopyJsonSettings = new()
+        {
+            ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+            TypeNameHandling = TypeNameHandling.Auto
+        };
+
         /// <summary>
         /// [扩展方法] 深度拷贝对象
         /// </summary>
@@ -161,15 +167,7 @@ namespace Viv.Delusion.Extension
         public static T? DeepCopy<T>(this T source)
         {
             if (source == null) return default;
-
-            var settings = new JsonSerializerSettings
-            {
-                ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
-                TypeNameHandling = TypeNameHandling.Auto
-            };
-
-            var json = JsonConvert.SerializeObject(source, settings);
-            return JsonConvert.DeserializeObject<T>(json, settings);
+            return JsonConvert.DeserializeObject<T>(JsonConvert.SerializeObject(source, _deepCopyJsonSettings), _deepCopyJsonSettings);
 
             #region  示例
 
