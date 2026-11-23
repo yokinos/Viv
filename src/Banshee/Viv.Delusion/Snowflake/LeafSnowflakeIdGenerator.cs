@@ -55,7 +55,6 @@ namespace Viv.Delusion.Snowflake
                     // 1. 若回拨时间在容忍范围内，等待时钟追平
                     if (backwardMs <= _options.MaxClockBackwardMs)
                     {
-                        Console.WriteLine($"检测到时钟回拨{backwardMs}ms，等待时钟追平...");
                         currentTimestamp = WaitUntilTimestamp(_lastTimestamp);
                     }
                     // 2. 超过容忍时间，直接抛异常（避免ID重复）
