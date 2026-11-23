@@ -30,18 +30,9 @@ namespace Viv.Keke.MagicOnion.Filters
 
         public override async ValueTask Invoke(ServiceContext context, Func<ServiceContext, ValueTask> next)
         {
-            VivIdentityResult result;
-            try
-            {
-                result = VivIdentityValidator.Validate(
-                    name => context.CallContext.RequestHeaders.Get(name)?.Value,
-                    _tokenOptions);
-            }
-            catch (VivIdentityException ex)
-            {
-                // 失败一律 Unauthenticated，不区分缺签名 / 坏签名 / 过期（与 gRPC 侧同口径）。
-                throw new RpcException(new Status(StatusCode.Unauthenticated, ex.Message));
-            }
+            var result = ValidateOrThrow(
+                name => context.CallContext.RequestHeaders.Get(name)?.Value,
+                _tokenOptions);
 
             if (result.Context is { } content)
             {
@@ -55,6 +46,28 @@ namespace Viv.Keke.MagicOnion.Filters
             }
 
             await next(context).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 验签并把 <see cref="VivIdentityException"/> 映射成 gRPC 的 Unauthenticated。
+        ///
+        /// <para>
+        /// 不区分缺签名 / 坏签名 / 过期 —— 与 <c>VivGrpcServerInterceptor</c> 同口径，
+        /// 免得攻击者靠错误信息区分「猜对了密钥前缀」和「完全没签」。
+        /// </para>
+        /// </summary>
+        /// <exception cref="RpcException">验签失败，<see cref="StatusCode.Unauthenticated"/></exception>
+        internal static VivIdentityResult ValidateOrThrow(Func<string, string?> readHeader, VivInternalTokenOptions tokenOptions)
+        {
+            try
+            {
+                return VivIdentityValidator.Validate(readHeader, tokenOptions);
+            }
+            catch (VivIdentityException ex)
+            {
+                // 失败一律 Unauthenticated，不区分缺签名 / 坏签名 / 过期（与 gRPC 侧同口径）。
+                throw new RpcException(new Status(StatusCode.Unauthenticated, ex.Message));
+            }
         }
     }
 }

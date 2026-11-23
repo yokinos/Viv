@@ -36,11 +36,33 @@ namespace Viv.Keke.MagicOnion.Filters
         {
             var values = VivIdentityHeaders.Build(_accessor.Current, _tokenOptions);
 
-            var headers = context.CallOptions.Headers;
+            WriteHeaders(context.CallOptions.Headers, values);
+
+            return await next(context).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 把身份头写进 metadata，<b>覆盖</b>而非追加。
+        ///
+        /// <para>
+        /// 覆盖是这里与 gRPC 拦截器的唯一语义差别：MagicOnion 的 <c>CallOptions</c> 挂在客户端实例上、
+        /// 会被复用，签名又带时间戳 —— 追加式写入会让一次请求带上多个 x-request-token，
+        /// 服务端取最前面那个、验签却按最后写入的算。
+        /// </para>
+        /// </summary>
+        /// <param name="headers">目标 metadata。<c>CallOptions.Headers</c> 未初始化时为 null</param>
+        /// <param name="values">身份头值快照</param>
+        /// <exception cref="InvalidOperationException">
+        /// <paramref name="headers"/> 为 null。静默跳过会变成「服务端按未认证拒绝」，
+        /// 把配置问题伪装成鉴权失败，所以这里直接抛。
+        /// </exception>
+        internal static void WriteHeaders(Metadata? headers, VivIdentityValues values)
+        {
+            ArgumentNullException.ThrowIfNull(values);
+
             if (headers is null)
             {
-                // RequestContext.CallOptions 是只读属性，拿不到就写不回去；
-                // 静默跳过会变成“服务端按未认证拒绝”，这里直接抛，避免把配置问题伪装成鉴权失败。
+                // RequestContext.CallOptions 是只读属性，拿不到就写不回去
                 throw new InvalidOperationException("MagicOnion RequestContext.CallOptions.Headers 未初始化，无法注入 x-viv-* 身份头。");
             }
 
@@ -57,8 +79,6 @@ namespace Viv.Keke.MagicOnion.Filters
 
                 headers.Add(pair.Key, pair.Value);
             }
-
-            return await next(context).ConfigureAwait(false);
         }
     }
 }

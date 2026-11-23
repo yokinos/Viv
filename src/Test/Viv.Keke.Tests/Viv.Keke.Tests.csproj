@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 测的是 Identity 层（头构造 / 头值 / 验签还原），这一层是传输无关的纯逻辑：
+         gRPC 拦截器与 MagicOnion Filter 都只是把它的产物写进各自 metadata。
+         拦截器本身需要构造 ClientInterceptorContext / ServerCallContext，样板远多于逻辑，
+         暂不覆盖 —— 真正的安全边界在 VivIdentityValidator。 -->
+    <ProjectReference Include="..\..\Banshee\Viv.Keke\Viv.Keke.csproj" />
+    <ProjectReference Include="..\..\Banshee\Viv.Contracts\Viv.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

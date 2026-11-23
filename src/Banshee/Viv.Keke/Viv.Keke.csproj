@@ -10,6 +10,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 三个拦截器/过滤器的入参是 MagicOnion 的 abstract RequestContext 与 Grpc 的 ServiceContext，
+         外部构造不出来。把「写 metadata」「验签并映射异常」抽成 internal 纯函数，测试直接调。 -->
+    <InternalsVisibleTo Include="Viv.Keke.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="Grpc.Net.Client" />
     <PackageReference Include="Grpc.Net.ClientFactory" />

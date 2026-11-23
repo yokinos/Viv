@@ -71,7 +71,21 @@ namespace Viv.Keke.Grpc
 
         private void AddVivHeaders(Metadata headers)
         {
-            var values = VivIdentityHeaders.Build(_vivContext, _tokenOptions);
+            AddVivHeaders(headers, VivIdentityHeaders.Build(_vivContext, _tokenOptions));
+        }
+
+        /// <summary>
+        /// 把身份头写进 gRPC metadata，<b>缺了才加</b>（已存在的不覆盖）。
+        ///
+        /// <para>
+        /// 与 MagicOnion 客户端 Filter 的「覆盖」语义相反，是有意的：gRPC 的 <see cref="Metadata"/>
+        /// 由调用方每次构造，已有值说明调用方自己显式设过，应当尊重。
+        /// </para>
+        /// </summary>
+        internal static void AddVivHeaders(Metadata headers, VivIdentityValues values)
+        {
+            ArgumentNullException.ThrowIfNull(headers);
+            ArgumentNullException.ThrowIfNull(values);
 
             AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.AppId), values.AppId);
             AddIfNotExist(headers, VivIdentityHeaders.Key(VivHeaderContract.SubjectId), values.SubjectId);
