@@ -1,10 +1,12 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.Net;
 using Viv.Apex.Core.Entity.Dto.Account;
 using Viv.Apex.Core.Entity.Vo.Account;
 using Viv.Apex.Core.IService;
+using Viv.Elysia.Attributes;
+using Viv.Elysia.Logging;
+using Viv.Entity.Enums;
 
 namespace Viv.Apex.Api.Controllers
 {
@@ -16,10 +18,12 @@ namespace Viv.Apex.Api.Controllers
     public class AccountController : ControllerBase
     {
         private readonly IAccountService _accountService;
+        private readonly IOperationLogScope _operationLog;
 
-        public AccountController(IAccountService accountService)
+        public AccountController(IAccountService accountService, IOperationLogScope operationLog)
         {
             _accountService = accountService;
+            _operationLog = operationLog;
         }
 
         /// <summary>
@@ -28,11 +32,20 @@ namespace Viv.Apex.Api.Controllers
         /// <param name="request"></param>
         /// <returns></returns>
         [AllowAnonymous]
+        [OperationLog(EmOperationType.Login, Name = "登录")]
         [ProducesResponseType(typeof(LoginOutput), StatusCodes.Status200OK)]
         [HttpPost("login")]
         public async Task<IActionResult> LoginAsync(LoginRequest request)
         {
-            return await _accountService.LoginAsync(request);
+            var result = await _accountService.LoginAsync(request);
+
+            // 登录请求本身没有登录态，UserId 取不到；但要审计的对象是这个账号，从结果里补
+            if (result.Data?.UserId is > 0)
+            {
+                _operationLog.Target("User", result.Data.UserId);
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -54,6 +67,7 @@ namespace Viv.Apex.Api.Controllers
         /// <param name="request"></param>
         /// <returns></returns>
         [Authorize]
+        [OperationLog(EmOperationType.Logout, Name = "退出登录")]
         [HttpPost("logout")]
         public async Task<IActionResult> LogoutAsync(LoginoutRequest request)
         {

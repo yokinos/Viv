@@ -7,7 +7,6 @@ using Viv.Apex.Core.Entity.Vo.Account;
 using Viv.Apex.Core.IService;
 using Viv.Apex.Core.Module.Login;
 using Viv.Contracts.Interface;
-using Viv.Elysia;
 using Viv.Engine;
 using Viv.Entity.Enums;
 
@@ -38,7 +37,8 @@ namespace Viv.Apex.Core.Service
                 return VivApiResult<LoginOutput>.Failed(result.Message);
             }
 
-            ElysiaLogContextAccessor.SetLog(EmOperationModule.User, EmOperationType.Login);
+            // 审计标注在 AccountController.LoginAsync 上：失败登录也要留痕，
+            // 所以不能像原来那样"成功之后在 Service 里补一句"。
             return VivApiResult<LoginOutput>.Success("登录成功", result.Data);
         }
 
@@ -56,7 +56,6 @@ namespace Viv.Apex.Core.Service
                 return VivApiResult<LoginOutput>.Failed("退出登录失败，请重试");
             }
 
-            ElysiaLogContextAccessor.SetLog(EmOperationModule.User, EmOperationType.Logout);
             return VivApiResult<LoginOutput>.Success("退出登录成功");
         }
 
