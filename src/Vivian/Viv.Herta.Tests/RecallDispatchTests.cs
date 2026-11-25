@@ -23,7 +23,9 @@ namespace Viv.Herta.Tests
         {
             var session = new StubKinnaSession<ChatHub>(pool, sender, new KinnaKeys("herta"), new KinnaOptions());
             return new KinnaMessageDispatcher<ChatHub, MessageRecalledEvent>(
-                session, new ChatRecallPusher(session), new RecordingLogger());
+                session,
+                new ChatRecallPusher(session),
+                new RecordingLogger());
         }
 
         private static MessageRecalledEvent CreateEvent(EmChatReceiverType receiverType) => new()

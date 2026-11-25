@@ -47,10 +47,24 @@ namespace Viv.Kinna.Connections
         {
             var key = new KinnaConnectionKey(appId, subjectId, userId);
             var added = false;
+            var detachedFromUserIndex = false;
             var now = _time.GetUtcNow();
+            DateTimeOffset establishedAt;
 
             lock (_structureLock)
             {
+                // 同一个连接 Id 换了身份：先把旧身份的索引摘干净。
+                // 不摘的话旧身份的桶里会永久留着一个「已经不在 _connectionLookup 里」的 Id，
+                // 按旧身份查连接/踢人都会对着它发，而反查表里已经是新身份了
+                if (_connectionLookup.TryGetValue(connectionId, out var previous) && previous != key)
+                {
+                    detachedFromUserIndex = DetachIndexes(connectionId, previous);
+
+                    // 建立时间必须清掉：不清的话下面的 TryAdd 会失败，新身份会沿用旧身份的
+                    // 「更旧」时间戳，顶号时被当成老连接
+                    _connectedAt.TryRemove(connectionId, out _);
+                }
+
                 added = _userConnections
                     .GetOrAdd((subjectId, userId), _ => new ConcurrentDictionary<string, byte>())
                     .TryAdd(connectionId, 0);
@@ -61,14 +75,28 @@ namespace Viv.Kinna.Connections
 
                 _connectionLookup[connectionId] = key;
                 _lastSeen[connectionId] = now;
-                _connectedAt[connectionId] = now;
+
+                // 建立时间只在第一次登记时记。重复 Add 不该重置它：顶号的「谁更旧」全靠这个值，
+                // 重置会把这条连接伪装成刚建立，和广播出去的时间也对不上
+                if (!_connectedAt.TryAdd(connectionId, now)
+                    && _connectedAt.TryGetValue(connectionId, out var firstSeen))
+                {
+                    establishedAt = firstSeen;
+                }
+                else
+                {
+                    establishedAt = now;
+                }
             }
 
             // transport 从连接 Id 前缀推断：两套传输共用这本表，指标要能分开看
+            if (detachedFromUserIndex)
+                KinnaMetrics.ConnectionRemoved(_hub, KinnaTransports.Of(connectionId));
+
             if (added)
                 KinnaMetrics.ConnectionAdded(_hub, KinnaTransports.Of(connectionId));
 
-            return now;
+            return establishedAt;
         }
 
         public KinnaConnectionInfo? Remove(string connectionId)
@@ -86,24 +114,7 @@ namespace Viv.Kinna.Connections
                 if (!_connectionLookup.TryRemove(connectionId, out key))
                     return null;
 
-                var userKey = (key.SubjectId, key.UserId);
-                if (_userConnections.TryGetValue(userKey, out var byUser) && byUser.TryRemove(connectionId, out _))
-                {
-                    removedFromUserIndex = true;
-
-                    // 桶空了就一起摘掉。空桶留着的话，每个注册过的用户都会永久占一本空字典，
-                    // 百万用户就是几百 MB。Add 走同一把锁，不会出现「刚写进去就被摘掉」。
-                    if (byUser.IsEmpty)
-                        _userConnections.TryRemove(userKey, out _);
-                }
-
-                var clientKey = (key.AppId, key.SubjectId, key.UserId);
-                if (_clientConnections.TryGetValue(clientKey, out var byClient)
-                    && byClient.TryRemove(connectionId, out _)
-                    && byClient.IsEmpty)
-                {
-                    _clientConnections.TryRemove(clientKey, out _);
-                }
+                removedFromUserIndex = DetachIndexes(connectionId, key);
             }
 
             if (removedFromUserIndex)
@@ -115,6 +126,39 @@ namespace Viv.Kinna.Connections
                 key.SubjectId,
                 key.UserId,
                 connectedAt);
+        }
+
+        /// <summary>
+        /// 把一条连接从两级索引里摘掉。调用方必须持有 <see cref="_structureLock"/>。
+        /// 返回是否真的从「按人」索引里摘掉了一条。
+        ///
+        /// 单独提出来是因为它有第二个调用方：<see cref="Add"/> 遇到同一 Id 换身份时，
+        /// 必须先把旧身份的索引摘掉，否则旧桶里会永久留一个幽灵 Id。
+        /// </summary>
+        private bool DetachIndexes(string connectionId, KinnaConnectionKey key)
+        {
+            var removedFromUserIndex = false;
+
+            var userKey = (key.SubjectId, key.UserId);
+            if (_userConnections.TryGetValue(userKey, out var byUser) && byUser.TryRemove(connectionId, out _))
+            {
+                removedFromUserIndex = true;
+
+                // 桶空了就一起摘掉。空桶留着的话，每个注册过的用户都会永久占一本空字典，
+                // 百万用户就是几百 MB。Add 走同一把锁，不会出现「刚写进去就被摘掉」。
+                if (byUser.IsEmpty)
+                    _userConnections.TryRemove(userKey, out _);
+            }
+
+            var clientKey = (key.AppId, key.SubjectId, key.UserId);
+            if (_clientConnections.TryGetValue(clientKey, out var byClient)
+                && byClient.TryRemove(connectionId, out _)
+                && byClient.IsEmpty)
+            {
+                _clientConnections.TryRemove(clientKey, out _);
+            }
+
+            return removedFromUserIndex;
         }
 
         public List<string> GetConnectionIds(long subjectId, long userId)
@@ -252,10 +296,18 @@ namespace Viv.Kinna.Connections
             var removed = new List<KinnaConnectionInfo>(expired.Count);
             foreach (var connectionId in expired)
             {
-                // 收集和摘除之间可能已经 Ping 续租，摘之前再看一眼
-                if (_lastSeen.TryGetValue(connectionId, out var seen) && _time.GetUtcNow() - seen <= ttl)
+                // 收集和摘除之间可能已经 Ping 续租，复核一次
+                if (!_lastSeen.TryGetValue(connectionId, out var seen)) continue;
+                if (_time.GetUtcNow() - seen <= ttl) continue;
+
+                // 复核和摘除之间还有一格窗口：Touch 会在这两步之间把值换掉，
+                // 只判「> ttl」的话刚续租的连接照样会被摘表并软踢。
+                // 用「值匹配才摘」的原子删除把这一格抢回来 —— 值变了就说明刚有人续租，放过它。
+                // （不能用 ContainsKey+赋值，那是两步；这里的比较和删除在 ConcurrentDictionary 内部完成）
+                if (!_lastSeen.TryRemove(new KeyValuePair<string, DateTimeOffset>(connectionId, seen)))
                     continue;
 
+                // 心跳表已经摘掉了，Remove 里那次 TryRemove 是空操作，其余索引由它清理
                 var info = Remove(connectionId);
                 if (info != null) removed.Add(info.Value);
             }

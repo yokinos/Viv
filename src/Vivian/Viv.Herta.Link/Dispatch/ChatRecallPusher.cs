@@ -8,8 +8,10 @@ using Viv.Kinna.Dispatch;
 
 namespace Viv.Herta.Link.Dispatch
 {
-    /// <summary>把撤回事件翻译成推送计划。</summary>
-    public sealed class ChatRecallPusher : IKinnaPusher<MessageRecalledEvent>
+    /// <summary>
+    /// 把撤回事件翻译成推送计划。
+    /// </summary>
+    public sealed class ChatRecallPusher : IKinnaPusher<ChatHub, MessageRecalledEvent>
     {
         private readonly IKinnaSession<ChatHub> _session;
 

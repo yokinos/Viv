@@ -892,5 +892,80 @@ namespace Viv.Kinna.Tests
             Assert.Empty(pool.GetConnectionIds(SubjectId, UserId));
             Assert.Contains(sender.Calls, x => x.Method == KinnaClientMethods.ForceDisconnect);
         }
+
+        [Fact]
+        public async Task KickUserEverywhereAsync_单条软踢失败不影响其余连接和广播()
+        {
+            // 传输层抛一次（背板抖、对端已断）不能让整批踢人停在半路：
+            // 剩下的本机连接还连着，广播也发不出去——对「封号」来说这是最糟的失败模式
+            var pool = new KinnaConnectionPool();
+            var sender = new RecordingKinnaClientSender();
+            var bus = new RecordingKinnaKickBus<TestHub>();
+            var coordinator = Create(pool, sender, kickBus: bus);
+
+            await coordinator.RegisterAsync("c1", Identity());
+            pool.Add("c2", appId: AppId, subjectId: SubjectId, userId: UserId);
+
+            sender.ThrowOnSend = new InvalidOperationException("传输层抖动");
+
+            await coordinator.KickUserEverywhereAsync(SubjectId, UserId);
+
+            // 两条都已摘表，广播照发
+            Assert.Empty(pool.GetConnectionIds(SubjectId, UserId));
+            Assert.Single(bus.PublishedKicks);
+        }
+
+        [Fact]
+        public async Task RegisterAsync_同客户端并发注册只留下一条()
+        {
+            // 「查旧连接」和「登记」分开做的话，两条连接会互相看不见对方、都成功登记；
+            // 之后各自广播的顶号指令又被本副本按 Origin==自己 跳过，没人来收这条
+            var pool = new KinnaConnectionPool();
+            var coordinator = Create(pool, new RecordingKinnaClientSender());
+
+            var registrations = Enumerable.Range(0, 20)
+                .Select(i => coordinator.RegisterAsync($"c{i}", Identity()))
+                .ToArray();
+
+            await Task.WhenAll(registrations);
+
+            Assert.Single(pool.GetConnectionIds(AppId, SubjectId, UserId));
+        }
+
+        [Fact]
+        public async Task RegisterAsync_在线态被取消时不吞异常()
+        {
+            // 取消不是「在线态抖了一下」：吞掉之后会在一条已经作废的连接上继续握手、加组
+            var pool = new KinnaConnectionPool();
+            var presence = new CancelingKinnaPresenceSink<TestHub>();
+            var coordinator = Create(pool, new RecordingKinnaClientSender(), presence: presence);
+
+            using var cts = new CancellationTokenSource();
+            presence.Source = cts;
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => coordinator.RegisterAsync("c1", Identity(), cts.Token));
+
+            Assert.Contains((SubjectId, UserId), presence.OnlineUsers);
+        }
+    }
+
+    /// <summary>替身：上线时把调用方的令牌置为取消，再抛取消——模拟「请求在写在线态时被中止」。</summary>
+    internal sealed class CancelingKinnaPresenceSink<THub> : IKinnaPresenceSink<THub> where THub : Hub
+    {
+        public CancellationTokenSource? Source { get; set; }
+
+        public List<(long SubjectId, long UserId)> OnlineUsers { get; } = new();
+
+        public Task OnlineAsync(long subjectId, long userId)
+        {
+            OnlineUsers.Add((subjectId, userId));
+            Source?.Cancel();
+            throw new OperationCanceledException();
+        }
+
+        public Task OfflineAsync(long subjectId, long userId) => Task.CompletedTask;
+
+        public Task RenewAsync(long subjectId, long userId) => Task.CompletedTask;
     }
 }

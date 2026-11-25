@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
@@ -7,6 +8,7 @@ using Viv.Kinna.Connections;
 using Viv.Kinna.Contracts;
 using Viv.Kinna.Dispatch;
 using Viv.Kinna.Health;
+using Viv.Kinna.Hubs;
 using Viv.Kinna.Options;
 using Viv.Kinna.Ports;
 using Viv.Kinna.WebSockets;
@@ -83,16 +85,32 @@ namespace Viv.Kinna.Extensions
 
             services.TryAddScoped<IKinnaConnectionCoordinator<THub>, KinnaConnectionCoordinator<THub>>();
 
+            // 注册闸门必须是单例：协调器本身是 scoped，靠它自己串行化等于每次请求一把新锁
+            services.TryAddSingleton<KinnaRegistrationGate<THub>>();
+
             services.AddHostedService<KinnaConnectionLeaseSweeper<THub>>();
 
             // 跨副本踢人的订阅端。没注册 IKinnaKickBus 时整体空转，单副本部署不受影响
             services.AddHostedService<KinnaKickSubscriber<THub>>();
 
-            // 关掉时检查自己会短路成 Healthy，不必在注册期判 EnableHealthCheck
-            services.AddHealthChecks()
-                .AddCheck<KinnaConnectionHealthCheck<THub>>($"kinna:{typeof(THub).Name}");
+            // 关掉时检查自己会短路成 Healthy，不必在注册期判 EnableHealthCheck。
+            //
+            // AddCheck 走的是 Configure 追加而不是 TryAdd，同一 Hub 重复 AddKinna 会多注册一条
+            // 同名检查（每次 /health 多跑一遍）。这里用标记服务挡一道，和 AddHostedService 的
+            // 去重语义对齐
+            if (!services.Any(d => d.ServiceType == typeof(KinnaHealthCheckRegistered<THub>)))
+            {
+                services.AddSingleton<KinnaHealthCheckRegistered<THub>>();
+                services.AddHealthChecks()
+                    .AddCheck<KinnaConnectionHealthCheck<THub>>($"kinna:{typeof(THub).Name}");
+            }
 
             return services;
+        }
+
+        /// <summary>「这个 Hub 的健康检查已经注册过」的标记，只用于去重。</summary>
+        private sealed class KinnaHealthCheckRegistered<THub>
+        {
         }
 
         /// <summary>
@@ -128,15 +146,102 @@ namespace Viv.Kinna.Extensions
             return options;
         }
 
-        /// <summary>注册事件的推送器，同时把对应的投递器按 Hub 和事件闭合。</summary>
+        /// <summary>
+        /// 扫一遍就把本 Hub 的推送器全装上。Pusher 类只要声明
+        /// <see cref="IKinnaPusher{THub, TEvent}"/>，注册处不必再把 Hub 和事件抄一遍。
+        ///
+        /// 默认扫 <typeparamref name="THub"/> 所在程序集，Pusher 放在别的程序集时把那个程序集传进来。
+        /// 重复调用是幂等的；同一个 (Hub, 事件) 出现两个 Pusher 会在注册期直接报错 ——
+        /// 「后注册的盖掉先注册的」是上线之后查不出来的那种错。
+        /// </summary>
+        /// <param name="services">宿主容器</param>
+        /// <param name="extraAssemblies">除 Hub 所在程序集之外还要扫的程序集</param>
+        public static IServiceCollection AddKinnaPusher<THub>(
+            this IServiceCollection services,
+            params Assembly[] extraAssemblies)
+            where THub : Hub
+        {
+            var hub = typeof(THub);
+
+            // 先收齐再登记：同一次扫描里出现两个 Pusher 抢同一个事件时，
+            // 要么先发现问题报错，要么一条都别注册，不能注册一半
+            var claimed = new Dictionary<Type, Type>();
+
+            foreach (var pusher in KinnaPusherScanner.Find<THub>(extraAssemblies))
+            {
+                foreach (var contract in pusher.GetInterfaces())
+                {
+                    if (!contract.IsGenericType || contract.GetGenericTypeDefinition() != typeof(IKinnaPusher<,>))
+                        continue;
+
+                    var arguments = contract.GetGenericArguments();
+                    if (arguments[0] != hub)
+                        continue;
+
+                    var eventType = arguments[1];
+                    if (claimed.TryGetValue(eventType, out var owner) && owner != pusher)
+                    {
+                        throw new InvalidOperationException(
+                            $"[kinna:{hub.Name}] 事件 {eventType.FullName} 有两个 Pusher："
+                            + $"{owner.FullName} 和 {pusher.FullName}。一个 (Hub, 事件) 只能有一个 Pusher。");
+                    }
+
+                    claimed[eventType] = pusher;
+                }
+            }
+
+            foreach (var pair in claimed)
+            {
+                RegisterPusher(services, hub, pair.Key, pair.Value);
+            }
+
+            return services;
+        }
+
+        /// <summary>
+        /// 显式注册一个 Pusher。常规场景用扫描版即可，这个留给裁剪/AOT（反射扫类型会被裁掉）
+        /// 或需要精确控制注册的时候。两条路径共用同一份登记逻辑，重复校验也一样。
+        /// </summary>
         public static IServiceCollection AddKinnaPusher<THub, TEvent, TPusher>(this IServiceCollection services)
             where THub : Hub
             where TEvent : class
-            where TPusher : class, IKinnaPusher<TEvent>
+            where TPusher : class, IKinnaPusher<THub, TEvent>
         {
-            services.AddScoped<IKinnaPusher<TEvent>, TPusher>();
-            services.TryAddScoped<IKinnaMessageDispatcher<THub, TEvent>, KinnaMessageDispatcher<THub, TEvent>>();
+            RegisterPusher(services, typeof(THub), typeof(TEvent), typeof(TPusher));
             return services;
+        }
+
+        /// <summary>
+        /// 一个 (Hub, 事件) 登记三件事：Pusher 具体类型、带 Hub 的契约、投递器，
+        /// 外加把前两者钉成同一个实例。
+        ///
+        /// 契约那条用 ImplementationType 注册而不是工厂，是为了再调一次注册时能认出
+        /// 「已经是这个实现」—— 认得出才能幂等，认不出就只能覆盖或者一律报错。
+        /// </summary>
+        private static void RegisterPusher(IServiceCollection services, Type hub, Type eventType, Type pusherType)
+        {
+            var contract = typeof(IKinnaPusher<,>).MakeGenericType(hub, eventType);
+
+            var existing = services.FirstOrDefault(descriptor => descriptor.ServiceType == contract);
+            if (existing != null)
+            {
+                if (existing.ImplementationType == pusherType)
+                    return;
+
+                throw new InvalidOperationException(
+                    $"[kinna:{hub.Name}] 事件 {eventType.FullName} 已经注册过 Pusher"
+                    + $"（{existing.ImplementationType?.FullName ?? "工厂注册"}），这里又来了 {pusherType.FullName}。"
+                    + "一个 (Hub, 事件) 只能有一个 Pusher。");
+            }
+
+            services.AddScoped(contract, pusherType);
+
+            // 业务注入具体类型和注入契约拿到同一个实例，不必为每次注入再构造一份
+            services.AddScoped(pusherType, provider => provider.GetRequiredService(contract));
+
+            services.TryAddScoped(
+                typeof(IKinnaMessageDispatcher<,>).MakeGenericType(hub, eventType),
+                typeof(KinnaMessageDispatcher<,>).MakeGenericType(hub, eventType));
         }
 
         /// <summary>
@@ -153,6 +258,16 @@ namespace Viv.Kinna.Extensions
             if (!session.Options.EnableSignalR)
             {
                 return app;
+            }
+
+            // 新加 Hub 时最容易漏的一步：不继承基类也能编译、也能握手成功，
+            // 但连接不会进连接表 —— 推送找不到人、顶号踢不到、租约也扫不到。
+            // 全程不报错，只是消息发不出去，排查成本很高，所以在启动时喊一声
+            if (!typeof(KinnaHubBase<THub>).IsAssignableFrom(typeof(THub)))
+            {
+                app.Services.GetService<ILoggerContract>()?.Warning(
+                    $"[kinna:{session.Hub}] {typeof(THub).FullName} 没有继承 KinnaHubBase<{typeof(THub).Name}>，"
+                    + "它的连接不会被登记，下行推送和租约清扫都找不到它。");
             }
 
             app.MapHub<THub>(pattern ?? session.Options.HubPath);

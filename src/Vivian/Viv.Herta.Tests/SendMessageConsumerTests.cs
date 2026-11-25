@@ -52,7 +52,9 @@ namespace Viv.Herta.Tests
             var logger = new RecordingLogger();
             var session = new StubKinnaSession<ChatHub>(pool, sender, new KinnaKeys("herta"), new KinnaOptions());
             var dispatcher = new KinnaMessageDispatcher<ChatHub, SendMessageEvent>(
-                session, new ChatMessagePusher(session), logger);
+                session,
+                new ChatMessagePusher(session),
+                logger);
 
             var dependency = new VivConsumerDependency(
                 logger,

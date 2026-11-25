@@ -322,6 +322,16 @@ namespace Viv.Kinna.WebSockets
             // 定时走 TimeProvider：这条路径上的宽限期是要被测的，真等 1 秒的用例没有意义
             await Task.WhenAny(_sender, Task.Delay(grace, _time)).ConfigureAwait(false);
 
+            // 关闭帧已经写出去了：再 Abort 就是 RST，会把对端还没读走的那一帧一起冲掉，
+            // 客户端看到的仍然是 1006 —— 停机路径踩过同一个坑（见 AbortAll），修法也一样：
+            // 把 socket 留给请求线程正常收尾，对端不配合时由 Abandon 的兜底定时器硬断。
+            // 只有「帧压根没出去」才该立刻硬断
+            if (CloseWritten)
+            {
+                Abandon(grace);
+                return;
+            }
+
             Abort();
             Dispose();
         }

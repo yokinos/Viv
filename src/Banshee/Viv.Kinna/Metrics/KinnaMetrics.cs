@@ -46,6 +46,12 @@ namespace Viv.Kinna.Metrics
         private static readonly Counter<long> KickBroadcastFailedCounter = Meter.CreateCounter<long>("kinna.kick.broadcast.failed");
 
         /// <summary>
+        /// 软踢帧下发失败的次数。连接已经从连接表摘掉，收尾交给端点关闭或租约过期；
+        /// 出现说明传输层在抖（或对端已断），踢人链路本身不会因此中断
+        /// </summary>
+        private static readonly Counter<long> KickFailedCounter = Meter.CreateCounter<long>("kinna.kick.failed");
+
+        /// <summary>
         /// 收到但因待处理队列满而丢弃的跨副本踢人指令。非零说明副本在处理上卡住了
         /// （或者在批量封号），被丢的那些用户要等租约过期才断
         /// </summary>
@@ -108,6 +114,9 @@ namespace Viv.Kinna.Metrics
         public static void RecordRemoteKick(string hub) => RemoteKickCounter.Add(1, HubTag(hub));
 
         public static void RecordKickBroadcastFailed(string hub) => KickBroadcastFailedCounter.Add(1, HubTag(hub));
+
+        /// <summary>记一次软踢帧下发失败。连接已摘表，不影响后续连接与广播</summary>
+        public static void RecordKickFailed(string hub) => KickFailedCounter.Add(1, HubTag(hub));
 
         public static void RecordRemoteKickDropped(string hub) => RemoteKickDroppedCounter.Add(1, HubTag(hub));
 

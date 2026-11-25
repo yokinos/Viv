@@ -15,7 +15,15 @@ namespace Viv.Kinna.Dispatch
         private readonly IKinnaPusher<TEvent> _pusher;
         private readonly ILoggerContract _logger;
 
-        public KinnaMessageDispatcher(IKinnaSession<THub> session, IKinnaPusher<TEvent> pusher, ILoggerContract logger)
+        /// <summary>
+        /// 注入带 Hub 标记的契约而不是裸的 <see cref="IKinnaPusher{TEvent}"/>：
+        /// 裸接口只有事件维度，两个 Hub 用同一事件类型时后注册的会盖掉先注册的，
+        /// 这里会拿到别的 Hub 的 Pusher。
+        /// </summary>
+        public KinnaMessageDispatcher(
+            IKinnaSession<THub> session,
+            IKinnaPusher<THub, TEvent> pusher,
+            ILoggerContract logger)
         {
             _session = session;
             _pusher = pusher;

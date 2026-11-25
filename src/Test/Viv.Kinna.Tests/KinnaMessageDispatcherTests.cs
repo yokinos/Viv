@@ -16,7 +16,21 @@ namespace Viv.Kinna.Tests
             RecordingLogger? logger = null)
         {
             var session = new StubKinnaSession<TestHub>(pool, sender);
-            return new KinnaMessageDispatcher<TestHub, string>(session, pusher, logger ?? new RecordingLogger());
+            return new KinnaMessageDispatcher<TestHub, string>(
+                session, new TestHubPusher(pusher), logger ?? new RecordingLogger());
+        }
+
+        /// <summary>
+        /// 替身本身没有 Hub 维度，这里补一个：投递器要的是带 Hub 标记的契约。
+        /// 包在 Create 里，各用例照旧只关心 FakeKinnaPusher 的行为。
+        /// </summary>
+        private sealed class TestHubPusher : IKinnaPusher<TestHub, string>
+        {
+            private readonly FakeKinnaPusher<string> _inner;
+
+            public TestHubPusher(FakeKinnaPusher<string> inner) => _inner = inner;
+
+            public KinnaPushPlan? Plan(string evt, KinnaPushContext? context) => _inner.Plan(evt, context);
         }
 
         private static KinnaPushPlan UserPlan(

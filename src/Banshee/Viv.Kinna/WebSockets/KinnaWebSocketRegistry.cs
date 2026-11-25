@@ -284,6 +284,15 @@ namespace Viv.Kinna.WebSockets
             // 和 Unbind 里的摘桶同锁：否则会出现「刚 GetOrAdd 出来就被当成空桶摘掉」
             lock (_structureLock)
             {
+                // 连接可能在这两步之间已经被 Unbind 摘走了 —— MembershipSync 是拿连接 Id 快照
+                // 之后再来入组的，和连接拆除天然并发。这时候再加组，会在 _groups/_memberships
+                // 里留下一份永远没人清理的记录：Unbind 的 DetachGroups 已经跑过了。
+                // 记进去也发不出去（SendMany 查不到连接），所以直接不加
+                if (!_connections.ContainsKey(connectionId))
+                {
+                    return;
+                }
+
                 _groups.GetOrAdd(groupName, _ => new ConcurrentDictionary<string, byte>(StringComparer.Ordinal))
                     .TryAdd(connectionId, 0);
 

@@ -903,5 +903,58 @@ namespace Viv.Kinna.Tests
 
             Assert.False(outbound.Close);
         }
+
+        [Fact]
+        public void AddToGroup_连接已经摘掉时不留组索引()
+        {
+            // MembershipSync 是拿「连接 Id 快照」之后再来入组的，和连接拆除天然并发。
+            // 连接已经 Unbind 之后再写组表，会留下永远没人清理的记录：
+            // Unbind 的 DetachGroups 早就跑完了，而这一帧本来也发不出去
+            var registry = new KinnaWebSocketRegistry<TestHub>(64);
+            var socket = new RecordingWebSocket();
+            registry.Bind("ws:1", socket, CancellationToken.None);
+
+            registry.Unbind("ws:1");
+            registry.AddToGroup("ws:1", "g1");
+
+            Assert.Empty(registry.GetGroupMembers("g1"));
+        }
+
+        [Fact]
+        public async Task SendToConnectionsAsync_SignalR失败时原生一条都不发()
+        {
+            // 顺序反过来（先入队原生帧）的话：SignalR 失败 → 投递器返回 Failed →
+            // 消费侧重投 → 已经拿到帧的原生连接重复收到同一条消息
+            var registry = new KinnaWebSocketRegistry<TestHub>(64);
+            var socket = new RecordingWebSocket();
+            registry.Bind("ws:1", socket, CancellationToken.None);
+
+            var signalr = new RecordingKinnaClientSender { ThrowOnSend = new InvalidOperationException("背板抖动") };
+            var sender = new CompositeKinnaClientSender<TestHub>(registry, signalr);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => sender.SendToConnectionsAsync(["ws:1", "sig:1"], "M", new { n = 1 }));
+
+            Assert.Empty(socket.Sent);
+        }
+
+        [Fact]
+        public async Task 取消令牌已取消时_原生分支也不发()
+        {
+            // 原生分支以前不看令牌：同一个调用换个传输就从「抛取消」变成「入队成功」
+            var registry = new KinnaWebSocketRegistry<TestHub>(64);
+            var socket = new RecordingWebSocket();
+            registry.Bind("ws:1", socket, CancellationToken.None);
+
+            var sender = new CompositeKinnaClientSender<TestHub>(registry, new RecordingKinnaClientSender());
+
+            using var cts = new CancellationTokenSource();
+            await cts.CancelAsync();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => sender.SendToConnectionAsync("ws:1", "M", [], cts.Token));
+
+            Assert.Empty(socket.Sent);
+        }
     }
 }

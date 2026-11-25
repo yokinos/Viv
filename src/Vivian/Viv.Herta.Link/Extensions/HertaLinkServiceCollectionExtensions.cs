@@ -1,8 +1,7 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Viv.EventContracts.Herta;
 using Viv.Herta.Link.Adapters;
-using Viv.Herta.Link.Dispatch;
 using Viv.Herta.Link.Hubs;
 using Viv.Kinna.Extensions;
 using Viv.Kinna.Ports;
@@ -18,24 +17,29 @@ namespace Viv.Herta.Link.Extensions
         /// </summary>
         public static IServiceCollection AddHertaLink(this IServiceCollection services, IConfiguration configuration)
         {
-            // Hub 是泛型，必须按具体类型闭合
-            services.AddKinna<ChatHub>();
-
-            // 原生 WebSocket 与 SignalR 共用同一套身份解析和准入：
-            // 换传输不能换判定，否则小程序那条路就成了绕过 Apex 应用校验的口子
-            services.AddSingleton<IKinnaIdentityResolver<ChatHub>, HertaIdentityResolver<ChatHub>>();
-
-            // AddKinna 里已经 TryAdd 了只校验身份完整性的默认实现，这里必须 Replace 而不是 Add：
-            // 精确类型注册优先于开放泛型，直接 Add 会让默认实现继续生效
-            services.Replace(ServiceDescriptor.Scoped<IKinnaAdmission<ChatHub>, HertaKinnaAdmission<ChatHub>>());
-
-            // 推送计划和投递器要 Hub + 事件两个类型参数
-            services.AddKinnaPusher<ChatHub, SendMessageEvent, ChatMessagePusher>();
-            services.AddKinnaPusher<ChatHub, MessageRecalledEvent, ChatRecallPusher>();
+            // 一个 Hub 一行。新加 Hub 只加这里，别手动抄那几行 —— 漏掉 Replace 就会退回
+            // AddKinna 里的默认准入（只校验身份完整性），等于给新入口开了后门
+            services.AddHertaKinnaHub<ChatHub>();
+            services.AddHertaKinnaHub<LineHub>();
 
             // 准入问 Apex，不维护本地白名单
             services.AddVivRpcProxies(configuration);
 
+            return services;
+        }
+
+        /// <summary>
+        /// 把一个 Hub 的 Kinna 运行时整个装上：会话/连接表/发送器、身份解析、准入、投递器。
+        ///
+        /// 身份和准入必须是 Herta 的实现而不是框架默认值 —— 原生 WebSocket 与 SignalR 共用
+        /// 同一张连接表，换传输不能换判定，否则小程序那条路就成了绕过 Apex 应用校验的口子。
+        /// </summary>
+        private static IServiceCollection AddHertaKinnaHub<THub>(this IServiceCollection services) where THub : Hub
+        {
+            services.AddKinna<THub>();
+            services.TryAddSingleton<IKinnaIdentityResolver<THub>, HertaIdentityResolver<THub>>();
+            services.Replace(ServiceDescriptor.Scoped<IKinnaAdmission<THub>, HertaKinnaAdmission<THub>>());
+            services.AddKinnaPusher<THub>();
             return services;
         }
     }

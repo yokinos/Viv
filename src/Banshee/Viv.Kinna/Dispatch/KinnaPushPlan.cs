@@ -97,6 +97,20 @@ namespace Viv.Kinna.Dispatch
         KinnaPushPlan? Plan(TEvent evt, KinnaPushContext? context);
     }
 
+    /// <summary>
+    /// 在 Pusher 自己的声明里带上 Hub，<c>AddKinnaPusher&lt;THub&gt;()</c> 才能只凭一个类型参数
+    /// 就把「哪个 Pusher 属于哪个 Hub」定下来，调用方不必在每个注册点把 Hub 和事件再抄一遍。
+    ///
+    /// 这个维度不能省：同一个 Hub 下本来就有多个事件（Herta 的聊天和撤回就是两个 Pusher），
+    /// 只靠事件类型区分不了；反过来，两个 Hub 消费同一事件类型时，如果契约里没有 Hub，
+    /// 容器里后注册的会盖掉先注册的，A 的投递器就会拿 B 的 Pusher 按错的方法名投递。
+    ///
+    /// 纯标记，没有成员：翻译逻辑仍然只在 <see cref="IKinnaPusher{TEvent}"/> 上。
+    /// </summary>
+    public interface IKinnaPusher<THub, TEvent> : IKinnaPusher<TEvent> where THub : Hub
+    {
+    }
+
     /// <summary>通用的投递流程。</summary>
     public interface IKinnaMessageDispatcher<THub, TEvent> where THub : Hub
     {

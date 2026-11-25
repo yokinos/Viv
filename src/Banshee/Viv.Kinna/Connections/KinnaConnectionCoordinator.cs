@@ -19,6 +19,7 @@ namespace Viv.Kinna.Connections
         private readonly IKinnaDeliveryStore<THub> _delivery;
         private readonly KinnaUplinkLimiter<THub>? _limiter;
         private readonly IKinnaKickBus<THub>? _kickBus;
+        private readonly KinnaRegistrationGate<THub> _gate;
         private readonly ILoggerContract _logger;
         private readonly TimeSpan _leaseTtl;
         private readonly TimeProvider _time;
@@ -31,7 +32,8 @@ namespace Viv.Kinna.Connections
             IKinnaDeliveryStore<THub>? delivery = null,
             KinnaUplinkLimiter<THub>? limiter = null,
             TimeProvider? timeProvider = null,
-            IKinnaKickBus<THub>? kickBus = null)
+            IKinnaKickBus<THub>? kickBus = null,
+            KinnaRegistrationGate<THub>? registrationGate = null)
         {
             _session = session;
             _logger = logger;
@@ -41,6 +43,7 @@ namespace Viv.Kinna.Connections
             _limiter = limiter;
             _time = timeProvider ?? TimeProvider.System;
             _kickBus = kickBus;
+            _gate = registrationGate ?? new KinnaRegistrationGate<THub>();
             _leaseTtl = TimeSpan.FromSeconds(Math.Max(1, session.Options.EntryTtlSeconds));
         }
 
@@ -53,21 +56,42 @@ namespace Viv.Kinna.Connections
             if (identity.SubjectId <= 0 || identity.UserId <= 0)
                 return null;
 
-            // 同一个客户端只留一条连接：新连接顶掉旧的，否则重装/重连会留下幽灵连接，
-            // 推送时同一条消息会被发到已经死掉的连接上
-            if (_session.Options.SingleConnectionPerApp)
+            var key = new KinnaConnectionKey(identity.AppId, identity.SubjectId, identity.UserId);
+            DateTimeOffset establishedAt;
+            List<KinnaConnectionInfo> replaced = [];
+
+            // 「查旧连接」和「登记新连接」必须在同一段临界区里。分开的话，同一客户端的
+            // 两条连接并发注册会互相看不见对方：两边都查到空、都成功 Add。之后各自广播的
+            // 顶号指令又会被本副本的订阅端按 Origin==自己 跳过，于是同一 AppId 留下两条
+            // 连接——重复收消息，和 SingleConnectionPerApp 的语义不符。
+            //
+            // 临界区里只放内存操作。软踢要走一次传输（SignalR 甚至要过背板），持锁等它会把
+            // 同条带上其它客户端的注册一起拖住；连接摘表之后推送已经到不了它，
+            // 晚一步发帧只是让客户端晚一点知道「你被顶了」
+            await _gate.WaitAsync(key, cancellationToken).ConfigureAwait(false);
+
+            try
             {
-                var existing = _session.Pool.GetConnectionIds(identity.AppId, identity.SubjectId, identity.UserId);
-                foreach (var oldConnectionId in existing)
+                // 同一个客户端只留一条连接：新连接顶掉旧的，否则重装/重连会留下幽灵连接，
+                // 推送时同一条消息会被发到已经死掉的连接上
+                if (_session.Options.SingleConnectionPerApp)
                 {
-                    if (oldConnectionId == connectionId) continue;
-                    await ReplaceAsync(oldConnectionId, cancellationToken).ConfigureAwait(false);
+                    replaced = DetachExisting(identity, connectionId);
                 }
+
+                // 登记时间从连接表拿，别在这里另取一次时钟：广播出去的那个值必须和表里记的一致，
+                // 否则两个副本对「谁更旧」的判断会不一致
+                establishedAt = _session.Pool.Add(connectionId, identity.AppId, identity.SubjectId, identity.UserId);
+            }
+            finally
+            {
+                _gate.Release(key);
             }
 
-            // 登记时间从连接表拿，别在这里另取一次时钟：广播出去的那个值必须和表里记的一致，
-            // 否则两个副本对「谁更旧」的判断会不一致
-            var establishedAt = _session.Pool.Add(connectionId, identity.AppId, identity.SubjectId, identity.UserId);
+            foreach (var info in replaced)
+            {
+                await FinishReplacedAsync(info, cancellationToken).ConfigureAwait(false);
+            }
 
             // 上面只踢得掉「本副本上」的旧连接。旧连接在别的副本上时，那边不知道自己已经过时，
             // 推送会照着它那条连接发，用户就收到两份。所以这里补一条广播。
@@ -90,7 +114,8 @@ namespace Viv.Kinna.Connections
                     cancellationToken).ConfigureAwait(false);
             }
 
-            await PresenceSafelyAsync(() => _presence.OnlineAsync(identity.SubjectId, identity.UserId), "online")
+            await PresenceSafelyAsync(
+                    () => _presence.OnlineAsync(identity.SubjectId, identity.UserId), "online", cancellationToken)
                 .ConfigureAwait(false);
 
             var connected = new KinnaConnected
@@ -161,27 +186,51 @@ namespace Viv.Kinna.Connections
             var info = _session.Pool.Remove(connectionId);
             if (info == null) return;
 
-            await PresenceSafelyAsync(() => _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId), "offline")
+            await PresenceSafelyAsync(
+                    () => _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId), "offline", cancellationToken)
                 .ConfigureAwait(false);
         }
 
-        /// <summary>同客户端重复登录时先摘旧连接：扣在线态、发软踢，最后让 OnDisconnectedAsync 空转。</summary>
-        private async Task ReplaceAsync(string connectionId, CancellationToken cancellationToken)
+        /// <summary>
+        /// 把该客户端在本副本上的旧连接摘表，返回摘到的身份交给调用方去收尾。
+        /// 调用方必须持有注册闸门 —— 判重和摘除要在一起，中间插进另一次注册就白判了。
+        /// </summary>
+        private List<KinnaConnectionInfo> DetachExisting(VivContextContent identity, string connectionId)
         {
-            var info = _session.Pool.Remove(connectionId);
-            if (info == null) return;
+            var existing = _session.Pool.GetConnectionIds(identity.AppId, identity.SubjectId, identity.UserId);
+            if (existing.Count == 0)
+            {
+                return [];
+            }
 
-            _logger.Info($"同一客户端重复登录，踢掉旧连接: {connectionId} app={info.Value.AppId}");
+            var detached = new List<KinnaConnectionInfo>(existing.Count);
 
-            _limiter?.Release(connectionId);
+            foreach (var oldConnectionId in existing)
+            {
+                if (oldConnectionId == connectionId) continue;
 
-            await PresenceSafelyAsync(() => _presence.OfflineAsync(info.Value.SubjectId, info.Value.UserId), "offline")
+                // 摘不到说明它已经被清扫或别的副本踢掉了，不用再收尾
+                var info = _session.Pool.Remove(oldConnectionId);
+                if (info == null) continue;
+
+                _limiter?.Release(oldConnectionId);
+                detached.Add(info.Value);
+            }
+
+            return detached;
+        }
+
+        /// <summary>顶号收尾：扣在线态，再让旧连接断开（原生发完软踢帧就硬断）。</summary>
+        private async Task FinishReplacedAsync(KinnaConnectionInfo info, CancellationToken cancellationToken)
+        {
+            _logger.Info($"同一客户端重复登录，踢掉旧连接: {info.ConnectionId} app={info.AppId}");
+
+            await PresenceSafelyAsync(
+                    () => _presence.OfflineAsync(info.SubjectId, info.UserId), "offline", cancellationToken)
                 .ConfigureAwait(false);
 
             // 走 Terminate：原生连接发完软踢帧就硬断，否则旧连接会一直挂在那儿收不到消息
-            await _session.Sender
-                .TerminateConnectionAsync(connectionId, KinnaClientMethods.ForceDisconnect, [], cancellationToken)
-                .ConfigureAwait(false);
+            await TerminateSafelyAsync(info.ConnectionId, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<KinnaPong> PingAsync(string connectionId, CancellationToken cancellationToken = default)
@@ -220,7 +269,8 @@ namespace Viv.Kinna.Connections
             }
 
             _session.Pool.Touch(connectionId);
-            await PresenceSafelyAsync(() => _presence.RenewAsync(info.Value.SubjectId, info.Value.UserId), "renew")
+            await PresenceSafelyAsync(
+                    () => _presence.RenewAsync(info.Value.SubjectId, info.Value.UserId), "renew", cancellationToken)
                 .ConfigureAwait(false);
 
             return new KinnaPong
@@ -349,9 +399,35 @@ namespace Viv.Kinna.Connections
             }
 
             // 即使表里没有也要断：可能是只在传输层登记过的连接，不硬断就再也回收不了
-            await _session.Sender
-                .TerminateConnectionAsync(connectionId, KinnaClientMethods.ForceDisconnect, [], cancellationToken)
-                .ConfigureAwait(false);
+            await TerminateSafelyAsync(connectionId, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 发软踢帧（原生连接排一个关闭帧再硬断，SignalR 只是发一帧）。
+        ///
+        /// 失败只记日志和指标，不往上抛：连接已经从连接表摘掉了，推送再也到不了它，
+        /// 剩下的收尾由端点关闭或租约过期兜底。这和广播失败的处理是同一个取舍——
+        /// 让一次发送异常中断整批踢人（甚至让新连接登记失败），代价比漏踢一条大得多。
+        /// 唯一的例外是调用方自己取消了，那不是失败。
+        /// </summary>
+        private async Task TerminateSafelyAsync(string connectionId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await _session.Sender
+                    .TerminateConnectionAsync(connectionId, KinnaClientMethods.ForceDisconnect, [], cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                KinnaMetrics.RecordKickFailed(_session.Hub);
+                _logger.Warning(
+                    $"[{_session.Hub}] 软踢下发失败，已从连接表摘除: {connectionId} {ex.Message}");
+            }
         }
 
         public async Task KickUserAsync(long subjectId, long userId, CancellationToken cancellationToken = default)
@@ -551,12 +627,19 @@ namespace Viv.Kinna.Connections
         ///
         /// 框架对查群、投递存储、清扫都已经是这个态度，唯独在线态以前把异常直接交给调用方，
         /// 等于把「能不能连上」的裁决权交给了一个展示型依赖。
+        ///
+        /// 但取消不算失败：调用方已经放弃这次请求/连接了，把取消吞掉会让后面的握手、
+        /// 加组白跑一遍，还会在一条已经作废的连接上留下登记。
         /// </summary>
-        private async Task PresenceSafelyAsync(Func<Task> call, string operation)
+        private async Task PresenceSafelyAsync(Func<Task> call, string operation, CancellationToken cancellationToken = default)
         {
             try
             {
                 await call().ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

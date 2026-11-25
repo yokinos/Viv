@@ -35,6 +35,7 @@ Viv.Kinna/
 ├── Extensions/          注册与挂载（AddKinna / MapKinnaHub / MapKinnaWebSocket / AddKinnaPusher）
 ├── Options/             配置项
 ├── Connections/         生命周期：会话、连接表、协调器、清扫器、限流器、跨副本订阅
+├── Hubs/                SignalR 基类：连接生命周期与 Ping/Ack/Resync
 ├── Dispatch/            推送流程：IKinnaPusher 产出计划，Dispatcher 执行
 ├── Ports/               宿主实现的端口（身份、准入、群成员、投递存储、在线态、踢人广播）
 ├── WebSockets/          原生 WebSocket：端点、连接、注册表、协议翻译、分流发送器
@@ -82,6 +83,10 @@ Viv.Kinna/
 
 分流**查连接表**（`registry.IsLocal`），不看 Id 前缀——前缀只是排障约定，一旦有人换了命名，
 SignalR 对未知连接是静默丢弃，消息会发丢而不报错。
+
+一次投递同时命中两种传输时，**先发 SignalR、再入队原生帧**。原生那一侧是纯内存入队、
+基本不会失败；SignalR 一侧可能抛（背板抖、序列化）。反过来写的话，SignalR 失败会返回
+`Failed`、消费侧重投，而已经拿到帧的原生连接就重复收到同一条消息了。
 
 `EnableSignalR = false` 时，本机表里查不到的连接没有兜底通道，直接丢弃并记
 `kinna.send.orphaned{reason=signalr_disabled}`。
@@ -340,7 +345,31 @@ builder.Services.AddKinna<ChatHub>();
 app.MapKinnaHub<ChatHub>();          // 用 HubPath 配置
 ```
 
-Hub 自己决定怎么取身份（Kinna 不插手），但**登记必须走协调器**：
+Hub 只写一个构造函数，其余全在 `KinnaHubBase<THub>` 里：
+
+```csharp
+public sealed class ChatHub : KinnaHubBase<ChatHub>
+{
+    public ChatHub(
+        IKinnaConnectionCoordinator<ChatHub> coordinator,
+        IKinnaAdmission<ChatHub> admission,
+        IKinnaIdentityResolver<ChatHub> identity,
+        ILoggerContract logger)
+        : base(coordinator, admission, identity, logger)
+    {
+    }
+
+    // 业务上行方法加在这里
+}
+```
+
+基类做四件事：按 `IKinnaIdentityResolver<THub>` 取身份 → 过 `IKinnaAdmission<THub>` → 调协调器登记并回握手帧 →
+断连反登记。`Ping` / `Ack` / `Resync` 也在里面，和原生端点是同一份行为，接入方不必再抄一遍。
+
+> 不继承也能编译、也能连上，但连接不会进连接表：推送找不到人、顶号踢不到、租约也扫不到。
+> `MapKinnaHub` 会在启动时为此记一条 Warning。
+
+**必须自己接管时**（已有别的 Hub 基类，或要改某一步），最小实现是：
 
 ```csharp
 public class ChatHub : Hub
@@ -410,6 +439,7 @@ app.MapKinnaWebSocket<ChatHub>(configure: e => e.RequireRateLimiting("ws"));
 | 要做的事 | 必须？ | 不做会怎样 |
 |---|---|---|
 | `AddKinna<THub>` | ✅ | 什么都起不来 |
+| `KinnaHubBase<THub>` | ✅ | 连接不进连接表，推送、踢人、租约清扫全部失效 |
 | `MapKinnaHub` / `MapKinnaWebSocket` | ✅ | 没有接入点 |
 | `IKinnaIdentityResolver<THub>` | 原生 WS 必须 | 端点拒绝所有连接（`no_resolver`） |
 | `IKinnaAdmission<THub>` | 建议 | 默认只校验身份完整性，不做业务放行 |
@@ -426,7 +456,7 @@ app.MapKinnaWebSocket<ChatHub>(configure: e => e.RequireRateLimiting("ws"));
 | `IKinnaAdmission<THub>` | `KinnaIdentityAdmission`（只校验字段齐） | 返回 `Allowed=false`，`Reason` 只进日志不回客户端 |
 | `IKinnaGroupSource<THub>` | 无 | 查询失败只丢群消息，**不断连接**（否则群服务成了 IM 的可用性单点） |
 | `IKinnaDeliveryStore<THub>` | `NoopKinnaDeliveryStore` | 抛异常 → 记 `kinna.ack.failed` / `resync.failed`，降级成「重报」/「要求补拉」，不拆连接 |
-| `IKinnaPresenceSink<THub>` | `NoopKinnaPresenceSink` | **框架吞异常**，记 `kinna.presence.failed{op}` 后继续 |
+| `IKinnaPresenceSink<THub>` | `NoopKinnaPresenceSink` | **框架吞异常**，记 `kinna.presence.failed{op}` 后继续（调用方令牌已取消时除外：取消照常上抛） |
 | `IKinnaKickBus<THub>` | 无 | 广播失败只记日志和指标，本机已经踢完 |
 
 **在线态为什么只降级**：它是展示信息，不在投递路径上。换一个会抛的实现，
@@ -445,7 +475,7 @@ app.MapKinnaWebSocket<ChatHub>(configure: e => e.RequireRateLimiting("ws"));
 业务只写「事件 → 方法名/载荷/目标」的翻译，流程由 `KinnaMessageDispatcher` 执行：
 
 ```csharp
-public sealed class ChatMessagePusher : IKinnaPusher<SendMessageEvent>
+public sealed class ChatMessagePusher : IKinnaPusher<ChatHub, SendMessageEvent>
 {
     public KinnaPushPlan? Plan(SendMessageEvent evt, KinnaPushContext? context)
     {
@@ -462,9 +492,18 @@ public sealed class ChatMessagePusher : IKinnaPusher<SendMessageEvent>
     }
 }
 
-// 注册（Hub + 事件两个类型参数，必须按具体类型闭合）
-services.AddKinnaPusher<ChatHub, SendMessageEvent, ChatMessagePusher>();
+// 注册：一个类型参数就够，Pusher 在自己的声明里带着归属的 Hub
+services.AddKinnaPusher<ChatHub>();
 ```
+
+`IKinnaPusher<THub, TEvent>` 里带 Hub 不能省：同一个 Hub 下本来就有多个事件（聊天、撤回），
+只靠事件类型区分不了；反过来，两个 Hub 消费同一事件类型时，如果契约里没有 Hub，
+容器里后注册的会盖掉先注册的，A 的投递器就会拿着 B 的 Pusher 按错的方法名投递。
+
+`AddKinnaPusher<THub>()` 扫 `THub` 所在程序集，Pusher 放在别的程序集时把那个程序集传进来。
+重复调用幂等；同一个 (Hub, 事件) 出现两个 Pusher 在注册期直接抛异常——靠注册顺序决定用哪个，
+是上线之后查不出来的那种错。裁剪 / AOT 下反射扫类型会被裁掉，那时用显式重载
+`AddKinnaPusher<THub, TEvent, TPusher>()`。
 
 投递结果：
 
@@ -570,6 +609,7 @@ services.AddKinnaPusher<ChatHub, SendMessageEvent, ChatMessagePusher>();
 | `kinna.groups.failed` | `hub` | 群成员查询失败（本次没进组） |
 | `kinna.identity.override` | `hub` | 代发审计，不是错误 |
 | `kinna.kick.remote` / `.dropped` / `.broadcast.failed` | `hub` | 跨副本踢人是否真的接上了 |
+| `kinna.kick.failed` | `hub` | 软踢帧下发失败。连接已摘表，链路不中断，收尾交给端点/租约 |
 
 `kinna.ws.closed{reason}` 的取值：`client` / `queue_full` / `frame_too_large` / `send_failed` /
 `close_timeout` / `expired` / `terminated` / `shutdown` / `shutdown_unsent`。

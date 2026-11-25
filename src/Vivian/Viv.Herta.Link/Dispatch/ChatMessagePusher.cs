@@ -9,8 +9,10 @@ using Viv.Kinna.Dispatch;
 
 namespace Viv.Herta.Link.Dispatch
 {
-    /// <summary>把聊天消息事件翻译成推送计划：载荷、方法名、目标。</summary>
-    public sealed class ChatMessagePusher : IKinnaPusher<SendMessageEvent>
+    /// <summary>
+    /// 把聊天消息事件翻译成推送计划：载荷、方法名、目标。
+    /// </summary>
+    public sealed class ChatMessagePusher : IKinnaPusher<ChatHub, SendMessageEvent>
     {
         private readonly IKinnaSession<ChatHub> _session;
 

@@ -38,6 +38,10 @@ namespace Viv.Kinna.WebSockets
             object?[] args,
             CancellationToken cancellationToken = default)
         {
+            // 取消语义两侧必须一致：SignalR 分支会把令牌透传下去（已取消就直接抛），
+            // 原生分支以前不看令牌，同一个调用换个传输就从「抛取消」变成「入队成功」
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (_webSockets.IsLocal(connectionId))
             {
                 _webSockets.Send(connectionId, method, args);
@@ -64,6 +68,8 @@ namespace Viv.Kinna.WebSockets
                 return;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             List<string>? nativeIds = null;
             List<string>? signalrIds = null;
 
@@ -79,33 +85,38 @@ namespace Viv.Kinna.WebSockets
                 }
             }
 
+            // 顺序有讲究：先发 SignalR，再入队原生帧。
+            //
+            // 原生一侧是纯内存入队，基本不会失败；SignalR 一侧可能抛（背板抖动、序列化）。
+            // 反过来写的话，SignalR 失败 → 投递器返回 Failed → 消费侧重投 →
+            // 已经拿到帧的原生连接会重复收到同一条消息。按这个顺序，失败时原生一条都还没发。
+            if (signalrIds is { Count: > 0 })
+            {
+                if (_signalrEnabled)
+                {
+                    await _signalr.SendToConnectionsAsync(signalrIds, method, payload, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                else
+                {
+                    // 按条记而不是按次记，和「实际丢了几条消息」对齐。
+                    // 一次 Add 累加 count，别在循环里逐条 Add：大群推送就是成百上千次分配
+                    KinnaMetrics.RecordOrphanedSend(
+                        HubName, KinnaSendDropReasons.SignalRDisabled, signalrIds.Count);
+                }
+            }
+
             if (nativeIds is { Count: > 0 })
             {
                 _webSockets.SendMany(nativeIds, method, [payload]);
             }
-
-            if (signalrIds is not { Count: > 0 })
-            {
-                return;
-            }
-
-            if (!_signalrEnabled)
-            {
-                // 按条记而不是按次记，和「实际丢了几条消息」对齐。
-                // 一次 Add 累加 count，别在循环里逐条 Add：大群推送就是成百上千次分配
-                KinnaMetrics.RecordOrphanedSend(
-                    HubName, KinnaSendDropReasons.SignalRDisabled, signalrIds.Count);
-
-                return;
-            }
-
-            await _signalr.SendToConnectionsAsync(signalrIds, method, payload, cancellationToken)
-                .ConfigureAwait(false);
         }
 
         /// <summary>
         /// 两边都发。组名相同但成员分处两张表，发到没有成员的那一侧是空操作，不用先判断。
         /// 排除项要往两边都传：原生连接和 SignalR 连接可能同处一个组里。
+        ///
+        /// 顺序同单聊：先 SignalR 再原生，理由见 <see cref="SendToConnectionsAsync"/>。
         /// </summary>
         public async Task SendToGroupAsync(
             string groupName,
@@ -114,15 +125,15 @@ namespace Viv.Kinna.WebSockets
             IReadOnlyList<string>? excludedConnectionIds = null,
             CancellationToken cancellationToken = default)
         {
-            _webSockets.SendToGroup(groupName, method, [payload], excludedConnectionIds);
+            cancellationToken.ThrowIfCancellationRequested();
 
-            if (!_signalrEnabled)
+            if (_signalrEnabled)
             {
-                return;
+                await _signalr.SendToGroupAsync(groupName, method, payload, excludedConnectionIds, cancellationToken)
+                    .ConfigureAwait(false);
             }
 
-            await _signalr.SendToGroupAsync(groupName, method, payload, excludedConnectionIds, cancellationToken)
-                .ConfigureAwait(false);
+            _webSockets.SendToGroup(groupName, method, [payload], excludedConnectionIds);
         }
 
         /// <summary>
@@ -134,6 +145,8 @@ namespace Viv.Kinna.WebSockets
             string groupName,
             CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (_webSockets.IsLocal(connectionId))
             {
                 _webSockets.AddToGroup(connectionId, groupName);
@@ -150,6 +163,8 @@ namespace Viv.Kinna.WebSockets
             string groupName,
             CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (_webSockets.IsLocal(connectionId))
             {
                 _webSockets.RemoveFromGroup(connectionId, groupName);
@@ -171,6 +186,8 @@ namespace Viv.Kinna.WebSockets
             object?[] args,
             CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (_webSockets.Terminate(connectionId, method, args))
             {
                 return Task.CompletedTask;

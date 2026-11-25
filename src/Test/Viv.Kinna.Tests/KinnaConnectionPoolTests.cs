@@ -254,5 +254,42 @@ namespace Viv.Kinna.Tests
             Assert.Equal(0, pool.BucketCount);
             Assert.Equal(0, pool.GetSnapshot().Connections);
         }
+
+        [Fact]
+        public void Add_同一个连接Id换身份_旧身份的索引被摘干净()
+        {
+            var pool = new KinnaConnectionPool();
+
+            pool.Add("c1", appId: 1, subjectId: 10, userId: 100);
+            // 同一 Id 以另一个身份再登记一次（框架重入、宿主误用）
+            pool.Add("c1", appId: 2, subjectId: 20, userId: 200);
+
+            // 旧身份的桶里不能留下一个「反查表里已经不存在」的幽灵 Id：
+            // 留着的话按旧身份踢人/推送会对着它发
+            Assert.Empty(pool.GetConnectionIds(10, 100));
+            Assert.Empty(pool.GetConnectionIds(1, 10, 100));
+
+            Assert.Single(pool.GetConnectionIds(20, 200));
+            Assert.Single(pool.GetConnectionIds(2, 20, 200));
+
+            Assert.Empty(pool.GetConnectionIdsByApp(1));
+            Assert.Single(pool.GetConnectionIdsByApp(2));
+        }
+
+        [Fact]
+        public void Add_重复登记同一条连接_建立时间不变()
+        {
+            var time = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+            var pool = new KinnaConnectionPool(timeProvider: time);
+
+            var first = pool.Add("c1", appId: 1, subjectId: 2, userId: 3);
+            time.Advance(TimeSpan.FromSeconds(30));
+            var second = pool.Add("c1", appId: 1, subjectId: 2, userId: 3);
+
+            // 顶号的「谁更旧」全靠这个值。重复登记把它重置成 now 的话，
+            // 这条老连接会被当成刚建立，和已经广播出去的时间也对不上
+            Assert.Equal(first, second);
+            Assert.Equal(first, pool.TryGet("c1")!.Value.ConnectedAt);
+        }
     }
 }
