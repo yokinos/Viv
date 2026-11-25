@@ -35,7 +35,7 @@ namespace Viv.Herta.Link.Dispatch
                 // 事件体没有业务消息 Id 时用信封的兜底
                 MessageId = evt.MessageId > 0 ? evt.MessageId : context?.TransportMessageId ?? 0,
                 SentAt = evt.SentAt,
-                TenantId = subjectId,
+                RealmId = subjectId,
                 AppId = context?.AppId > 0 ? context.AppId : null,
                 FromUserId = evt.FromUserId,
                 ToUserId = isGroup ? 0 : evt.TargetId,

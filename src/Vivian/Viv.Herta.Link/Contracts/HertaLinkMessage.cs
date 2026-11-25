@@ -13,10 +13,9 @@ namespace Viv.Herta.Link.Contracts
         public long? Seq { get; init; }
 
         /// <summary>
-        /// 消息所属聊天域。字段名保留下发协议里的 TenantId —— 老客户端按这个名字读，
-        /// 改名等于破协议；它装的始终是 RealmId。
+        /// 消息所属聊天域
         /// </summary>
-        public long TenantId { get; init; }
+        public long RealmId { get; init; }
 
         public long? AppId { get; init; }
 

@@ -128,7 +128,7 @@ namespace Viv.Herta.Tests
             Assert.Equal(99L, pool.LastSubjectId);
 
             var msg = Assert.IsType<HertaLinkMessage>(Assert.Single(Assert.Single(sender.Calls).Args));
-            Assert.Equal(99L, msg.TenantId);
+            Assert.Equal(99L, msg.RealmId);
         }
 
         [Fact]
@@ -150,7 +150,7 @@ namespace Viv.Herta.Tests
             Assert.Equal(1, msg.V);
             // 推送用落库行 Id，客户端要拿它和拉取结果对上
             Assert.Equal(PersistedMessageId, msg.MessageId);
-            Assert.Equal(RealmId, msg.TenantId);
+            Assert.Equal(RealmId, msg.RealmId);
             Assert.Equal(7L, msg.AppId);
             Assert.Equal(FromUserId, msg.FromUserId);
             // 群聊的接收方是群，ToUserId 留 0
